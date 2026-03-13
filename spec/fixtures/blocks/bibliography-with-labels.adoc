@@ -1,0 +1,5 @@
+[bibliography]
+== References
+
+- [[[ref1,1]]] First reference.
+- [[[ref2,See Also]]] Second reference.

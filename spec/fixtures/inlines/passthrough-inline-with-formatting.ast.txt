@@ -1,0 +1,5 @@
+Document
+  Paragraph
+    InlineText Value="This "
+    InlinePassthrough Content="*not bold*"
+    InlineText Value=" stays literal."

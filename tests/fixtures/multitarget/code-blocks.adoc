@@ -1,0 +1,33 @@
+= Code Blocks Test
+
+== Inline Code
+
+Use `Console.WriteLine()` to print output.
+
+== Source Block
+
+[source,csharp]
+----
+public class Hello
+{
+    public static void Main()
+    {
+        Console.WriteLine("Hello, World!");
+    }
+}
+----
+
+== Listing Block
+
+----
+This is a listing block.
+It preserves whitespace.
+    Indented line.
+----
+
+== Literal Block
+
+....
+Literal block content.
+  Also preserves whitespace.
+....

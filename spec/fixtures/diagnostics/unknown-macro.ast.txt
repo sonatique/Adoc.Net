@@ -1,0 +1,3 @@
+Document
+  Paragraph
+    InlineText Value="chart::sales-data.csv[Chart title]"

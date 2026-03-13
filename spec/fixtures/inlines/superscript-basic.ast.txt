@@ -1,0 +1,4 @@
+Document
+  Paragraph
+    InlineText Value="E = mc"
+    InlineSuperscript Content="2"

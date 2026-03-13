@@ -1,0 +1,18 @@
+Document Title="Document With Footnotes"
+  Section Id="_introduction" Level="1" Title="Introduction"
+    InlineText Value="Introduction"
+    Paragraph
+      InlineText Value="AsciiDoc supports footnotes."
+      InlineFootnote Text="An anonymous footnote"
+        InlineText Value="An anonymous footnote"
+      InlineText Value=" for inline references."
+  Section Id="_details" Level="1" Title="Details"
+    InlineText Value="Details"
+    Paragraph
+      InlineText Value="This uses a named footnote."
+      InlineFootnote Id="details" Text="A named footnote"
+        InlineText Value="A named footnote"
+      InlineText Value=" that can be reused."
+    Paragraph
+      InlineText Value="See the earlier note."
+      InlineFootnote Id="details"

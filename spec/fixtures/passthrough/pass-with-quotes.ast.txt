@@ -1,0 +1,6 @@
+Document
+  Paragraph
+    InlineText Value="This is "
+    InlineStrong
+      InlineText Value="bold inside passthrough"
+    InlineText Value="."

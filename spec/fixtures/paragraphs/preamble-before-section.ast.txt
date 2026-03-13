@@ -1,0 +1,7 @@
+Document Title="My Document"
+  Paragraph
+    InlineText Value="This is preamble text before any section."
+  Section Id="_first_section" Level="1" Title="First Section"
+    InlineText Value="First Section"
+    Paragraph
+      InlineText Value="Section content here."

@@ -1,0 +1,157 @@
+= Large Integration Test Document
+:toc:
+:author: Test Suite
+:revdate: 2026-01-01
+
+== Chapter One: Introduction
+
+This document tests parsing and rendering of a large AsciiDoc file with many features.
+
+=== Background
+
+The parser must handle documents with hundreds of lines efficiently.
+This paragraph contains *bold*, _italic_, `monospace`, and *_combined_* formatting.
+
+=== Goals
+
+. Parse correctly
+. Render identical output across TFMs
+. Handle edge cases gracefully
+
+== Chapter Two: Lists
+
+=== Simple Lists
+
+* Item one with *bold*
+* Item two with _italic_
+* Item three with `code`
+
+=== Nested Lists
+
+* Top level A
+** Nested A.1
+** Nested A.2
+*** Deep A.2.1
+* Top level B
+** Nested B.1
+
+=== Ordered Lists
+
+. First item
+. Second item
+.. Sub-item 2a
+.. Sub-item 2b
+. Third item
+
+=== Checklists
+
+* [x] Completed task
+* [ ] Pending task
+* [x] Another done
+
+== Chapter Three: Tables
+
+=== Basic Table
+
+|===
+| Column A | Column B | Column C
+
+| Row 1A | Row 1B | Row 1C
+| Row 2A | Row 2B | Row 2C
+| Row 3A | Row 3B | Row 3C
+|===
+
+=== Table with Header
+
+[options="header"]
+|===
+| Name | Type | Default
+
+| timeout | integer | 30
+| retries | integer | 3
+| verbose | boolean | false
+|===
+
+== Chapter Four: Code
+
+=== Inline Code
+
+Use the `AdocParser.Parse()` method to parse AsciiDoc.
+
+=== Code Block
+
+[source,csharp]
+----
+public class Example
+{
+    public string Name { get; set; }
+    public int Value { get; set; }
+
+    public override string ToString()
+        => $"{Name}: {Value}";
+}
+----
+
+=== Literal Block
+
+....
+  This preserves
+    all whitespace
+      including indentation
+....
+
+== Chapter Five: Admonitions
+
+NOTE: Remember to check the output.
+
+TIP: Use diff tools for comparison.
+
+WARNING: Do not modify golden files manually.
+
+IMPORTANT: Cross-TFM consistency is critical.
+
+== Chapter Six: Links and Images
+
+Visit https://example.com for documentation.
+
+See link:https://example.com/docs[the docs] for more information.
+
+== Chapter Seven: Formatting Edge Cases
+
+=== Adjacent Formatting
+
+*bold*_italic_`mono`
+
+=== Formatting Across Words
+
+*two words* and _two words_ and `two words`
+
+=== Special Characters
+
+Ampersand & less < greater > quote " apostrophe '
+
+Copyright © and trademark ™ and registered ®
+
+== Chapter Eight: Sections
+
+=== Level 3
+
+==== Level 4
+
+===== Level 5
+
+Back to content after deep sections.
+
+== Chapter Nine: Paragraphs
+
+First paragraph with some text that spans multiple concepts and ideas, providing enough content to test paragraph handling.
+
+Second paragraph immediately following the first, separated by a blank line as per AsciiDoc rules.
+
+Third paragraph. This one is shorter.
+
+== Chapter Ten: Conclusion
+
+This concludes the large integration test document. All features above should parse and render consistently across both `netstandard2.0` and `net10.0` targets.
+
+The end.

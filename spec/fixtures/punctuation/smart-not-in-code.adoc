@@ -1,0 +1,1 @@
+Normal -- becomes en dash but `code -- stays` the same.

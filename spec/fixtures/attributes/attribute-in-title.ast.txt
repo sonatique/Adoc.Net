@@ -1,0 +1,5 @@
+Document Title="Doc"
+  Section Id="_getting_started_with_git" Level="1" Title="Getting started with {tool}"
+    InlineText Value="Getting started with Git"
+    Paragraph
+      InlineText Value="Install Git first."

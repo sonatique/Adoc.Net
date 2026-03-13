@@ -1,0 +1,9 @@
+Document
+  Paragraph
+    InlineText Value="First paragraph."
+  DelimitedBlock BlockKind="Listing" Content="listing block"
+  Paragraph
+    InlineText Value="Second paragraph."
+  DelimitedBlock BlockKind="Literal" Content="literal block"
+  Paragraph
+    InlineText Value="Third paragraph."

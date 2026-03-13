@@ -1,0 +1,32 @@
+= Tables Test
+
+== Simple Table
+
+[cols="1,2,3"]
+|===
+| Header 1 | Header 2 | Header 3
+
+| Cell A1
+| Cell A2
+| Cell A3
+
+| Cell B1
+| Cell B2
+| Cell B3
+|===
+
+== Table with Alignment
+
+[cols="<1,^2,>3"]
+|===
+| Left | Center | Right
+
+| a | b | c
+|===
+
+== Headerless Table
+
+|===
+| A | B | C
+| D | E | F
+|===

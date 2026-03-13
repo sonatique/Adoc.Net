@@ -1,0 +1,5 @@
+Document
+  Paragraph
+    InlineText Value="This is "
+    InlinePassthrough Content="<b>raw HTML</b>"
+    InlineText Value=" inline."

@@ -1,0 +1,3 @@
+Document
+  DelimitedBlock BlockKind="Source" Language="ruby" Content="puts \"hello\" #
+puts \"world\" #" Callout[1]="" Callout[2]=""

@@ -1,0 +1,13 @@
+Document
+  Section Id="_using_bold_and_italic_and_code" Level="1" Title="Using *bold* and _italic_ and `code`"
+    InlineText Value="Using "
+    InlineStrong
+      InlineText Value="bold"
+    InlineText Value=" and "
+    InlineEmphasis
+      InlineText Value="italic"
+    InlineText Value=" and "
+    InlineMonospace
+      InlineText Value="code"
+    Paragraph
+      InlineText Value="Some paragraph text."

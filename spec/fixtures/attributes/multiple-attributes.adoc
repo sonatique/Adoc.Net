@@ -1,0 +1,4 @@
+= Doc
+:author: Jane Doe
+:email: jane@example.com
+:revnumber: 2.0

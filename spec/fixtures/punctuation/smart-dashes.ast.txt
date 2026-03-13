@@ -1,0 +1,3 @@
+Document
+  Paragraph
+    InlineText Value="An em dash—​-and an en dash—​here."

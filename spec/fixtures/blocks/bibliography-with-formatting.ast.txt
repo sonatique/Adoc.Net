@@ -1,0 +1,8 @@
+Document
+  Section Id="_references" Level="1" Title="References"
+    InlineText Value="References"
+    BibliographyEntry RefId="ref1" Text="Author. _Title of the Book_. Publisher, 2024."
+      InlineText Value="Author. "
+      InlineEmphasis
+        InlineText Value="Title of the Book"
+      InlineText Value=". Publisher, 2024."

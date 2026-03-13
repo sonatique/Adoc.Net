@@ -1,0 +1,4 @@
+Document
+  DelimitedBlock BlockKind="Source" Language="xml" Content="<root attr=\"value\">
+  <child>&amp; text</child>
+</root>"

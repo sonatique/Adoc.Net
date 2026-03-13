@@ -1,0 +1,57 @@
+namespace AdocNet.Ast;
+
+/// <summary>Highlighted/marked text delimited by <c>#content#</c> or <c>##content##</c>.</summary>
+public sealed class HighlightInlineNode : InlineNode
+{
+    public new required IReadOnlyList<InlineNode> Children { get; init; }
+
+    /// <summary>
+    /// Optional roles from <c>[.role]#text#</c> syntax. When non-empty, the renderer
+    /// outputs a <c>&lt;span class="..."&gt;</c> instead of <c>&lt;mark&gt;</c>.
+    /// </summary>
+    public IReadOnlyList<string>? Roles { get; init; }
+
+    /// <summary>
+    /// Plain-text content extracted from children for backward compatibility.
+    /// </summary>
+    public string Content => GetPlainText(Children);
+
+    public override AstNodeKind Kind => AstNodeKind.InlineHighlight;
+
+    public override IEnumerable<KeyValuePair<string, string>> GetProperties() => [];
+
+    private static string GetPlainText(IReadOnlyList<InlineNode> children)
+    {
+        if (children.Count == 1 && children[0] is TextInlineNode t)
+            return t.Value;
+
+        var sb = new System.Text.StringBuilder();
+        AppendPlainText(sb, children);
+        return sb.ToString();
+    }
+
+    private static void AppendPlainText(System.Text.StringBuilder sb, IReadOnlyList<InlineNode> children)
+    {
+        foreach (var child in children)
+        {
+            switch (child)
+            {
+                case TextInlineNode text:
+                    sb.Append(text.Value);
+                    break;
+                case StrongInlineNode strong:
+                    AppendPlainText(sb, strong.Children);
+                    break;
+                case EmphasisInlineNode emphasis:
+                    AppendPlainText(sb, emphasis.Children);
+                    break;
+                case MonospaceInlineNode monospace:
+                    AppendPlainText(sb, monospace.Children);
+                    break;
+                case HighlightInlineNode highlight:
+                    AppendPlainText(sb, highlight.Children);
+                    break;
+            }
+        }
+    }
+}

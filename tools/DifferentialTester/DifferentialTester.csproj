@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>AdocNet.Tools.DifferentialTester</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AdocNet.Core\AdocNet.Core.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Ast\AdocNet.Ast.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Parser\AdocNet.Parser.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Converters.Html\AdocNet.Converters.Html.csproj" />
+  </ItemGroup>
+</Project>

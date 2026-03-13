@@ -1,0 +1,3 @@
+Document
+  Paragraph
+    InlineText Value="Click btn:[OK] to continue."

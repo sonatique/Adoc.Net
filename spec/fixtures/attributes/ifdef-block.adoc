@@ -1,0 +1,10 @@
+= Doc
+:backend: html
+
+ifdef::backend[]
+This is the HTML backend.
+
+It has multiple paragraphs.
+endif::[]
+
+Always visible.

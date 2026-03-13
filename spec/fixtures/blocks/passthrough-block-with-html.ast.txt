@@ -1,0 +1,4 @@
+Document
+  DelimitedBlock BlockKind="Passthrough" Content="<div class=\"custom\">
+  <p>Raw HTML content</p>
+</div>"

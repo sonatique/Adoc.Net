@@ -1,0 +1,7 @@
+Document
+  Paragraph
+    InlineText Value="Text with formatted footnote."
+    InlineFootnote Text="*bold* text"
+      InlineStrong
+        InlineText Value="bold"
+      InlineText Value=" text"

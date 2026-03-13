@@ -1,0 +1,7 @@
+= Doc
+
+First paragraph.
+
+:late: value
+
+The {late} reference.

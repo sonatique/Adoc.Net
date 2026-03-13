@@ -1,0 +1,4 @@
+= Doc
+:backend: html
+
+ifdef::backend[This is HTML output.]

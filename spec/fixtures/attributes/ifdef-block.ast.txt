@@ -1,0 +1,7 @@
+Document Title="Doc"
+  Paragraph
+    InlineText Value="This is the HTML backend."
+  Paragraph
+    InlineText Value="It has multiple paragraphs."
+  Paragraph
+    InlineText Value="Always visible."

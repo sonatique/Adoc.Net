@@ -1,0 +1,7 @@
+# Diff: nested-italic-bold.adoc
+# Similarity: 0.0%
+# --- Asciidoctor (expected)
+# +++ AdocNet (actual)
+
+- <p>This has <em>*italic bold*</em> text.</p>
++ <p>This has <em><strong>italic bold</strong></em> text.</p>

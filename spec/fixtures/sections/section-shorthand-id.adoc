@@ -1,0 +1,4 @@
+[#my-id]
+== My Section
+
+This section has a custom ID via shorthand.

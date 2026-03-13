@@ -1,0 +1,17 @@
+Document
+  List ListKind="Unordered"
+    ListItem Text="A *bold* item"
+      InlineText Value="A "
+      InlineStrong
+        InlineText Value="bold"
+      InlineText Value=" item"
+    ListItem Text="An _italic_ item"
+      InlineText Value="An "
+      InlineEmphasis
+        InlineText Value="italic"
+      InlineText Value=" item"
+    ListItem Text="A `code` item"
+      InlineText Value="A "
+      InlineMonospace
+        InlineText Value="code"
+      InlineText Value=" item"

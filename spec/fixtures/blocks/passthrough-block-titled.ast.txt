@@ -1,0 +1,2 @@
+Document
+  DelimitedBlock BlockKind="Passthrough" Title="Custom HTML" Content="<hr>"

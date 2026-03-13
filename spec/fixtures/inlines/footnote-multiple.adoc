@@ -1,0 +1,1 @@
+First item.footnote:[Footnote one] Second item.footnote:[Footnote two] Third item.footnote:[Footnote three]

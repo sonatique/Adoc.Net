@@ -1,0 +1,12 @@
+Document
+  Table
+    TableRow
+      TableCell Text="<b>not bold</b>"
+        InlineText Value="<b>not bold</b>"
+      TableCell Text="A & B"
+        InlineText Value="A & B"
+    TableRow
+      TableCell Text="\"quoted\""
+        InlineText Value="\"quoted\""
+      TableCell Text="it's here"
+        InlineText Value="it’s here"

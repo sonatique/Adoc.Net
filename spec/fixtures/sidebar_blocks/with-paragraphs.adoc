@@ -1,0 +1,5 @@
+****
+First paragraph in sidebar.
+
+Second paragraph in sidebar.
+****

@@ -1,0 +1,6 @@
+Document
+  List Id="my-list" ListKind="Unordered"
+    ListItem Text="Item one"
+      InlineText Value="Item one"
+    ListItem Text="Item two"
+      InlineText Value="Item two"

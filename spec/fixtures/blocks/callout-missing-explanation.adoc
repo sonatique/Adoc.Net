@@ -1,0 +1,5 @@
+[source,ruby]
+----
+puts "hello" # <1>
+puts "world" # <2>
+----

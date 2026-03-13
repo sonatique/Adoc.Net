@@ -1,0 +1,8 @@
+= Doc
+:backend: html
+
+ifndef::missing[]
+This content shows because missing is not set.
+endif::[]
+
+Always visible.

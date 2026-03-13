@@ -1,0 +1,36 @@
+= Inline Formatting
+
+== Basic Formatting
+
+This has *bold text* and _italic text_ and `monospace text`.
+
+This has **char-level bold** and __char-level italic__ and ``char-level monospace``.
+
+== Combined Formatting
+
+This has *_bold italic_* text and *`bold monospace`* text.
+
+== Links and URLs
+
+Visit https://example.com for more info.
+
+Here is a link:https://example.com[labeled link].
+
+Here is a mailto:user@example.com[email link].
+
+== Escaping
+
+Use \*asterisks\* without bold.
+
+A backslash before \_underscores\_ prevents italic.
+
+== Superscript and Subscript
+
+H~2~O is water.
+
+E=mc^2^ is famous.
+
+== Line Break
+
+This has a hard +
+line break.

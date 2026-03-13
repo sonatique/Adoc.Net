@@ -1,0 +1,100 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "AsciiDoc",
+  "scopeName": "source.asciidoc",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#heading" },
+    { "include": "#attribute-entry" },
+    { "include": "#admonition" },
+    { "include": "#block-delimiter" },
+    { "include": "#block-anchor" },
+    { "include": "#block-attribute-list" },
+    { "include": "#inline" }
+  ],
+  "repository": {
+    "comment": {
+      "match": "^//(?!//).*$",
+      "name": "comment.line.double-slash.asciidoc"
+    },
+    "heading": {
+      "match": "^(={1,6})\\s+(.+)$",
+      "captures": {
+        "1": { "name": "punctuation.definition.heading.asciidoc" },
+        "2": { "name": "markup.heading.asciidoc" }
+      }
+    },
+    "attribute-entry": {
+      "match": "^(:)([\\w-]+)(:)\\s*(.*)$",
+      "captures": {
+        "1": { "name": "punctuation.definition.attribute.asciidoc" },
+        "2": { "name": "support.variable.attribute.asciidoc" },
+        "3": { "name": "punctuation.definition.attribute.asciidoc" },
+        "4": { "name": "string.unquoted.attribute-value.asciidoc" }
+      }
+    },
+    "admonition": {
+      "match": "^(NOTE|TIP|IMPORTANT|WARNING|CAUTION):\\s",
+      "captures": {
+        "1": { "name": "storage.type.admonition.asciidoc" }
+      }
+    },
+    "block-delimiter": {
+      "match": "^(----+|====+|\\*\\*\\*\\*+|____+|\\+\\+\\+\\++|\\.\\.\\.\\.)\\s*$",
+      "name": "markup.fenced_code.block.asciidoc"
+    },
+    "block-anchor": {
+      "match": "^(\\[\\[)([\\w-]+)(\\]\\])",
+      "captures": {
+        "1": { "name": "punctuation.definition.anchor.asciidoc" },
+        "2": { "name": "entity.name.tag.anchor.asciidoc" },
+        "3": { "name": "punctuation.definition.anchor.asciidoc" }
+      }
+    },
+    "block-attribute-list": {
+      "match": "^(\\[)([^\\]]*)(\\])\\s*$",
+      "captures": {
+        "1": { "name": "punctuation.definition.attribute-list.asciidoc" },
+        "2": { "name": "entity.other.attribute-name.asciidoc" },
+        "3": { "name": "punctuation.definition.attribute-list.asciidoc" }
+      }
+    },
+    "inline": {
+      "patterns": [
+        {
+          "match": "(\\*)[^*]+(\\*)",
+          "name": "markup.bold.asciidoc"
+        },
+        {
+          "match": "(_)[^_]+(_)",
+          "name": "markup.italic.asciidoc"
+        },
+        {
+          "match": "(`)[^`]+(`)",
+          "name": "markup.inline.raw.asciidoc"
+        },
+        {
+          "match": "(<<)([^>,]+)(,([^>]+))?(>>)",
+          "captures": {
+            "1": { "name": "punctuation.definition.xref.asciidoc" },
+            "2": { "name": "entity.name.tag.xref.asciidoc" },
+            "4": { "name": "string.unquoted.xref-label.asciidoc" },
+            "5": { "name": "punctuation.definition.xref.asciidoc" }
+          }
+        },
+        {
+          "match": "(\\{)([\\w-]+)(\\})",
+          "captures": {
+            "1": { "name": "punctuation.definition.variable.asciidoc" },
+            "2": { "name": "variable.other.attribute.asciidoc" },
+            "3": { "name": "punctuation.definition.variable.asciidoc" }
+          }
+        },
+        {
+          "match": "https?://[^\\s\\[]+",
+          "name": "markup.underline.link.asciidoc"
+        }
+      ]
+    }
+  }
+}

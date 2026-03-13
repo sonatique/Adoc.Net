@@ -1,0 +1,14 @@
+Document
+  Table HasHeader="True"
+    TableRow
+      TableCell Text="Name"
+        InlineText Value="Name"
+      TableCell Text="Description"
+        InlineText Value="Description"
+    TableRow
+      TableCell Text="Item"
+        InlineText Value="Item"
+      TableCell Text="A table cell with a footnote.footnote:[Table footnote]"
+        InlineText Value="A table cell with a footnote."
+        InlineFootnote Text="Table footnote"
+          InlineText Value="Table footnote"

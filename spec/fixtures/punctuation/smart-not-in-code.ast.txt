@@ -1,0 +1,6 @@
+Document
+  Paragraph
+    InlineText Value="Normal — becomes en dash but "
+    InlineMonospace
+      InlineText Value="code -- stays"
+    InlineText Value=" the same."

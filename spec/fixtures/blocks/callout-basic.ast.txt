@@ -1,0 +1,6 @@
+Document
+  DelimitedBlock BlockKind="Source" Language="java" Content="public class Main {
+    public static void main(String[] args) { //
+        System.out.println(\"Hello\");         //
+    }
+}" Callout[1]="Entry point method" Callout[2]="Print greeting"

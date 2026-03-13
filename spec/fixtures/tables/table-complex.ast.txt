@@ -1,0 +1,24 @@
+Document
+  Table HasHeader="True" Columns="1,2,1"
+    TableRow
+      TableCell Text="H1"
+        InlineText Value="H1"
+      TableCell Text="H2"
+        InlineText Value="H2"
+      TableCell Text="H3"
+        InlineText Value="H3"
+    TableRow
+      TableCell Text="Merged" ColSpan="2"
+        InlineText Value="Merged"
+      TableCell Text="C"
+        InlineText Value="C"
+    TableRow
+      TableCell Text="D"
+        InlineText Value="D"
+      TableCell Text="Tall" RowSpan="2"
+        InlineText Value="Tall"
+      TableCell Text="F"
+        InlineText Value="F"
+    TableRow
+      TableCell Text="G"
+        InlineText Value="G"

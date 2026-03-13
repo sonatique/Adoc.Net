@@ -1,0 +1,11 @@
+Document
+  Section Id="_a_bold_and_italic_title" Level="1" Title="A *bold* and _italic_ title"
+    InlineText Value="A "
+    InlineStrong
+      InlineText Value="bold"
+    InlineText Value=" and "
+    InlineEmphasis
+      InlineText Value="italic"
+    InlineText Value=" title"
+    Paragraph
+      InlineText Value="Paragraph under the section."

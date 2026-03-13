@@ -1,0 +1,2 @@
+Document
+  DelimitedBlock BlockKind="Listing" Title="Build output" Content="BUILD SUCCESSFUL"

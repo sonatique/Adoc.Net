@@ -1,0 +1,10 @@
+Document
+  Paragraph
+    InlineText Value="Normal "
+    InlineStrong
+      InlineText Value="bold"
+    InlineText Value=" and "
+    InlinePassthrough Content="passthrough"
+    InlineText Value=" and "
+    InlinePassthrough Content="<br>"
+    InlineText Value=" text."

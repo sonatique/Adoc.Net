@@ -1,0 +1,4 @@
+= Document
+:badattr
+
+Some content.

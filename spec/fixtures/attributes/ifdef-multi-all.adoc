@@ -1,0 +1,5 @@
+= Doc
+:backend: html
+:format: full
+
+ifdef::backend+format[Both are set.]

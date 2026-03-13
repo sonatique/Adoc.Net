@@ -1,0 +1,4 @@
+[source]
+----
+*not bold* and {not-expanded}
+----

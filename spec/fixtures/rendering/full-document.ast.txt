@@ -1,0 +1,41 @@
+Document Title="Project Guide"
+  Section Id="_introduction" Level="1" Title="Introduction"
+    InlineText Value="Introduction"
+    Paragraph
+      InlineText Value="Welcome to the "
+      InlineStrong
+        InlineText Value="Project Guide"
+      InlineText Value=". This document covers "
+      InlineEmphasis
+        InlineText Value="everything"
+      InlineText Value=" you need."
+  Section Id="_getting_started" Level="1" Title="Getting Started"
+    InlineText Value="Getting Started"
+    Paragraph
+      InlineText Value="Follow these steps:"
+    List ListKind="Ordered"
+      ListItem Text="Install the `SDK`"
+        InlineText Value="Install the "
+        InlineMonospace
+          InlineText Value="SDK"
+      ListItem Text="Clone the repository"
+        InlineText Value="Clone the repository"
+      ListItem Text="Run the build"
+        InlineText Value="Run the build"
+  Section Id="_prerequisites" Level="2" Title="Prerequisites"
+    InlineText Value="Prerequisites"
+    Paragraph
+      InlineText Value="You will need:"
+    List ListKind="Unordered"
+      ListItem Text="A modern OS"
+        InlineText Value="A modern OS"
+      ListItem Text=".NET 10 or later"
+        InlineText Value=".NET 10 or later"
+      ListItem Text="A text editor"
+        InlineText Value="A text editor"
+  Section Id="_resources" Level="1" Title="Resources"
+    InlineText Value="Resources"
+    Paragraph
+      InlineText Value="Visit "
+      InlineLink Url="https://example.com"
+      InlineText Value=" for more information."

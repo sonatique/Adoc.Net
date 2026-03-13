@@ -1,0 +1,6 @@
+Document
+  DelimitedBlock BlockKind="Example"
+    Paragraph
+      InlineText Value="This is an example paragraph."
+    Paragraph
+      InlineText Value="And a second paragraph inside the example."

@@ -1,0 +1,9 @@
+Document
+  Paragraph
+    InlineText Value="This has "
+    InlineStrong
+      InlineText Value="bold "
+    InlineText Value="not nested"
+    InlineStrong
+      InlineText Value=" bold"
+    InlineText Value=" text."

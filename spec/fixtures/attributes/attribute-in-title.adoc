@@ -1,0 +1,6 @@
+= Doc
+:tool: Git
+
+== Getting started with {tool}
+
+Install {tool} first.

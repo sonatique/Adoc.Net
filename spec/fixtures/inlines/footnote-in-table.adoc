@@ -1,0 +1,6 @@
+|===
+| Name | Description
+
+| Item
+| A table cell with a footnote.footnote:[Table footnote]
+|===

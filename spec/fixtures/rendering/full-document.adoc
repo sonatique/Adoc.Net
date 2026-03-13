@@ -1,0 +1,27 @@
+= Project Guide
+:author: Jane Doe
+:version: 1.0
+
+== Introduction
+
+Welcome to the *Project Guide*. This document covers _everything_ you need.
+
+== Getting Started
+
+Follow these steps:
+
+. Install the `SDK`
+. Clone the repository
+. Run the build
+
+=== Prerequisites
+
+You will need:
+
+* A modern OS
+* .NET 10 or later
+* A text editor
+
+== Resources
+
+Visit https://example.com for more information.

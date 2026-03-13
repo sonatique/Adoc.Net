@@ -1,0 +1,1 @@
+Before link:https://example.com[a link] and image:icon.png[icon] after.

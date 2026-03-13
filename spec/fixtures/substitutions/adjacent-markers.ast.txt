@@ -1,0 +1,9 @@
+Document
+  Paragraph
+    InlineStrong
+      InlineText Value="bold"
+    InlineEmphasis
+      InlineText Value="italic"
+    InlineMonospace
+      InlineText Value="mono"
+    InlineText Value=" end."

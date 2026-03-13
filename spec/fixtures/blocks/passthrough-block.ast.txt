@@ -1,0 +1,3 @@
+Document
+  DelimitedBlock BlockKind="Passthrough" Content="This is passthrough content.
+It is not processed."

@@ -1,0 +1,5 @@
+Document
+  Paragraph
+    InlineText Value="See "
+    InlineCrossReference Target="nonexistent"
+    InlineText Value=" for details."

@@ -1,0 +1,4 @@
+= Doc
+
+.System Architecture
+image::arch.png[Architecture]

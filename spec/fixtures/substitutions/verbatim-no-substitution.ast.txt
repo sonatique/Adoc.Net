@@ -1,0 +1,6 @@
+Document Title="Doc"
+  Paragraph
+    InlineText Value="Paragraph with Value expanded."
+  DelimitedBlock BlockKind="Listing" Content="{name} is not expanded here.
+*not bold* in listing."
+  DelimitedBlock BlockKind="Literal" Content="{name} is not expanded here either."

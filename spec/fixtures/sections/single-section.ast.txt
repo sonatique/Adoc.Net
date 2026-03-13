@@ -1,0 +1,5 @@
+Document
+  Section Id="_introduction" Level="1" Title="Introduction"
+    InlineText Value="Introduction"
+    Paragraph
+      InlineText Value="This is the introduction paragraph."

@@ -1,0 +1,23 @@
+= Unicode Test
+
+== Accented Characters
+
+Héllo Wörld. Ça fait plaisir. Ñoño.
+
+== CJK Characters
+
+日本語テスト。中文测试。한국어 테스트.
+
+== Emoji
+
+This is a test with symbols: © ® ™ € £ ¥ § ¶
+
+== Mixed Script
+
+The word café contains an accented character.
+
+Ünïcödé in a *bold* context and _Ïtàlïc_ context.
+
+== Special Characters
+
+Ampersand & less-than < greater-than > double-quote " single-quote '

@@ -1,0 +1,5 @@
+Document
+  Paragraph
+    InlineText Value="Visit "
+    InlineLink Url="https://example.com"
+    InlineText Value="."

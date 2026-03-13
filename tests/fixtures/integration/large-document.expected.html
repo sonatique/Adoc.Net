@@ -1,0 +1,420 @@
+<div id="toc" class="toc">
+<div id="toctitle">Table of Contents</div>
+<ul class="sectlevel1">
+<li><a href="#_chapter_one_introduction">Chapter One: Introduction</a>
+<ul class="sectlevel2">
+<li><a href="#_background">Background</a></li>
+<li><a href="#_goals">Goals</a></li>
+</ul>
+</li>
+<li><a href="#_chapter_two_lists">Chapter Two: Lists</a>
+<ul class="sectlevel2">
+<li><a href="#_simple_lists">Simple Lists</a></li>
+<li><a href="#_nested_lists">Nested Lists</a></li>
+<li><a href="#_ordered_lists">Ordered Lists</a></li>
+<li><a href="#_checklists">Checklists</a></li>
+</ul>
+</li>
+<li><a href="#_chapter_three_tables">Chapter Three: Tables</a>
+<ul class="sectlevel2">
+<li><a href="#_basic_table">Basic Table</a></li>
+<li><a href="#_table_with_header">Table with Header</a></li>
+</ul>
+</li>
+<li><a href="#_chapter_four_code">Chapter Four: Code</a>
+<ul class="sectlevel2">
+<li><a href="#_inline_code">Inline Code</a></li>
+<li><a href="#_code_block">Code Block</a></li>
+<li><a href="#_literal_block">Literal Block</a></li>
+</ul>
+</li>
+<li><a href="#_chapter_five_admonitions">Chapter Five: Admonitions</a></li>
+<li><a href="#_chapter_six_links_and_images">Chapter Six: Links and Images</a></li>
+<li><a href="#_chapter_seven_formatting_edge_cases">Chapter Seven: Formatting Edge Cases</a>
+<ul class="sectlevel2">
+<li><a href="#_adjacent_formatting">Adjacent Formatting</a></li>
+<li><a href="#_formatting_across_words">Formatting Across Words</a></li>
+<li><a href="#_special_characters">Special Characters</a></li>
+</ul>
+</li>
+<li><a href="#_chapter_eight_sections">Chapter Eight: Sections</a>
+<ul class="sectlevel2">
+<li><a href="#_level_3">Level 3</a></li>
+</ul>
+</li>
+<li><a href="#_chapter_nine_paragraphs">Chapter Nine: Paragraphs</a></li>
+<li><a href="#_chapter_ten_conclusion">Chapter Ten: Conclusion</a></li>
+</ul>
+</div>
+<div class="sect1">
+<h2 id="_chapter_one_introduction">Chapter One: Introduction</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>This document tests parsing and rendering of a large AsciiDoc file with many features.</p>
+</div>
+<div class="sect2">
+<h3 id="_background">Background</h3>
+<div class="paragraph">
+<p>The parser must handle documents with hundreds of lines efficiently.
+This paragraph contains <strong>bold</strong>, <em>italic</em>, <code>monospace</code>, and <strong><em>combined</em></strong> formatting.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_goals">Goals</h3>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Parse correctly</p>
+</li>
+<li>
+<p>Render identical output across TFMs</p>
+</li>
+<li>
+<p>Handle edge cases gracefully</p>
+</li>
+</ol>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_chapter_two_lists">Chapter Two: Lists</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_simple_lists">Simple Lists</h3>
+<div class="ulist">
+<ul>
+<li>
+<p>Item one with <strong>bold</strong></p>
+</li>
+<li>
+<p>Item two with <em>italic</em></p>
+</li>
+<li>
+<p>Item three with <code>code</code></p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_nested_lists">Nested Lists</h3>
+<div class="ulist">
+<ul>
+<li>
+<p>Top level A</p>
+<div class="ulist">
+<ul>
+<li>
+<p>Nested A.1</p>
+</li>
+<li>
+<p>Nested A.2</p>
+<div class="ulist">
+<ul>
+<li>
+<p>Deep A.2.1</p>
+</li>
+</ul>
+</div>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p>Top level B</p>
+<div class="ulist">
+<ul>
+<li>
+<p>Nested B.1</p>
+</li>
+</ul>
+</div>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_ordered_lists">Ordered Lists</h3>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>First item</p>
+</li>
+<li>
+<p>Second item</p>
+<div class="olist loweralpha">
+<ol class="loweralpha" type="a">
+<li>
+<p>Sub-item 2a</p>
+</li>
+<li>
+<p>Sub-item 2b</p>
+</li>
+</ol>
+</div>
+</li>
+<li>
+<p>Third item</p>
+</li>
+</ol>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_checklists">Checklists</h3>
+<div class="ulist checklist">
+<ul class="checklist">
+<li>
+<p>&#10003; Completed task</p>
+</li>
+<li>
+<p>&#10063; Pending task</p>
+</li>
+<li>
+<p>&#10003; Another done</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_chapter_three_tables">Chapter Three: Tables</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_basic_table">Basic Table</h3>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 33.3333%;">
+<col style="width: 33.3333%;">
+<col style="width: 33.3334%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Column A</th>
+<th class="tableblock halign-left valign-top">Column B</th>
+<th class="tableblock halign-left valign-top">Column C</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Row 1A</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Row 1B</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Row 1C</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Row 2A</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Row 2B</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Row 2C</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Row 3A</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Row 3B</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Row 3C</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect2">
+<h3 id="_table_with_header">Table with Header</h3>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 33.3333%;">
+<col style="width: 33.3333%;">
+<col style="width: 33.3334%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Name</th>
+<th class="tableblock halign-left valign-top">Type</th>
+<th class="tableblock halign-left valign-top">Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">timeout</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">integer</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">30</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">retries</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">integer</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">3</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">verbose</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">boolean</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_chapter_four_code">Chapter Four: Code</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_inline_code">Inline Code</h3>
+<div class="paragraph">
+<p>Use the <code>AdocParser.Parse()</code> method to parse AsciiDoc.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_code_block">Code Block</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-csharp" data-lang="csharp">public class Example
+{
+    public string Name { get; set; }
+    public int Value { get; set; }
+
+    public override string ToString()
+        =&gt; $"{Name}: {Value}";
+}</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_literal_block">Literal Block</h3>
+<div class="literalblock">
+<div class="content">
+<pre>  This preserves
+    all whitespace
+      including indentation</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_chapter_five_admonitions">Chapter Five: Admonitions</h2>
+<div class="sectionbody">
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+Remember to check the output.
+</td>
+</tr>
+</table>
+</div>
+<div class="admonitionblock tip">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Tip</div>
+</td>
+<td class="content">
+Use diff tools for comparison.
+</td>
+</tr>
+</table>
+</div>
+<div class="admonitionblock warning">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Warning</div>
+</td>
+<td class="content">
+Do not modify golden files manually.
+</td>
+</tr>
+</table>
+</div>
+<div class="admonitionblock important">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Important</div>
+</td>
+<td class="content">
+Cross-TFM consistency is critical.
+</td>
+</tr>
+</table>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_chapter_six_links_and_images">Chapter Six: Links and Images</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Visit <a href="https://example.com" class="bare">https://example.com</a> for documentation.</p>
+</div>
+<div class="paragraph">
+<p>See <a href="https://example.com/docs">the docs</a> for more information.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_chapter_seven_formatting_edge_cases">Chapter Seven: Formatting Edge Cases</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_adjacent_formatting">Adjacent Formatting</h3>
+<div class="paragraph">
+<p>*bold*<em>italic</em>`mono`</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_formatting_across_words">Formatting Across Words</h3>
+<div class="paragraph">
+<p><strong>two words</strong> and <em>two words</em> and <code>two words</code></p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_special_characters">Special Characters</h3>
+<div class="paragraph">
+<p>Ampersand &amp; less &lt; greater &gt; quote " apostrophe '</p>
+</div>
+<div class="paragraph">
+<p>Copyright © and trademark ™ and registered ®</p>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_chapter_eight_sections">Chapter Eight: Sections</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_level_3">Level 3</h3>
+<div class="sect3">
+<h4 id="_level_4">Level 4</h4>
+<div class="sect4">
+<h5 id="_level_5">Level 5</h5>
+<div class="paragraph">
+<p>Back to content after deep sections.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_chapter_nine_paragraphs">Chapter Nine: Paragraphs</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>First paragraph with some text that spans multiple concepts and ideas, providing enough content to test paragraph handling.</p>
+</div>
+<div class="paragraph">
+<p>Second paragraph immediately following the first, separated by a blank line as per AsciiDoc rules.</p>
+</div>
+<div class="paragraph">
+<p>Third paragraph. This one is shorter.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_chapter_ten_conclusion">Chapter Ten: Conclusion</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>This concludes the large integration test document. All features above should parse and render consistently across both <code>netstandard2.0</code> and <code>net10.0</code> targets.</p>
+</div>
+<div class="paragraph">
+<p>The end.</p>
+</div>
+</div>
+</div>

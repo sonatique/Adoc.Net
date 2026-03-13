@@ -1,0 +1,10 @@
+[source,java]
+----
+public class Main {
+    public static void main(String[] args) { // <1>
+        System.out.println("Hello");         // <2>
+    }
+}
+----
+<1> Entry point method
+<2> Print greeting

@@ -1,0 +1,14 @@
+Document
+  Paragraph
+    InlineText Value="Here is "
+    InlineStrong
+      InlineText Value="bold"
+    InlineText Value=", "
+    InlineEmphasis
+      InlineText Value="italic"
+    InlineText Value=", "
+    InlineMonospace
+      InlineText Value="code"
+    InlineText Value=", and "
+    InlineLink Url="https://example.com"
+    InlineText Value=" in one line."

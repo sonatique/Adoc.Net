@@ -1,0 +1,3 @@
+= Getting Started Guide
+:author: Jane Doe
+:version: 1.0

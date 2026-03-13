@@ -1,0 +1,6 @@
+Document
+  Paragraph
+    InlineText Value="Use the "
+    InlineMonospace
+      InlineText Value="println"
+    InlineText Value=" function to print output."

@@ -1,0 +1,7 @@
+# Diff: adjacent-markers.adoc
+# Similarity: 0.0%
+# --- Asciidoctor (expected)
+# +++ AdocNet (actual)
+
+- <p>*bold*<em>italic</em>`mono` end.</p>
++ <p><strong>bold</strong><em>italic</em><code>mono</code> end.</p>

@@ -1,0 +1,3 @@
+Document
+  Paragraph
+    InlineText Value="This has *bold _unclosed text."

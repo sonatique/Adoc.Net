@@ -1,0 +1,14 @@
+Document
+  Section Id="_people" Level="1" Title="People"
+    InlineText Value="People"
+    Table
+      TableRow
+        TableCell Text="Name"
+          InlineText Value="Name"
+        TableCell Text="Age"
+          InlineText Value="Age"
+      TableRow
+        TableCell Text="Alice"
+          InlineText Value="Alice"
+        TableCell Text="30"
+          InlineText Value="30"

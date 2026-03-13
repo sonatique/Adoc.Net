@@ -1,0 +1,3 @@
+First reference.footnote:myid[This is a reusable footnote]
+
+Second reference.footnote:myid[]

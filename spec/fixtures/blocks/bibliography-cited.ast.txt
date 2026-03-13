@@ -1,0 +1,9 @@
+Document
+  Paragraph
+    InlineText Value="See "
+    InlineCrossReference Target="ref1"
+    InlineText Value=" for more information."
+  Section Id="_references" Level="1" Title="References"
+    InlineText Value="References"
+    BibliographyEntry RefId="ref1" Text="The main reference."
+      InlineText Value="The main reference."

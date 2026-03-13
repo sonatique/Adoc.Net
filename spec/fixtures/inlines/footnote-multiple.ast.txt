@@ -1,0 +1,11 @@
+Document
+  Paragraph
+    InlineText Value="First item."
+    InlineFootnote Text="Footnote one"
+      InlineText Value="Footnote one"
+    InlineText Value=" Second item."
+    InlineFootnote Text="Footnote two"
+      InlineText Value="Footnote two"
+    InlineText Value=" Third item."
+    InlineFootnote Text="Footnote three"
+      InlineText Value="Footnote three"

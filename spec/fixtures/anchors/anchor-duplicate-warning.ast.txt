@@ -1,0 +1,5 @@
+Document
+  Paragraph Id="dup-id"
+    InlineText Value="First paragraph."
+  Paragraph Id="dup-id"
+    InlineText Value="Second paragraph."

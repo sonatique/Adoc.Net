@@ -1,0 +1,47 @@
+= Complex Tables
+
+== Table with Header and Footer
+
+[options="header,footer"]
+|===
+| Name | Value | Description
+
+| alpha | 1 | First item
+| beta | 2 | Second item
+| gamma | 3 | Third item
+
+| Total | 6 | Sum
+|===
+
+== Table with Column Widths
+
+[cols="1,3,2"]
+|===
+| ID | Description | Status
+
+| 001
+| A long description that spans multiple words
+| Active
+
+| 002
+| Another description here
+| Inactive
+|===
+
+== Table with Cell Alignment
+
+[cols="<1,^2,>3"]
+|===
+| Left | Center | Right
+
+| A | B | C
+| D | E | F
+|===
+
+== Simple Table
+
+|===
+| A1 | B1 | C1
+| A2 | B2 | C2
+| A3 | B3 | C3
+|===

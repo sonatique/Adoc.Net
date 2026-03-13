@@ -1,0 +1,11 @@
+Document
+  Section Id="my-id" Level="1" Title="Introduction"
+    InlineText Value="Introduction"
+    Paragraph
+      InlineText Value="This is the intro."
+  Section Id="_details" Level="1" Title="Details"
+    InlineText Value="Details"
+    Paragraph
+      InlineText Value="See "
+      InlineCrossReference Target="my-id" Label="Introduction"
+      InlineText Value=" for background."

@@ -1,0 +1,3 @@
+Document
+  Paragraph Id="myid" Roles="myrole"
+    InlineText Value="This paragraph has an ID and a role."

@@ -1,0 +1,6 @@
+Document
+  DelimitedBlock BlockKind="Quote"
+    Paragraph
+      InlineText Value="This quote is never closed."
+    Paragraph
+      InlineText Value="A trailing paragraph."

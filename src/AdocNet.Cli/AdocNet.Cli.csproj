@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>adocnet</AssemblyName>
+    <RootNamespace>AdocNet.Cli</RootNamespace>
+    <Description>AsciiDoc CLI tool — convert files and directories to HTML, PDF, DocBook, EPUB. Includes watch mode, live preview server, and project configuration.</Description>
+
+    <!-- NuGet tool packaging -->
+    <PackageId>AdocNet.Tool</PackageId>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>adocnet</ToolCommandName>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AdocNet.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AdocNet.Core\AdocNet.Core.csproj" />
+    <ProjectReference Include="..\AdocNet.Ast\AdocNet.Ast.csproj" />
+    <ProjectReference Include="..\AdocNet.Parser\AdocNet.Parser.csproj" />
+    <ProjectReference Include="..\AdocNet.Converters.Html\AdocNet.Converters.Html.csproj" />
+    <ProjectReference Include="..\AdocNet.Converters.Pdf\AdocNet.Converters.Pdf.csproj" />
+    <ProjectReference Include="..\AdocNet.Converters.DocBook\AdocNet.Converters.DocBook.csproj" />
+    <ProjectReference Include="..\AdocNet.Converters.Epub\AdocNet.Converters.Epub.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,7 @@
+Document
+  Section Id="_references" Level="1" Title="References"
+    InlineText Value="References"
+    BibliographyEntry RefId="ref1" Text="First reference."
+      InlineText Value="First reference."
+    BibliographyEntry RefId="ref2" Text="Second reference."
+      InlineText Value="Second reference."

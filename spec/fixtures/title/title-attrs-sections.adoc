@@ -1,0 +1,11 @@
+= Complete Document
+:author: Jane Doe
+:version: 2.0
+
+== First Section
+
+Content of the first section.
+
+== Second Section
+
+Content of the second section.

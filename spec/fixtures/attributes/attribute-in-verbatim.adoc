@@ -1,0 +1,17 @@
+= Doc
+:name: Hello
+
+{name} expanded here.
+
+----
+{name} not expanded.
+----
+
+....
+{name} not expanded.
+....
+
+[source,csharp]
+----
+var x = "{name}";
+----

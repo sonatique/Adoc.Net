@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework />
+    <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>AdocNet.Converters.Epub</RootNamespace>
+    <Description>EPUB 3.0 renderer for the Adoc.Net library.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AdocNet.Core\AdocNet.Core.csproj" />
+    <ProjectReference Include="..\AdocNet.Ast\AdocNet.Ast.csproj" />
+    <ProjectReference Include="..\AdocNet.Converters.Html\AdocNet.Converters.Html.csproj" />
+  </ItemGroup>
+</Project>

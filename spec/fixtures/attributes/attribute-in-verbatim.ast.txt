@@ -1,0 +1,6 @@
+Document Title="Doc"
+  Paragraph
+    InlineText Value="Hello expanded here."
+  DelimitedBlock BlockKind="Listing" Content="{name} not expanded."
+  DelimitedBlock BlockKind="Literal" Content="{name} not expanded."
+  DelimitedBlock BlockKind="Source" Language="csharp" Content="var x = \"{name}\";"

@@ -1,0 +1,4 @@
+= Doc
+:product: AdocNet
+
+Welcome to {product}.

@@ -1,0 +1,11 @@
+Document
+  List ListKind="Unordered"
+    ListItem Text="Apples"
+      InlineText Value="Apples"
+    ListItem Text="Bananas"
+      InlineText Value="Bananas"
+  List ListKind="Ordered"
+    ListItem Text="First step"
+      InlineText Value="First step"
+    ListItem Text="Second step"
+      InlineText Value="Second step"

@@ -1,0 +1,7 @@
+Document Title="Nested"
+  Section Id="_outer" Level="1" Title="Outer"
+    InlineText Value="Outer"
+    Paragraph
+      InlineText Value="Inner content here."
+    Paragraph
+      InlineText Value="Outer paragraph."

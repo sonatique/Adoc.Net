@@ -1,0 +1,26 @@
+= Document Title
+:sectnums:
+
+== First Section
+
+Some content.
+
+=== Subsection One
+
+More content.
+
+=== Subsection Two
+
+Even more content.
+
+==== Deep Section
+
+Deep content.
+
+== Second Section
+
+Another section.
+
+=== Another Subsection
+
+Final content.

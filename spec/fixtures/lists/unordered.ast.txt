@@ -1,0 +1,8 @@
+Document
+  List ListKind="Unordered"
+    ListItem Text="Apple"
+      InlineText Value="Apple"
+    ListItem Text="Banana"
+      InlineText Value="Banana"
+    ListItem Text="Cherry"
+      InlineText Value="Cherry"

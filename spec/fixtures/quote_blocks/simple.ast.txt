@@ -1,0 +1,4 @@
+Document
+  DelimitedBlock BlockKind="Quote"
+    Paragraph
+      InlineText Value="This is a quoted paragraph."

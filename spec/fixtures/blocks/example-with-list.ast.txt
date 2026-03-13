@@ -1,0 +1,9 @@
+Document
+  DelimitedBlock BlockKind="Example"
+    Paragraph
+      InlineText Value="Here is an example:"
+    List ListKind="Unordered"
+      ListItem Text="Step one"
+        InlineText Value="Step one"
+      ListItem Text="Step two"
+        InlineText Value="Step two"

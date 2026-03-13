@@ -1,0 +1,178 @@
+= Network Monitoring with Prometheus and Grafana
+:author: Jane Chen
+:email: jchen@example.com
+:revnumber: 2.4
+:revdate: 2025-11-15
+:toc: left
+:icons: font
+:source-highlighter: highlight.js
+:sectnums:
+
+== Introduction
+
+Modern infrastructure demands *continuous observability*.
+Whether you manage a handful of services or a fleet spanning thousands of nodes,
+understanding _what is happening_ and _why_ is essential to maintaining reliability.
+
+This guide walks through setting up a monitoring stack using
+https://prometheus.io[Prometheus] for metrics collection and
+https://grafana.com[Grafana] for visualization.
+By the end you will have a working pipeline that captures system and application metrics,
+stores them efficiently, and presents actionable dashboards.
+
+NOTE: This guide assumes a Linux host with `systemd`.
+Adaptations for container-based deployments are covered in <<containerized-setup>>.
+
+== Architecture Overview
+
+The monitoring pipeline consists of three layers:
+
+. *Collection* -- exporters and instrumented applications expose metrics.
+. *Storage* -- Prometheus scrapes and stores time-series data.
+. *Visualization* -- Grafana queries Prometheus and renders dashboards.
+
+Each layer can be scaled independently.
+For high-availability configurations see <<scaling-considerations>>.
+
+=== Component Versions
+
+[cols="1,2,1"]
+|===
+| Component | Purpose | Version
+
+| Prometheus
+| Metrics scraping and TSDB
+| 2.51.0
+
+| Grafana
+| Dashboard and alerting UI
+| 10.3.1
+
+| Node Exporter
+| Host-level metrics
+| 1.7.0
+|===
+
+== Installing Prometheus
+
+TIP: Always verify checksums after downloading release archives.
+
+Download and extract the latest release:
+
+[source,bash]
+----
+curl -LO https://github.com/prometheus/prometheus/releases/download/v2.51.0/prometheus-2.51.0.linux-amd64.tar.gz
+sha256sum -c prometheus-2.51.0.linux-amd64.tar.gz.sha256
+tar xvfz prometheus-2.51.0.linux-amd64.tar.gz
+----
+
+Create a dedicated user and move the binaries:
+
+[source,bash]
+----
+sudo useradd --no-create-home --shell /bin/false prometheus
+sudo mv prometheus-2.51.0.linux-amd64/prometheus /usr/local/bin/
+sudo mv prometheus-2.51.0.linux-amd64/promtool /usr/local/bin/
+----
+
+=== Configuration
+
+The main configuration file is `prometheus.yml`.
+A minimal scrape config targeting the local Node Exporter looks like this:
+
+[source,yaml]
+----
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "node"
+    static_configs:
+      - targets: ["localhost:9100"]
+----
+
+WARNING: Setting `scrape_interval` below `5s` can cause excessive load on both Prometheus and the targets being scraped.
+
+== Setting Up Grafana
+
+Install Grafana OSS from the official APT repository:
+
+[source,bash]
+----
+sudo apt-get install -y apt-transport-https software-properties-common
+sudo add-apt-repository "deb https://packages.grafana.com/oss/deb stable main"
+sudo apt-get update && sudo apt-get install grafana
+----
+
+Start and enable the service:
+
+[source,bash]
+----
+sudo systemctl daemon-reload
+sudo systemctl enable --now grafana-server
+----
+
+Access the web UI at `+http://localhost:3000+` with the default credentials `admin` / `admin`.
+
+=== Adding a Data Source
+
+Navigate to *Configuration > Data Sources > Add data source* and select **Prometheus**.
+Set the URL to `+http://localhost:9090+` and click *Save & Test*.
+
+[[containerized-setup]]
+== Containerized Setup
+
+For container-based deployments use the official images:
+
+[source,yaml]
+----
+version: "3.8"
+services:
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana-oss:10.3.1
+    ports:
+      - "3000:3000"
+----
+
+NOTE: Bind-mount your `prometheus.yml` so configuration changes persist across container restarts.
+
+[[scaling-considerations]]
+== Scaling Considerations
+
+* Use *federation* to aggregate metrics from multiple Prometheus servers.
+* Deploy _Thanos_ or _Cortex_ for long-term storage beyond the local TSDB retention window.
+* Horizontal scaling of Grafana is straightforward -- place instances behind a load balancer and share a common database for dashboard state.
+
+=== Retention Tuning
+
+Prometheus defaults to 15 days of retention.
+Adjust with the `--storage.tsdb.retention.time` flag:
+
+[source,bash]
+----
+prometheus --storage.tsdb.retention.time=90d
+----
+
+Alternatively, set a size-based limit:
+
+[source,bash]
+----
+prometheus --storage.tsdb.retention.size=50GB
+----
+
+== Conclusion
+
+A well-configured monitoring stack is the foundation of reliable operations.
+Prometheus and Grafana together provide a *flexible*, _cost-effective_ solution
+that scales from a single server to a global fleet.
+
+Refer to the official documentation for advanced topics such as recording rules,
+alerting pipelines with `Alertmanager`, and custom `+PromQL+` queries.

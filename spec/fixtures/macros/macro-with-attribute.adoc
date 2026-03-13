@@ -1,0 +1,5 @@
+= Doc
+:site: https://example.com
+:project: AdocNet
+
+Visit link:{site}[{project} website] today.

@@ -1,0 +1,26 @@
+= Conditionals and Attributes
+:product: AdocNet
+:version: 1.0
+:show-advanced:
+
+== Basic Attribute Substitution
+
+Welcome to {product} version {version}.
+
+== Conditional Inclusion
+
+ifdef::show-advanced[]
+This section is visible because `show-advanced` is set.
+endif::[]
+
+ifndef::hide-section[]
+This section is visible because `hide-section` is NOT set.
+endif::[]
+
+ifdef::nonexistent-attr[]
+This should NOT appear in output.
+endif::[]
+
+== Attribute in Inline
+
+The product name is *{product}* and the version is _{version}_.

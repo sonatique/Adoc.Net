@@ -1,0 +1,9 @@
+Document
+  Paragraph
+    InlineText Value="link: missing target"
+  Paragraph
+    InlineText Value="image: also missing"
+  Paragraph
+    InlineText Value="link:target without brackets"
+  Paragraph
+    InlineText Value="image:target no closing bracket["

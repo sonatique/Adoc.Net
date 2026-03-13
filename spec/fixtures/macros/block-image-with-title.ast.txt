@@ -1,0 +1,2 @@
+Document Title="Doc"
+  BlockImage Target="arch.png" Alt="Architecture" Title="System Architecture"

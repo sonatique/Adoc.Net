@@ -1,0 +1,5 @@
+Document
+  Paragraph
+    InlineText Value="This document has no title line."
+  Paragraph
+    InlineText Value="It starts directly with paragraph text."

@@ -1,0 +1,8 @@
+Document
+  Paragraph
+    InlineText Value="First reference."
+    InlineFootnote Id="myid" Text="This is a reusable footnote"
+      InlineText Value="This is a reusable footnote"
+  Paragraph
+    InlineText Value="Second reference."
+    InlineFootnote Id="myid"

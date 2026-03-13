@@ -1,0 +1,7 @@
+Document
+  Paragraph
+    InlineText Value="Before "
+    InlineLinkMacro Url="https://example.com" Label="a link"
+    InlineText Value=" and "
+    InlineImage Target="icon.png" Alt="icon"
+    InlineText Value=" after."

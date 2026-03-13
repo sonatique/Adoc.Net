@@ -1,0 +1,6 @@
+Document
+  DelimitedBlock BlockKind="Quote"
+    Paragraph
+      InlineText Value="First paragraph in quote."
+    Paragraph
+      InlineText Value="Second paragraph in quote."

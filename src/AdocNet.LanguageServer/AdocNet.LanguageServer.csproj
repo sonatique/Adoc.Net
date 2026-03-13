@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>adocnet-lsp</AssemblyName>
+    <RootNamespace>AdocNet.LanguageServer</RootNamespace>
+    <Description>AsciiDoc Language Server Protocol implementation powered by AdocNet.</Description>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="OmniSharp.Extensions.LanguageServer" Version="0.19.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AdocNet.Core\AdocNet.Core.csproj" />
+    <ProjectReference Include="..\AdocNet.Ast\AdocNet.Ast.csproj" />
+    <ProjectReference Include="..\AdocNet.Parser\AdocNet.Parser.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AdocNet.Tests" />
+  </ItemGroup>
+</Project>

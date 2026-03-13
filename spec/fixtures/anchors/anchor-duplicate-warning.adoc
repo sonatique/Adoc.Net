@@ -1,0 +1,5 @@
+[[dup-id]]
+First paragraph.
+
+[[dup-id]]
+Second paragraph.

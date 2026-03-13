@@ -1,0 +1,5 @@
+Document
+  Paragraph
+    InlineText Value="Hello "
+    InlineText Value="World"
+    InlineText Value="!"

@@ -1,0 +1,2 @@
+[#myid.myrole]
+This paragraph has an ID and a role.

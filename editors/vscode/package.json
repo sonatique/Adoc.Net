@@ -1,0 +1,53 @@
+{
+  "name": "adocnet-vscode",
+  "displayName": "AdocNet for Visual Studio Code",
+  "description": "AsciiDoc language support powered by AdocNet — diagnostics, symbols, hover, go-to-definition, completion.",
+  "version": "0.1.0",
+  "publisher": "adocnet",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Programming Languages", "Linters"],
+  "activationEvents": ["onLanguage:asciidoc"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "asciidoc",
+        "aliases": ["AsciiDoc", "asciidoc"],
+        "extensions": [".adoc", ".asciidoc", ".asc"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "asciidoc",
+        "scopeName": "source.asciidoc",
+        "path": "./syntaxes/asciidoc.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "AdocNet",
+      "properties": {
+        "adocnet.lsp.path": {
+          "type": "string",
+          "default": "adocnet-lsp",
+          "description": "Path to the adocnet-lsp binary. Defaults to finding it on PATH."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -watch -p .",
+    "package": "npx @vscode/vsce package"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0"
+  }
+}

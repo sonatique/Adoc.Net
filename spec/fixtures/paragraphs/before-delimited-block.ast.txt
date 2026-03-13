@@ -1,0 +1,4 @@
+Document
+  Paragraph
+    InlineText Value="Here is some introductory text."
+  DelimitedBlock BlockKind="Listing" Content="code goes here"

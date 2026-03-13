@@ -1,0 +1,9 @@
+Document Title="Guide"
+  Paragraph
+    InlineText Value="Use "
+    InlineStrong
+      InlineText Value="Git"
+    InlineText Value=" for "
+    InlineEmphasis
+      InlineText Value="version control"
+    InlineText Value="."

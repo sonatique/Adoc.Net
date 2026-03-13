@@ -1,0 +1,271 @@
+= Feature Catalogue: AsciiDoc Stress Test
+:author: QA Engineering
+:email: qa@example.com
+:revnumber: 1.0
+:revdate: 2025-12-01
+:toc: left
+:icons: font
+:sectnums:
+:source-highlighter: highlight.js
+:experimental:
+:homepage: https://asciidoc.org
+:lib-version: 4.2.0
+
+[[section-inline]]
+== Inline Formatting
+
+Plain text followed by *bold text*, _italic text_, `monospace text`,
+*_bold italic_*, `*mono bold*`, and _`italic mono`_.
+A word with pass:[<b>raw HTML</b>] embedded via passthrough.
+
+Superscript: E = mc^2^.
+Subscript: H~2~O is water.
+
+A line with a footnote.footnote:[This is the footnote text that appears at the bottom.]
+
+Escaped formatting: \*not bold\*, \_not italic\_.
+
+Constrained vs unconstrained: **un**constrained bold, __un__constrained italic.
+
+[[section-links]]
+== Links and Cross-References
+
+Visit the {homepage}[AsciiDoc home page] for more information.
+Email the team at qa@example.com.
+
+Internal cross-references:
+
+* <<section-inline>> covers inline formatting.
+* <<section-lists>> describes list types.
+* <<section-tables>> shows table features.
+* <<section-blocks>> demonstrates delimited blocks.
+* <<section-admonitions>> contains admonition examples.
+* See also <<section-includes>> for include directives.
+
+[[section-lists]]
+== Lists
+
+=== Unordered Lists
+
+* Mercury
+* Venus
+* Earth
+** Moon
+*** Near side
+*** Far side
+* Mars
+** Phobos
+** Deimos
+
+=== Ordered Lists
+
+. Prepare the environment
+. Install dependencies
+.. Core libraries
+.. Optional plugins
+... Plugin A
+... Plugin B
+. Run the test suite
+. Review results
+
+=== Mixed Lists
+
+* Setup phase
+. Clone the repository
+. Install dependencies
+* Execution phase
+. Run unit tests
+.. Fast tests first
+.. Integration tests second
+. Collect coverage
+* Teardown phase
+. Archive artifacts
+. Clean up resources
+
+=== Description Lists
+
+CPU:: Central Processing Unit. The primary component that executes instructions.
+GPU:: Graphics Processing Unit. Specialised hardware for parallel computation.
+RAM:: Random Access Memory. Volatile storage for active processes.
+SSD::
+  Solid State Drive.
+  Non-volatile storage with no moving parts, offering faster I/O than traditional hard drives.
+
+[[section-tables]]
+== Tables
+
+.Server inventory
+[cols="1,2,1,1", options="header"]
+|===
+| ID | Hostname | Region | Status
+
+| 1
+| app-server-01.us-east
+| us-east-1
+| active
+
+| 2
+| app-server-02.eu-west
+| eu-west-1
+| active
+
+| 3
+| db-primary.us-east
+| us-east-1
+| active
+
+| 4
+| db-replica.ap-south
+| ap-south-1
+| maintenance
+|===
+
+.Build matrix
+[cols="2,1,1,1"]
+|===
+| Platform | Debug | Release | Status
+
+| Linux x86_64
+| PASS
+| PASS
+| OK
+
+| macOS ARM64
+| PASS
+| PASS
+| OK
+
+| Windows x64
+| PASS
+| FAIL
+| Investigating
+|===
+
+[[section-blocks]]
+== Delimited Blocks
+
+=== Source Code Blocks
+
+[source,rust]
+----
+fn fibonacci(n: u64) -> u64 {
+    match n {
+        0 => 0,
+        1 => 1,
+        _ => fibonacci(n - 1) + fibonacci(n - 2),
+    }
+}
+----
+
+[source,python]
+----
+def merge_sort(arr: list[int]) -> list[int]:
+    if len(arr) <= 1:
+        return arr
+    mid = len(arr) // 2
+    left = merge_sort(arr[:mid])
+    right = merge_sort(arr[mid:])
+    return merge(left, right)
+----
+
+[source,csharp]
+----
+public record Point(double X, double Y)
+{
+    public double DistanceTo(Point other) =>
+        Math.Sqrt(Math.Pow(X - other.X, 2) + Math.Pow(Y - other.Y, 2));
+}
+----
+
+=== Literal Block
+
+....
+This is a literal block.
+  Whitespace is preserved exactly as written.
+    No *formatting* is applied.
+....
+
+=== Sidebar
+
+.Did you know?
+****
+AsciiDoc was created by Stuart Rackham in 2002.
+It was designed as a lightweight alternative to DocBook XML
+while retaining the ability to produce professional documentation.
+****
+
+=== Example Block
+
+.Calculating compound interest
+====
+The formula for compound interest is:
+
+A = P(1 + r/n)^nt^
+
+Where:
+
+* A = final amount
+* P = principal
+* r = annual interest rate
+* n = compounding frequency
+* t = time in years
+====
+
+=== Block Quote
+
+[quote, Grace Hopper]
+The most dangerous phrase in the language is, "We've always done it this way."
+
+=== Passthrough Block
+
+++++
+<div class="custom-widget">
+  <p>This is <strong>raw HTML</strong> passed through without processing.</p>
+</div>
+++++
+
+[[section-admonitions]]
+== Admonitions
+
+NOTE: This is a note admonition providing supplementary information.
+
+TIP: Use keyboard shortcut kbd:[Ctrl+Shift+P] to open the command palette.
+
+IMPORTANT: Back up your database before running migrations.
+
+WARNING: Exceeding the rate limit will result in temporary account suspension.
+
+CAUTION: Modifying system files without proper permissions may render the system unbootable.
+
+[[section-includes]]
+== Included Content
+
+The following section is pulled from a shared content file:
+
+include::includes/shared-content.adoc[]
+
+== Attribute Interpolation
+
+The current library version is *{lib-version}*.
+Visit the project at {homepage}.
+This document was authored by {author} ({email})
+and last revised on {revdate} as revision {revnumber}.
+
+[[section-anchors]]
+== Anchors and IDs
+
+[[custom-anchor]]
+This paragraph has a custom anchor.
+
+[[another-anchor]]
+=== Subsection with Anchor
+
+You can link to <<custom-anchor>> or <<another-anchor>> from anywhere in the document.
+You can also use <<section-inline,the inline formatting section>> with custom link text.
+
+== Conclusion
+
+This document exercises a broad set of AsciiDoc features to verify
+that the parser and renderer produce correct, standards-conformant output.
+Every section identifier above is cross-referenced in <<section-links>>
+to ensure internal linking works correctly.

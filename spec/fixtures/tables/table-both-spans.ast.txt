@@ -1,0 +1,13 @@
+Document
+  Table
+    TableRow
+      TableCell Text="Big" ColSpan="2" RowSpan="3"
+        InlineText Value="Big"
+      TableCell Text="B"
+        InlineText Value="B"
+    TableRow
+      TableCell Text="C"
+        InlineText Value="C"
+    TableRow
+      TableCell Text="D"
+        InlineText Value="D"

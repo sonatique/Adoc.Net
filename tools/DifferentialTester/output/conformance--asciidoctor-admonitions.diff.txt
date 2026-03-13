@@ -1,0 +1,14 @@
+# Diff: asciidoctor-admonitions.adoc
+# Similarity: 99.0%
+# --- Asciidoctor (expected)
+# +++ AdocNet (actual)
+
+  <pre>= Document Title
+  :icons: font
+  // include removed for conformance testing</pre>
+- <p>Learn more about using Font Awesome or custom icons with admonitions in <a href="macros:icons-font.html">macros:icons-font.html</a>.</p>
++ <p>Learn more about using Font Awesome or custom icons with admonitions in xref:macros:icons-font.adoc[].</p>
+  <h2 id="_using_emoji_for_admonition_icons">Using emoji for admonition icons</h2>
+  <p>If image-based or font-based icons are not available, you can leverage the admonition caption to display an emoji (or any symbol from Unicode) in the place of the admonition label, thus giving you an alternative way to make admonition icons.</p>
+  <p>If the <code>icons</code> attribute is not set on the document, the admonition label is shown as text (e.g., CAUTION).
+  ...

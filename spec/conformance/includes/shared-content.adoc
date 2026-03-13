@@ -1,0 +1,30 @@
+== License and Attribution
+
+This project is licensed under the Apache License, Version 2.0.
+You may obtain a copy of the license at https://www.apache.org/licenses/LICENSE-2.0[apache.org].
+
+=== Contributors
+
+* *Alice Martinez* -- core engine
+* *Bob Nakamura* -- CLI tooling
+* _Chen Wei_ -- documentation
+* `devops-bot` -- CI/CD automation
+
+=== Third-Party Libraries
+
+[cols="2,1,2"]
+|===
+| Library | Version | License
+
+| serde
+| 1.0
+| MIT / Apache-2.0
+
+| tokio
+| 1.36
+| MIT
+
+| clap
+| 4.5
+| MIT / Apache-2.0
+|===

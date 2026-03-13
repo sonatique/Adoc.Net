@@ -1,0 +1,11 @@
+Document
+  Paragraph
+    InlineText Value="Here is a table:"
+  Table
+    TableRow
+      TableCell Text="X"
+        InlineText Value="X"
+      TableCell Text="Y"
+        InlineText Value="Y"
+  Paragraph
+    InlineText Value="And here is text after."

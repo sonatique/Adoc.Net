@@ -1,0 +1,17 @@
+Document
+  Table HasHeader="True" HasFooter="True"
+    TableRow
+      TableCell Text="Item"
+        InlineText Value="Item"
+      TableCell Text="Price"
+        InlineText Value="Price"
+    TableRow
+      TableCell Text="Widget"
+        InlineText Value="Widget"
+      TableCell Text="$10"
+        InlineText Value="$10"
+    TableRow
+      TableCell Text="Total"
+        InlineText Value="Total"
+      TableCell Text="$10"
+        InlineText Value="$10"

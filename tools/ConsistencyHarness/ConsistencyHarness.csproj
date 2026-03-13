@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AdocNet.Core\AdocNet.Core.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Ast\AdocNet.Ast.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Parser\AdocNet.Parser.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Converters.Html\AdocNet.Converters.Html.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Converters.Pdf\AdocNet.Converters.Pdf.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,4 @@
+Document
+  DelimitedBlock BlockKind="Listing" Title="Directory contents" Content="bin/
+src/
+README.md"

@@ -1,0 +1,4 @@
+= Doc
+:foo: bar
+
+Text with {foo} and {unknown} and {} and {foo{nested}} end.

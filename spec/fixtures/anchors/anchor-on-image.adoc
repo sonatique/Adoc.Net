@@ -1,0 +1,2 @@
+[[my-image]]
+image::photo.jpg[Photo]

@@ -1,0 +1,9 @@
+Document
+  Section Id="_introduction" Level="1" Title="Introduction"
+    InlineText Value="Introduction"
+    Paragraph
+      InlineText Value="This is the introduction."
+  Section Id="_getting_started" Level="1" Title="Getting Started"
+    InlineText Value="Getting Started"
+    Paragraph
+      InlineText Value="This is the getting started section."

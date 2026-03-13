@@ -1,0 +1,8 @@
+Before the comment.
+
+////
+This is a block comment.
+It should be completely discarded.
+////
+
+After the comment.
