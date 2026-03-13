@@ -1,0 +1,17 @@
+Document Title="Doc"
+  Table
+    TableRow
+      TableCell Text="Name"
+        InlineText Value="Name"
+      TableCell Text="Description"
+        InlineText Value="Description"
+    TableRow
+      TableCell Text="{lib}"
+        InlineText Value="AdocNet"
+      TableCell Text="AsciiDoc parser"
+        InlineText Value="AsciiDoc parser"
+    TableRow
+      TableCell Text="Other"
+        InlineText Value="Other"
+      TableCell Text="Something else"
+        InlineText Value="Something else"

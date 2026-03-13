@@ -1,0 +1,3 @@
+Document
+  Admonition AdmonitionType="NOTE" Text="This is an inline note with icons."
+    InlineText Value="This is an inline note with icons."

@@ -1,0 +1,13 @@
+= Doc
+:backend: html
+:format: full
+
+ifdef::backend[]
+Outer block included.
+
+ifdef::format[]
+Inner block included.
+endif::[]
+endif::[]
+
+Always visible.

@@ -1,0 +1,12 @@
+Document
+  Table Id="my-table"
+    TableRow
+      TableCell Text="A"
+        InlineText Value="A"
+      TableCell Text="B"
+        InlineText Value="B"
+    TableRow
+      TableCell Text="1"
+        InlineText Value="1"
+      TableCell Text="2"
+        InlineText Value="2"

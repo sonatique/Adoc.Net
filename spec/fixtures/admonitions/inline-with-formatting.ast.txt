@@ -1,0 +1,9 @@
+Document
+  Admonition AdmonitionType="WARNING" Text="This has *bold* and _italic_ text."
+    InlineText Value="This has "
+    InlineStrong
+      InlineText Value="bold"
+    InlineText Value=" and "
+    InlineEmphasis
+      InlineText Value="italic"
+    InlineText Value=" text."

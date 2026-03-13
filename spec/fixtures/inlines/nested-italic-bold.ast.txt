@@ -1,0 +1,7 @@
+Document
+  Paragraph
+    InlineText Value="This has "
+    InlineEmphasis
+      InlineStrong
+        InlineText Value="italic bold"
+    InlineText Value=" text."

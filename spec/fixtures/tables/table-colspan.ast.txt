@@ -1,0 +1,14 @@
+Document
+  Table
+    TableRow
+      TableCell Text="Merged" ColSpan="2"
+        InlineText Value="Merged"
+      TableCell Text="C"
+        InlineText Value="C"
+    TableRow
+      TableCell Text="D"
+        InlineText Value="D"
+      TableCell Text="E"
+        InlineText Value="E"
+      TableCell Text="F"
+        InlineText Value="F"

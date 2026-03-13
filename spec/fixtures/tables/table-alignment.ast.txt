@@ -1,0 +1,16 @@
+Document
+  Table Columns="1,>1,^1"
+    TableRow
+      TableCell Text="Left"
+        InlineText Value="Left"
+      TableCell Text="Right"
+        InlineText Value="Right"
+      TableCell Text="Center"
+        InlineText Value="Center"
+    TableRow
+      TableCell Text="A"
+        InlineText Value="A"
+      TableCell Text="B"
+        InlineText Value="B"
+      TableCell Text="C"
+        InlineText Value="C"

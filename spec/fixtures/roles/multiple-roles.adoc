@@ -1,0 +1,2 @@
+[.role1.role2]
+This paragraph has multiple roles.

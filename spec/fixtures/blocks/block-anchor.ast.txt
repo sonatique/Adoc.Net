@@ -1,0 +1,3 @@
+Document
+  Paragraph Id="myid"
+    InlineText Value="This paragraph has an anchor."

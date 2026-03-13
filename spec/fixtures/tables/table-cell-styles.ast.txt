@@ -1,0 +1,11 @@
+Document
+  Table
+    TableRow
+      TableCell Text="Normal"
+        InlineText Value="Normal"
+      TableCell Text="Emphasized" ContentStyle="Emphasis"
+        InlineText Value="Emphasized"
+      TableCell Text="Header cell" ContentStyle="Header"
+        InlineText Value="Header cell"
+      TableCell Text="Monospace" ContentStyle="Monospace"
+        InlineText Value="Monospace"

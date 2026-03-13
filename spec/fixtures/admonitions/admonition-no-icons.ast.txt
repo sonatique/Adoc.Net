@@ -1,0 +1,3 @@
+Document
+  Admonition AdmonitionType="NOTE" Text="A note without icons attribute."
+    InlineText Value="A note without icons attribute."

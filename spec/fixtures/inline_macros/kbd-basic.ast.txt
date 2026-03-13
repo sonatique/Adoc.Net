@@ -1,0 +1,3 @@
+Document
+  Paragraph
+    InlineText Value="Press kbd:[Ctrl+C] to copy."

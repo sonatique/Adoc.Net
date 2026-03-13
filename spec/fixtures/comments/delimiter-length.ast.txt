@@ -1,0 +1,5 @@
+Document
+  Paragraph
+    InlineText Value="Before."
+  Paragraph
+    InlineText Value="After."

@@ -1,0 +1,62 @@
+= Admonitions and Blocks
+
+== Admonitions
+
+NOTE: This is a note admonition.
+
+TIP: This is a tip admonition.
+
+WARNING: This is a warning admonition.
+
+IMPORTANT: This is an important admonition.
+
+CAUTION: This is a caution admonition.
+
+== Source Code Block
+
+[source,python]
+----
+def hello():
+    print("Hello, World!")
+
+hello()
+----
+
+== Listing Block
+
+----
+This is a plain listing block.
+No syntax highlighting.
+    Preserves indentation.
+----
+
+== Literal Block
+
+....
+This is a literal block.
+    Also preserves whitespace.
+        And deeper indentation.
+....
+
+== Sidebar Block
+
+****
+This is a sidebar block.
+
+It can contain *formatted* text.
+****
+
+== Quote Block
+
+[quote, Albert Einstein]
+____
+Imagination is more important than knowledge.
+____
+
+== Example Block
+
+====
+This is an example block.
+
+It supports *inline formatting*.
+====

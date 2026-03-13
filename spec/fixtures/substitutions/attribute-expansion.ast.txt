@@ -1,0 +1,12 @@
+Document Title="Project Docs"
+  Section Id="_about_adocnet" Level="1" Title="About {project}"
+    InlineText Value="About AdocNet"
+    Paragraph
+      InlineText Value="The AdocNet library version 1.0 is available at "
+      InlineLink Url="https://example.com"
+      InlineText Value="."
+    List ListKind="Unordered"
+      ListItem Text="Built with {project}"
+        InlineText Value="Built with AdocNet"
+      ListItem Text="Version {version}"
+        InlineText Value="Version 1.0"

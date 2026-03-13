@@ -1,0 +1,3 @@
+Document
+  DelimitedBlock BlockKind="Literal" Content="This is literal text.
+It preserves formatting."

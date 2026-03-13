@@ -1,0 +1,5 @@
+Document
+  Paragraph
+    InlineText Value="Visit "
+    InlineLinkMacro Url="https://example.com" Label="https://example.com"
+    InlineText Value=" for details."

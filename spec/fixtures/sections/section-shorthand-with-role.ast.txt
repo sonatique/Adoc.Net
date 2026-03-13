@@ -1,0 +1,5 @@
+Document
+  Section Id="my-id" Roles="summary" Level="1" Title="Overview"
+    InlineText Value="Overview"
+    Paragraph
+      InlineText Value="This section has an ID and a role."

@@ -1,0 +1,6 @@
+= Doc
+:first: John
+:last: Doe
+:full: {first} {last}
+
+Hello {full}.

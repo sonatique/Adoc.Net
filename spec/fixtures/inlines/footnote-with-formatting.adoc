@@ -1,0 +1,1 @@
+Text with formatted footnote.footnote:[*bold* text]

@@ -1,0 +1,5 @@
+Document
+  Paragraph
+    InlineText Value="Before comment."
+  Paragraph
+    InlineText Value="After comment."

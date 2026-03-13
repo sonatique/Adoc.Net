@@ -1,0 +1,4 @@
+Document
+  DelimitedBlock BlockKind="Sidebar"
+    Paragraph
+      InlineText Value="This is a sidebar paragraph."

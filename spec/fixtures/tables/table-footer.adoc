@@ -1,0 +1,7 @@
+[%footer]
+|===
+|Item |Price
+
+|Widget |$10
+|Total |$10
+|===

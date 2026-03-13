@@ -1,0 +1,17 @@
+= Document Title
+Author Name <author@example.com>
+:revdate: 2026-01-01
+
+== First Section
+
+This is a paragraph with *bold*, _italic_, `monospace`, and *_bold italic_* formatting.
+
+A second paragraph with a https://example.com[link] and an anchor: [[my-anchor]]
+
+== Second Section
+
+Another paragraph.
+
+=== Subsection
+
+Content in a subsection.

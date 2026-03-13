@@ -1,0 +1,5 @@
+Document
+  Paragraph
+    InlineText Value="See "
+    InlineCrossReference Target="_introduction" Label="the introduction"
+    InlineText Value=" for details."

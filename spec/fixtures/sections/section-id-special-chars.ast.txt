@@ -1,0 +1,5 @@
+Document
+  Section Id="_hello_world_2024" Level="1" Title="Hello, World! (2024)"
+    InlineText Value="Hello, World! (2024)"
+    Paragraph
+      InlineText Value="Some content."

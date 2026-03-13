@@ -1,0 +1,4 @@
+[#my-id]
+== Getting Started
+
+This section's auto-generated ID is overridden.

@@ -1,0 +1,5 @@
+Document
+  Paragraph
+    InlineText Value="Normal text and "
+    InlinePassthrough Content="{not-expanded}"
+    InlineText Value=" passthrough."

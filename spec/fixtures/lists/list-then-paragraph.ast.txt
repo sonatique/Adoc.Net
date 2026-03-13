@@ -1,0 +1,8 @@
+Document
+  List ListKind="Unordered"
+    ListItem Text="Item one"
+      InlineText Value="Item one"
+    ListItem Text="Item two"
+      InlineText Value="Item two"
+  Paragraph
+    InlineText Value="This is a paragraph after the list."

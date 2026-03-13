@@ -1,0 +1,5 @@
+Document
+  Section Id="custom-id" Level="1" Title="My Section"
+    InlineText Value="My Section"
+    Paragraph
+      InlineText Value="This section has a custom ID."

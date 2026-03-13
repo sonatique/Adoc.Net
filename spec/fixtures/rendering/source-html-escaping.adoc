@@ -1,0 +1,6 @@
+[source,xml]
+----
+<root attr="value">
+  <child>&amp; text</child>
+</root>
+----

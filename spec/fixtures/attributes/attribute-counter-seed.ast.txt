@@ -1,0 +1,9 @@
+Document Title="Doc"
+  Paragraph
+    InlineText Value=":counter:step:5"
+  Paragraph
+    InlineText Value="Step {step}."
+  Paragraph
+    InlineText Value=":counter:step:"
+  Paragraph
+    InlineText Value="Step {step}."

@@ -1,0 +1,7 @@
+Before.
+
+////
+This is inside a block comment.
+////
+
+After.

@@ -1,0 +1,18 @@
+Document
+  Table
+    TableRow
+      TableCell Text="*bold* cell"
+        InlineStrong
+          InlineText Value="bold"
+        InlineText Value=" cell"
+      TableCell Text="_italic_ cell"
+        InlineEmphasis
+          InlineText Value="italic"
+        InlineText Value=" cell"
+    TableRow
+      TableCell Text="`mono` cell"
+        InlineMonospace
+          InlineText Value="mono"
+        InlineText Value=" cell"
+      TableCell Text="https://example.com"
+        InlineLink Url="https://example.com"

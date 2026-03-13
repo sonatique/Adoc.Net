@@ -1,0 +1,40 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>preview</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+  <!-- NuGet package metadata (shared across all packable projects) -->
+  <PropertyGroup>
+    <Version>1.0.0-beta.1</Version>
+    <Authors>Sylvain Fasel</Authors>
+    <Copyright>Copyright (c) Sylvain Fasel</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/sonatique/Adoc.Net</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/sonatique/Adoc.Net</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;documentation;lsp</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReleaseNotes>v1.0: First stable release. Full AsciiDoc support, 94% Asciidoctor conformance, HTML/PDF/DocBook/EPUB renderers, CLI with watch mode and live preview, extension architecture, LSP server.</PackageReleaseNotes>
+  </PropertyGroup>
+
+  <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->
+  <PropertyGroup Condition="'$(IsPackable)' != 'false' and '$(IsTestProject)' != 'true'">
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+  </PropertyGroup>
+
+  <!-- XML documentation for public API surfaces.
+       CS1591 (missing XML comment) is suppressed so that TreatWarningsAsErrors
+       does not block builds for undocumented members. Documentation is added
+       incrementally as API surfaces stabilise. -->
+  <PropertyGroup Condition="'$(IsPackable)' != 'false' and '$(IsTestProject)' != 'true'">
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+</Project>

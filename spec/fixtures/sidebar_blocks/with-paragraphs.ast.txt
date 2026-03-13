@@ -1,0 +1,6 @@
+Document
+  DelimitedBlock BlockKind="Sidebar"
+    Paragraph
+      InlineText Value="First paragraph in sidebar."
+    Paragraph
+      InlineText Value="Second paragraph in sidebar."

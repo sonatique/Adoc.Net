@@ -1,0 +1,2 @@
+Document
+  DelimitedBlock BlockKind="Source" Content="*not bold* and {not-expanded}"

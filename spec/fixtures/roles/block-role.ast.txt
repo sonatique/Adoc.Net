@@ -1,0 +1,3 @@
+Document
+  Paragraph Roles="lead"
+    InlineText Value="This is a lead paragraph."

@@ -1,0 +1,2 @@
+Document
+  DelimitedBlock BlockKind="Source" Content="This stays literal, not source."

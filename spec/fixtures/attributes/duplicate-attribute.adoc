@@ -1,0 +1,5 @@
+= Doc
+:color: red
+:color: blue
+
+The color is {color}.

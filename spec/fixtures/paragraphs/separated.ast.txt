@@ -1,0 +1,5 @@
+Document
+  Paragraph
+    InlineText Value="First paragraph here."
+  Paragraph
+    InlineText Value="Second paragraph here."

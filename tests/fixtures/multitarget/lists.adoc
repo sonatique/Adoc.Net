@@ -1,0 +1,31 @@
+= Lists Test
+
+== Unordered List
+
+* Item one
+* Item two
+** Nested item A
+** Nested item B
+*** Deep nested
+* Item three
+
+== Ordered List
+
+. First
+. Second
+.. Nested first
+.. Nested second
+. Third
+
+== Mixed Lists
+
+* Unordered
+. Ordered inside unordered
+. Another ordered
+* Back to unordered
+
+== Checklist
+
+* [x] Done task
+* [ ] Pending task
+* [x] Another done task

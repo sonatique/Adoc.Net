@@ -1,0 +1,3 @@
+Document
+  Paragraph
+    InlineText Value="Select menu:File[Save]."

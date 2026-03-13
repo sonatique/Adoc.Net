@@ -1,0 +1,9 @@
+Document Title="Guide"
+  Section Id="_part_a" Level="1" Title="Part A"
+    InlineText Value="Part A"
+    Paragraph
+      InlineText Value="Alpha content."
+  Section Id="_part_b" Level="1" Title="Part B"
+    InlineText Value="Part B"
+    Paragraph
+      InlineText Value="Bravo content."

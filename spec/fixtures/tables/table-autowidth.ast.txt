@@ -1,0 +1,17 @@
+Document
+  Table HasHeader="True" IsAutoWidth="True"
+    TableRow
+      TableCell Text="Name"
+        InlineText Value="Name"
+      TableCell Text="Value"
+        InlineText Value="Value"
+    TableRow
+      TableCell Text="Alpha"
+        InlineText Value="Alpha"
+      TableCell Text="1"
+        InlineText Value="1"
+    TableRow
+      TableCell Text="Beta"
+        InlineText Value="Beta"
+      TableCell Text="2"
+        InlineText Value="2"

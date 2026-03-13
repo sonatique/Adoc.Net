@@ -1,0 +1,5 @@
+Document
+  DelimitedBlock BlockKind="Source" Language="csharp" Content="public class Hello
+{
+    public static void Main() => Console.WriteLine(\"Hello\");
+}"

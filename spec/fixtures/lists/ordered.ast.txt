@@ -1,0 +1,8 @@
+Document
+  List ListKind="Ordered"
+    ListItem Text="First"
+      InlineText Value="First"
+    ListItem Text="Second"
+      InlineText Value="Second"
+    ListItem Text="Third"
+      InlineText Value="Third"

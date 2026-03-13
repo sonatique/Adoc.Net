@@ -1,0 +1,10 @@
+Document
+  Table
+    TableRow
+      TableCell Text="Tall" RowSpan="2"
+        InlineText Value="Tall"
+      TableCell Text="B"
+        InlineText Value="B"
+    TableRow
+      TableCell Text="C"
+        InlineText Value="C"

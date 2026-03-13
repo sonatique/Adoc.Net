@@ -1,0 +1,3 @@
+= Doc
+
+The {unknown} reference stays as-is.

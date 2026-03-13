@@ -1,0 +1,11 @@
+Document
+  DescriptionList
+    DescriptionItem Term="First" Description="Description one."
+      InlineText Value="First"
+      InlineText Value="Description one."
+    DescriptionItem Term="Second" Description="Description two."
+      InlineText Value="Second"
+      InlineText Value="Description two."
+    DescriptionItem Term="Third" Description="Description three."
+      InlineText Value="Third"
+      InlineText Value="Description three."

@@ -1,0 +1,6 @@
+[source,java]
+----
+public void run() { // <1>
+}
+----
+<1> The *main* entry point

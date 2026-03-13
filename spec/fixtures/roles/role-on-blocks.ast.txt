@@ -1,0 +1,5 @@
+Document
+  DelimitedBlock Roles="highlight" BlockKind="Listing" Content="listing content"
+  DelimitedBlock Roles="special" BlockKind="Example"
+    Paragraph
+      InlineText Value="Example content."

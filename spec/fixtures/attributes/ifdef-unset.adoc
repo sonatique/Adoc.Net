@@ -1,0 +1,5 @@
+= Doc
+
+ifdef::backend[This should not appear.]
+
+Only this paragraph.

@@ -1,0 +1,29 @@
+# Diff: quarkus-getting-started.adoc
+# Similarity: 99.2%
+# --- Asciidoctor (expected)
+# +++ AdocNet (actual)
+
+  Tip
+  </td>
+  <td class="content">
+- Verify Maven is using the Java you expect
+  <p>If you have multiple JDK's installed, it is not certain Maven will pick up the expected java
+  and you could end up with unexpected results.
+  You can verify which JDK Maven uses by running <code>mvn --version</code>.</p>
+  ...
+  Tip
+  </td>
+  <td class="content">
+- Differences with vanilla Jakarta REST
+  <p>With Quarkus, there is no need to create an <code>Application</code> class. It's supported, but not required. In addition, only one instance
+  of the resource is created and not one per request. You can configure this using the different <code>*Scoped</code> annotations (<code>ApplicationScoped</code>, <code>RequestScoped</code>, etc).</p>
+  </td>
+  ...
+  Tip
+  </td>
+  <td class="content">
+- Automatically add newline with <code>curl -w "\n"</code>
+  <p>We are using <code>curl -w "\n"</code> in this example to avoid your terminal printing a '%' or put both result and next command prompt on the same line.</p>
+  </td>
+  </tr>
+  ...

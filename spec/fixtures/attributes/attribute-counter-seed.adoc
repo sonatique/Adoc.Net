@@ -1,0 +1,9 @@
+= Doc
+
+:counter:step:5
+
+Step {step}.
+
+:counter:step:
+
+Step {step}.

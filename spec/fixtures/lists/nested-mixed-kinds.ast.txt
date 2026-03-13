@@ -1,0 +1,9 @@
+Document
+  List ListKind="Unordered"
+    ListItem Text="Unordered parent"
+      InlineText Value="Unordered parent"
+      List ListKind="Unordered"
+        ListItem Text="Nested unordered"
+          InlineText Value="Nested unordered"
+    ListItem Text="Another parent"
+      InlineText Value="Another parent"

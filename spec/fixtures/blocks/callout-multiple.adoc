@@ -1,0 +1,16 @@
+[source,csharp]
+----
+using System;           // <1>
+
+class Program            // <2>
+{
+    static void Main()   // <3>
+    {
+        Console.WriteLine("Hi"); // <4>
+    }
+}
+----
+<1> Import namespace
+<2> Class declaration
+<3> Entry point
+<4> Print message

@@ -1,0 +1,5 @@
+Document
+  Paragraph
+    InlineText Value="This has "
+    InlinePassthrough Content="inline passthrough"
+    InlineText Value=" in it."

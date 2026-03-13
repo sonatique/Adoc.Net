@@ -1,0 +1,5 @@
+Document Title="Book"
+  Section Id="_chapter_1" Level="1" Title="Chapter 1"
+    InlineText Value="Chapter 1"
+    Paragraph
+      InlineText Value="This is the first chapter."

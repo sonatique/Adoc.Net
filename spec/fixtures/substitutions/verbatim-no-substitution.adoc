@@ -1,0 +1,13 @@
+= Doc
+:name: Value
+
+Paragraph with {name} expanded.
+
+----
+{name} is not expanded here.
+*not bold* in listing.
+----
+
+....
+{name} is not expanded here either.
+....

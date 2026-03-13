@@ -1,0 +1,11 @@
+= Document With Footnotes
+
+== Introduction
+
+AsciiDoc supports footnotes.footnote:[An anonymous footnote] for inline references.
+
+== Details
+
+This uses a named footnote.footnote:details[A named footnote] that can be reused.
+
+See the earlier note.footnote:details[]

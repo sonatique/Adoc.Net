@@ -1,0 +1,7 @@
+Document
+  Paragraph
+    InlineText Value="The formula E = mc"
+    InlineSuperscript Content="2"
+    InlineText Value=" and water H"
+    InlineSubscript Content="2"
+    InlineText Value="O are common."

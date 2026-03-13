@@ -1,0 +1,5 @@
+= Doc
+:product: AdocNet
+:version: 1.0
+
+include::_included-content.adoc[]

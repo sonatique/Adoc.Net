@@ -1,0 +1,4 @@
+= Doc
+:backend: html
+
+ifdef::backend,format[At least one is set.]

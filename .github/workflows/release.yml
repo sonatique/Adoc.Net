@@ -1,0 +1,144 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  id-token: write  # required for trusted publishing OIDC
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history for changelog generation
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-quality: 'preview'
+
+      - name: Setup .NET 8 (for cross-TFM tests)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify version matches Directory.Build.props
+        run: |
+          PROPS_VERSION=$(grep '<Version>' Directory.Build.props | sed 's/.*<Version>\(.*\)<\/Version>.*/\1/')
+          if [ "$PROPS_VERSION" != "${{ steps.version.outputs.VERSION }}" ]; then
+            echo "::error::Tag version (${{ steps.version.outputs.VERSION }}) does not match Directory.Build.props ($PROPS_VERSION)"
+            exit 1
+          fi
+
+      - name: Build
+        run: dotnet build -c Release
+
+      - name: Test
+        run: dotnet test -c Release --no-build
+
+      - name: Pack (NuGet + symbols)
+        run: dotnet pack -c Release --no-build -o artifacts/
+
+      - name: Verify packages
+        run: |
+          echo "Packages:"
+          ls -la artifacts/*.nupkg artifacts/*.snupkg
+          echo ""
+          echo "Package contents:"
+          for pkg in artifacts/*.nupkg; do
+            echo "--- $(basename $pkg) ---"
+            unzip -l "$pkg" | grep -E "lib/(net|netstandard)" | awk '{print "  " $4}'
+          done
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Find the previous tag
+          PREV_TAG=$(git tag --sort=-v:refname | grep '^v' | sed -n '2p')
+          if [ -z "$PREV_TAG" ]; then
+            PREV_TAG=$(git rev-list --max-parents=0 HEAD)
+            RANGE="$PREV_TAG..HEAD"
+          else
+            RANGE="$PREV_TAG..HEAD"
+          fi
+
+          echo "Generating changelog for $RANGE"
+
+          # Generate structured changelog
+          {
+            echo "## What's Changed"
+            echo ""
+
+            # Features
+            FEATS=$(git log "$RANGE" --oneline --grep="^feat" --format="- %s" 2>/dev/null)
+            if [ -n "$FEATS" ]; then
+              echo "### Features"
+              echo "$FEATS"
+              echo ""
+            fi
+
+            # Fixes
+            FIXES=$(git log "$RANGE" --oneline --grep="^fix" --format="- %s" 2>/dev/null)
+            if [ -n "$FIXES" ]; then
+              echo "### Bug Fixes"
+              echo "$FIXES"
+              echo ""
+            fi
+
+            # Docs
+            DOCS=$(git log "$RANGE" --oneline --grep="^docs" --format="- %s" 2>/dev/null)
+            if [ -n "$DOCS" ]; then
+              echo "### Documentation"
+              echo "$DOCS"
+              echo ""
+            fi
+
+            # Other
+            OTHER=$(git log "$RANGE" --oneline --grep="^chore\|^ci\|^test\|^refactor" --format="- %s" 2>/dev/null)
+            if [ -n "$OTHER" ]; then
+              echo "### Other"
+              echo "$OTHER"
+              echo ""
+            fi
+
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${{ github.ref_name }}"
+          } > /tmp/changelog.md
+
+          cat /tmp/changelog.md
+
+      - name: Publish to NuGet (trusted publishing)
+        run: |
+          dotnet nuget add source https://api.nuget.org/v3/index.json \
+            --name nuget.org \
+            --username "az" \
+            --password "${{ secrets.NUGET_API_KEY }}" \
+            --store-password-in-clear-text || true
+          for pkg in artifacts/*.nupkg; do
+            dotnet nuget push "$pkg" \
+              --api-key "${{ secrets.NUGET_API_KEY }}" \
+              --source https://api.nuget.org/v3/index.json \
+              --skip-duplicate
+          done
+          for pkg in artifacts/*.snupkg; do
+            dotnet nuget push "$pkg" \
+              --api-key "${{ secrets.NUGET_API_KEY }}" \
+              --source https://api.nuget.org/v3/index.json \
+              --skip-duplicate
+          done
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: /tmp/changelog.md
+          files: |
+            artifacts/*.nupkg
+            artifacts/*.snupkg

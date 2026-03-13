@@ -1,0 +1,7 @@
+= My Document
+
+This is preamble text before any section.
+
+== First Section
+
+Section content here.

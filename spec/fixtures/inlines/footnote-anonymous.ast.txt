@@ -1,0 +1,5 @@
+Document
+  Paragraph
+    InlineText Value="This has a footnote."
+    InlineFootnote Text="This is a footnote"
+      InlineText Value="This is a footnote"

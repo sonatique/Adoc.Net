@@ -1,0 +1,10 @@
+Document
+  DelimitedBlock BlockKind="Source" Language="csharp" Content="using System;           //
+
+class Program            //
+{
+    static void Main()   //
+    {
+        Console.WriteLine(\"Hi\"); //
+    }
+}" Callout[1]="Import namespace" Callout[2]="Class declaration" Callout[3]="Entry point" Callout[4]="Print message"

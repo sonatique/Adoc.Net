@@ -1,0 +1,3 @@
+Document Title="Document"
+  Paragraph
+    InlineText Value="Some content."

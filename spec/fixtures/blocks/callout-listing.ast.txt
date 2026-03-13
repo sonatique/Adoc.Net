@@ -1,0 +1,3 @@
+Document
+  DelimitedBlock BlockKind="Listing" Content="$ docker run -d myapp //
+$ docker ps           //" Callout[1]="Start the container" Callout[2]="List running containers"

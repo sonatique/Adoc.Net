@@ -1,0 +1,5 @@
+== Outer
+
+include::_inner.adoc[]
+
+Outer paragraph.

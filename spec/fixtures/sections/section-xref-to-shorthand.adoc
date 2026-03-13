@@ -1,0 +1,8 @@
+[#my-id]
+== Introduction
+
+This is the intro.
+
+== Details
+
+See <<my-id,Introduction>> for background.

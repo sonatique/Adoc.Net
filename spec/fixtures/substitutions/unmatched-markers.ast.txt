@@ -1,0 +1,7 @@
+Document
+  Paragraph
+    InlineText Value="Hello *world with no close."
+  Paragraph
+    InlineText Value="An _orphan underscore too."
+  Paragraph
+    InlineText Value="And `orphan backtick here."

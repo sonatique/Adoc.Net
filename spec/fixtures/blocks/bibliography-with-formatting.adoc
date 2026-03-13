@@ -1,0 +1,4 @@
+[bibliography]
+== References
+
+- [[[ref1]]] Author. _Title of the Book_. Publisher, 2024.

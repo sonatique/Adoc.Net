@@ -1,0 +1,5 @@
+Document Title="Doc"
+  Paragraph
+    InlineText Value="Visit "
+    InlineLinkMacro Url="https://example.com" Label="AdocNet website"
+    InlineText Value=" today."

@@ -1,0 +1,6 @@
+Document
+  Paragraph
+    InlineText Value="This text has "
+    InlineEmphasis
+      InlineText Value="italic words"
+    InlineText Value=" in it."

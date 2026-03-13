@@ -1,0 +1,7 @@
+Here is a table:
+
+|===
+|X |Y
+|===
+
+And here is text after.

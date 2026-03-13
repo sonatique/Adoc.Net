@@ -1,0 +1,3 @@
+Document
+  DelimitedBlock BlockKind="Source" Language="python" Content="import os       #
+print(\"hello\")  #" Callout[1]="Import module" Callout[2]="Print output"

@@ -1,0 +1,4 @@
+Document
+  DelimitedBlock BlockKind="Listing" Content="some code here
+
+A normal paragraph."

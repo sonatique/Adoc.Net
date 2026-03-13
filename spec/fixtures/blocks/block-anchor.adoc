@@ -1,0 +1,2 @@
+[[myid]]
+This paragraph has an anchor.

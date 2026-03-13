@@ -1,0 +1,13 @@
+= Doc
+
+:counter:step:
+
+Step {step}.
+
+:counter:step:
+
+Step {step}.
+
+:counter:step:
+
+Step {step}.

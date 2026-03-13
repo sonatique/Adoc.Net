@@ -1,0 +1,6 @@
+[NOTE]
+====
+This is a block note.
+
+It has multiple paragraphs.
+====

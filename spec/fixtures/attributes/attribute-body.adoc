@@ -1,0 +1,7 @@
+= Doc
+
+First paragraph.
+
+:greeting: Hello
+
+{greeting} world.

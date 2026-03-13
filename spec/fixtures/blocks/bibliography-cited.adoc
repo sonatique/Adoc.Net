@@ -1,0 +1,6 @@
+See <<ref1>> for more information.
+
+[bibliography]
+== References
+
+- [[[ref1]]] The main reference.

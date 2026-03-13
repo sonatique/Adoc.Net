@@ -1,0 +1,5 @@
+Document Title="Doc"
+  Paragraph
+    InlineText Value="First paragraph."
+  Paragraph
+    InlineText Value="The value reference."

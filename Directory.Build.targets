@@ -1,0 +1,22 @@
+<Project>
+  <!-- Polyfill source files compile ONLY in AdocNet.Ast (the leaf assembly).
+       All other multi-targeted projects access polyfill types via InternalsVisibleTo.
+       This avoids extension method ambiguity when multiple assemblies each define the same types. -->
+  <ItemGroup Condition="'$(TargetFrameworks)' != '' and '$(RootNamespace)' == 'AdocNet.Ast'">
+    <Compile Include="$(MSBuildThisFileDirectory)src\Polyfills\*.cs" LinkBase="Polyfills" />
+  </ItemGroup>
+
+  <!-- Global usings for the compatibility namespace — included in ALL multi-targeted projects
+       so extension methods from the polyfills (compiled in AdocNet.Ast) are accessible. -->
+  <ItemGroup Condition="'$(TargetFrameworks)' != '' and '$(RootNamespace)' != 'AdocNet.Ast'">
+    <Compile Include="$(MSBuildThisFileDirectory)src\Polyfills\GlobalUsings.ns20.cs" LinkBase="Polyfills" />
+  </ItemGroup>
+
+  <!-- Suppress CS0436 (type conflicts with imported type) for NS2.0 polyfills.
+       This is expected when multiple assemblies in the same solution each compile
+       the same internal polyfill types (Index, Range, IsExternalInit, etc.).
+       The compiler resolves correctly by using the locally defined type. -->
+  <PropertyGroup Condition="'$(TargetFrameworks)' != ''">
+    <NoWarn>$(NoWarn);CS0436;CS1685</NoWarn>
+  </PropertyGroup>
+</Project>

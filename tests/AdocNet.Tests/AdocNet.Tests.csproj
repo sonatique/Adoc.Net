@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <!-- Suppress VS Threading analyzer rules pulled transitively by OmniSharp.Extensions.LanguageServer -->
+    <NoWarn>$(NoWarn);VSTHRD002;VSTHRD103;VSTHRD200</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="nunit" Version="4.*" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.*" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AdocNet.Core\AdocNet.Core.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Ast\AdocNet.Ast.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Parser\AdocNet.Parser.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Converters.Html\AdocNet.Converters.Html.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Converters.DocBook\AdocNet.Converters.DocBook.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Converters.Pdf\AdocNet.Converters.Pdf.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Converters.Epub\AdocNet.Converters.Epub.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Cli\AdocNet.Cli.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.LanguageServer\AdocNet.LanguageServer.csproj" />
+    <ProjectReference Include="..\..\tools\DifferentialTester\DifferentialTester.csproj" />
+  </ItemGroup>
+</Project>

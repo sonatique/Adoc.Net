@@ -1,0 +1,5 @@
+Document Title="Doc"
+  Paragraph
+    InlineText Value="This should not appear."
+  Paragraph
+    InlineText Value="Only this paragraph."

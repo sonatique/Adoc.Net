@@ -1,0 +1,17 @@
+Document
+  Table HasHeader="True"
+    TableRow
+      TableCell Text="Name"
+        InlineText Value="Name"
+      TableCell Text="Age"
+        InlineText Value="Age"
+    TableRow
+      TableCell Text="Alice"
+        InlineText Value="Alice"
+      TableCell Text="30"
+        InlineText Value="30"
+    TableRow
+      TableCell Text="Bob"
+        InlineText Value="Bob"
+      TableCell Text="41"
+        InlineText Value="41"

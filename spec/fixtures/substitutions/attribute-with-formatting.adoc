@@ -1,0 +1,4 @@
+= Guide
+:tool: Git
+
+Use *{tool}* for _version control_.

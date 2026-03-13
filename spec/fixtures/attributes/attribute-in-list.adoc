@@ -1,0 +1,7 @@
+= Doc
+:lang: C#
+
+* Write code in {lang}
+* Build with dotnet
+. Install {lang} SDK
+. Run tests

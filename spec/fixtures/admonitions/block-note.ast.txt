@@ -1,0 +1,6 @@
+Document
+  Admonition AdmonitionType="NOTE"
+    Paragraph
+      InlineText Value="This is a block note."
+    Paragraph
+      InlineText Value="It has multiple paragraphs."

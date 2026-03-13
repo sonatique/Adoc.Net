@@ -1,0 +1,5 @@
+Document
+  Section Id="_tags_attributes" Level="1" Title="Tags & Attributes"
+    InlineText Value="Tags & Attributes"
+    Paragraph
+      InlineText Value="Use <div> elements with \"class\" attributes & 'id' values."

@@ -1,0 +1,6 @@
+----
+$ docker run -d myapp // <1>
+$ docker ps           // <2>
+----
+<1> Start the container
+<2> List running containers

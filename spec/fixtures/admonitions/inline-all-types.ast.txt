@@ -1,0 +1,11 @@
+Document
+  Admonition AdmonitionType="NOTE" Text="A note."
+    InlineText Value="A note."
+  Admonition AdmonitionType="TIP" Text="A tip."
+    InlineText Value="A tip."
+  Admonition AdmonitionType="IMPORTANT" Text="Something important."
+    InlineText Value="Something important."
+  Admonition AdmonitionType="WARNING" Text="A warning."
+    InlineText Value="A warning."
+  Admonition AdmonitionType="CAUTION" Text="Be careful."
+    InlineText Value="Be careful."

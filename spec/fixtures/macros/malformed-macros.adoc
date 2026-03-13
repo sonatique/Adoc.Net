@@ -1,0 +1,7 @@
+link: missing target
+
+image: also missing
+
+link:target without brackets
+
+image:target no closing bracket[

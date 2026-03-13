@@ -1,0 +1,11 @@
+= Project Docs
+:project: AdocNet
+:version: 1.0
+:url: https://example.com
+
+== About {project}
+
+The {project} library version {version} is available at {url}.
+
+* Built with {project}
+* Version {version}

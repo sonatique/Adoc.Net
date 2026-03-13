@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework />
+    <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>AdocNet.Converters.Pdf</RootNamespace>
+    <Description>PDF renderer for the Adoc.Net library. Pure managed code, no external dependencies.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AdocNet.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AdocNet.Core\AdocNet.Core.csproj" />
+    <ProjectReference Include="..\AdocNet.Ast\AdocNet.Ast.csproj" />
+  </ItemGroup>
+</Project>

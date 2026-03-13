@@ -1,0 +1,6 @@
+Document
+  Paragraph
+    InlineText Value="This text has "
+    InlineStrong
+      InlineText Value="bold words"
+    InlineText Value=" in it."

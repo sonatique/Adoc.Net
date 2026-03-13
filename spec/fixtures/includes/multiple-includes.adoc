@@ -1,0 +1,5 @@
+= Guide
+
+include::_part-a.adoc[]
+
+include::_part-b.adoc[]

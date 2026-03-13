@@ -1,0 +1,5 @@
+[cols="<,>,^"]
+|===
+|Left |Right |Center
+|A |B |C
+|===

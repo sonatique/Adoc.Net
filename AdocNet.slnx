@@ -1,0 +1,26 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AdocNet/AdocNet.csproj" />
+    <Project Path="src/AdocNet.Ast/AdocNet.Ast.csproj" />
+    <Project Path="src/AdocNet.Converters.Html/AdocNet.Converters.Html.csproj" />
+    <Project Path="src/AdocNet.Converters.DocBook/AdocNet.Converters.DocBook.csproj" />
+    <Project Path="src/AdocNet.Converters.Pdf/AdocNet.Converters.Pdf.csproj" />
+    <Project Path="src/AdocNet.Converters.Epub/AdocNet.Converters.Epub.csproj" />
+    <Project Path="src/AdocNet.Core/AdocNet.Core.csproj" />
+    <Project Path="src/AdocNet.Parser/AdocNet.Parser.csproj" />
+    <Project Path="src/AdocNet.LanguageServer/AdocNet.LanguageServer.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AdocNet.Tests/AdocNet.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="src/AdocNet.Cli/AdocNet.Cli.csproj" />
+    <Project Path="tools/DifferentialTester/DifferentialTester.csproj" />
+  </Folder>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/AdocNet.Benchmarks/AdocNet.Benchmarks.csproj" />
+  </Folder>
+  <Folder Name="/examples/">
+    <Project Path="examples/BasicUsage/BasicUsage.csproj" />
+  </Folder>
+</Solution>

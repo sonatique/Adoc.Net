@@ -1,0 +1,7 @@
+Document
+  Paragraph
+    InlineText Value="This has "
+    InlineStrong
+      InlineText Value="bold "
+      InlineLinkMacro Url="https://example.com" Label="text"
+    InlineText Value=" here."

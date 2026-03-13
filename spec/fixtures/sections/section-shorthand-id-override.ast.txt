@@ -1,0 +1,5 @@
+Document
+  Section Id="my-id" Level="1" Title="Getting Started"
+    InlineText Value="Getting Started"
+    Paragraph
+      InlineText Value="This section’s auto-generated ID is overridden."

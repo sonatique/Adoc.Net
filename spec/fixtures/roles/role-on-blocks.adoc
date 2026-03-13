@@ -1,0 +1,9 @@
+[.highlight]
+----
+listing content
+----
+
+[.special]
+====
+Example content.
+====

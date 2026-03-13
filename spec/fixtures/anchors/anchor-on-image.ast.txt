@@ -1,0 +1,2 @@
+Document
+  BlockImage Id="my-image" Target="photo.jpg" Alt="Photo"

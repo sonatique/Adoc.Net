@@ -1,0 +1,5 @@
+Document Title="Doc"
+  Paragraph
+    InlineText Value="This content shows because missing is not set."
+  Paragraph
+    InlineText Value="Always visible."

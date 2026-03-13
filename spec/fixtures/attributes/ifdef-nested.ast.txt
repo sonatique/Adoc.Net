@@ -1,0 +1,7 @@
+Document Title="Doc"
+  Paragraph
+    InlineText Value="Outer block included."
+  Paragraph
+    InlineText Value="Inner block included."
+  Paragraph
+    InlineText Value="Always visible."

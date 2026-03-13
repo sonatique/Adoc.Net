@@ -1,0 +1,6 @@
+[options="header"]
+|===
+|Name |Age
+|Alice |30
+|Bob |41
+|===

@@ -1,0 +1,3 @@
+:icons: font
+
+NOTE: This is an inline note with icons.

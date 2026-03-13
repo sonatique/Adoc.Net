@@ -1,0 +1,5 @@
+Document
+  Paragraph
+    InlineText Value="See "
+    InlineImage Target="logo.png" Alt="Logo"
+    InlineText Value=" here."

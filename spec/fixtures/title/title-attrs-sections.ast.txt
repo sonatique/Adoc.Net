@@ -1,0 +1,9 @@
+Document Title="Complete Document"
+  Section Id="_first_section" Level="1" Title="First Section"
+    InlineText Value="First Section"
+    Paragraph
+      InlineText Value="Content of the first section."
+  Section Id="_second_section" Level="1" Title="Second Section"
+    InlineText Value="Second Section"
+    Paragraph
+      InlineText Value="Content of the second section."
