@@ -1,0 +1,93 @@
+= Special Characters and Symbols
+
+== Copyright and Legal Symbols
+
+Copyright (C) 2026 Acme Corp. All Rights Reserved.
+
+Copyright symbol: (C)
+
+Registered trademark: (R)
+
+Trademark: (TM)
+
+Section symbol: {empty}§
+
+Degree symbol: 45{deg}C
+
+Non-breaking space: before{nbsp}after
+
+Broken bar: {brvbar}
+
+== Smart Punctuation
+
+This is an em dash -- used for emphasis.
+
+This is an en dash for ranges: pages 10-20.
+
+An ellipsis... appears here.
+
+Curly apostrophe: it's a test.
+
+Double curly quotes: "Hello, World!"
+
+Single curly quotes: 'Hello, World!'
+
+== Attribute References
+
+Document year: {docyear}
+
+Document date: {docdate}
+
+Empty attribute: [{empty}]
+
+Space attribute: [{sp}]
+
+C++ language: {cpp}
+
+Ampersand: {amp}
+
+Less than: {lt}
+
+Greater than: {gt}
+
+Vertical bar: {vbar}
+
+Asterisk: {asterisk}
+
+Backtick: {backtick}
+
+Left square bracket: {startsb}
+
+Right square bracket: {endsb}
+
+Two colons: {two-colons}
+
+Apostrophe: {apos}
+
+Double quote: {quot}
+
+Left single quote: {lsquo}
+
+Right single quote: {rsquo}
+
+Left double quote: {ldquo}
+
+Right double quote: {rdquo}
+
+== HTML Special Characters
+
+Ampersand & less-than < greater-than > double-quote " single-quote '
+
+Pre-escaped: &amp; &lt; &gt; &quot;
+
+== Unicode Characters
+
+Accented: é è ê ë ñ ü ö ä ß
+
+Greek: α β γ δ ε ζ η θ
+
+Mathematical: ∑ ∏ ∫ ∞ √ ≠ ≤ ≥
+
+Arrows: → ← ↑ ↓ ↔
+
+Box drawing: ┌ ─ ┐ │ └ ┘

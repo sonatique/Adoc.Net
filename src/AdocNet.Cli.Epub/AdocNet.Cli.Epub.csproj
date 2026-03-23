@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>adocnet-epub</AssemblyName>
+    <RootNamespace>AdocNet.Cli.Epub</RootNamespace>
+    <Description>AsciiDoc to EPUB 3.0 converter. Equivalent to: adocnet -b epub</Description>
+
+    <!-- NuGet tool packaging -->
+    <PackageId>AdocNet.Epub</PackageId>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>adocnet-epub</ToolCommandName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AdocNet.Cli\AdocNet.Cli.csproj" />
+  </ItemGroup>
+</Project>

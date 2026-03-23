@@ -1,0 +1,108 @@
+<div class="sect1">
+<h2 id="_introduction">Introduction</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>This document is designed to test text wrapping behavior in the PDF renderer. Each paragraph below contains enough text to force wrapping at the right margin, exercising the word-wrap algorithm across various content patterns.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_dense_prose">Dense Prose</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium.</p>
+</div>
+<div class="paragraph">
+<p>Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_paragraph_with_inline_formatting">Paragraph with Inline Formatting</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>This paragraph contains <strong>bold text that spans multiple words</strong> and <em>italic text that also spans multiple words</em> as well as <code>monospace code spans like variable_name_with_underscores</code> mixed together. The purpose is to verify that the word-wrapping algorithm correctly handles segments with <strong>different font metrics</strong> since bold text is wider than regular text and <em>italic text uses oblique variants</em> of the same font family.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_paragraph_with_links">Paragraph with Links</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Visit <a href="https://www.example.com/documentation/reference/getting-started/" class="bare">https://www.example.com/documentation/reference/getting-started/</a> for the complete documentation. The <a href="https://www.example.com/products/dashboard/">Acme Dashboard</a> provides comprehensive monitoring capabilities including support for multiple data sources, real-time updates, and historical reporting in a single interface.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_very_long_single_line">Very Long Single Line</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>ABCDEFGHIJKLMNOPQRSTUVWXYZ_ABCDEFGHIJKLMNOPQRSTUVWXYZ_ABCDEFGHIJKLMNOPQRSTUVWXYZ_ABCDEFGHIJKLMNOPQRSTUVWXYZ_ABCDEFGHIJKLMNOPQRSTUVWXYZ</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_table_with_long_cell_content">Table with Long Cell Content</h2>
+<div class="sectionbody">
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 33.3333%;">
+<col style="width: 33.3333%;">
+<col style="width: 33.3334%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Parameter</th>
+<th class="tableblock halign-left valign-top">Description</th>
+<th class="tableblock halign-left valign-top">Default Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">MAX_CONCURRENT_SESSIONS</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Specifies the maximum number of concurrent sessions that can be simultaneously active in the system, including both foreground and background processing tasks</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">64</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">ENABLE_AUTOMATIC_RECOVERY</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Controls whether the system automatically attempts to recover from transient failures by retrying the operation with exponential backoff and circuit breaker protection</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">true</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">DATA_RETENTION_POLICY_DAYS</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Maximum number of days that processed data records are retained in the storage subsystem before being eligible for automatic cleanup by the maintenance scheduler</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">90</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_nested_lists_with_long_items">Nested Lists with Long Items</h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p>The first item in this unordered list contains enough text to demonstrate that list items properly wrap at the right margin without overlapping the bullet point or extending beyond the page boundary.</p>
+<div class="ulist">
+<ul>
+<li>
+<p>A nested item that also contains a substantial amount of text to verify that the indentation is properly applied and the available width for text wrapping is reduced accordingly.</p>
+<div class="ulist">
+<ul>
+<li>
+<p>A deeply nested item with even more indentation, reducing the available text width further and testing the wrapping behavior under constrained horizontal space.</p>
+</li>
+</ul>
+</div>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p>The second top-level item returns to the normal indentation level and continues with more text to ensure consistent behavior across all list nesting levels.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>

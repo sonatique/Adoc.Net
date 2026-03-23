@@ -2,18 +2,34 @@ using AdocNet.Ast;
 
 namespace AdocNet;
 
+/// <summary>
+/// Base class for document renderers that dispatches block and inline nodes to virtual methods.
+/// Override the specific <c>Render*</c> methods for each node type your format supports.
+/// </summary>
 public abstract class DocumentRendererBase : IDocumentRenderer
 {
+    /// <inheritdoc />
     public abstract string Format { get; }
 
+    /// <inheritdoc />
     public void Render(DocumentNode document, Stream output, RenderOptions options)
     {
         var context = new RenderContext(document, options);
         RenderDocument(context, output);
     }
 
+    /// <summary>
+    /// Renders the entire document to the output stream. Implemented by each format-specific renderer.
+    /// </summary>
+    /// <param name="context">The render context containing the document and options.</param>
+    /// <param name="output">The stream to write the rendered output to.</param>
     protected abstract void RenderDocument(RenderContext context, Stream output);
 
+    /// <summary>
+    /// Dispatches a block node to the appropriate format-specific render method.
+    /// </summary>
+    /// <param name="node">The block node to render.</param>
+    /// <param name="context">The render context.</param>
     protected void RenderBlock(BlockNode node, RenderContext context)
     {
         switch (node)
@@ -39,6 +55,11 @@ public abstract class DocumentRendererBase : IDocumentRenderer
         }
     }
 
+    /// <summary>
+    /// Dispatches an inline node to the appropriate format-specific render method.
+    /// </summary>
+    /// <param name="node">The inline node to render.</param>
+    /// <param name="context">The render context.</param>
     protected void RenderInline(InlineNode node, RenderContext context)
     {
         switch (node)
@@ -65,12 +86,22 @@ public abstract class DocumentRendererBase : IDocumentRenderer
         }
     }
 
+    /// <summary>
+    /// Renders a sequence of block nodes by dispatching each to <see cref="RenderBlock"/>.
+    /// </summary>
+    /// <param name="nodes">The block nodes to render.</param>
+    /// <param name="context">The render context.</param>
     protected void RenderBlocks(IEnumerable<BlockNode> nodes, RenderContext context)
     {
         foreach (var node in nodes)
             RenderBlock(node, context);
     }
 
+    /// <summary>
+    /// Renders a sequence of inline nodes by dispatching each to <see cref="RenderInline"/>.
+    /// </summary>
+    /// <param name="nodes">The inline nodes to render.</param>
+    /// <param name="context">The render context.</param>
     protected void RenderInlines(IEnumerable<InlineNode> nodes, RenderContext context)
     {
         foreach (var node in nodes)

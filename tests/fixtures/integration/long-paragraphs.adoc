@@ -1,0 +1,49 @@
+= Long Paragraphs and Text Wrapping
+:author: Test Suite
+
+== Introduction
+
+This document is designed to test text wrapping behavior in the PDF renderer. Each paragraph below contains enough text to force wrapping at the right margin, exercising the word-wrap algorithm across various content patterns.
+
+== Dense Prose
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium.
+
+Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam.
+
+== Paragraph with Inline Formatting
+
+This paragraph contains *bold text that spans multiple words* and _italic text that also spans multiple words_ as well as `monospace code spans like variable_name_with_underscores` mixed together. The purpose is to verify that the word-wrapping algorithm correctly handles segments with *different font metrics* since bold text is wider than regular text and _italic text uses oblique variants_ of the same font family.
+
+== Paragraph with Links
+
+Visit https://www.example.com/documentation/reference/getting-started/ for the complete documentation. The link:https://www.example.com/products/dashboard/[Acme Dashboard] provides comprehensive monitoring capabilities including support for multiple data sources, real-time updates, and historical reporting in a single interface.
+
+== Very Long Single Line
+
+ABCDEFGHIJKLMNOPQRSTUVWXYZ_ABCDEFGHIJKLMNOPQRSTUVWXYZ_ABCDEFGHIJKLMNOPQRSTUVWXYZ_ABCDEFGHIJKLMNOPQRSTUVWXYZ_ABCDEFGHIJKLMNOPQRSTUVWXYZ
+
+== Table with Long Cell Content
+
+|===
+| Parameter | Description | Default Value
+
+| MAX_CONCURRENT_SESSIONS
+| Specifies the maximum number of concurrent sessions that can be simultaneously active in the system, including both foreground and background processing tasks
+| 64
+
+| ENABLE_AUTOMATIC_RECOVERY
+| Controls whether the system automatically attempts to recover from transient failures by retrying the operation with exponential backoff and circuit breaker protection
+| true
+
+| DATA_RETENTION_POLICY_DAYS
+| Maximum number of days that processed data records are retained in the storage subsystem before being eligible for automatic cleanup by the maintenance scheduler
+| 90
+|===
+
+== Nested Lists with Long Items
+
+* The first item in this unordered list contains enough text to demonstrate that list items properly wrap at the right margin without overlapping the bullet point or extending beyond the page boundary.
+** A nested item that also contains a substantial amount of text to verify that the indentation is properly applied and the available width for text wrapping is reduced accordingly.
+*** A deeply nested item with even more indentation, reducing the available text width further and testing the wrapping behavior under constrained horizontal space.
+* The second top-level item returns to the normal indentation level and continues with more text to ensure consistent behavior across all list nesting levels.

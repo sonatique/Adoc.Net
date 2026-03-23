@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>adocnet-docbook</AssemblyName>
+    <RootNamespace>AdocNet.Cli.DocBook</RootNamespace>
+    <Description>AsciiDoc to DocBook 5.0 converter. Equivalent to: adocnet -b docbook5</Description>
+
+    <!-- NuGet tool packaging -->
+    <PackageId>AdocNet.DocBook</PackageId>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>adocnet-docbook</ToolCommandName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AdocNet.Cli\AdocNet.Cli.csproj" />
+  </ItemGroup>
+</Project>

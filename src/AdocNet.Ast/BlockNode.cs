@@ -10,6 +10,9 @@ public abstract class BlockNode : AstNode
     /// <summary>Optional ID assigned via <c>[[id]]</c> block anchor or <c>[#id]</c> shorthand.</summary>
     public string? Id { get; set; }
 
+    /// <summary>Optional reference text assigned via <c>[[id,reftext]]</c> block anchor syntax.</summary>
+    public string? Reftext { get; set; }
+
     /// <summary>Optional roles assigned via <c>[.role]</c>, <c>[#id.role1.role2]</c>, or <c>[role="..."]</c> syntax.</summary>
     public IReadOnlyList<string> Roles { get; set; } = [];
 

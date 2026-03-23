@@ -83,6 +83,7 @@ internal static class BlockParser
         string? pendingFormat = null;
         string? pendingAdmonitionType = null;
         string? pendingBlockId = null;
+        string? pendingBlockReftext = null;
         List<string>? pendingBlockRoles = null;
         string? pendingQuoteAttribution = null;
         string? pendingQuoteCitation = null;
@@ -135,7 +136,9 @@ internal static class BlockParser
                     new SourceRange(new(lineNumber, 1), new(lineNumber, lineLength))));
             }
             node.Id = pendingBlockId;
+            node.Reftext = pendingBlockReftext;
             pendingBlockId = null;
+            pendingBlockReftext = null;
         }
 
         for (int i = 0; i < lines.Length; i++)
@@ -186,6 +189,7 @@ internal static class BlockParser
                     document.Title = line[2..].Trim();
                     // Consume any pending anchor as the document's ID (not propagated to next block).
                     pendingBlockId = null;
+                    pendingBlockReftext = null;
                     continue;
                 }
 
@@ -272,6 +276,7 @@ internal static class BlockParser
                 pendingFormat = null;
                 pendingAdmonitionType = null;
                 pendingBlockId = null;
+                pendingBlockReftext = null;
                 pendingBlockRoles = null;
                 pendingSubs = null;
                 pendingSubsIsIncremental = false;
@@ -363,6 +368,7 @@ internal static class BlockParser
                         TitleInlines    = InlineParser.Parse(titleText, EffectiveNormal(), document.Attributes),
                         Source          = new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length)),
                         Id              = discreteId,
+                        Reftext         = pendingBlockReftext,
                         IsDiscrete      = true,
                         SectnumsEnabled = document.Attributes.ContainsKey("sectnums"),
                     };
@@ -376,6 +382,7 @@ internal static class BlockParser
                     // Do NOT change currentContainer — discrete heading doesn't nest.
                     pendingDiscrete = false;
                     pendingBlockId = null;
+                    pendingBlockReftext = null;
                     pendingBlockRoles = null;
                     pendingSubs = null;
                 pendingSubsIsIncremental = false;
@@ -406,6 +413,7 @@ internal static class BlockParser
                     TitleInlines    = InlineParser.Parse(titleText, EffectiveNormal(), document.Attributes),
                     Source          = new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length)),
                     Id              = sectionId,
+                    Reftext         = pendingBlockReftext,
                     SectnumsEnabled = document.Attributes.ContainsKey("sectnums"),
                 };
                 if (pendingBlockRoles is not null)
@@ -415,6 +423,7 @@ internal static class BlockParser
                 inBibliographySection = hasPendingBibliography;
                 hasPendingBibliography = false;
                 pendingBlockId = null;
+                pendingBlockReftext = null;
                 pendingBlockRoles = null;
                 pendingSubs = null;
                 pendingSubsIsIncremental = false;
@@ -563,15 +572,29 @@ internal static class BlockParser
                         pendingBlockRoles = blockAttrs.Roles;
                     continue;
                 }
-                // Generic role/id-only attribute line (e.g. [.lead], [#myid], [.role1.role2]).
-                // Capture roles and ID for the next block when no specific style was matched above.
+                // Generic role/id-only attribute line (e.g. [.lead], [#myid], [.role1.role2], [#id,reftext="..."]).
+                // Capture roles, ID, and reftext for the next block when no specific style was matched above.
                 if (blockAttrs is not null && blockAttrs.Style is null
                     && (blockAttrs.Roles.Count > 0 || blockAttrs.Id is not null)
                     && blockAttrs.Options.Count == 0
                     && blockAttrs.Positional.Count == 0
-                    && blockAttrs.Named.Count == 0
+                    && (blockAttrs.Named.Count == 0 || (blockAttrs.Named.Count == 1 && blockAttrs.Named.ContainsKey("reftext")))
                     && !blockAttrs.Subs.HasValue
                     && !blockAttrs.SubsIsIncremental)
+                {
+                    FlushParagraph(currentContainer, paragraphLines, ref paragraphStartLine, lineNumber - 1, document.Attributes);
+                    listFrames.Clear();
+                    dlFrames.Clear();
+                    if (blockAttrs.Id is not null)
+                        pendingBlockId = blockAttrs.Id;
+                    if (blockAttrs.Named.TryGetValue("reftext", out var reftext))
+                        pendingBlockReftext = reftext;
+                    if (blockAttrs.Roles.Count > 0)
+                        pendingBlockRoles = blockAttrs.Roles;
+                    continue;
+                }
+                // [horizontal] — style for description lists (consumed as pending style, applied to next dlist).
+                if (blockAttrs is not null && string.Equals(blockAttrs.Style, "horizontal", StringComparison.OrdinalIgnoreCase))
                 {
                     FlushParagraph(currentContainer, paragraphLines, ref paragraphStartLine, lineNumber - 1, document.Attributes);
                     listFrames.Clear();
@@ -765,13 +788,15 @@ internal static class BlockParser
                 continue;
             }
 
-            // Block anchor: [[id]] on a line by itself assigns an ID to the next block.
-            if (paragraphLines.Count == 0 && TryParseBlockAnchor(line, out var anchorId))
+            // Block anchor: [[id]] or [[id,reftext]] on a line by itself assigns an ID to the next block.
+            if (paragraphLines.Count == 0 && TryParseBlockAnchor(line, out var anchorId, out var anchorReftext))
             {
                 // No FlushParagraph needed: paragraphLines.Count == 0 is already checked above.
                 listFrames.Clear();
                 dlFrames.Clear();
                 pendingBlockId = anchorId;
+                if (anchorReftext is not null)
+                    pendingBlockReftext = anchorReftext;
                 continue;
             }
 
@@ -856,6 +881,7 @@ internal static class BlockParser
                 pendingFormat = null;
                     pendingAdmonitionType = null;
                     pendingBlockId = null;
+                    pendingBlockReftext = null;
                     pendingBlockRoles = null;
                     pendingSubs = null;
                 pendingSubsIsIncremental = false;
@@ -956,6 +982,7 @@ internal static class BlockParser
                 pendingFormat = null;
                     pendingAdmonitionType = null;
                     pendingBlockId = null;
+                    pendingBlockReftext = null;
                     pendingBlockRoles = null;
                     pendingSubs = null;
                 pendingSubsIsIncremental = false;
@@ -1011,6 +1038,7 @@ internal static class BlockParser
                 pendingFormat = null;
                 pendingAdmonitionType = null;
                 pendingBlockId = null;
+                pendingBlockReftext = null;
                 pendingBlockRoles = null;
                 pendingSubs = null;
                 pendingSubsIsIncremental = false;
@@ -1250,6 +1278,7 @@ internal static class BlockParser
                 pendingFormat = null;
                 pendingAdmonitionType = null;
                 pendingBlockId = null;
+                pendingBlockReftext = null;
                 pendingBlockRoles = null;
                 pendingSubs = null;
                 pendingSubsIsIncremental = false;
@@ -1505,6 +1534,7 @@ internal static class BlockParser
                 pendingFormat = null;
                 pendingAdmonitionType = null;
                 pendingBlockId = null;
+                pendingBlockReftext = null;
                 pendingBlockRoles = null;
                 pendingSubs = null;
                 pendingSubsIsIncremental = false;
@@ -1574,6 +1604,7 @@ internal static class BlockParser
                 pendingFormat = null;
                 pendingAdmonitionType = null;
                 pendingBlockId = null;
+                pendingBlockReftext = null;
                 pendingBlockRoles = null;
                 pendingSubs = null;
                 pendingSubsIsIncremental = false;
@@ -1674,12 +1705,40 @@ internal static class BlockParser
                     else
                     {
                         var descLines = new List<string>();
+                        // First try indented continuation
                         while (nextIdx < lines.Length && lines[nextIdx].Length > 0
                             && (lines[nextIdx][0] == ' ' || lines[nextIdx][0] == '\t')
                             && !string.IsNullOrWhiteSpace(lines[nextIdx]))
                         {
                             descLines.Add(lines[nextIdx].Trim());
                             nextIdx++;
+                        }
+                        // If no indented continuation found, try non-indented next line
+                        // as description (AsciiDoc allows Term::\nDescription on next line)
+                        if (descLines.Count == 0 && nextIdx < lines.Length
+                            && !string.IsNullOrWhiteSpace(lines[nextIdx])
+                            && lines[nextIdx].Trim() != "+"
+                            && !TryParseDescriptionItem(lines[nextIdx], out _, out _, out _)
+                            && !IsSectionHeader(lines[nextIdx])
+                            && !TryParseListItem(lines[nextIdx], out _, out _, out _)
+                            && !IsDelimitedBlockBoundary(lines[nextIdx])
+                            && !(lines[nextIdx].Length > 1 && lines[nextIdx][0] == '[' && lines[nextIdx][^1] == ']'))
+                        {
+                            descLines.Add(lines[nextIdx].Trim());
+                            nextIdx++;
+                            // Continue consuming non-blank, non-structural lines
+                            while (nextIdx < lines.Length
+                                && !string.IsNullOrWhiteSpace(lines[nextIdx])
+                                && lines[nextIdx].Trim() != "+"
+                                && !TryParseDescriptionItem(lines[nextIdx], out _, out _, out _)
+                                && !IsSectionHeader(lines[nextIdx])
+                                && !TryParseListItem(lines[nextIdx], out _, out _, out _)
+                                && !IsDelimitedBlockBoundary(lines[nextIdx])
+                                && !(lines[nextIdx].Length > 1 && lines[nextIdx][0] == '[' && lines[nextIdx][^1] == ']'))
+                            {
+                                descLines.Add(lines[nextIdx].Trim());
+                                nextIdx++;
+                            }
                         }
                         if (descLines.Count > 0)
                         {
@@ -1730,6 +1789,7 @@ internal static class BlockParser
                 pendingFormat = null;
                 pendingAdmonitionType = null;
                 pendingBlockId = null;
+                pendingBlockReftext = null;
                 pendingBlockRoles = null;
                 pendingSubs = null;
                 pendingSubsIsIncremental = false;
@@ -1775,6 +1835,7 @@ internal static class BlockParser
                 pendingFormat = null;
                 pendingAdmonitionType = null;
                 pendingBlockId = null;
+                pendingBlockReftext = null;
                 pendingBlockRoles = null;
                 pendingSubs = null;
                 pendingSubsIsIncremental = false;
@@ -2073,6 +2134,7 @@ internal static class BlockParser
                 pendingAdmonitionType = null;
                 // pendingBlockId is consumed by ApplyPendingId above if a new list was created
                 pendingBlockId = null;
+                pendingBlockReftext = null;
                 pendingBlockRoles = null;
                 pendingSubs = null;
                 pendingSubsIsIncremental = false;
@@ -2197,6 +2259,7 @@ internal static class BlockParser
                 pendingFormat = null;
                 pendingAdmonitionType = null;
                 pendingBlockId = null;
+                pendingBlockReftext = null;
                 pendingBlockRoles = null;
                 pendingSubs = null;
                 pendingSubsIsIncremental = false;
@@ -2288,6 +2351,7 @@ internal static class BlockParser
                 currentContainer.AddChild(literalBlock);
 
                 pendingBlockId = null;
+                pendingBlockReftext = null;
                 pendingBlockRoles = null;
                 continue;
             }
@@ -2299,6 +2363,7 @@ internal static class BlockParser
 
         FlushParagraph(currentContainer, paragraphLines, ref paragraphStartLine, lines.Length, document.Attributes, pendingBlockId, pendingBlockRoles, seenIds, diagnostics, pendingHardbreaks, pendingAbstract ? "abstract" : null, subsOverride: ResolvePendingSubs(EffectiveNormal()));
         pendingBlockId = null;
+        pendingBlockReftext = null;
         pendingBlockRoles = null;
 
         // Generate TOC node when :toc: attribute is set.
@@ -4047,14 +4112,24 @@ internal static class BlockParser
         return true;
     }
 
-    private static bool TryParseBlockAnchor(string line, out string id)
+    private static bool TryParseBlockAnchor(string line, out string id, out string? reftext)
     {
         id = string.Empty;
+        reftext = null;
         if (line.Length < 5 || line[0] != '[' || line[1] != '[') return false;
         if (line[^1] != ']' || line[^2] != ']') return false;
         var inner = line[2..^2];
         if (inner.Length == 0) return false;
-        id = inner;
+        var commaIdx = inner.IndexOf(',');
+        if (commaIdx > 0)
+        {
+            id = inner[..commaIdx].Trim();
+            reftext = inner[(commaIdx + 1)..].Trim();
+        }
+        else
+        {
+            id = inner;
+        }
         return true;
     }
 
@@ -4128,6 +4203,32 @@ internal static class BlockParser
         term = candidateTerm;
         description = desc;
         depth = colonCount - 1; // :: = depth 1, ::: = depth 2, :::: = depth 3
+        return true;
+    }
+
+    /// <summary>
+    /// Returns true if the line looks like a section header (starts with "= " or "== " etc.).
+    /// </summary>
+    private static bool IsSectionHeader(string line)
+    {
+        return line.Length >= 3 && line[0] == '='
+            && (line.StartsWith("= ") || line.StartsWith("== ") || line.StartsWith("=== ")
+                || line.StartsWith("==== ") || line.StartsWith("===== "));
+    }
+
+    /// <summary>
+    /// Returns true if the line is a delimited block boundary (e.g. ----, ====, ****, etc.).
+    /// </summary>
+    private static bool IsDelimitedBlockBoundary(string line)
+    {
+        if (line.Length < 4) return false;
+        char c = line[0];
+        if (c != '-' && c != '=' && c != '.' && c != '*' && c != '_' && c != '+' && c != '/' && c != '|')
+            return false;
+        for (int i = 1; i < line.Length; i++)
+        {
+            if (line[i] != c) return false;
+        }
         return true;
     }
 
@@ -4333,6 +4434,16 @@ internal static class BlockParser
             ["caret"] = "^",
             ["tilde"] = "~",
             ["backslash"] = "\\",
+            ["backtick"] = "`",
+            ["vbar"] = "|",
+            ["amp"] = "&",
+            ["lt"] = "<",
+            ["gt"] = ">",
+            ["asterisk"] = "*",
+            ["two-colons"] = "::",
+            ["two-semicolons"] = ";;",
+            ["cpp"] = "C++",
+            ["asciidoc-version"] = "", // empty — we're not Asciidoctor
             // Smart quotes are enabled by default (matching Asciidoctor).
             // Users can disable via :!smartquotes: in their document.
             ["smartquotes"] = "",
@@ -4343,6 +4454,14 @@ internal static class BlockParser
     {
         foreach (var kvp in GetDefaultAttributes())
             document.SetAttribute(kvp.Key, kvp.Value);
+
+        // Date/time built-in attributes (Asciidoctor compatibility)
+        var now = DateTime.Now;
+        document.SetAttribute("docyear", now.Year.ToString());
+        document.SetAttribute("docdate", now.ToString("yyyy-MM-dd"));
+        document.SetAttribute("localyear", now.Year.ToString());
+        document.SetAttribute("localdate", now.ToString("yyyy-MM-dd"));
+        document.SetAttribute("localdatetime", now.ToString("yyyy-MM-dd HH:mm:ss zzz"));
     }
 
     /// <summary>

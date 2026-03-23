@@ -12,7 +12,7 @@ public class CliArgumentTests
     [Test]
     public void Format_docbook_parses_correctly()
     {
-        var result = Program.ParseArguments(["-f", "docbook", "input.adoc"]);
+        var result = Program.ParseArguments(["-b", "docbook", "input.adoc"]);
         Assert.That(result, Is.InstanceOf<CliArgs.Run>());
         var run = (CliArgs.Run)result;
         Assert.That(run.Format, Is.EqualTo(OutputFormat.DocBook));
@@ -21,7 +21,7 @@ public class CliArgumentTests
     [Test]
     public void Format_epub_parses_correctly()
     {
-        var result = Program.ParseArguments(["-f", "epub", "input.adoc"]);
+        var result = Program.ParseArguments(["-b", "epub", "input.adoc"]);
         Assert.That(result, Is.InstanceOf<CliArgs.Run>());
         var run = (CliArgs.Run)result;
         Assert.That(run.Format, Is.EqualTo(OutputFormat.Epub));
@@ -30,7 +30,7 @@ public class CliArgumentTests
     [Test]
     public void Format_xml_is_alias_for_docbook()
     {
-        var result = Program.ParseArguments(["-f", "xml", "input.adoc"]);
+        var result = Program.ParseArguments(["-b", "xml", "input.adoc"]);
         Assert.That(result, Is.InstanceOf<CliArgs.Run>());
         var run = (CliArgs.Run)result;
         Assert.That(run.Format, Is.EqualTo(OutputFormat.DocBook));
@@ -39,7 +39,7 @@ public class CliArgumentTests
     [Test]
     public void Format_html_parses_correctly()
     {
-        var result = Program.ParseArguments(["-f", "html", "input.adoc"]);
+        var result = Program.ParseArguments(["-b", "html", "input.adoc"]);
         Assert.That(result, Is.InstanceOf<CliArgs.Run>());
         var run = (CliArgs.Run)result;
         Assert.That(run.Format, Is.EqualTo(OutputFormat.Html));
@@ -48,7 +48,7 @@ public class CliArgumentTests
     [Test]
     public void Format_pdf_parses_correctly()
     {
-        var result = Program.ParseArguments(["-f", "pdf", "input.adoc"]);
+        var result = Program.ParseArguments(["-b", "pdf", "input.adoc"]);
         Assert.That(result, Is.InstanceOf<CliArgs.Run>());
         var run = (CliArgs.Run)result;
         Assert.That(run.Format, Is.EqualTo(OutputFormat.Pdf));
@@ -57,7 +57,7 @@ public class CliArgumentTests
     [Test]
     public void Format_unknown_returns_error()
     {
-        var result = Program.ParseArguments(["-f", "unknown", "input.adoc"]);
+        var result = Program.ParseArguments(["-b", "unknown", "input.adoc"]);
         Assert.That(result, Is.InstanceOf<CliArgs.Error>());
         var error = (CliArgs.Error)result;
         Assert.That(error.Message, Does.Contain("Unknown format"));
@@ -68,7 +68,7 @@ public class CliArgumentTests
     [Test]
     public void Styled_flag_sets_Styled_true()
     {
-        var result = Program.ParseArguments(["--styled", "input.adoc"]);
+        var result = Program.ParseArguments(["-e", "input.adoc"]);
         Assert.That(result, Is.InstanceOf<CliArgs.Run>());
         var run = (CliArgs.Run)result;
         Assert.That(run.Styled, Is.True);
@@ -127,7 +127,7 @@ public class CliArgumentTests
     [Test]
     public void OutDir_flag_sets_OutDir()
     {
-        var result = Program.ParseArguments(["--out-dir", "build", "input.adoc"]);
+        var result = Program.ParseArguments(["-D", "build", "input.adoc"]);
         Assert.That(result, Is.InstanceOf<CliArgs.Run>());
         var run = (CliArgs.Run)result;
         Assert.That(run.OutDir, Is.EqualTo("build"));
@@ -136,10 +136,10 @@ public class CliArgumentTests
     [Test]
     public void OutDir_without_value_returns_error()
     {
-        var result = Program.ParseArguments(["--out-dir"]);
+        var result = Program.ParseArguments(["-D"]);
         Assert.That(result, Is.InstanceOf<CliArgs.Error>());
         var error = (CliArgs.Error)result;
-        Assert.That(error.Message, Does.Contain("--out-dir"));
+        Assert.That(error.Message, Does.Contain("-D"));
     }
 
     // ── Watch flag ────────────────────────────────────────────────────
@@ -311,7 +311,7 @@ public class CliArgumentTests
         Program.PrintHelp(writer);
         var help = writer.ToString();
 
-        Assert.That(help, Does.Contain("--styled"));
+        Assert.That(help, Does.Contain("--embedded"));
         Assert.That(help, Does.Contain("--theme"));
     }
 
@@ -322,7 +322,7 @@ public class CliArgumentTests
         Program.PrintHelp(writer);
         var help = writer.ToString();
 
-        Assert.That(help, Does.Contain("--out-dir"));
+        Assert.That(help, Does.Contain("-D"));
         Assert.That(help, Does.Contain("--watch"));
         Assert.That(help, Does.Contain("--verbose"));
         Assert.That(help, Does.Contain("--quiet"));

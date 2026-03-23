@@ -1,52 +1,66 @@
 # AdocNet CLI Reference
 
-The `adocnet` command-line tool converts AsciiDoc files to HTML, PDF,
-DocBook, and EPUB. It supports watch mode with auto-rebuild and a live
+The AdocNet command-line tools convert AsciiDoc files to HTML, PDF,
+DocBook, and EPUB. They support watch mode with auto-rebuild and a live
 preview server with browser hot-reload.
 
 ## Installation
 
 ```bash
-dotnet tool install --global AdocNet.Tool
+dotnet tool install --global AdocNet.Tool         # adocnet (default: HTML)
+dotnet tool install --global AdocNet.Pdf          # adocnet-pdf
+dotnet tool install --global AdocNet.Epub         # adocnet-epub
+dotnet tool install --global AdocNet.DocBook      # adocnet-docbook
 ```
+
+## Tools
+
+| Command | Default format | Equivalent |
+|---------|---------------|------------|
+| `adocnet` | HTML | `asciidoctor` |
+| `adocnet-pdf` | PDF | `asciidoctor-pdf` |
+| `adocnet-epub` | EPUB | `asciidoctor-epub3` |
+| `adocnet-docbook` | DocBook XML | — |
+
+All tools accept the same flags. The only difference is the default output format.
 
 ## Synopsis
 
 ```
 adocnet <input.adoc|directory> [options]
+adocnet-pdf <input.adoc|directory> [options]
 adocnet preview <path> [preview-options]
 ```
 
 ## Converting Files
 
-### Single file to stdout
+By default, output is written to a file with the same name and the appropriate
+extension. Use `-o -` for stdout output.
+
+### Single file
 
 ```bash
-adocnet README.adoc
-```
-
-### Single file to output file
-
-```bash
-adocnet README.adoc -o README.html
+adocnet README.adoc                     # → README.html
+adocnet-pdf README.adoc                 # → README.pdf
+adocnet README.adoc -b pdf              # → README.pdf (same as above)
+adocnet README.adoc -o -                # → stdout
+adocnet README.adoc -o custom.html      # → custom.html
 ```
 
 ### Directory conversion
 
 ```bash
-adocnet docs/ -r -f html --out-dir build/
+adocnet docs/ -r -D build/              # all .adoc → .html in build/
+adocnet-pdf docs/ -r -D build/          # all .adoc → .pdf in build/
 ```
 
-Converts all `.adoc` files in `docs/` (recursively with `-r`) to HTML,
-writing output to `build/` preserving directory structure.
-
-### Output formats
+### All output formats
 
 ```bash
-adocnet docs/ -f html --out-dir build/html
-adocnet docs/ -f pdf --out-dir build/pdf
-adocnet docs/ -f docbook --out-dir build/xml
-adocnet docs/ -f epub --out-dir build/epub
+adocnet input.adoc                      # → input.html
+adocnet input.adoc -b pdf               # → input.pdf
+adocnet input.adoc -b docbook5          # → input.xml
+adocnet input.adoc -b epub              # → input.epub
 ```
 
 ## Watch Mode
@@ -55,7 +69,7 @@ Automatically rebuild when files change:
 
 ```bash
 adocnet docs/ --watch -v
-adocnet README.adoc -w -o README.html
+adocnet-pdf README.adoc -w
 ```
 
 Press `Ctrl+C` to stop.
@@ -77,30 +91,22 @@ Editing any `.adoc` file triggers a rebuild and browser refresh via WebSocket.
 
 ### General Options
 
-| Option | Short | Description |
-|--------|-------|-------------|
-| `--help` | `-h` | Show help |
-| `-o <file>` | | Write output to file (single-file mode only) |
-| `-f <format>` | | Output format: `html` (default), `pdf`, `docbook`, `epub` |
-| `--out-dir <dir>` | | Write output files to directory |
-| `-r, --recursive` | | Include subdirectories for directory input |
-| `-w, --watch` | | Watch for changes and rebuild |
-| `-v, --verbose` | | Show per-file status with timing |
-| `-q, --quiet` | | Suppress non-error output |
-| `--config <file>` | | Load config from file (default: discover `adocnet.json`) |
-
-### HTML Options
-
 | Option | Description |
 |--------|-------------|
-| `--styled` | Wrap output in full HTML document with CSS theme |
+| `-b, --backend <fmt>` | Output format: `html5` (default), `pdf`, `docbook5`, `epub` |
+| `-o <file>` | Write output to file (use `-` for stdout) |
+| `-D, --destination-dir <dir>` | Write output files to directory |
+| `-a, --attribute <k=v>` | Set a document attribute |
+| `-n, --section-numbers` | Auto-number section titles |
+| `-e, --embedded` | Wrap HTML in a full document with CSS theme |
 | `--theme <name>` | CSS theme: `default`, `asciidoctor`, `clean` |
-
-### Debug Options
-
-| Option | Description |
-|--------|-------------|
 | `--dump-ast` | Print AST tree instead of rendering |
+| `-w, --watch` | Watch for changes and rebuild |
+| `-v, --verbose` | Show per-file status with timing |
+| `-q, --quiet` | Suppress non-error output |
+| `-r, --recursive` | Include subdirectories for directory input |
+| `--config <file>` | Load config from file (default: discover `adocnet.json`) |
+| `-h, --help` | Show help |
 
 ### Preview Options
 
@@ -111,6 +117,15 @@ Editing any `.adoc` file triggers a rebuild and browser refresh via WebSocket.
 | `--theme <name>` | asciidoctor | CSS theme for preview |
 | `-r, --recursive` | false | Include subdirectories |
 
+## Document Attributes
+
+Set attributes from the command line with `-a`:
+
+```bash
+adocnet input.adoc -a version=2.0 -a author="Jane Doe"
+adocnet input.adoc -a sectnums          # enable section numbering
+```
+
 ## Project Configuration
 
 Place an `adocnet.json` in your project root:
@@ -120,8 +135,6 @@ Place an `adocnet.json` in your project root:
   "format": "html",
   "outDir": "build",
   "recursive": true,
-  "styled": true,
-  "theme": "asciidoctor",
   "attributes": {
     "author": "Jane Doe",
     "source-highlighter": "highlight.js"
@@ -132,14 +145,13 @@ Place an `adocnet.json` in your project root:
 The CLI discovers `adocnet.json` by walking up from the input path.
 CLI flags override config file values.
 
-CLI flags override config file values.
-
 ## Running from Source
 
 ```bash
 dotnet run --project src/AdocNet.Cli -- input.adoc
-dotnet run --project src/AdocNet.Cli -- docs/ -r -f html --out-dir build/
-dotnet run --project src/AdocNet.Cli -- preview docs/
+dotnet run --project src/AdocNet.Cli.Pdf -- input.adoc
+dotnet run --project src/AdocNet.Cli.Epub -- input.adoc
+dotnet run --project src/AdocNet.Cli.DocBook -- input.adoc
 ```
 
 ## Exit Codes
@@ -153,30 +165,29 @@ dotnet run --project src/AdocNet.Cli -- preview docs/
 ## Examples
 
 ```bash
-# Convert single file with styled output
-adocnet intro.adoc --styled --theme asciidoctor -o intro.html
+# Convert with themed HTML
+adocnet intro.adoc -e --theme asciidoctor
 
-# Batch convert docs to PDF
-adocnet docs/ -r -f pdf --out-dir dist/
+# Batch convert to PDF
+adocnet-pdf docs/ -r -D dist/
 
-# Watch with verbose output
+# Watch and rebuild
 adocnet docs/ -r -w -v
 
 # Preview with custom port
 adocnet preview docs/ --port 3000
 
-# Use explicit config
-adocnet docs/ --config custom-config.json -v
+# Set attributes
+adocnet input.adoc -a version=2.0 -a env=production
 
 # Dump AST for debugging
 adocnet input.adoc --dump-ast
 
-# Generate EPUB from a book
-adocnet book.adoc -f epub -o book.epub
-
-# Multiple formats from one source
-adocnet manual.adoc -f html -o manual.html
-adocnet manual.adoc -f pdf -o manual.pdf
+# Multiple formats
+adocnet manual.adoc                     # → manual.html
+adocnet-pdf manual.adoc                 # → manual.pdf
+adocnet-epub manual.adoc                # → manual.epub
+adocnet-docbook manual.adoc             # → manual.xml
 ```
 
 ## See Also

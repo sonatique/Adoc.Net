@@ -1,0 +1,34 @@
+= AdocNet Avalonia Viewer
+
+A sample document for testing the Avalonia renderer.
+
+== Formatting
+
+This paragraph has *bold*, _italic_, and `monospace` text.
+It also has a link: https://github.com/sonatique/Adoc.Net[AdocNet on GitHub].
+
+== Lists
+
+.Unordered
+* First item
+* Second item
+* Third item
+
+.Ordered
+. Step one
+. Step two
+. Step three
+
+== Code
+
+[source,csharp]
+----
+var layout = new LayoutBuilder().Build(document);
+var control = new AvaloniaRenderer().Render(layout);
+----
+
+== Admonitions
+
+NOTE: This is a note admonition.
+
+WARNING: This is a warning.

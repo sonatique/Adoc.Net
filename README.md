@@ -10,37 +10,59 @@ Adoc.Net parses AsciiDoc into a typed AST and renders it to **HTML5**, **PDF**, 
 dotnet add package AdocNet
 ```
 
-For the CLI tool:
+For the CLI tools:
 
 ```
-dotnet tool install --global AdocNet.Tool
+dotnet tool install --global AdocNet.Tool         # adocnet (HTML default)
+dotnet tool install --global AdocNet.Pdf          # adocnet-pdf
+dotnet tool install --global AdocNet.Epub         # adocnet-epub
+dotnet tool install --global AdocNet.DocBook      # adocnet-docbook
 ```
 
 ## Quick Start
 
 ```csharp
+using AdocNet;
+
+// One line — that's it
+string html = Adoc.ToHtml("= Hello\n\nThis is *bold* text.");
+```
+
+### More control
+
+```csharp
+// Styled full HTML document with CSS theme
+string page = Adoc.ToStyledHtml(source, HtmlTheme.Asciidoctor);
+
+// PDF output
+byte[] pdf = Adoc.ToPdf(source);
+
+// Write directly to a stream (no intermediate string)
+using var file = File.Create("output.html");
+Adoc.ToHtml(source, file);
+
+// Convert a file with include resolution
+Adoc.ConvertFile("docs/chapter.adoc", file);
+
+// Parse with diagnostics
+var result = Adoc.Parse(source);
+if (result.HasErrors)
+    foreach (var d in result.Diagnostics) Console.WriteLine(d);
+```
+
+### Full API (when you need options)
+
+```csharp
 using AdocNet.Parser;
 using AdocNet.Converters.Html;
 
-var source = """
-    = My Document
+var result = AdocParser.Parse(source, new ParseOptions
+{
+    SourceFilePath = "docs/chapter.adoc",  // enables include resolution
+    Attributes = new Dictionary<string, string> { ["version"] = "2.0" },
+});
 
-    == Introduction
-
-    This is *bold* and _italic_ text with a link: https://example.com
-
-    * First item
-    * Second item with `inline code`
-    """;
-
-var result = AdocParser.Parse(source);
-var html = new HtmlRenderer().RenderToString(result.Document);
-```
-
-### Styled HTML with theme
-
-```csharp
-string styledHtml = new HtmlRenderer().RenderToString(result.Document,
+var html = new HtmlRenderer().RenderToString(result.Document,
     new HtmlRenderOptions { Theme = HtmlTheme.Asciidoctor });
 ```
 
@@ -90,18 +112,24 @@ if (result.HasErrors)
 }
 ```
 
-## CLI Tool
+## CLI Tools
 
-```
-adocnet input.adoc                            # render HTML to stdout
-adocnet input.adoc -o output.html             # render HTML to file
-adocnet input.adoc --styled --theme asciidoctor -o out.html
-adocnet input.adoc -f pdf -o out.pdf          # render PDF
-adocnet input.adoc -f docbook -o out.xml      # render DocBook
-adocnet input.adoc -f epub -o out.epub        # render EPUB
-adocnet input.adoc --dump-ast                 # print AST tree
-adocnet docs/ --out-dir build/                # convert entire directory
-adocnet docs/ --watch                         # auto-rebuild on changes
+```bash
+# General-purpose (default: HTML)
+adocnet input.adoc                            # → input.html
+adocnet input.adoc -b pdf                     # → input.pdf
+adocnet input.adoc -o -                       # → stdout
+
+# Specialized tools (same flags, different default format)
+adocnet-pdf input.adoc                        # → input.pdf
+adocnet-epub input.adoc                       # → input.epub
+adocnet-docbook input.adoc                    # → input.xml
+
+# Common options (all tools)
+adocnet input.adoc -o custom.html             # explicit output file
+adocnet input.adoc -a version=2.0             # set document attribute
+adocnet docs/ -r -D build/                    # convert directory
+adocnet docs/ --watch -v                      # watch and rebuild
 adocnet preview input.adoc                    # live preview with hot reload
 ```
 
@@ -154,7 +182,7 @@ See [docs/CLI.md](docs/CLI.md) for the full reference.
 
 ## Architecture
 
-Seven assemblies, each with a single responsibility:
+Nine assemblies, each with a single responsibility:
 
 | Assembly | Namespace | Description |
 |----------|-----------|-------------|
@@ -165,6 +193,10 @@ Seven assemblies, each with a single responsibility:
 | AdocNet.Converters.Pdf | `AdocNet.Converters.Pdf` | Pure managed PDF 1.4 renderer |
 | AdocNet.Converters.DocBook | `AdocNet.Converters.DocBook` | DocBook 5.0 renderer |
 | AdocNet.Converters.Epub | `AdocNet.Converters.Epub` | EPUB 3.0 renderer |
+| AdocNet.Layout | `AdocNet.Layout` | UI-agnostic layout model and AST-to-layout builder |
+| AdocNet.Avalonia | `AdocNet.Avalonia` | Avalonia UI renderer (layout tree to controls) |
+
+The data flow for the Avalonia viewer is strictly layered: `AST → Layout → Avalonia`. The Layout library has zero UI dependencies and targets netstandard2.0, making it consumable by any .NET UI framework.
 
 ## Documentation
 
@@ -174,6 +206,8 @@ Seven assemblies, each with a single responsibility:
 | [CLI.md](docs/CLI.md) | CLI reference and examples |
 | [RENDERERS.md](docs/RENDERERS.md) | Renderer guide (HTML, PDF, DocBook, EPUB) |
 | [EXTENSIONS.md](docs/EXTENSIONS.md) | Building custom renderers and include readers |
+| [COMPATIBILITY.md](docs/COMPATIBILITY.md) | Asciidoctor conformance and known differences |
+| [SECURITY.md](docs/SECURITY.md) | Security considerations for untrusted input |
 
 ## Building
 
