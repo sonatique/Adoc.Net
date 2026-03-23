@@ -3,18 +3,28 @@ using AdocNet.Converters.Html;
 
 namespace AdocNet.Cli;
 
-internal static class Program
+/// <summary>
+/// Main entry point for the adocnet CLI. Also serves as the shared entry point
+/// for specialized tools (adocnet-pdf, adocnet-epub, adocnet-docbook).
+/// </summary>
+public static class Program
 {
     private const int ExitSuccess = 0;
     private const int ExitUsageError = 2;
 
     private static int Main(string[] args)
+        => Run(args, OutputFormat.Html, "adocnet");
+
+    /// <summary>
+    /// Shared entry point for adocnet and specialized tools (adocnet-pdf, etc.).
+    /// </summary>
+    public static int Run(string[] args, OutputFormat defaultFormat, string toolName)
     {
-        var parsed = ParseArguments(args);
+        var parsed = ParseArguments(args, defaultFormat);
 
         if (parsed is CliArgs.ShowHelp)
         {
-            PrintHelp(Console.Out);
+            PrintHelp(Console.Out, toolName, defaultFormat);
             return ExitSuccess;
         }
 
@@ -22,7 +32,7 @@ internal static class Program
         {
             Console.Error.WriteLine(error.Message);
             Console.Error.WriteLine();
-            PrintHelp(Console.Error);
+            PrintHelp(Console.Error, toolName, defaultFormat);
             return ExitUsageError;
         }
 
@@ -77,7 +87,7 @@ internal static class Program
 
     // ── Argument parsing ─────────────────────────────────────────────────
 
-    internal static CliArgs ParseArguments(string[] args)
+    internal static CliArgs ParseArguments(string[] args, OutputFormat defaultFormat = OutputFormat.Html)
     {
         if (args.Length > 0 && args[0] == "preview")
             return ParsePreviewArguments(args);
@@ -87,13 +97,15 @@ internal static class Program
         string? outDir = null;
         bool dumpAst = false;
         bool styled = false;
-        OutputFormat format = OutputFormat.Html;
+        bool outputToStdout = false;
+        OutputFormat format = defaultFormat;
         HtmlTheme theme = HtmlTheme.Default;
         bool watch = false;
         bool verbose = false;
         bool quiet = false;
         bool recursive = false;
         string? configPath = null;
+        Dictionary<string, string>? attributes = null;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -108,7 +120,7 @@ internal static class Program
                 continue;
             }
 
-            if (arg is "--styled")
+            if (arg is "-e" or "--embedded")
             {
                 styled = true;
                 continue;
@@ -135,34 +147,59 @@ internal static class Program
             if (arg is "-o")
             {
                 if (i + 1 >= args.Length)
-                    return new CliArgs.Error("Option -o requires a file path argument.");
-                outputPath = args[++i];
+                    return new CliArgs.Error("Option -o requires a file path argument (use '-' for stdout).");
+                var val = args[++i];
+                if (val == "-")
+                    outputToStdout = true;
+                else
+                    outputPath = val;
                 continue;
             }
 
-            if (arg is "-f" or "--format")
+            if (arg is "-b" or "--backend")
             {
                 if (i + 1 >= args.Length)
-                    return new CliArgs.Error("Option -f requires a format argument (html, pdf, docbook, epub).");
+                    return new CliArgs.Error("Option -b requires a format argument (html5, html, pdf, docbook5, docbook, epub).");
                 var formatStr = args[++i].ToLowerInvariant();
                 format = formatStr switch
                 {
-                    "html" => OutputFormat.Html,
+                    "html" or "html5" => OutputFormat.Html,
                     "pdf" => OutputFormat.Pdf,
-                    "docbook" or "xml" => OutputFormat.DocBook,
+                    "docbook" or "docbook5" or "xml" => OutputFormat.DocBook,
                     "epub" => OutputFormat.Epub,
                     _ => OutputFormat.Html,
                 };
-                if (formatStr is not "html" and not "pdf" and not "docbook" and not "xml" and not "epub")
-                    return new CliArgs.Error($"Unknown format: {formatStr}. Supported formats: html, pdf, docbook, epub.");
+                if (formatStr is not "html" and not "html5" and not "pdf" and not "docbook" and not "docbook5" and not "xml" and not "epub")
+                    return new CliArgs.Error($"Unknown format: {formatStr}. Supported formats: html, html5, pdf, docbook, docbook5, epub.");
                 continue;
             }
 
-            if (arg is "--out-dir")
+            if (arg is "-D" or "--destination-dir")
             {
                 if (i + 1 >= args.Length)
-                    return new CliArgs.Error("Option --out-dir requires a directory path argument.");
+                    return new CliArgs.Error("Option -D requires a directory path argument.");
                 outDir = args[++i];
+                continue;
+            }
+
+            if (arg is "-a" or "--attribute")
+            {
+                if (i + 1 >= args.Length)
+                    return new CliArgs.Error("Option -a requires an attribute in the form 'name=value'.");
+                var attrStr = args[++i];
+                attributes ??= [];
+                var eqIdx = attrStr.IndexOf('=');
+                if (eqIdx > 0)
+                    attributes[attrStr[..eqIdx]] = attrStr[(eqIdx + 1)..];
+                else
+                    attributes[attrStr] = "";
+                continue;
+            }
+
+            if (arg is "-n" or "--section-numbers")
+            {
+                attributes ??= [];
+                attributes["sectnums"] = "";
                 continue;
             }
 
@@ -211,12 +248,18 @@ internal static class Program
             return new CliArgs.Error("No input file specified.");
 
         if (outputPath is not null && Directory.Exists(inputPath))
-            return new CliArgs.Error("Option -o cannot be used with directory input. Use --out-dir instead.");
+            return new CliArgs.Error("Option -o cannot be used with directory input. Use -D instead.");
 
         if (verbose && quiet)
             return new CliArgs.Error("Options --verbose and --quiet cannot be used together.");
 
-        return new CliArgs.Run(inputPath, outputPath, outDir, dumpAst, format, styled, theme, watch, verbose, quiet, recursive, configPath);
+        // Default behavior (matching Asciidoctor): output to file, same name with format extension.
+        // Use -o - to write to stdout instead.
+        if (outputPath is null && !outputToStdout && !dumpAst && !Directory.Exists(inputPath))
+            outputPath = Path.ChangeExtension(inputPath, FormatExtension(format));
+
+        return new CliArgs.Run(inputPath, outputPath, outDir, dumpAst, format, styled, theme, watch, verbose, quiet, recursive, configPath,
+            attributes is { Count: > 0 } ? attributes : null);
     }
 
     private static CliArgs ParsePreviewArguments(string[] args)
@@ -276,36 +319,60 @@ internal static class Program
         return new CliArgs.Preview(inputPath, port, noOpen, Styled: true, theme, recursive);
     }
 
-    internal static void PrintHelp(TextWriter writer)
+    private static string FormatExtension(OutputFormat format) => format switch
     {
+        OutputFormat.Html => ".html",
+        OutputFormat.Pdf => ".pdf",
+        OutputFormat.DocBook => ".xml",
+        OutputFormat.Epub => ".epub",
+        _ => ".html",
+    };
+
+    internal static void PrintHelp(TextWriter writer, string toolName = "adocnet", OutputFormat defaultFormat = OutputFormat.Html)
+    {
+        var ext = FormatExtension(defaultFormat);
+        var fmtName = defaultFormat.ToString().ToLowerInvariant();
+
         writer.WriteLine("Usage:");
-        writer.WriteLine("  adocnet <input.adoc|directory> [options]");
+        writer.WriteLine($"  {toolName} <input.adoc|directory> [options]");
+        writer.WriteLine();
+        writer.WriteLine($"By default, output is written to a file with the same name and {ext}");
+        writer.WriteLine("extension. Use -o - for stdout.");
         writer.WriteLine();
         writer.WriteLine("Options:");
-        writer.WriteLine("  -o <file>          Write output to file");
-        writer.WriteLine("  -f <format>        Output format: html (default), pdf, docbook, epub");
-        writer.WriteLine("  --styled           Wrap HTML output in a full document with CSS theme");
-        writer.WriteLine("  --theme <name>     Select CSS theme: default, asciidoctor, clean");
-        writer.WriteLine("  --out-dir <dir>    Write output files to directory");
-        writer.WriteLine("  --dump-ast         Print AST instead of rendering");
-        writer.WriteLine("  -w, --watch        Watch input file for changes and re-render");
-        writer.WriteLine("  -v, --verbose      Enable verbose output");
-        writer.WriteLine("  -q, --quiet        Suppress non-error output");
-        writer.WriteLine("  -r, --recursive    Process input directories recursively");
-        writer.WriteLine("  --config <file>    Load project configuration (default: discover adocnet.json)");
-        writer.WriteLine("  --help             Show help");
+        writer.WriteLine($"  -b, --backend <fmt>   Output format: html5, pdf, docbook5, epub (default: {fmtName})");
+        writer.WriteLine("  -o <file>             Write output to file (use '-' for stdout)");
+        writer.WriteLine("  -D, --destination-dir <dir>  Write output files to directory");
+        writer.WriteLine("  -a, --attribute <k=v> Set a document attribute");
+        writer.WriteLine("  -n, --section-numbers Auto-number section titles");
+        writer.WriteLine("  -e, --embedded        Wrap HTML in a full document with CSS theme");
+        writer.WriteLine("  --theme <name>        Select CSS theme: default, asciidoctor, clean");
+        writer.WriteLine("  --dump-ast            Print AST instead of rendering");
+        writer.WriteLine("  -w, --watch           Watch input file for changes and re-render");
+        writer.WriteLine("  -v, --verbose         Enable verbose output");
+        writer.WriteLine("  -q, --quiet           Suppress non-error output");
+        writer.WriteLine("  -r, --recursive       Process input directories recursively");
+        writer.WriteLine("  --config <file>       Load project configuration (default: discover adocnet.json)");
+        writer.WriteLine("  -h, --help            Show help");
         writer.WriteLine();
         writer.WriteLine("Examples:");
-        writer.WriteLine("  adocnet README.adoc                       Convert single file to stdout");
-        writer.WriteLine("  adocnet docs/ -r -f html --out-dir build/ Convert directory to build/");
-        writer.WriteLine("  adocnet docs/ --watch -v                  Watch and rebuild on changes");
-        writer.WriteLine();
-        writer.WriteLine("Preview:");
-        writer.WriteLine("  adocnet preview <path> [--port N] [--no-open] [--theme name] [-r]");
+        writer.WriteLine($"  {toolName} README.adoc                       Convert to README{ext}");
+        writer.WriteLine($"  {toolName} README.adoc -o -                  Convert to stdout");
+        writer.WriteLine($"  {toolName} README.adoc -o custom{ext}        Convert to custom{ext}");
+        writer.WriteLine($"  {toolName} docs/ -r -D build/                Convert directory to build/");
+        writer.WriteLine($"  {toolName} docs/ --watch -v                  Watch and rebuild on changes");
+        writer.WriteLine($"  {toolName} README.adoc -a version=2.0        Set document attribute");
+
+        if (toolName == "adocnet")
+        {
+            writer.WriteLine();
+            writer.WriteLine("Preview:");
+            writer.WriteLine("  adocnet preview <path> [--port N] [--no-open] [--theme name] [-r]");
+        }
     }
 }
 
-internal enum OutputFormat
+public enum OutputFormat
 {
     Html,
     Pdf,

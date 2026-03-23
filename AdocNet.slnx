@@ -9,12 +9,18 @@
     <Project Path="src/AdocNet.Core/AdocNet.Core.csproj" />
     <Project Path="src/AdocNet.Parser/AdocNet.Parser.csproj" />
     <Project Path="src/AdocNet.LanguageServer/AdocNet.LanguageServer.csproj" />
+    <Project Path="src/AdocNet.Layout/AdocNet.Layout.csproj" />
+    <Project Path="src/AdocNet.Avalonia/AdocNet.Avalonia.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AdocNet.Tests/AdocNet.Tests.csproj" />
+    <Project Path="tests/AdocNet.Layout.Tests/AdocNet.Layout.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="src/AdocNet.Cli/AdocNet.Cli.csproj" />
+    <Project Path="src/AdocNet.Cli.Pdf/AdocNet.Cli.Pdf.csproj" />
+    <Project Path="src/AdocNet.Cli.Epub/AdocNet.Cli.Epub.csproj" />
+    <Project Path="src/AdocNet.Cli.DocBook/AdocNet.Cli.DocBook.csproj" />
     <Project Path="tools/DifferentialTester/DifferentialTester.csproj" />
   </Folder>
   <Folder Name="/benchmarks/">
@@ -22,5 +28,8 @@
   </Folder>
   <Folder Name="/examples/">
     <Project Path="examples/BasicUsage/BasicUsage.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/AdocNet.Avalonia.Viewer/AdocNet.Avalonia.Viewer.csproj" />
   </Folder>
 </Solution>

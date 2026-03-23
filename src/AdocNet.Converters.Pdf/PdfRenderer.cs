@@ -312,8 +312,11 @@ public sealed class PdfRenderer : DocumentRendererBase
         var content = block.Content ?? string.Empty;
         w.EnsurePage();
 
-        // Draw a light gray background
-        float estimatedHeight = content.Split('\n').Length * CodeLeading + 8;
+        // Draw a light gray background (account for wrapped lines)
+        int totalLines = 0;
+        foreach (var line in content.Split('\n'))
+            totalLines += w.CountVerbatimLines(line, _fontMono, CodeFontSize);
+        float estimatedHeight = totalLines * CodeLeading + 8;
         w.SetFillColor(0.95f, 0.95f, 0.95f);
         w.DrawRect(w.MarginLeftValue - 4, w.CursorY - estimatedHeight + 4, w.ContentWidth + 8, estimatedHeight, fill: true);
         w.SetFillColor(0, 0, 0); // Reset to black
@@ -327,9 +330,7 @@ public sealed class PdfRenderer : DocumentRendererBase
 
         foreach (var line in content.Split('\n'))
         {
-            w.EnsurePage();
-            w.WriteText(line, _fontMono, CodeFontSize, w.MarginLeftValue, w.CursorY);
-            w.MoveCursor(CodeLeading);
+            w.WriteWrappedVerbatimText(line, _fontMono, CodeFontSize, CodeLeading);
         }
         w.MoveCursor(ParagraphSpacing);
 
@@ -377,8 +378,25 @@ public sealed class PdfRenderer : DocumentRendererBase
 
         // Build column widths array (proportional)
         float[] colWidths = new float[colCount];
+
+        // Check if column specs have varying weights (user explicitly set different sizes)
+        bool hasVaryingWeights = false;
         if (table.Columns is { Count: > 0 })
         {
+            int firstWeight = table.Columns[0].Width;
+            foreach (var col in table.Columns)
+            {
+                if (col.Width != firstWeight)
+                {
+                    hasVaryingWeights = true;
+                    break;
+                }
+            }
+        }
+
+        if (hasVaryingWeights && table.Columns is { Count: > 0 })
+        {
+            // User explicitly set different column widths — respect them
             int totalWeight = 0;
             foreach (var col in table.Columns)
                 totalWeight += col.Width;
@@ -390,8 +408,16 @@ public sealed class PdfRenderer : DocumentRendererBase
         }
         else
         {
-            // Auto-size columns based on content width
-            float[] maxContentWidths = new float[colCount];
+            // Auto-size columns using two metrics per column:
+            // 1. minWidth: the longest single word (column can't be narrower)
+            // 2. totalChars: total character count across all rows (text volume)
+            // Columns get their minWidth first, then remaining space is distributed
+            // proportionally to text volume.
+
+            float[] minWidths = new float[colCount];
+            float[] totalChars = new float[colCount];
+            float cellPad = 4f;
+
             foreach (var child in table.Children)
             {
                 if (child is TableRowNode r)
@@ -402,31 +428,51 @@ public sealed class PdfRenderer : DocumentRendererBase
                         if (cell is TableCellNode c && ci < colCount)
                         {
                             string text = GetPlainText(c.Inlines, c.Text);
-                            float width = w.MeasureText(text, _fontRegular, BodyFontSize);
-                            if (width > maxContentWidths[ci])
-                                maxContentWidths[ci] = width;
+                            totalChars[ci] += text.Length;
+
+                            // Minimum width = longest word + padding
+                            foreach (var word in text.Split(' '))
+                            {
+                                float ww = w.MeasureText(word, _fontRegular, BodyFontSize) + 2 * cellPad;
+                                if (ww > minWidths[ci])
+                                    minWidths[ci] = ww;
+                            }
                             ci += c.ColSpan;
                         }
                     }
                 }
             }
 
-            float totalContentWidth = maxContentWidths.Sum();
-            if (totalContentWidth > 0)
+            // Start each column at its minimum width
+            float usedWidth = 0;
+            for (int c = 0; c < colCount; c++)
             {
-                for (int c = 0; c < colCount; c++)
-                    colWidths[c] = Math.Max(w.ContentWidth * maxContentWidths[c] / totalContentWidth, w.ContentWidth * 0.1f);
+                colWidths[c] = minWidths[c];
+                usedWidth += minWidths[c];
+            }
 
-                // Normalize to fit exactly
-                float total = colWidths.Sum();
-                for (int c = 0; c < colCount; c++)
-                    colWidths[c] = colWidths[c] * w.ContentWidth / total;
+            // Distribute remaining space proportionally to text volume
+            float remaining = w.ContentWidth - usedWidth;
+            if (remaining > 0)
+            {
+                float totalVol = totalChars.Sum();
+                if (totalVol > 0)
+                {
+                    for (int c = 0; c < colCount; c++)
+                        colWidths[c] += remaining * totalChars[c] / totalVol;
+                }
+                else
+                {
+                    for (int c = 0; c < colCount; c++)
+                        colWidths[c] += remaining / colCount;
+                }
             }
             else
             {
-                float equalWidth = w.ContentWidth / colCount;
+                // Content doesn't fit — normalize proportionally
+                float total = colWidths.Sum();
                 for (int c = 0; c < colCount; c++)
-                    colWidths[c] = equalWidth;
+                    colWidths[c] = colWidths[c] * w.ContentWidth / total;
             }
         }
 
@@ -509,14 +555,38 @@ public sealed class PdfRenderer : DocumentRendererBase
         foreach (var (lines, cellWidth, align, colSpan) in cellWrapped)
         {
             float lineY = baseY;
-            foreach (var line in lines)
+            float availWidth = cellWidth - 2 * cellPadding;
+            for (int li = 0; li < lines.Count; li++)
             {
+                var line = lines[li];
+                float textWidth = w.MeasureText(line, font, fontSize);
+                bool isLastLine = li == lines.Count - 1;
+
                 float textX = align switch
                 {
-                    TableAlignment.Right => x + cellWidth - cellPadding - w.MeasureText(line, font, fontSize),
-                    TableAlignment.Center => x + (cellWidth - w.MeasureText(line, font, fontSize)) / 2,
+                    TableAlignment.Right => x + cellWidth - cellPadding - textWidth,
+                    TableAlignment.Center => x + (cellWidth - textWidth) / 2,
                     _ => x + cellPadding,
                 };
+
+                // Justify non-last lines in left-aligned cells
+                if (align is null or TableAlignment.Left && !isLastLine && lines.Count > 1)
+                {
+                    int spaceCount = 0;
+                    foreach (var ch in line)
+                        if (ch == ' ') spaceCount++;
+                    if (spaceCount > 0)
+                    {
+                        float extraSpacing = (availWidth - textWidth) / spaceCount;
+                        if (extraSpacing > 0 && extraSpacing < 8)
+                        {
+                            w.WriteJustifiedText(line, font, fontSize, x + cellPadding, lineY, extraSpacing);
+                            lineY -= BodyLeading;
+                            continue;
+                        }
+                    }
+                }
+
                 w.WriteText(line, font, fontSize, textX, lineY);
                 lineY -= BodyLeading;
             }

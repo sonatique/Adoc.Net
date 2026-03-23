@@ -28,6 +28,9 @@ public class IntegrationTests
         "inline-formatting",
         "admonitions-and-blocks",
         "large-document",
+        "special-characters",
+        "long-paragraphs",
+        "anchors-and-xrefs",
     ];
 
     [OneTimeSetUp]

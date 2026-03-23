@@ -1,0 +1,46 @@
+= Anchors and Cross-References
+
+== Section Anchors
+
+=== Regular Section
+
+This section has an auto-generated ID.
+
+[#custom-id]
+=== Custom ID Section
+
+This section has a custom ID.
+
+[[block-anchor]]
+=== Block Anchor Section
+
+This section was preceded by a block anchor.
+
+[[anchor-with-reftext,Display Text]]
+=== Reftext Anchor
+
+This section has a block anchor with reftext.
+
+== Inline Anchors
+
+This paragraph has an inline anchor [[inline-target]] in the middle.
+
+This paragraph has an anchor with reftext [[inline-ref,Inline Reference Text]] here.
+
+== Cross-References
+
+See <<regular-section>>.
+
+See <<custom-id>>.
+
+See <<block-anchor>>.
+
+See <<anchor-with-reftext>> which should display "Display Text".
+
+See <<inline-target>>.
+
+See <<inline-ref>> which should display "Inline Reference Text".
+
+== Cross-Reference with Label
+
+See <<custom-id,click here for custom section>>.

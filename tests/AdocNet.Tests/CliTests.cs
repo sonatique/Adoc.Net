@@ -33,6 +33,9 @@ public class CliTests
     }
 
     private (int ExitCode, string StdOut, string StdErr) RunCli(params string[] args)
+        => RunProject(_cliProjectPath, args);
+
+    private static (int ExitCode, string StdOut, string StdErr) RunProject(string projectPath, params string[] args)
     {
         var psi = new ProcessStartInfo
         {
@@ -53,7 +56,7 @@ public class CliTests
 #endif
         );
         psi.ArgumentList.Add("--project");
-        psi.ArgumentList.Add(_cliProjectPath);
+        psi.ArgumentList.Add(projectPath);
         psi.ArgumentList.Add("--");
         foreach (var arg in args)
             psi.ArgumentList.Add(arg);
@@ -75,10 +78,24 @@ public class CliTests
     // ── Basic document processing ────────────────────────────────────────
 
     [Test]
-    public void Simple_document_produces_html_on_stdout()
+    public void Simple_document_produces_html_file_by_default()
     {
         var input = WriteTempAdoc("basic.adoc", "= Title\n\nHello world.\n");
         var (exitCode, stdout, _) = RunCli(input);
+        Assert.That(exitCode, Is.EqualTo(0));
+        Assert.That(stdout, Is.Empty, "Default output goes to file, not stdout");
+        var outputFile = Path.ChangeExtension(input, ".html");
+        Assert.That(File.Exists(outputFile), Is.True);
+        var content = File.ReadAllText(outputFile);
+        Assert.That(content, Does.Contain("<h1>Title</h1>"));
+        Assert.That(content, Does.Contain("<p>Hello world.</p>"));
+    }
+
+    [Test]
+    public void Stdout_flag_writes_to_stdout()
+    {
+        var input = WriteTempAdoc("stdout.adoc", "= Title\n\nHello world.\n");
+        var (exitCode, stdout, _) = RunCli(input, "-o", "-");
         Assert.That(exitCode, Is.EqualTo(0));
         Assert.That(stdout, Does.Contain("<h1>Title</h1>"));
         Assert.That(stdout, Does.Contain("<p>Hello world.</p>"));
@@ -91,13 +108,15 @@ public class CliTests
     {
         var source = "= Doc\n\nA *bold* paragraph.\n";
         var input = WriteTempAdoc("match.adoc", source);
-        var (exitCode, stdout, _) = RunCli(input);
+        var (exitCode, _, _) = RunCli(input);
 
         var result = AdocParser.Parse(source);
         var expected = new HtmlRenderer().RenderToString(result.Document);
 
         Assert.That(exitCode, Is.EqualTo(0));
-        Assert.That(stdout, Is.EqualTo(expected));
+        var outputFile = Path.ChangeExtension(input, ".html");
+        var actual = File.ReadAllText(outputFile);
+        Assert.That(actual, Is.EqualTo(expected));
     }
 
     // ── AST dump ─────────────────────────────────────────────────────────
@@ -178,10 +197,12 @@ public class CliTests
         var partialPath = Path.Combine(_tempDir, "_partial.adoc");
         File.WriteAllText(partialPath, "Included content.\n");
         var input = WriteTempAdoc("main.adoc", "= Doc\n\ninclude::_partial.adoc[]\n");
-        var (exitCode, stdout, _) = RunCli(input);
+        var (exitCode, _, _) = RunCli(input);
 
         Assert.That(exitCode, Is.EqualTo(0));
-        Assert.That(stdout, Does.Contain("Included content."));
+        var outputFile = Path.ChangeExtension(input, ".html");
+        var content = File.ReadAllText(outputFile);
+        Assert.That(content, Does.Contain("Included content."));
     }
 
     // ── Directory conversion ─────────────────────────────────────────────
@@ -210,7 +231,7 @@ public class CliTests
         Directory.CreateDirectory(inputDir);
         File.WriteAllText(Path.Combine(inputDir, "doc.adoc"), "= Doc\n\nContent.\n");
 
-        var (exitCode, stdout, _) = RunCli(inputDir, "--out-dir", outputDir);
+        var (exitCode, stdout, _) = RunCli(inputDir, "-D", outputDir);
 
         Assert.That(exitCode, Is.EqualTo(0));
         Assert.That(File.Exists(Path.Combine(outputDir, "doc.html")), Is.True);
@@ -232,5 +253,61 @@ public class CliTests
 
         Assert.That(exitCode, Is.EqualTo(0));
         Assert.That(File.Exists(Path.Combine(inputDir, "out", "doc.html")), Is.True);
+    }
+
+    // ── Specialized tools ─────────────────────────────────────────────────
+
+    private string ResolveToolProject(string name)
+    {
+        var dir = TestContext.CurrentContext.TestDirectory;
+        while (dir is not null && !File.Exists(Path.Combine(dir, "AdocNet.slnx")))
+            dir = Path.GetDirectoryName(dir);
+        return Path.Combine(dir!, "src", name, $"{name}.csproj");
+    }
+
+    [Test]
+    public void AdocnetPdf_produces_pdf_file_by_default()
+    {
+        var input = WriteTempAdoc("pdf-tool.adoc", "= Title\n\nHello.\n");
+        var project = ResolveToolProject("AdocNet.Cli.Pdf");
+        var (exitCode, stdout, _) = RunProject(project, input);
+
+        Assert.That(exitCode, Is.EqualTo(0));
+        Assert.That(stdout, Is.Empty);
+        var outputFile = Path.ChangeExtension(input, ".pdf");
+        Assert.That(File.Exists(outputFile), Is.True);
+        var bytes = File.ReadAllBytes(outputFile);
+        Assert.That(bytes.Length, Is.GreaterThan(100));
+        Assert.That(System.Text.Encoding.ASCII.GetString(bytes, 0, 5), Is.EqualTo("%PDF-"));
+    }
+
+    [Test]
+    public void AdocnetEpub_produces_epub_file_by_default()
+    {
+        var input = WriteTempAdoc("epub-tool.adoc", "= Title\n\nHello.\n");
+        var project = ResolveToolProject("AdocNet.Cli.Epub");
+        var (exitCode, stdout, _) = RunProject(project, input);
+
+        Assert.That(exitCode, Is.EqualTo(0));
+        Assert.That(stdout, Is.Empty);
+        var outputFile = Path.ChangeExtension(input, ".epub");
+        Assert.That(File.Exists(outputFile), Is.True);
+        Assert.That(new FileInfo(outputFile).Length, Is.GreaterThan(100));
+    }
+
+    [Test]
+    public void AdocnetDocbook_produces_xml_file_by_default()
+    {
+        var input = WriteTempAdoc("docbook-tool.adoc", "= Title\n\nHello.\n");
+        var project = ResolveToolProject("AdocNet.Cli.DocBook");
+        var (exitCode, stdout, _) = RunProject(project, input);
+
+        Assert.That(exitCode, Is.EqualTo(0));
+        Assert.That(stdout, Is.Empty);
+        var outputFile = Path.ChangeExtension(input, ".xml");
+        Assert.That(File.Exists(outputFile), Is.True);
+        var content = File.ReadAllText(outputFile);
+        Assert.That(content, Does.StartWith("<?xml"));
+        Assert.That(content, Does.Contain("docbook"));
     }
 }

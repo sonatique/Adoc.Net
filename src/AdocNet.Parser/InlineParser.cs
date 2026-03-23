@@ -173,17 +173,29 @@ internal static class InlineParser
                 }
             }
 
-            // ── Inline anchor: [[id]] ─────────────────────────────────────────
+            // ── Inline anchor: [[id]] or [[id,reftext]] ────────────────────────
             if (doFormatting && c == '[' && i + 1 < endIndex && text[i + 1] == '[')
             {
                 int closeIdx = text.IndexOf("]]", i + 2, StringComparison.Ordinal);
                 if (closeIdx > i + 2 && closeIdx + 2 <= endIndex)
                 {
-                    var id = text[(i + 2)..closeIdx];
-                    if (id.Length > 0)
+                    var content = text[(i + 2)..closeIdx];
+                    if (content.Length > 0)
                     {
                         FlushPlain(nodes, plain, doReplacements, doPostReplacements);
-                        nodes.Add(new InlineAnchorNode { Id = id });
+                        var commaIdx = content.IndexOf(',');
+                        string id;
+                        string? reftext = null;
+                        if (commaIdx > 0)
+                        {
+                            id = content[..commaIdx].Trim();
+                            reftext = content[(commaIdx + 1)..].Trim();
+                        }
+                        else
+                        {
+                            id = content;
+                        }
+                        nodes.Add(new InlineAnchorNode { Id = id, Reftext = reftext });
                         i = closeIdx + 2;
                         continue;
                     }

@@ -991,13 +991,18 @@ public class PdfRendererTests
 
     private static string? FindSystemFont()
     {
+        // Only .ttf files — the TrueType parser does not handle .ttc collections.
         string[] candidates =
         [
             @"C:\Windows\Fonts\arial.ttf",
             @"C:\Windows\Fonts\calibri.ttf",
             @"C:\Windows\Fonts\segoeui.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/System/Library/Fonts/Helvetica.ttc",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "/System/Library/Fonts/Supplemental/Arial.ttf",
+            "/System/Library/Fonts/Supplemental/Courier New.ttf",
+            "/System/Library/Fonts/Supplemental/Times New Roman.ttf",
+            "/Library/Fonts/Arial.ttf",
         ];
         return candidates.FirstOrDefault(File.Exists);
     }

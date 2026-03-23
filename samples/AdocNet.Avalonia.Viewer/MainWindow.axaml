@@ -1,0 +1,14 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="AdocNet.Avalonia.Viewer.MainWindow"
+        Title="AdocNet Viewer"
+        Width="900" Height="700">
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8">
+      <Button x:Name="OpenButton" Content="Open" Click="OnOpenClick" />
+      <TextBlock x:Name="FileLabel" VerticalAlignment="Center" Margin="12,0,0,0"
+                 Foreground="Gray" Text="No file loaded" />
+    </StackPanel>
+    <ContentControl x:Name="ContentHost" />
+  </DockPanel>
+</Window>

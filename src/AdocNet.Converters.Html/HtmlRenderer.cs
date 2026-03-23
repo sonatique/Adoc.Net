@@ -243,18 +243,25 @@ public sealed class HtmlRenderer : DocumentRendererBase
     private static void CollectTitles(AstNode node, Dictionary<string, string> map)
     {
         if (node is SectionNode section && section.Id is not null)
-            map.TryAdd(section.Id, section.Title);
+            map.TryAdd(section.Id, section.Reftext ?? section.Title);
         else if (node is BlockNode block && block.Id is not null)
         {
-            // For other blocks (images, etc.), use the title if available
-            if (node is DelimitedBlockNode db && db.Title is not null)
+            // Reftext from [[id,reftext]] takes priority over inferred titles
+            if (block.Reftext is not null)
+                map.TryAdd(block.Id, block.Reftext);
+            else if (node is DelimitedBlockNode db && db.Title is not null)
                 map.TryAdd(block.Id, db.Title);
             else if (node is BlockImageNode img)
                 map.TryAdd(block.Id, img.Alt);
         }
 
         foreach (var child in node.Children)
+        {
+            // Collect reftext from inline anchors: [[id,reftext]] inside flowing text
+            if (child is InlineAnchorNode anchor && anchor.Reftext is not null)
+                map.TryAdd(anchor.Id, anchor.Reftext);
             CollectTitles(child, map);
+        }
     }
 
     private void RenderDocumentBody(StringBuilder sb, DocumentNode document, FootnoteState footnotes, HtmlRenderState state)

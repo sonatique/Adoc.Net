@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>adocnet-pdf</AssemblyName>
+    <RootNamespace>AdocNet.Cli.Pdf</RootNamespace>
+    <Description>AsciiDoc to PDF converter. Equivalent to: adocnet -b pdf</Description>
+
+    <!-- NuGet tool packaging -->
+    <PackageId>AdocNet.Pdf</PackageId>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>adocnet-pdf</ToolCommandName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AdocNet.Cli\AdocNet.Cli.csproj" />
+  </ItemGroup>
+</Project>

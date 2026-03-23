@@ -80,9 +80,58 @@ internal sealed class PdfWriter
 
     // ── Font metrics (approximate widths for standard fonts at size 1) ──
     // Helvetica average character widths per 1000 units
-    private const float HelveticaAvgWidth = 0.52f;
-    private const float HelveticaBoldAvgWidth = 0.55f;
     private const float CourierAvgWidth = 0.6f;
+
+    // Helvetica character widths from the Adobe Font Metrics (AFM) file,
+    // divided by 1000 to get the per-unit width at fontSize 1.
+    private static readonly Dictionary<char, float> HelveticaWidths = new()
+    {
+        [' '] = 0.278f, ['!'] = 0.278f, ['"'] = 0.355f, ['#'] = 0.556f, ['$'] = 0.556f,
+        ['%'] = 0.889f, ['&'] = 0.667f, ['\''] = 0.191f, ['('] = 0.333f, [')'] = 0.333f,
+        ['*'] = 0.389f, ['+'] = 0.584f, [','] = 0.278f, ['-'] = 0.333f, ['.'] = 0.278f,
+        ['/'] = 0.278f, ['0'] = 0.556f, ['1'] = 0.556f, ['2'] = 0.556f, ['3'] = 0.556f,
+        ['4'] = 0.556f, ['5'] = 0.556f, ['6'] = 0.556f, ['7'] = 0.556f, ['8'] = 0.556f,
+        ['9'] = 0.556f, [':'] = 0.278f, [';'] = 0.278f, ['<'] = 0.584f, ['='] = 0.584f,
+        ['>'] = 0.584f, ['?'] = 0.556f, ['@'] = 1.015f, ['A'] = 0.667f, ['B'] = 0.667f,
+        ['C'] = 0.722f, ['D'] = 0.722f, ['E'] = 0.667f, ['F'] = 0.611f, ['G'] = 0.778f,
+        ['H'] = 0.722f, ['I'] = 0.278f, ['J'] = 0.500f, ['K'] = 0.667f, ['L'] = 0.556f,
+        ['M'] = 0.833f, ['N'] = 0.722f, ['O'] = 0.778f, ['P'] = 0.667f, ['Q'] = 0.778f,
+        ['R'] = 0.722f, ['S'] = 0.667f, ['T'] = 0.611f, ['U'] = 0.722f, ['V'] = 0.667f,
+        ['W'] = 0.944f, ['X'] = 0.667f, ['Y'] = 0.667f, ['Z'] = 0.611f, ['['] = 0.278f,
+        ['\\'] = 0.278f, [']'] = 0.278f, ['^'] = 0.469f, ['_'] = 0.556f, ['`'] = 0.333f,
+        ['a'] = 0.556f, ['b'] = 0.556f, ['c'] = 0.500f, ['d'] = 0.556f, ['e'] = 0.556f,
+        ['f'] = 0.278f, ['g'] = 0.556f, ['h'] = 0.556f, ['i'] = 0.222f, ['j'] = 0.222f,
+        ['k'] = 0.500f, ['l'] = 0.222f, ['m'] = 0.833f, ['n'] = 0.556f, ['o'] = 0.556f,
+        ['p'] = 0.556f, ['q'] = 0.556f, ['r'] = 0.333f, ['s'] = 0.500f, ['t'] = 0.278f,
+        ['u'] = 0.556f, ['v'] = 0.500f, ['w'] = 0.722f, ['x'] = 0.500f, ['y'] = 0.500f,
+        ['z'] = 0.500f, ['{'] = 0.334f, ['|'] = 0.260f, ['}'] = 0.334f, ['~'] = 0.584f,
+    };
+
+    private static readonly Dictionary<char, float> HelveticaBoldWidths = new()
+    {
+        [' '] = 0.278f, ['!'] = 0.333f, ['"'] = 0.474f, ['#'] = 0.556f, ['$'] = 0.556f,
+        ['%'] = 0.889f, ['&'] = 0.722f, ['\''] = 0.238f, ['('] = 0.333f, [')'] = 0.333f,
+        ['*'] = 0.389f, ['+'] = 0.584f, [','] = 0.278f, ['-'] = 0.333f, ['.'] = 0.278f,
+        ['/'] = 0.278f, ['0'] = 0.556f, ['1'] = 0.556f, ['2'] = 0.556f, ['3'] = 0.556f,
+        ['4'] = 0.556f, ['5'] = 0.556f, ['6'] = 0.556f, ['7'] = 0.556f, ['8'] = 0.556f,
+        ['9'] = 0.556f, [':'] = 0.333f, [';'] = 0.333f, ['<'] = 0.584f, ['='] = 0.584f,
+        ['>'] = 0.584f, ['?'] = 0.611f, ['@'] = 0.975f, ['A'] = 0.722f, ['B'] = 0.722f,
+        ['C'] = 0.722f, ['D'] = 0.722f, ['E'] = 0.667f, ['F'] = 0.611f, ['G'] = 0.778f,
+        ['H'] = 0.722f, ['I'] = 0.278f, ['J'] = 0.556f, ['K'] = 0.722f, ['L'] = 0.611f,
+        ['M'] = 0.833f, ['N'] = 0.722f, ['O'] = 0.778f, ['P'] = 0.667f, ['Q'] = 0.778f,
+        ['R'] = 0.722f, ['S'] = 0.667f, ['T'] = 0.611f, ['U'] = 0.722f, ['V'] = 0.667f,
+        ['W'] = 0.944f, ['X'] = 0.667f, ['Y'] = 0.667f, ['Z'] = 0.611f, ['['] = 0.333f,
+        ['\\'] = 0.278f, [']'] = 0.333f, ['^'] = 0.584f, ['_'] = 0.556f, ['`'] = 0.333f,
+        ['a'] = 0.556f, ['b'] = 0.611f, ['c'] = 0.556f, ['d'] = 0.611f, ['e'] = 0.556f,
+        ['f'] = 0.333f, ['g'] = 0.611f, ['h'] = 0.611f, ['i'] = 0.278f, ['j'] = 0.278f,
+        ['k'] = 0.556f, ['l'] = 0.278f, ['m'] = 0.889f, ['n'] = 0.611f, ['o'] = 0.611f,
+        ['p'] = 0.611f, ['q'] = 0.611f, ['r'] = 0.389f, ['s'] = 0.556f, ['t'] = 0.333f,
+        ['u'] = 0.611f, ['v'] = 0.556f, ['w'] = 0.778f, ['x'] = 0.556f, ['y'] = 0.556f,
+        ['z'] = 0.500f, ['{'] = 0.389f, ['|'] = 0.280f, ['}'] = 0.389f, ['~'] = 0.584f,
+    };
+
+    private const float HelveticaDefaultWidth = 0.556f;
+    private const float HelveticaBoldDefaultWidth = 0.611f;
 
     internal PdfWriter(float pageWidth = DefaultPageWidth, float pageHeight = DefaultPageHeight,
         float marginLeft = DefaultMarginLeft, float marginRight = DefaultMarginRight,
@@ -306,6 +355,34 @@ internal sealed class PdfWriter
     }
 
     /// <summary>
+    /// Writes a single line of text with extra word spacing for justification.
+    /// </summary>
+    internal void WriteJustifiedText(string text, string font, float fontSize, float x, float y, float wordSpacing)
+    {
+        _currentStream!.Append("BT\n");
+        _currentStream.Append($"/{font} {Fmt(fontSize)} Tf\n");
+        _currentStream.Append($"{Fmt(x)} {Fmt(y)} Td\n");
+        _currentStream.Append($"{Fmt(wordSpacing)} Tw\n");
+
+        if (_embeddedFonts.TryGetValue(font, out var ttFont))
+        {
+            TrackCodePoints(font, text);
+            _currentStream.Append('<');
+            _currentStream.Append(EncodeTextAsGlyphIds(text, ttFont));
+            _currentStream.Append("> Tj\n");
+        }
+        else
+        {
+            _currentStream.Append('(');
+            _currentStream.Append(EscapePdfString(text));
+            _currentStream.Append(") Tj\n");
+        }
+
+        _currentStream.Append("0 Tw\n");
+        _currentStream.Append("ET\n");
+    }
+
+    /// <summary>
     /// Writes a line of mixed-style text segments at the current cursor position.
     /// Each segment has its own font and the text is positioned relative to the previous segment.
     /// </summary>
@@ -366,19 +443,121 @@ internal sealed class PdfWriter
 
     /// <summary>
     /// Word-wraps mixed-style segments and writes them line by line.
+    /// When <paramref name="justify"/> is true, full lines are stretched to fill the content width.
     /// </summary>
-    internal float WriteWrappedSegments(List<TextSegment> segments, float leading)
+    internal float WriteWrappedSegments(List<TextSegment> segments, float leading, bool justify = true)
     {
         var lines = WrapSegments(segments, _contentWidth);
         float consumed = 0;
-        foreach (var line in lines)
+        for (int i = 0; i < lines.Count; i++)
         {
             EnsurePage();
-            WriteTextSegments(line, _marginLeft, _cursorY);
+            bool isLastLine = i == lines.Count - 1;
+            if (justify && !isLastLine)
+                WriteJustifiedSegments(lines[i], _marginLeft, _cursorY, _contentWidth);
+            else
+                WriteTextSegments(lines[i], _marginLeft, _cursorY);
             _cursorY -= leading;
             consumed += leading;
         }
         return consumed;
+    }
+
+    /// <summary>
+    /// Writes a line of segments justified to fill the given width.
+    /// Extra space is distributed evenly across word gaps.
+    /// </summary>
+    private void WriteJustifiedSegments(List<TextSegment> segments, float x, float y, float targetWidth)
+    {
+        if (segments.Count == 0) return;
+
+        // Measure natural width and count spaces
+        float naturalWidth = 0;
+        int spaceCount = 0;
+        foreach (var seg in segments)
+        {
+            naturalWidth += MeasureText(seg.Text, seg.Font, seg.FontSize);
+            foreach (var ch in seg.Text)
+                if (ch == ' ') spaceCount++;
+        }
+
+        float extraSpacing = spaceCount > 0 ? (targetWidth - naturalWidth) / spaceCount : 0;
+
+        // Clamp to avoid absurd stretching on very short lines
+        if (extraSpacing < 0) extraSpacing = 0;
+        if (extraSpacing > 10) extraSpacing = 0; // fall back to left-aligned if gap is too large
+
+        float currentX = x;
+        _currentStream!.Append("BT\n");
+        _currentStream.Append($"{Fmt(x)} {Fmt(y)} Td\n");
+        _currentStream.Append($"{Fmt(extraSpacing)} Tw\n");
+
+        foreach (var seg in segments)
+        {
+            _currentStream.Append($"/{seg.Font} {Fmt(seg.FontSize)} Tf\n");
+
+            if (_embeddedFonts.TryGetValue(seg.Font, out var ttFont))
+            {
+                TrackCodePoints(seg.Font, seg.Text);
+                _currentStream.Append('<');
+                _currentStream.Append(EncodeTextAsGlyphIds(seg.Text, ttFont));
+                _currentStream.Append("> Tj\n");
+            }
+            else
+            {
+                _currentStream.Append('(');
+                _currentStream.Append(EscapePdfString(seg.Text));
+                _currentStream.Append(") Tj\n");
+            }
+
+            float segWidth = MeasureText(seg.Text, seg.Font, seg.FontSize);
+            // Account for extra spacing per space in this segment
+            int segSpaces = 0;
+            foreach (var ch in seg.Text)
+                if (ch == ' ') segSpaces++;
+            float adjustedWidth = segWidth + segSpaces * extraSpacing;
+
+            if (seg.LinkUri is not null)
+                AddLinkAnnotation(currentX, y - 2, adjustedWidth, seg.FontSize + 4, seg.LinkUri);
+
+            currentX += adjustedWidth;
+        }
+
+        _currentStream.Append("0 Tw\n"); // reset word spacing
+        _currentStream.Append("ET\n");
+    }
+
+    internal float WriteWrappedVerbatimText(string text, string font, float fontSize, float leading)
+    {
+        float consumed = 0;
+        float charWidth = MeasureText("M", font, fontSize); // monospace: all chars same width
+        int charsPerLine = Math.Max(1, (int)(_contentWidth / charWidth));
+
+        int pos = 0;
+        while (pos < text.Length)
+        {
+            int remaining = text.Length - pos;
+            int lineLen = Math.Min(remaining, charsPerLine);
+            string line = text.Substring(pos, lineLen);
+
+            EnsurePage();
+            WriteText(line, font, fontSize, _marginLeft, _cursorY);
+            _cursorY -= leading;
+            consumed += leading;
+            pos += lineLen;
+        }
+        return consumed;
+    }
+
+    /// <summary>
+    /// Returns the number of wrapped lines a verbatim text line would produce at the given font size.
+    /// </summary>
+    internal int CountVerbatimLines(string text, string font, float fontSize)
+    {
+        float charWidth = MeasureText("M", font, fontSize);
+        int charsPerLine = Math.Max(1, (int)(_contentWidth / charWidth));
+        if (text.Length == 0) return 1;
+        return (text.Length + charsPerLine - 1) / charsPerLine;
     }
 
     internal void MoveCursor(float dy) => _cursorY -= dy;
@@ -484,13 +663,17 @@ internal sealed class PdfWriter
 
     internal static float MeasureStandardText(string text, string font, float fontSize)
     {
-        float avgWidth = font switch
-        {
-            "F2" => HelveticaBoldAvgWidth,
-            "F4" => CourierAvgWidth,
-            _ => HelveticaAvgWidth,
-        };
-        return text.Length * fontSize * avgWidth;
+        if (font == "F4") // Courier — monospace
+            return text.Length * fontSize * CourierAvgWidth;
+
+        var widths = font == "F2" ? HelveticaBoldWidths : HelveticaWidths;
+        float defaultWidth = font == "F2" ? HelveticaBoldDefaultWidth : HelveticaDefaultWidth;
+
+        float total = 0;
+        foreach (var ch in text)
+            total += widths.GetValueOrDefault(ch, defaultWidth);
+
+        return total * fontSize;
     }
 
     // ── Word wrapping ───────────────────────────────────────────────────
@@ -544,17 +727,52 @@ internal sealed class PdfWriter
 
         foreach (var seg in segments)
         {
-            float segWidth = MeasureText(seg.Text, seg.Font, seg.FontSize);
+            float spaceWidth = MeasureText(" ", seg.Font, seg.FontSize);
 
-            if (currentLine.Count > 0 && currentWidth + segWidth > maxWidth)
+            // Split segment text into words for word-level wrapping
+            var words = seg.Text.Split(' ');
+            var wordBuffer = new StringBuilder();
+
+            for (int i = 0; i < words.Length; i++)
             {
-                result.Add(currentLine);
-                currentLine = [];
-                currentWidth = 0;
+                var word = words[i];
+                float wordWidth = MeasureText(word, seg.Font, seg.FontSize);
+                float neededWidth = wordBuffer.Length > 0 || currentWidth > 0
+                    ? spaceWidth + wordWidth
+                    : wordWidth;
+
+                if (currentWidth + neededWidth > maxWidth && (currentLine.Count > 0 || wordBuffer.Length > 0))
+                {
+                    // Flush word buffer as a segment on the current line
+                    if (wordBuffer.Length > 0)
+                    {
+                        currentLine.Add(new TextSegment(wordBuffer.ToString(), seg.Font, seg.FontSize, seg.LinkUri));
+                        wordBuffer.Clear();
+                    }
+
+                    result.Add(currentLine);
+                    currentLine = [];
+                    currentWidth = 0;
+                    neededWidth = wordWidth;
+                }
+
+                if (wordBuffer.Length > 0)
+                    wordBuffer.Append(' ');
+                else if (currentWidth > 0 && i == 0)
+                {
+                    // Add space between previous segment and this one
+                    wordBuffer.Append(' ');
+                }
+
+                wordBuffer.Append(word);
+                currentWidth += neededWidth;
             }
 
-            currentLine.Add(seg);
-            currentWidth += segWidth;
+            // Flush remaining words in buffer
+            if (wordBuffer.Length > 0)
+            {
+                currentLine.Add(new TextSegment(wordBuffer.ToString(), seg.Font, seg.FontSize, seg.LinkUri));
+            }
         }
 
         if (currentLine.Count > 0)
@@ -653,13 +871,43 @@ internal sealed class PdfWriter
                 case '\\': sb.Append("\\\\"); break;
                 default:
                     if (ch < 128)
+                    {
                         sb.Append(ch);
+                    }
+                    else if (ch <= 255)
+                    {
+                        // WinAnsiEncoding: emit as octal escape
+                        sb.Append('\\');
+                        sb.Append(Convert.ToString(ch, 8).PadLeft(3, '0'));
+                    }
                     else
-                        sb.Append('?'); // Non-ASCII simplified to ? for standard fonts
+                    {
+                        // Outside WinAnsi range — best effort: try to map common Unicode chars
+                        sb.Append(MapUnicodeToWinAnsi(ch));
+                    }
                     break;
             }
         }
         return sb.ToString();
+    }
+
+    private static string MapUnicodeToWinAnsi(char ch)
+    {
+        // Map common Unicode characters to WinAnsi equivalents
+        return ch switch
+        {
+            '\u2013' => "\\226", // en dash
+            '\u2014' => "\\227", // em dash
+            '\u2018' => "\\221", // left single quote
+            '\u2019' => "\\222", // right single quote / apostrophe
+            '\u201C' => "\\223", // left double quote
+            '\u201D' => "\\224", // right double quote
+            '\u2022' => "\\225", // bullet
+            '\u2026' => "\\205", // ellipsis
+            '\u2122' => "\\231", // trademark
+            '\u20AC' => "\\200", // euro sign
+            _ => "?",
+        };
     }
 
     private static string Fmt(float value) =>

@@ -17,6 +17,7 @@ public sealed record Diagnostic(DiagnosticSeverity Severity, string Message, Sou
     /// <summary>Returns true when this diagnostic has <see cref="DiagnosticSeverity.Warning"/> severity.</summary>
     public bool IsWarning => Severity == DiagnosticSeverity.Warning;
 
+    /// <summary>Returns a human-readable representation including severity, location, and message.</summary>
     public override string ToString() =>
         FilePath is not null
             ? $"{Severity} at {FilePath} {Range}: {Message}"

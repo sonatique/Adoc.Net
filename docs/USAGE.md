@@ -5,6 +5,8 @@ as a library in your .NET applications.
 
 ## Installation
 
+### Library (NuGet)
+
 Add the umbrella package (includes parser, HTML, and PDF renderers):
 
 ```xml
@@ -18,19 +20,67 @@ Or reference only what you need:
 <PackageReference Include="AdocNet.Converters.Html" Version="1.0.0" />
 ```
 
+### CLI tools
+
+```bash
+dotnet tool install --global AdocNet.Tool         # adocnet (HTML default)
+dotnet tool install --global AdocNet.Pdf          # adocnet-pdf
+dotnet tool install --global AdocNet.Epub         # adocnet-epub
+dotnet tool install --global AdocNet.DocBook      # adocnet-docbook
+```
+
+### Target frameworks
+
 AdocNet targets both `netstandard2.0` and `net10.0`. It works on .NET Framework 4.6.1+,
 .NET Core 2.0+, and modern .NET. The `net10.0` target includes Span-based optimizations;
 `netstandard2.0` uses string-based fallbacks with identical behavior.
 
 ## Quick Start
 
+### Zero-config API
+
+The simplest way to use AdocNet — one `using`, one line:
+
+```csharp
+using AdocNet;
+
+string html = Adoc.ToHtml("= Hello\n\nThis is *bold* text.");
+```
+
+More options without additional `using` directives:
+
+```csharp
+// Styled full HTML document
+string page = Adoc.ToStyledHtml(source, HtmlTheme.Asciidoctor);
+
+// PDF
+byte[] pdf = Adoc.ToPdf(source);
+
+// Write directly to a stream (no intermediate allocation)
+using var file = File.Create("output.html");
+Adoc.ToHtml(source, file);
+
+// Convert a file (resolves includes automatically)
+Adoc.ConvertFile("docs/chapter.adoc", file);
+
+// Parse with error checking
+var result = Adoc.Parse(source);
+if (result.HasErrors)
+    foreach (var d in result.Diagnostics) Console.WriteLine(d);
+```
+
+### Full API
+
+For advanced scenarios (custom options, include readers, render options), use the
+component API directly:
+
 ```csharp
 using AdocNet.Parser;
 using AdocNet.Converters.Html;
 
-var result = AdocParser.Parse("= Hello\n\nThis is *bold* text.\n");
-var html = new HtmlRenderer().RenderToString(result.Document);
-Console.WriteLine(html);
+var result = AdocParser.Parse(text, new ParseOptions { SourceFilePath = "chapter.adoc" });
+var html = new HtmlRenderer().RenderToString(result.Document,
+    new HtmlRenderOptions { Theme = HtmlTheme.Asciidoctor });
 ```
 
 ## Parsing
@@ -386,6 +436,6 @@ File.WriteAllBytes("output.epub", new EpubRenderer().RenderToBytes(doc));
 
 ## See Also
 
-- [CLI Reference](CLI.md) — command-line tool
+- [CLI Reference](CLI.md) — command-line tools (adocnet, adocnet-pdf, adocnet-epub, adocnet-docbook)
 - [Renderers Guide](RENDERERS.md) — renderer options and details
 - [Extensions Guide](EXTENSIONS.md) — writing custom renderers and include readers
