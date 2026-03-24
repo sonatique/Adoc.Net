@@ -16,4 +16,7 @@ public enum HtmlTheme
 
     /// <summary>Minimal theme with maximum readability and very little decoration.</summary>
     Clean,
+
+    /// <summary>GitHub-flavored styling with system font stack and GitHub syntax colors.</summary>
+    Github,
 }

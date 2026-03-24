@@ -3,6 +3,37 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0-beta.4] - 2026-03-24
+
+### Added
+- Syntax highlighting tokenizer in AdocNet.Core with 7 language support (C#, Java, JavaScript, Python, JSON, XML/HTML, SQL)
+- 9 token categories: keyword, string, comment, number, type, punctuation, attribute, preprocessor, plain
+- Server-side syntax highlighting for HTML source blocks (`EnableSyntaxHighlighting` option)
+- Syntax highlighting CSS rules in all 4 built-in HTML themes
+- PDF syntax highlighting via `SyntaxColorScheme` with configurable per-token colors
+- Github theme (`HtmlTheme.Github`) — GitHub-flavored HTML styling
+- Liang/Knuth hyphenation engine with TeX US English patterns (`EnableHyphenation` option)
+- Hyphenation-aware line breaking in PDF text layout
+- Configurable paragraph spacing: `ParagraphSpacingBefore` and `ParagraphSpacingAfter`
+- Configurable section spacing: `SectionSpacing`
+- Heading color: `HeadingColor` property for PDF
+- Body text color: `BodyColor` property for PDF
+- Table header background: `TableHeaderBackground` property for PDF
+- Block indent: `BlockIndent` property for PDF
+- PDF style presets: `PdfRenderOptions.Compact` and `PdfRenderOptions.Presentation`
+- 84 new tests across 8 test files
+- Documentation: THEMING.md, SYNTAX_HIGHLIGHTING.md, TYPOGRAPHY.md
+
+### Changed
+- Justification max spacing tightened to 1.5x when hyphenation enabled (was 2x)
+- PdfWriter word-wrapping code extracted into PdfWriter.WordWrap.cs partial
+- Highlighted verbatim rendering moved to PdfRenderer.Blocks.cs partial
+
+### Compatibility
+- All new options default to values matching beta.3 output
+- Syntax highlighting defaults to disabled (opt-in) in both renderers
+- Existing tests pass without modification
+
 ## [1.0.0-beta.3] - 2026-03-24
 
 ### Added

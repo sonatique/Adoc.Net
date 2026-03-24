@@ -176,6 +176,16 @@ See [docs/CLI.md](docs/CLI.md) for the full reference.
 | Smart punctuation (em/en dash, ellipsis, curly quotes) | Supported |
 | Inline macros (`kbd:[]`, `btn:[]`, `menu:[]`) | Supported |
 
+### Rendering Features
+
+| Feature | HTML | PDF |
+|---------|------|-----|
+| Built-in themes (Default, Asciidoctor, Clean, Github) | 4 themes | Style presets |
+| Syntax highlighting (C#, Java, JS, Python, JSON, XML, SQL) | Server-side `<span>` classes | Per-token color operators |
+| Hyphenation (English, Liang/Knuth algorithm) | N/A (browser CSS) | Enabled via option |
+| Custom styling | Custom CSS override | Color/spacing properties |
+| TrueType font embedding with Unicode | N/A | Full Unicode support |
+
 ### Not yet supported
 
 - Stem/math blocks (MathJax, LaTeX)

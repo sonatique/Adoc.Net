@@ -26,6 +26,7 @@ public sealed class HtmlRenderer : DocumentRendererBase
         public int TableCounter { get; set; } = 1;
         public int FigureCounter { get; set; } = 1;
         public int ExampleCounter { get; set; } = 1;
+        public bool EnableSyntaxHighlighting { get; set; }
     }
 
     /// <summary>
@@ -155,6 +156,7 @@ public sealed class HtmlRenderer : DocumentRendererBase
         state.TableCounter = 1;
 
         var htmlOptions = context.Options as HtmlRenderOptions;
+        state.EnableSyntaxHighlighting = htmlOptions?.EnableSyntaxHighlighting ?? false;
         bool fullDoc = htmlOptions?.IsFullDocument == true;
 
         var sb = new StringBuilder();
@@ -641,7 +643,19 @@ public sealed class HtmlRenderer : DocumentRendererBase
                     sb.Append('"');
                 }
                 sb.Append('>');
-                RenderVerbatimContent(sb, block, state);
+
+                // Use server-side syntax highlighting when available and enabled
+                if (!useHighlightJs && state.EnableSyntaxHighlighting
+                    && block.Language is not null
+                    && Highlighting.SyntaxTokenizer.IsLanguageSupported(block.Language))
+                {
+                    RenderHighlightedContent(sb, block);
+                }
+                else
+                {
+                    RenderVerbatimContent(sb, block, state);
+                }
+
                 sb.Append("</code></pre>\n");
                 RenderCalloutList(sb, block, footnotes, state);
                 break;
@@ -1749,6 +1763,33 @@ public sealed class HtmlRenderer : DocumentRendererBase
             EscapeTo(sb, node.Roles[i]);
         }
         sb.Append('"');
+    }
+
+    /// <summary>
+    /// Renders source block content with server-side syntax highlighting.
+    /// Each non-plain token is wrapped in a &lt;span class="hl-XX"&gt; element.
+    /// </summary>
+    private static void RenderHighlightedContent(StringBuilder sb, DelimitedBlockNode block)
+    {
+        var content = block.Content ?? string.Empty;
+        var tokens = Highlighting.SyntaxTokenizer.Tokenize(content, block.Language);
+
+        foreach (var token in tokens)
+        {
+            var cssClass = Highlighting.SyntaxTokenizer.GetCssClass(token.Kind);
+            if (cssClass is not null)
+            {
+                sb.Append("<span class=\"");
+                sb.Append(cssClass);
+                sb.Append("\">");
+                EscapeTo(sb, token.Text);
+                sb.Append("</span>");
+            }
+            else
+            {
+                EscapeTo(sb, token.Text);
+            }
+        }
     }
 
     /// <summary>

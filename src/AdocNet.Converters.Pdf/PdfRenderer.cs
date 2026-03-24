@@ -1,6 +1,5 @@
 using AdocNet;
 using AdocNet.Ast;
-
 namespace AdocNet.Converters.Pdf;
 
 /// <summary>
@@ -33,15 +32,20 @@ public sealed partial class PdfRenderer : DocumentRendererBase
     private float _bodyLeading = 15f;
     private float _codeLeading = 12f;
 
-    private const float ParagraphSpacing = 8f;
-    private const float SectionSpacing = 16f;
+    private float _paragraphSpacingBefore;
+    private float _paragraphSpacingAfter = 8f;
+    private float _sectionSpacing = 16f;
     private const float ListIndent = 18f;
-    private const float BlockIndent = 24f;
+    private float _blockIndent = 24f;
 
     // ── Visual styling (initialized from PdfRenderOptions) ──────────────
     private PdfColor? _linkColor;
     private PdfColor? _codeBackground;
     private float _admonitionBorderWidth = 2f;
+    private SyntaxColorScheme? _syntaxColors;
+    private PdfColor? _headingColor;
+    private PdfColor? _bodyColor;
+    private PdfColor? _tableHeaderBackground;
     private bool _repeatTableHeader = true;
 
     /// <summary>
@@ -115,6 +119,19 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         _admonitionBorderWidth = pdfOptions.AdmonitionBorderWidth;
         _repeatTableHeader = pdfOptions.RepeatTableHeader;
 
+        // Syntax highlighting and styling
+        _syntaxColors = pdfOptions.SyntaxColors;
+        _headingColor = pdfOptions.HeadingColor;
+        _bodyColor = pdfOptions.BodyColor;
+        _tableHeaderBackground = pdfOptions.TableHeaderBackground;
+        _sectionSpacing = pdfOptions.SectionSpacing;
+        _blockIndent = pdfOptions.BlockIndent;
+
+        // Typography options
+        writer.HyphenationEnabled = pdfOptions.EnableHyphenation;
+        _paragraphSpacingBefore = pdfOptions.ParagraphSpacingBefore;
+        _paragraphSpacingAfter = pdfOptions.ParagraphSpacingAfter;
+
         // Register embedded TrueType fonts if configured
         _fontRegular = "F1";
         _fontBold = "F2";
@@ -162,8 +179,10 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         if (document.Title is not null)
         {
             w.EnsurePage();
+            if (_headingColor is { } hc) w.SetFillColor(hc.R, hc.G, hc.B);
             w.WriteWrappedText(document.Title, _fontBold, _titleFontSize, _titleLeading);
-            w.MoveCursor(SectionSpacing);
+            if (_headingColor is not null) w.SetFillColor(0, 0, 0);
+            w.MoveCursor(_sectionSpacing);
         }
 
         foreach (var child in document.Children)
@@ -174,14 +193,14 @@ public sealed partial class PdfRenderer : DocumentRendererBase
     {
         if (footnotes.Footnotes.Count == 0) return;
 
-        w.MoveCursor(SectionSpacing);
+        w.MoveCursor(_sectionSpacing);
         w.EnsurePage();
 
         // Draw a horizontal rule
         w.SetStrokeColor(0.5f, 0.5f, 0.5f);
         w.DrawLine(w.MarginLeftValue, w.CursorY, w.MarginLeftValue + w.ContentWidth, w.CursorY, 0.5f);
         w.SetStrokeColor(0, 0, 0);
-        w.MoveCursor(ParagraphSpacing);
+        w.MoveCursor(_paragraphSpacingAfter);
 
         foreach (var (number, _, node) in footnotes.Footnotes)
         {
@@ -232,14 +251,14 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 w.SetStrokeColor(0.5f, 0.5f, 0.5f);
                 w.DrawLine(w.MarginLeftValue, w.CursorY, w.MarginLeftValue + w.ContentWidth, w.CursorY, 0.5f);
                 w.SetStrokeColor(0, 0, 0);
-                w.MoveCursor(ParagraphSpacing);
+                w.MoveCursor(_paragraphSpacingAfter);
                 break;
         }
     }
 
     private void RenderSection(PdfWriter w, SectionNode section, int indentLevel, FootnoteState footnotes)
     {
-        w.MoveCursor(SectionSpacing);
+        w.MoveCursor(_sectionSpacing);
         w.EnsurePage();
 
         var (fontSize, leading) = section.Level switch
@@ -250,10 +269,12 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             _ => (_h5FontSize, _bodyLeading),
         };
 
-        // Render section title with inline formatting
+        // Render section title with inline formatting, optionally colored
+        if (_headingColor is { } hc) w.SetFillColor(hc.R, hc.G, hc.B);
         var segments = BuildInlineSegments(section.TitleInlines, section.Title, _fontBold, fontSize, footnotes);
         w.WriteWrappedSegments(segments, leading);
-        w.MoveCursor(ParagraphSpacing / 2);
+        if (_headingColor is not null) w.SetFillColor(0, 0, 0);
+        w.MoveCursor(_paragraphSpacingAfter / 2);
 
         foreach (var child in section.Children)
             RenderBlock(w, child, indentLevel, footnotes);
@@ -261,11 +282,15 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
     private void RenderParagraph(PdfWriter w, ParagraphNode paragraph, int indentLevel, FootnoteState footnotes)
     {
+        if (_paragraphSpacingBefore > 0)
+            w.MoveCursor(_paragraphSpacingBefore);
         w.EnsurePage();
 
+        if (_bodyColor is { } bc) w.SetFillColor(bc.R, bc.G, bc.B);
         var segments = BuildInlineSegments(paragraph.Inlines, paragraph.Text, _fontRegular, _bodyFontSize, footnotes);
         w.WriteWrappedSegments(segments, _bodyLeading);
-        w.MoveCursor(ParagraphSpacing);
+        if (_bodyColor is not null) w.SetFillColor(0, 0, 0);
+        w.MoveCursor(_paragraphSpacingAfter);
     }
 
     private void RenderList(PdfWriter w, ListNode list, int indentLevel, FootnoteState footnotes)
@@ -304,7 +329,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 itemNumber++;
             }
         }
-        w.MoveCursor(ParagraphSpacing);
+        w.MoveCursor(_paragraphSpacingAfter);
     }
 
     private void RenderDelimitedBlock(PdfWriter w, DelimitedBlockNode block, int indentLevel, FootnoteState footnotes)
@@ -338,50 +363,33 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         var content = block.Content ?? string.Empty;
         w.EnsurePage();
 
-        // Draw a light gray background sized from the visual content bounds.
-        // The rect covers from above the first text's ascenders to below the
-        // last text's descenders, with symmetric visual padding (gap) on each side.
-        int totalLines = 0;
-        foreach (var line in content.Split('\n'))
-            totalLines += w.CountVerbatimLines(line, _fontMono, _codeFontSize);
-
-        float ascent = _codeFontSize * 0.75f;
-        float descent = _codeFontSize * 0.25f;
-        float gap = 4f; // visual padding between rect edge and text extremes
-
-        // Baseline-to-baseline distance across all lines (including language label)
-        int lineSlots = totalLines + (block.Language is not null ? 1 : 0);
-        float interline = lineSlots > 1 ? (lineSlots - 1) * _codeLeading : 0;
-
-        // bgHeight = gap + ascent + interline + descent + gap
-        float bgHeight = ascent + interline + descent + gap * 2;
-
+        // Enable per-line background drawing (handles page breaks correctly)
         if (_codeBackground is { } bg)
-        {
-            w.SetFillColor(bg.R, bg.G, bg.B);
-            w.DrawRect(w.MarginLeftValue - 4, w.CursorY - bgHeight, w.ContentWidth + 8, bgHeight, fill: true);
-            w.SetFillColor(0, 0, 0);
-        }
-
-        // Move cursor to first text baseline: gap + ascent below rect top
-        w.MoveCursor(gap + ascent);
+            w.BeginCodeBlockBackground(bg, _codeFontSize, _codeLeading);
 
         // Language label
         if (block.Language is not null)
         {
+            w.DrawCodeLineBackground();
             w.WriteText(block.Language, _fontItalic, 8f, w.MarginLeftValue, w.CursorY);
             w.MoveCursor(_codeLeading);
         }
 
-        foreach (var line in content.Split('\n'))
+        // Render content: highlighted if supported, plain monospace otherwise
+        if (_syntaxColors is not null && block.BlockKind == DelimitedBlockKind.Source
+            && block.Language is not null
+            && Highlighting.SyntaxTokenizer.IsLanguageSupported(block.Language))
         {
-            w.WriteWrappedVerbatimText(line, _fontMono, _codeFontSize, _codeLeading);
+            RenderHighlightedVerbatim(w, content, block.Language);
         }
-        // Cursor is now _codeLeading below the last baseline. The rect bottom
-        // is at CursorY_start - bgHeight. Move cursor to below rect + body leading.
-        float cursorBelowRectBottom = _codeLeading - descent - gap;
-        float remainingToRectBottom = cursorBelowRectBottom > 0 ? 0 : -cursorBelowRectBottom;
-        w.MoveCursor(remainingToRectBottom + _bodyLeading);
+        else
+        {
+            foreach (var line in content.Split('\n'))
+                w.WriteWrappedVerbatimText(line, _fontMono, _codeFontSize, _codeLeading);
+        }
+
+        w.EndCodeBlockBackground();
+        w.MoveCursor(_bodyLeading);
 
         // Render callout list
         if (block.Callouts is { Count: > 0 })
@@ -393,7 +401,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 w.WriteWrappedText($"({num}) {entry.Text}", _fontRegular, _bodyFontSize, _bodyLeading);
                 num++;
             }
-            w.MoveCursor(ParagraphSpacing);
+            w.MoveCursor(_paragraphSpacingAfter);
         }
     }
 
@@ -416,12 +424,12 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
         // Cursor is _bodyLeading + ParagraphSpacing below the last text baseline.
         // Line bottom = last baseline - descent.
-        float lineBottom = w.CursorY + _bodyLeading + ParagraphSpacing - descent;
+        float lineBottom = w.CursorY + _bodyLeading + _paragraphSpacingAfter - descent;
         w.DrawLine(borderX, lineTop, borderX, lineBottom, _admonitionBorderWidth);
         w.SetStrokeColor(0, 0, 0);
 
         w.PopIndent(savedIndent);
-        w.MoveCursor(ParagraphSpacing);
+        w.MoveCursor(_paragraphSpacingAfter);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

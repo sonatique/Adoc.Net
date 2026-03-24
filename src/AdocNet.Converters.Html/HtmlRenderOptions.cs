@@ -43,6 +43,14 @@ public sealed class HtmlRenderOptions : RenderOptions
     /// </summary>
     public string? ExtraHead { get; init; }
 
+    /// <summary>
+    /// When true and a supported language is specified, source blocks are highlighted
+    /// server-side using the built-in tokenizer. When false, source blocks are emitted
+    /// as plain text (for client-side highlighting). Default: true.
+    /// Ignored when :source-highlighter: highlight.js is set (always defers to client).
+    /// </summary>
+    public bool EnableSyntaxHighlighting { get; init; }
+
     /// <summary>Whether the output should be a full HTML document.</summary>
     internal bool IsFullDocument => FullDocument || Theme != HtmlTheme.None;
 
