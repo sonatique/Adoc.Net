@@ -547,6 +547,25 @@ internal static class BlockParser
                             && blockAttrs.Options.All(o => !downstreamOptions.Contains(o)))
                             continue;
                     }
+                    else if (blockAttrs.Style is null && blockAttrs.Positional.Count == 0
+                        && blockAttrs.Named.All(kv => kv.Key is "options" or "opts"))
+                    {
+                        // All options are downstream (e.g. [options="header,footer"]).
+                        // Set the pending flags and consume the line.
+                        FlushParagraph(currentContainer, paragraphLines, ref paragraphStartLine, lineNumber - 1, document.Attributes);
+                        listFrames.Clear();
+                        dlFrames.Clear();
+                        foreach (var opt in blockAttrs.Options)
+                        {
+                            if (opt.Equals("header", StringComparison.OrdinalIgnoreCase))
+                                hasPendingOptionsHeader = true;
+                            else if (opt.Equals("footer", StringComparison.OrdinalIgnoreCase))
+                                hasPendingFooter = true;
+                            else if (opt.Equals("autowidth", StringComparison.OrdinalIgnoreCase))
+                                hasPendingAutoWidth = true;
+                        }
+                        continue;
+                    }
                 }
 
                 // [start=N] and/or [loweralpha] etc. — ordered list attributes.

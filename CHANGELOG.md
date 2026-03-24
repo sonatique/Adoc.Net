@@ -3,6 +3,30 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0-beta.3] - 2026-03-24
+
+### Added
+- TrueType font embedding with Unicode support (cmap format 4 and 12)
+- Font subsetting — only used glyphs are embedded, reducing PDF size
+- JPEG image embedding via DCTDecode filter
+- PNG image embedding with RGBA alpha channel support via SMask
+- Clickable hyperlinks via PDF link annotations
+- Table header repetition on continuation pages
+- Total page count placeholder `{pages}` in headers/footers
+- Configurable typography: FontSize, CodeFontSize, TitleFontSize, HeadingScale, LineSpacing
+- Visual styling options: LinkColor, CodeBackground, AdmonitionBorderWidth
+- RepeatTableHeader option for table page breaks
+- PdfColor type for RGB color configuration
+- Line-start punctuation prevention (no line starts with `)`, `.`, etc.)
+- Justification spacing cap at 2x normal word space
+- PDF renderer documentation (`docs/PDF_RENDERER.md`)
+- 27 new tests covering fonts, images, links, tables, headers, configuration, determinism
+
+### Changed
+- PdfRenderOptions: 10 new properties (backward compatible — all have defaults matching beta.2)
+- Renderer constants (font sizes, leading) now configurable via PdfRenderOptions
+- PdfWriter and PdfRenderer split into partial classes for maintainability
+
 ## [1.0.0-beta.2] - 2026-03-20
 
 ### Added

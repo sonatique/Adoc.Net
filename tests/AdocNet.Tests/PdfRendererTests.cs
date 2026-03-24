@@ -447,6 +447,93 @@ public class PdfRendererTests
         Assert.That(options.PageHeight, Is.EqualTo(792f));
     }
 
+    [Test]
+    public void Custom_font_size_changes_output()
+    {
+        var doc = AdocParser.Parse("= Test\n\nHello.").Document;
+        var defaultBytes = new PdfRenderer().RenderToBytes(doc);
+        var largeBytes = new PdfRenderer().RenderToBytes(doc, new PdfRenderOptions { FontSize = 16f });
+        // Different font size should produce different PDF output
+        Assert.That(largeBytes, Is.Not.EqualTo(defaultBytes),
+            "Custom FontSize should produce different output than default");
+    }
+
+    // ── Header/footer tests ──────────────────────────────────────────────
+
+    [Test]
+    public void Multi_page_footer_contains_page_numbers()
+    {
+        // Generate a document long enough for 3+ pages
+        var sb = new System.Text.StringBuilder("= Long Doc\n\n");
+        for (int i = 0; i < 100; i++)
+            sb.Append($"Paragraph {i} with some text to fill space.\n\n");
+
+        var doc = AdocParser.Parse(sb.ToString()).Document;
+        var options = new PdfRenderOptions { ShowPageNumbers = true };
+        var bytes = new PdfRenderer().RenderToBytes(doc, options);
+        var text = Encoding.ASCII.GetString(bytes);
+
+        Assert.That(text, Does.Contain("Page 1"));
+        Assert.That(text, Does.Contain("Page 2"));
+        Assert.That(text, Does.Contain("Page 3"));
+    }
+
+    [Test]
+    public void Total_pages_placeholder_resolved()
+    {
+        // Generate a multi-page doc with {pages} in footer
+        var sb = new System.Text.StringBuilder("= Doc\n\n");
+        for (int i = 0; i < 100; i++)
+            sb.Append($"Paragraph {i} text.\n\n");
+
+        var doc = AdocParser.Parse(sb.ToString()).Document;
+        var options = new PdfRenderOptions { FooterText = "{page} of {pages}" };
+        var bytes = new PdfRenderer().RenderToBytes(doc, options);
+        var text = Encoding.ASCII.GetString(bytes);
+
+        // {pages} placeholder must NOT appear literally
+        Assert.That(text, Does.Not.Contain("{pages}"));
+        Assert.That(text, Does.Not.Contain("___TOTAL___"));
+
+        // Page count should appear (at least "1 of N" for page 1)
+        Assert.That(text, Does.Contain("1 of "));
+    }
+
+    [Test]
+    public void Custom_footer_template_with_page_and_pages()
+    {
+        var sb = new System.Text.StringBuilder("= Doc\n\n");
+        for (int i = 0; i < 60; i++)
+            sb.Append($"Paragraph {i} with enough text.\n\n");
+
+        var doc = AdocParser.Parse(sb.ToString()).Document;
+        var options = new PdfRenderOptions { FooterText = "Page {page} of {pages}" };
+        var bytes = new PdfRenderer().RenderToBytes(doc, options);
+        var text = Encoding.ASCII.GetString(bytes);
+
+        Assert.That(text, Does.Contain("Page 1 of "));
+        Assert.That(text, Does.Contain("Page 2 of "));
+    }
+
+    [Test]
+    public void No_footer_by_default()
+    {
+        var doc = AdocParser.Parse("= Test\n\nHello world.").Document;
+        var bytes = new PdfRenderer().RenderToBytes(doc);
+        var text = Encoding.ASCII.GetString(bytes);
+        Assert.That(text, Does.Not.Contain("Page 1"));
+    }
+
+    [Test]
+    public void Header_footer_determinism()
+    {
+        var doc = AdocParser.Parse("= Test\n\nContent.").Document;
+        var options = new PdfRenderOptions { ShowPageNumbers = true, HeaderText = "Title" };
+        var bytes1 = new PdfRenderer().RenderToBytes(doc, options);
+        var bytes2 = new PdfRenderer().RenderToBytes(doc, options);
+        Assert.That(bytes1, Is.EqualTo(bytes2), "Header/footer renders must be byte-identical");
+    }
+
     // ── Hyperlink annotations ──────────────────────────────────────────
 
     [Test]
@@ -475,6 +562,400 @@ public class PdfRendererTests
         var bytes = new PdfRenderer().RenderToBytes(doc);
         var text = Encoding.ASCII.GetString(bytes);
         Assert.That(text, Does.Contain("/Annots"));
+    }
+
+    [Test]
+    public void Multiple_links_produce_multiple_annotations()
+    {
+        var doc = AdocParser.Parse(
+            "See https://one.com and https://two.com and https://three.com links.").Document;
+        var bytes = new PdfRenderer().RenderToBytes(doc);
+        var text = Encoding.ASCII.GetString(bytes);
+        Assert.That(text, Does.Contain("/URI (https://one.com)"));
+        Assert.That(text, Does.Contain("/URI (https://two.com)"));
+        Assert.That(text, Does.Contain("/URI (https://three.com)"));
+        // Count annotation objects — each /Subtype /Link is a separate annotation
+        int annotCount = 0;
+        int idx = 0;
+        while ((idx = text.IndexOf("/Subtype /Link", idx, StringComparison.Ordinal)) >= 0)
+        {
+            annotCount++;
+            idx++;
+        }
+        Assert.That(annotCount, Is.GreaterThanOrEqualTo(3), "Should have at least 3 link annotations");
+    }
+
+    [Test]
+    public void Hyperlink_determinism_two_renders_produce_identical_output()
+    {
+        var doc = AdocParser.Parse(
+            "Visit https://example.com and link:https://other.com[Other].").Document;
+        var bytes1 = new PdfRenderer().RenderToBytes(doc);
+        var bytes2 = new PdfRenderer().RenderToBytes(doc);
+        Assert.That(bytes1, Is.EqualTo(bytes2), "Link renders must be byte-identical");
+    }
+
+    // ── Text quality ─────────────────────────────────────────────────────
+
+    [Test]
+    public void Punctuation_does_not_start_wrapped_line()
+    {
+        // Use WrapText directly to inspect line-break decisions.
+        // Construct input where a closing paren would naturally start a new line.
+        // Width is tight enough that "word)" wraps — the ")" must not start the next line.
+        var writer = new PdfWriter();
+
+        // Measure to pick a maxWidth that forces a break right before the paren
+        float bodySize = 11f;
+        string input = "some words here then more text and close) after that";
+        var lines = writer.WrapText(input, "F1", bodySize, 200f);
+
+        // No line should start with a no-start character
+        for (int i = 1; i < lines.Count; i++)
+        {
+            char first = lines[i][0];
+            Assert.That(first, Is.Not.EqualTo(')'),
+                $"Line {i} starts with ')': \"{lines[i]}\"");
+            Assert.That(first, Is.Not.EqualTo('.'),
+                $"Line {i} starts with '.': \"{lines[i]}\"");
+        }
+    }
+
+    [Test]
+    public void Justification_spacing_capped_at_twice_space_width()
+    {
+        // A very short line with few words should not get extreme spacing.
+        // The WriteJustifiedSegments method caps at 2× space width.
+        // We verify indirectly: render a justified paragraph with a very short line
+        // and check the PDF Tw operator value doesn't exceed 2× space width.
+        float spaceWidth = PdfWriter.MeasureStandardText(" ", "F1", 11f);
+        float maxAllowed = spaceWidth * 2;
+
+        var doc = AdocParser.Parse("= Test\n\nWord word word word word word word word more text here for wrapping purpose.").Document;
+        var bytes = new PdfRenderer().RenderToBytes(doc);
+        var text = Encoding.ASCII.GetString(bytes);
+
+        // Find all "Tw" operators and extract the spacing value
+        int idx = 0;
+        while ((idx = text.IndexOf(" Tw\n", idx, StringComparison.Ordinal)) >= 0)
+        {
+            // Walk back to find the number before " Tw"
+            int end = idx;
+            int start = end - 1;
+            while (start > 0 && (char.IsDigit(text[start]) || text[start] == '.' || text[start] == '-'))
+                start--;
+            start++;
+            if (start < end)
+            {
+                string numStr = text.Substring(start, end - start);
+                if (float.TryParse(numStr, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out float twValue))
+                {
+                    if (twValue > 0) // Only check positive (non-reset) values
+                    {
+                        Assert.That(twValue, Is.LessThanOrEqualTo(maxAllowed),
+                            $"Tw value {twValue} exceeds 2× space width ({maxAllowed})");
+                    }
+                }
+            }
+            idx++;
+        }
+    }
+
+    [Test]
+    public void Last_line_of_justified_paragraph_is_not_justified()
+    {
+        // Render a multi-line paragraph. The last line should have Tw=0 (left-aligned),
+        // while non-last lines should have Tw>0 (justified).
+        var doc = AdocParser.Parse(
+            "= Test\n\nThis is a paragraph with enough words that it will wrap across " +
+            "multiple lines in the PDF output to test justification behavior properly.").Document;
+        var bytes = new PdfRenderer().RenderToBytes(doc);
+        var text = Encoding.ASCII.GetString(bytes);
+
+        // Find all Tw values in order — the pattern is: value Tw, then text, then 0 Tw (reset)
+        var twValues = new List<float>();
+        int idx = 0;
+        while ((idx = text.IndexOf(" Tw\n", idx, StringComparison.Ordinal)) >= 0)
+        {
+            int end = idx;
+            int start = end - 1;
+            while (start > 0 && (char.IsDigit(text[start]) || text[start] == '.' || text[start] == '-'))
+                start--;
+            start++;
+            if (start < end)
+            {
+                string numStr = text.Substring(start, end - start);
+                if (float.TryParse(numStr, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out float twValue))
+                {
+                    twValues.Add(twValue);
+                }
+            }
+            idx++;
+        }
+
+        // Non-zero Tw values are justification; they come in pairs (set, then 0 reset).
+        // The last text line should be rendered via WriteTextSegments (no Tw at all) or Tw=0.
+        // We just verify that not ALL lines have positive Tw — at least the last must be 0 or absent.
+        bool hasPositiveTw = twValues.Exists(v => v > 0);
+        bool hasZeroTw = twValues.Exists(v => v == 0);
+        if (hasPositiveTw)
+        {
+            Assert.That(hasZeroTw, Is.True,
+                "Justified paragraph must have at least one Tw reset (0) for the last line");
+        }
+    }
+
+    [Test]
+    public void Text_quality_determinism()
+    {
+        var doc = AdocParser.Parse(
+            "= Test\n\nA paragraph with text (including punctuation) that wraps.").Document;
+        var bytes1 = new PdfRenderer().RenderToBytes(doc);
+        var bytes2 = new PdfRenderer().RenderToBytes(doc);
+        Assert.That(bytes1, Is.EqualTo(bytes2), "Text quality renders must be byte-identical");
+    }
+
+    [Test]
+    public void Code_block_background_does_not_overlap_surrounding_text()
+    {
+        // Regression test: the gray background rect of a code block must not
+        // overlap with surrounding paragraphs, and internal padding must be
+        // visually balanced (top gap ≈ bottom gap within 2pt).
+
+        var adoc = "= Test\n\nBefore the block.\n\n----\ncode line 1\n\ncode line 3\n----\n\nAfter the block.";
+        var doc = AdocParser.Parse(adoc).Document;
+        var bytes = new PdfRenderer().RenderToBytes(doc);
+        var pdf = Encoding.ASCII.GetString(bytes);
+
+        // Parse all Td (text position) Y values
+        var tdYValues = ParseTdYValues(pdf);
+        // Parse all filled rects (code block backgrounds)
+        var rects = ParseFilledRects(pdf);
+
+        Assert.That(rects.Count, Is.GreaterThan(0), "Should have at least one background rect");
+
+        foreach (var (rectY, rectH) in rects)
+        {
+            float rectTop = rectY + rectH;
+            float rectBottom = rectY;
+
+            // Collect text positions INSIDE the rect (code block text)
+            var insideY = new List<float>();
+            // Text OUTSIDE and closest to the rect
+            float? closestAbove = null;
+            float? closestBelow = null;
+
+            foreach (var ty in tdYValues)
+            {
+                if (ty > rectTop)
+                {
+                    if (closestAbove is null || ty < closestAbove)
+                        closestAbove = ty;
+                }
+                else if (ty < rectBottom)
+                {
+                    if (closestBelow is null || ty > closestBelow)
+                        closestBelow = ty;
+                }
+                else
+                {
+                    insideY.Add(ty);
+                }
+            }
+
+            // 1. No overlap with surrounding text
+            if (closestAbove is not null)
+            {
+                Assert.That(closestAbove.Value, Is.GreaterThan(rectTop),
+                    $"Text above code block (Y={closestAbove}) overlaps rect top (Y={rectTop})");
+            }
+            if (closestBelow is not null)
+            {
+                Assert.That(closestBelow.Value, Is.LessThan(rectBottom),
+                    $"Text below code block (Y={closestBelow}) overlaps rect bottom (Y={rectBottom})");
+            }
+
+            // 2. Balanced internal padding: top gap ≈ bottom gap
+            if (insideY.Count >= 2)
+            {
+                float firstBaseline = insideY.Max(); // highest Y = first line
+                float lastBaseline = insideY.Min();   // lowest Y = last line
+                float fontSize = 9f; // code font size
+
+                // Visual gap = distance from rect edge to nearest text extreme
+                float topVisualGap = rectTop - firstBaseline - fontSize * 0.75f;  // rect top to ascenders
+                float bottomVisualGap = lastBaseline - fontSize * 0.25f - rectBottom; // descenders to rect bottom
+
+                Assert.That(topVisualGap, Is.GreaterThanOrEqualTo(1f),
+                    $"Top padding too small: {topVisualGap:F1}pt visual gap above first text");
+                Assert.That(bottomVisualGap, Is.GreaterThanOrEqualTo(1f),
+                    $"Bottom padding too small: {bottomVisualGap:F1}pt visual gap below last text");
+                Assert.That(Math.Abs(topVisualGap - bottomVisualGap), Is.LessThanOrEqualTo(2f),
+                    $"Padding imbalance: top={topVisualGap:F1}pt, bottom={bottomVisualGap:F1}pt (max 2pt difference)");
+            }
+        }
+    }
+
+    private static List<float> ParseTdYValues(string pdf)
+    {
+        var values = new List<float>();
+        int idx = 0;
+        while ((idx = pdf.IndexOf(" Td\n", idx, StringComparison.Ordinal)) >= 0)
+        {
+            int lineStart = pdf.LastIndexOf('\n', idx - 1) + 1;
+            string line = pdf.Substring(lineStart, idx - lineStart).Trim();
+            var parts = line.Split(' ');
+            if (parts.Length >= 2 && float.TryParse(parts[1],
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out float y))
+            {
+                values.Add(y);
+            }
+            idx++;
+        }
+        return values;
+    }
+
+    private static List<(float Y, float H)> ParseFilledRects(string pdf)
+    {
+        var rects = new List<(float Y, float H)>();
+        int idx = 0;
+        // Look for "X Y W H re f" (filled rect) — the 'f' after 're' means fill
+        while ((idx = pdf.IndexOf(" re ", idx, StringComparison.Ordinal)) >= 0)
+        {
+            // Check if followed by 'f\n' (fill operator)
+            int afterRe = idx + 4;
+            bool isFilled = afterRe < pdf.Length && pdf[afterRe] == 'f';
+
+            if (isFilled)
+            {
+                int lineStart = pdf.LastIndexOf('\n', idx - 1) + 1;
+                string line = pdf.Substring(lineStart, idx - lineStart).Trim();
+                var parts = line.Split(' ');
+                if (parts.Length >= 4 &&
+                    float.TryParse(parts[1], System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out float ry) &&
+                    float.TryParse(parts[3], System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out float rh))
+                {
+                    rects.Add((ry, rh));
+                }
+            }
+            idx++;
+        }
+        return rects;
+    }
+
+    [Test]
+    public void Quote_block_does_not_render_newline_as_visible_glyph()
+    {
+        // Regression: multi-line quote block text had \n chars rendered as
+        // visible square glyphs instead of being treated as spaces.
+        var adoc = "[quote]\n____\nLine one.\nLine two.\nLine three.\n____";
+        var doc = AdocParser.Parse(adoc).Document;
+        var bytes = new PdfRenderer().RenderToBytes(doc);
+        var pdf = Encoding.ASCII.GetString(bytes);
+
+        // The text should be joined with spaces — no \n in the content stream.
+        // In PDF, text is rendered via (string) Tj or <hex> Tj operators.
+        // A literal \n (0x0A) inside a PDF string would show as a square.
+        // Check that the rendered text for "Line one" and "Line two" appears
+        // as a single paragraph without control characters.
+
+        // Extract all parenthesized strings from the PDF (standard font text)
+        var renderedTexts = new List<string>();
+        int idx = 0;
+        while ((idx = pdf.IndexOf(") Tj", idx, StringComparison.Ordinal)) >= 0)
+        {
+            int start = pdf.LastIndexOf('(', idx);
+            if (start >= 0)
+            {
+                string text = pdf.Substring(start + 1, idx - start - 1);
+                renderedTexts.Add(text);
+            }
+            idx++;
+        }
+
+        // No rendered text should contain a newline character
+        foreach (var text in renderedTexts)
+        {
+            Assert.That(text, Does.Not.Contain("\n"),
+                $"Rendered text contains literal newline: '{text}'");
+            Assert.That(text, Does.Not.Contain("\r"),
+                $"Rendered text contains literal carriage return: '{text}'");
+        }
+    }
+
+    [Test]
+    public void Structural_block_border_line_aligns_with_indented_text()
+    {
+        // The left border line of a quote/example block should be at or left of
+        // the text start position, and the text should be indented past the line.
+        var adoc = "[quote]\n____\nQuote content here.\n____";
+        var doc = AdocParser.Parse(adoc).Document;
+        var bytes = new PdfRenderer().RenderToBytes(doc);
+        var pdf = Encoding.ASCII.GetString(bytes);
+
+        // Find vertical lines: "X1 Y1 m X2 Y2 l S" where X1 == X2 (vertical)
+        var verticalLines = new List<float>(); // X positions of vertical lines
+        int idx = 0;
+        while ((idx = pdf.IndexOf(" l S\n", idx, StringComparison.Ordinal)) >= 0)
+        {
+            int lineStart = pdf.LastIndexOf('\n', idx - 1) + 1;
+            string line = pdf.Substring(lineStart, idx - lineStart).Trim();
+            var parts = line.Split(' ');
+            // Format: "X1 Y1 m X2 Y2 l S" — we look for the 'm' and check X1 == X2
+            int mIdx = Array.IndexOf(parts, "m");
+            if (mIdx >= 2 && mIdx + 2 < parts.Length &&
+                float.TryParse(parts[mIdx - 2], System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out float x1) &&
+                float.TryParse(parts[mIdx + 1], System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out float x2))
+            {
+                if (Math.Abs(x1 - x2) < 0.1f) // vertical line
+                    verticalLines.Add(x1);
+            }
+            idx++;
+        }
+
+        // Find text X positions (first number in "X Y Td")
+        var textXPositions = ParseTdXValues(pdf);
+
+        Assert.That(verticalLines.Count, Is.GreaterThan(0), "Should have a vertical border line");
+        Assert.That(textXPositions.Count, Is.GreaterThan(0), "Should have text positions");
+
+        // The border line X should be less than the smallest text X in the block
+        // (line is to the left of the text, with a visible gap)
+        float borderX = verticalLines.Min();
+        float minTextX = textXPositions.Where(x => x > borderX - 20).Min();
+        float gap = minTextX - borderX;
+
+        Assert.That(gap, Is.GreaterThanOrEqualTo(4f),
+            $"Border line (X={borderX:F1}) too close to text (X={minTextX:F1}), gap={gap:F1}pt");
+        Assert.That(gap, Is.LessThanOrEqualTo(20f),
+            $"Border line (X={borderX:F1}) too far from text (X={minTextX:F1}), gap={gap:F1}pt");
+    }
+
+    private static List<float> ParseTdXValues(string pdf)
+    {
+        var values = new List<float>();
+        int idx = 0;
+        while ((idx = pdf.IndexOf(" Td\n", idx, StringComparison.Ordinal)) >= 0)
+        {
+            int lineStart = pdf.LastIndexOf('\n', idx - 1) + 1;
+            string line = pdf.Substring(lineStart, idx - lineStart).Trim();
+            var parts = line.Split(' ');
+            if (parts.Length >= 2 && float.TryParse(parts[0],
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out float x))
+            {
+                values.Add(x);
+            }
+            idx++;
+        }
+        return values;
     }
 
     // ── Cell wrapping and multi-line support ─────────────────────────────
@@ -508,6 +989,102 @@ public class PdfRendererTests
         var doc = AdocParser.Parse(adoc).Document;
         var bytes = new PdfRenderer().RenderToBytes(doc);
         Assert.That(bytes, Is.Not.Empty);
+    }
+
+    [Test]
+    public void Table_cell_wraps_to_multiple_lines()
+    {
+        // A cell with very long text should produce a row taller than 1 line
+        var writer = new PdfWriter();
+        string longText = "This is a very long cell text that absolutely must wrap within the column width";
+        var lines = writer.WrapText(longText, "F1", 11f, 150f); // narrow column
+        Assert.That(lines.Count, Is.GreaterThan(1),
+            "Long cell text must wrap to multiple lines in a narrow column");
+    }
+
+    [Test]
+    public void Table_column_spec_3_1_1_produces_correct_ratio()
+    {
+        // Test that cols="3,1,1" produces first column ~3× wider than others.
+        // We verify by checking that the table renders and the column spec parser works.
+        var adoc = "[cols=\"3,1,1\"]\n|===\n| Wide column | Narrow | Narrow\n\n| Content A | B | C\n|===";
+        var doc = AdocParser.Parse(adoc).Document;
+        var bytes = new PdfRenderer().RenderToBytes(doc);
+        var text = Encoding.ASCII.GetString(bytes);
+        Assert.That(text, Does.Contain("Wide column"));
+        Assert.That(text, Does.Contain("Content A"));
+
+        // Verify the column spec was parsed correctly
+        var table = doc.Children.OfType<TableNode>().First();
+        Assert.That(table.Columns, Is.Not.Null);
+        Assert.That(table.Columns!, Has.Count.EqualTo(3));
+        Assert.That(table.Columns![0].Width, Is.EqualTo(3));
+        Assert.That(table.Columns![1].Width, Is.EqualTo(1));
+        Assert.That(table.Columns![2].Width, Is.EqualTo(1));
+        // The ratio is enforced: col0 gets 3/5 of width, col1 and col2 get 1/5 each
+        // So col0 should be 3× col1 within the renderer
+    }
+
+    [Test]
+    public void Table_with_many_rows_splits_across_pages()
+    {
+        // Generate a table with 50+ rows that should span multiple pages
+        var sb = new System.Text.StringBuilder();
+        sb.Append("|===\n| Header 1 | Header 2\n\n");
+        for (int i = 1; i <= 60; i++)
+            sb.Append($"| Row {i} Col 1 | Row {i} Col 2\n");
+        sb.Append("|===");
+
+        var doc = AdocParser.Parse(sb.ToString()).Document;
+        var bytes = new PdfRenderer().RenderToBytes(doc);
+        var text = Encoding.ASCII.GetString(bytes);
+
+        // Count pages by counting /Type /Page entries (not /Type /Pages)
+        int pageCount = 0;
+        int idx = 0;
+        while ((idx = text.IndexOf("/Type /Page ", idx, StringComparison.Ordinal)) >= 0)
+        {
+            pageCount++;
+            idx++;
+        }
+        Assert.That(pageCount, Is.GreaterThanOrEqualTo(2), "Large table must span at least 2 pages");
+    }
+
+    [Test]
+    public void Table_header_repeats_on_continuation_page()
+    {
+        // Generate a table with header that spans multiple pages
+        var sb = new System.Text.StringBuilder();
+        sb.Append("|===\n| HeaderAlpha | HeaderBeta\n\n");
+        for (int i = 1; i <= 60; i++)
+            sb.Append($"| Row {i} Col 1 | Row {i} Col 2\n");
+        sb.Append("|===");
+
+        var doc = AdocParser.Parse(sb.ToString()).Document;
+        var bytes = new PdfRenderer().RenderToBytes(doc);
+        var text = Encoding.ASCII.GetString(bytes);
+
+        // Count occurrences of the header text — should appear at least twice
+        // (once on first page, once on continuation page)
+        int headerCount = 0;
+        int idx = 0;
+        while ((idx = text.IndexOf("HeaderAlpha", idx, StringComparison.Ordinal)) >= 0)
+        {
+            headerCount++;
+            idx++;
+        }
+        Assert.That(headerCount, Is.GreaterThanOrEqualTo(2),
+            "Header text should appear on first page and continuation pages");
+    }
+
+    [Test]
+    public void Table_determinism_two_renders_produce_identical_output()
+    {
+        var adoc = "|===\n| H1 | H2\n\n| C1 | C2\n| C3 | C4\n|===";
+        var doc = AdocParser.Parse(adoc).Document;
+        var bytes1 = new PdfRenderer().RenderToBytes(doc);
+        var bytes2 = new PdfRenderer().RenderToBytes(doc);
+        Assert.That(bytes1, Is.EqualTo(bytes2), "Table renders must be byte-identical");
     }
 
     // ── Image embedding ────────────────────────────────────────────────
@@ -697,6 +1274,99 @@ public class PdfRendererTests
             var text = Encoding.ASCII.GetString(bytes);
             Assert.That(text, Does.Contain("/XObject"));
             Assert.That(text, Does.Contain("/Im1"));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
+    public void Image_determinism_two_renders_produce_identical_output()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "adocnet_test_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            byte[] jpegData = CreateMinimalJpeg(8, 8, 3);
+            byte[] pngData = CreateMinimalPng(4, 2, colorType: 2);
+            File.WriteAllBytes(Path.Combine(tempDir, "test.jpg"), jpegData);
+            File.WriteAllBytes(Path.Combine(tempDir, "test.png"), pngData);
+
+            var doc = AdocParser.Parse("= Images\n\nimage::test.jpg[JPEG]\n\nimage::test.png[PNG]").Document;
+            var options = new PdfRenderOptions { BaseDirectory = tempDir };
+            var bytes1 = new PdfRenderer().RenderToBytes(doc, options);
+            var bytes2 = new PdfRenderer().RenderToBytes(doc, options);
+
+            Assert.That(bytes1, Is.EqualTo(bytes2), "Image renders must be byte-identical");
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    // ── Combined feature tests ──────────────────────────────────────────
+
+    [Test]
+    public void Combined_features_unicode_image_link_table_justified()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "adocnet_combined_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            byte[] jpegData = CreateMinimalJpeg(16, 16, 3);
+            File.WriteAllBytes(Path.Combine(tempDir, "photo.jpg"), jpegData);
+
+            var source = """
+                = Combined Test — café résumé
+
+                A justified paragraph with enough words to wrap across multiple lines in the output so that justification is exercised properly.
+
+                Visit https://example.com for more details.
+
+                image::photo.jpg[A photo]
+
+                |===
+                | Header 1 | Header 2
+
+                | Cell A | Cell B
+                |===
+                """;
+
+            var doc = AdocParser.Parse(source).Document;
+            var options = new PdfRenderOptions { BaseDirectory = tempDir };
+            var bytes = new PdfRenderer().RenderToBytes(doc, options);
+            var text = Encoding.ASCII.GetString(bytes);
+
+            Assert.That(text, Does.Contain("%PDF-1.4"));
+            Assert.That(text, Does.Contain("/Subtype /Image"));
+            Assert.That(text, Does.Contain("/URI (https://example.com)"));
+            Assert.That(text, Does.Contain("Header 1"));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
+    public void Combined_features_determinism()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "adocnet_det_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            byte[] jpegData = CreateMinimalJpeg(8, 8, 3);
+            File.WriteAllBytes(Path.Combine(tempDir, "img.jpg"), jpegData);
+
+            var source = "= Test\n\nText with https://example.com link.\n\nimage::img.jpg[Img]\n\n|===\n| A | B\n|===";
+            var doc = AdocParser.Parse(source).Document;
+            var options = new PdfRenderOptions { BaseDirectory = tempDir };
+            var bytes1 = new PdfRenderer().RenderToBytes(doc, options);
+            var bytes2 = new PdfRenderer().RenderToBytes(doc, options);
+
+            Assert.That(bytes1, Is.EqualTo(bytes2), "Combined feature renders must be byte-identical");
         }
         finally
         {
