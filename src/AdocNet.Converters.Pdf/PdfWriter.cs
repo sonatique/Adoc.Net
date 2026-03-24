@@ -71,6 +71,43 @@ internal sealed partial class PdfWriter
     internal string? HeaderTemplate { get; set; }
     internal string? FooterTemplate { get; set; }
 
+    // ── Hyphenation ──────────────────────────────────────────────────────
+    internal bool HyphenationEnabled { get; set; }
+
+    // ── Code block background ────────────────────────────────────────────
+    private PdfColor? _codeBlockBg;
+    private float _codeBlockLeading;
+    private float _codeBlockFontSize;
+
+    /// <summary>
+    /// Enables per-line background drawing for code blocks. Each line rendered
+    /// while active gets a background strip. Call <see cref="EndCodeBlockBackground"/>
+    /// when done.
+    /// </summary>
+    internal void BeginCodeBlockBackground(PdfColor bg, float fontSize, float leading)
+    {
+        _codeBlockBg = bg;
+        _codeBlockFontSize = fontSize;
+        _codeBlockLeading = leading;
+    }
+
+    /// <summary>Disables per-line code block background.</summary>
+    internal void EndCodeBlockBackground() => _codeBlockBg = null;
+
+    /// <summary>
+    /// Draws a background strip at the current cursor position if code block
+    /// background is active. Called before each line of code text.
+    /// </summary>
+    internal void DrawCodeLineBackground()
+    {
+        if (_codeBlockBg is not { } bg) return;
+        float ascent = _codeBlockFontSize * 0.75f;
+        float stripHeight = _codeBlockLeading;
+        SetFillColor(bg.R, bg.G, bg.B);
+        DrawRect(MarginLeftValue - 4, _cursorY - stripHeight + ascent, ContentWidth + 8, stripHeight, fill: true);
+        SetFillColor(0, 0, 0);
+    }
+
     // ── Content indent (for nested blocks like quotes) ─────────────────
     private float _contentLeftIndent;
 
@@ -391,111 +428,6 @@ internal sealed partial class PdfWriter
             currentX += segWidth;
         }
 
-        _currentStream.Append("ET\n");
-    }
-
-    /// <summary>
-    /// Word-wraps text and writes it line by line, advancing the cursor.
-    /// Returns the number of points consumed vertically.
-    /// </summary>
-    internal float WriteWrappedText(string text, string font, float fontSize, float leading)
-    {
-        var lines = WrapText(text, font, fontSize, ContentWidth);
-        float consumed = 0;
-        foreach (var line in lines)
-        {
-            EnsurePage();
-            WriteText(line, font, fontSize, MarginLeftValue, _cursorY);
-            _cursorY -= leading;
-            consumed += leading;
-        }
-        return consumed;
-    }
-
-    /// <summary>
-    /// Word-wraps mixed-style segments and writes them line by line.
-    /// When <paramref name="justify"/> is true, full lines are stretched to fill the content width.
-    /// </summary>
-    internal float WriteWrappedSegments(List<TextSegment> segments, float leading, bool justify = true)
-    {
-        var lines = WrapSegments(segments, ContentWidth);
-        float consumed = 0;
-        for (int i = 0; i < lines.Count; i++)
-        {
-            EnsurePage();
-            bool isLastLine = i == lines.Count - 1;
-            if (justify && !isLastLine)
-                WriteJustifiedSegments(lines[i], MarginLeftValue, _cursorY, ContentWidth);
-            else
-                WriteTextSegments(lines[i], MarginLeftValue, _cursorY);
-            _cursorY -= leading;
-            consumed += leading;
-        }
-        return consumed;
-    }
-
-    /// <summary>
-    /// Writes a line of segments justified to fill the given width.
-    /// Extra space is distributed evenly across word gaps.
-    /// </summary>
-    private void WriteJustifiedSegments(List<TextSegment> segments, float x, float y, float targetWidth)
-    {
-        if (segments.Count == 0) return;
-
-        // Measure natural width and count spaces
-        float naturalWidth = 0;
-        int spaceCount = 0;
-        foreach (var seg in segments)
-        {
-            naturalWidth += MeasureText(seg.Text, seg.Font, seg.FontSize);
-            foreach (var ch in seg.Text)
-                if (ch == ' ') spaceCount++;
-        }
-
-        float extraSpacing = spaceCount > 0 ? (targetWidth - naturalWidth) / spaceCount : 0;
-
-        // Clamp to 2× normal space width to avoid absurd stretching
-        float maxSpacing = MeasureText(" ", segments[0].Font, segments[0].FontSize) * 2;
-        if (extraSpacing < 0) extraSpacing = 0;
-        if (extraSpacing > maxSpacing) extraSpacing = 0; // fall back to left-aligned if gap is too large
-
-        float currentX = x;
-        _currentStream!.Append("BT\n");
-        _currentStream.Append($"{Fmt(x)} {Fmt(y)} Td\n");
-        _currentStream.Append($"{Fmt(extraSpacing)} Tw\n");
-
-        foreach (var seg in segments)
-        {
-            _currentStream.Append($"/{seg.Font} {Fmt(seg.FontSize)} Tf\n");
-
-            if (_embeddedFonts.TryGetValue(seg.Font, out var ttFont))
-            {
-                TrackCodePoints(seg.Font, seg.Text);
-                _currentStream.Append('<');
-                _currentStream.Append(EncodeTextAsGlyphIds(seg.Text, ttFont));
-                _currentStream.Append("> Tj\n");
-            }
-            else
-            {
-                _currentStream.Append('(');
-                _currentStream.Append(EscapePdfString(seg.Text));
-                _currentStream.Append(") Tj\n");
-            }
-
-            float segWidth = MeasureText(seg.Text, seg.Font, seg.FontSize);
-            // Account for extra spacing per space in this segment
-            int segSpaces = 0;
-            foreach (var ch in seg.Text)
-                if (ch == ' ') segSpaces++;
-            float adjustedWidth = segWidth + segSpaces * extraSpacing;
-
-            if (seg.LinkUri is not null)
-                AddLinkAnnotation(currentX, y - 2, adjustedWidth, seg.FontSize + 4, seg.LinkUri);
-
-            currentX += adjustedWidth;
-        }
-
-        _currentStream.Append("0 Tw\n"); // reset word spacing
         _currentStream.Append("ET\n");
     }
 

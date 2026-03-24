@@ -68,6 +68,15 @@ public sealed class PdfRenderOptions : RenderOptions
     /// <summary>Line spacing multiplier. Leading = fontSize × lineSpacing. Default: 1.35.</summary>
     public float LineSpacing { get; init; } = 1.35f;
 
+    /// <summary>Enable hyphenation in body text. Default: false.</summary>
+    public bool EnableHyphenation { get; init; }
+
+    /// <summary>Spacing before paragraphs in points. Default: 0.</summary>
+    public float ParagraphSpacingBefore { get; init; } = 0f;
+
+    /// <summary>Spacing after paragraphs in points. Default: 8 (matches beta.3).</summary>
+    public float ParagraphSpacingAfter { get; init; } = 8f;
+
     // ── Headers and footers ──────────────────────────────────────────────
 
     /// <summary>Show page numbers in footer. Default: false.</summary>
@@ -84,6 +93,15 @@ public sealed class PdfRenderOptions : RenderOptions
     /// <summary>Base directory for resolving relative image paths. Null = images fall back to placeholder.</summary>
     public string? BaseDirectory { get; init; }
 
+    // ── Syntax highlighting ────────────────────────────────────────────
+
+    /// <summary>
+    /// Color scheme for syntax highlighting in source blocks.
+    /// Null = no highlighting (plain monospace, beta.3 compatible). Default: null.
+    /// Set to <see cref="SyntaxColorScheme.Default"/> to enable highlighting.
+    /// </summary>
+    public SyntaxColorScheme? SyntaxColors { get; init; }
+
     // ── Visual styling ───────────────────────────────────────────────────
 
     /// <summary>Color for hyperlink text. Null = no coloring (black). Default: dark blue (0, 0, 0.8).</summary>
@@ -98,6 +116,21 @@ public sealed class PdfRenderOptions : RenderOptions
     /// <summary>Repeat header row when a table spans pages. Default: true.</summary>
     public bool RepeatTableHeader { get; init; } = true;
 
+    /// <summary>Color for heading text (h1–h5). Null = black (default).</summary>
+    public PdfColor? HeadingColor { get; init; }
+
+    /// <summary>Color for body text. Null = black (default).</summary>
+    public PdfColor? BodyColor { get; init; }
+
+    /// <summary>Background color for table header rows. Null = no background (default).</summary>
+    public PdfColor? TableHeaderBackground { get; init; }
+
+    /// <summary>Vertical spacing before/after sections in points. Default: 16 (matches beta.3).</summary>
+    public float SectionSpacing { get; init; } = 16f;
+
+    /// <summary>Indent for nested blocks (admonitions, quotes) in points. Default: 24.</summary>
+    public float BlockIndent { get; init; } = 24f;
+
     // ── Presets ──────────────────────────────────────────────────────────
 
     /// <summary>Predefined page sizes for convenience.</summary>
@@ -105,4 +138,19 @@ public sealed class PdfRenderOptions : RenderOptions
 
     /// <summary>A4 page size (same as Default).</summary>
     public static PdfRenderOptions A4 => Default;
+
+    /// <summary>Compact preset: smaller fonts, tighter spacing, narrower margins.</summary>
+    public static PdfRenderOptions Compact => new()
+    {
+        FontSize = 10f, LineSpacing = 1.25f,
+        ParagraphSpacingAfter = 6f, MarginTop = 54f, MarginBottom = 54f,
+        SectionSpacing = 12f
+    };
+
+    /// <summary>Presentation preset: larger fonts, wider spacing, heading colors.</summary>
+    public static PdfRenderOptions Presentation => new()
+    {
+        TitleFontSize = 30f, FontSize = 14f, LineSpacing = 1.5f,
+        HeadingColor = new PdfColor(0f, 0f, 0.6f), SectionSpacing = 24f
+    };
 }

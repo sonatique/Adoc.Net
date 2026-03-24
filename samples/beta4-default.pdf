@@ -1,0 +1,1387 @@
+%PDF-1.4
+%âãÏÓ
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Length 4172 >>
+stream
+BT
+/F2 24 Tf
+72 770 Td
+(AdocNet v1.0.0-beta.4 \227 Feature) Tj
+ET
+BT
+/F2 24 Tf
+72 737.6 Td
+(Showcase) Tj
+ET
+BT
+72 673.2 Td
+/F2 20.4 Tf
+(Syntax Highlighting) Tj
+ET
+BT
+72 641.66 Td
+4.5 Tw
+/F1 11 Tf
+(Beta.4 adds server-side syntax highlighting for source blocks. Seven languages are) Tj
+0 Tw
+ET
+BT
+72 626.81 Td
+/F1 11 Tf
+(supported with 9 token categories.) Tj
+ET
+BT
+72 587.96 Td
+/F2 17.34 Tf
+(C# Example) Tj
+ET
+0.95 0.95 0.95 rg
+68 551.02 459 12.15 re f
+0 0 0 rg
+BT
+/F3 8 Tf
+72 556.42 Td
+(csharp) Tj
+ET
+0.95 0.95 0.95 rg
+68 538.87 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 544.27 Td
+(using System.Text;) Tj
+ET
+0.95 0.95 0.95 rg
+68 526.72 459 12.15 re f
+0 0 0 rg
+0.95 0.95 0.95 rg
+68 514.57 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 519.97 Td
+(namespace AdocNet.Highlighting;) Tj
+ET
+0.95 0.95 0.95 rg
+68 502.42 459 12.15 re f
+0 0 0 rg
+0.95 0.95 0.95 rg
+68 490.27 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 495.67 Td
+(/// <summary>Tokenizes source code for syntax highlighting.</summary>) Tj
+ET
+0.95 0.95 0.95 rg
+68 478.12 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 483.52 Td
+(public static class SyntaxTokenizer) Tj
+ET
+0.95 0.95 0.95 rg
+68 465.97 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 471.37 Td
+({) Tj
+ET
+0.95 0.95 0.95 rg
+68 453.82 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 459.22 Td
+(    public static List<SyntaxToken> Tokenize\(string source, string? language\)) Tj
+ET
+0.95 0.95 0.95 rg
+68 441.67 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 447.07 Td
+(    {) Tj
+ET
+0.95 0.95 0.95 rg
+68 429.52 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 434.92 Td
+(        if \(string.IsNullOrEmpty\(source\)\)) Tj
+ET
+0.95 0.95 0.95 rg
+68 417.37 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 422.77 Td
+(            return [new SyntaxToken\(TokenKind.Plain, source ?? ""\)];) Tj
+ET
+0.95 0.95 0.95 rg
+68 405.22 459 12.15 re f
+0 0 0 rg
+0.95 0.95 0.95 rg
+68 393.07 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 398.47 Td
+(        #if DEBUG) Tj
+ET
+0.95 0.95 0.95 rg
+68 380.92 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 386.32 Td
+(        Console.WriteLine\($"Tokenizing {source.Length} chars as {language}"\);) Tj
+ET
+0.95 0.95 0.95 rg
+68 368.77 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 374.17 Td
+(        #endif) Tj
+ET
+0.95 0.95 0.95 rg
+68 356.62 459 12.15 re f
+0 0 0 rg
+0.95 0.95 0.95 rg
+68 344.47 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 349.87 Td
+(        return TokenizeWithRules\(source, rules\);) Tj
+ET
+0.95 0.95 0.95 rg
+68 332.32 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 337.72 Td
+(    }) Tj
+ET
+0.95 0.95 0.95 rg
+68 320.17 459 12.15 re f
+0 0 0 rg
+0.95 0.95 0.95 rg
+68 308.02 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 313.42 Td
+(    [Obsolete\("Use Tokenize instead"\)]) Tj
+ET
+0.95 0.95 0.95 rg
+68 295.87 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 301.27 Td
+(    public static bool IsSupported\(string lang\) => true;) Tj
+ET
+0.95 0.95 0.95 rg
+68 283.72 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 289.12 Td
+(}) Tj
+ET
+BT
+72 246.12 Td
+/F2 17.34 Tf
+(Python Example) Tj
+ET
+0.95 0.95 0.95 rg
+68 209.18 459 12.15 re f
+0 0 0 rg
+BT
+/F3 8 Tf
+72 214.58 Td
+(python) Tj
+ET
+0.95 0.95 0.95 rg
+68 197.03 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 202.43 Td
+(import json) Tj
+ET
+0.95 0.95 0.95 rg
+68 184.88 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 190.28 Td
+(from pathlib import Path) Tj
+ET
+0.95 0.95 0.95 rg
+68 172.73 459 12.15 re f
+0 0 0 rg
+0.95 0.95 0.95 rg
+68 160.58 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 165.98 Td
+(class DocumentProcessor:) Tj
+ET
+0.95 0.95 0.95 rg
+68 148.43 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 153.83 Td
+(    """Processes AsciiDoc documents with syntax highlighting.""") Tj
+ET
+0.95 0.95 0.95 rg
+68 136.28 459 12.15 re f
+0 0 0 rg
+0.95 0.95 0.95 rg
+68 124.13 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 129.53 Td
+(    def __init__\(self, config_path: str = "config.json"\):) Tj
+ET
+0.95 0.95 0.95 rg
+68 111.98 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 117.38 Td
+(        self.config = self._load_config\(config_path\)) Tj
+ET
+0.95 0.95 0.95 rg
+68 99.83 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 105.23 Td
+(        self._cache: dict[str, list] = {}) Tj
+ET
+0.95 0.95 0.95 rg
+68 87.68 459 12.15 re f
+0 0 0 rg
+0.95 0.95 0.95 rg
+68 75.53 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 80.93 Td
+(    def process\(self, source: str, language: str = "python"\) -> list:) Tj
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /MediaBox [0 0 595 842] /Contents 5 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R >> >> /Parent 15 0 R >>
+endobj
+7 0 obj
+<< /Length 5369 >>
+stream
+0.95 0.95 0.95 rg
+68 764.6 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 770 Td
+(        # Check cache first) Tj
+ET
+0.95 0.95 0.95 rg
+68 752.45 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 757.85 Td
+(        if source in self._cache:) Tj
+ET
+0.95 0.95 0.95 rg
+68 740.3 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 745.7 Td
+(            return self._cache[source]) Tj
+ET
+0.95 0.95 0.95 rg
+68 728.15 459 12.15 re f
+0 0 0 rg
+0.95 0.95 0.95 rg
+68 716 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 721.4 Td
+(        tokens = self._tokenize\(source, language\)) Tj
+ET
+0.95 0.95 0.95 rg
+68 703.85 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 709.25 Td
+(        self._cache[source] = tokens) Tj
+ET
+0.95 0.95 0.95 rg
+68 691.7 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 697.1 Td
+(        return tokens) Tj
+ET
+0.95 0.95 0.95 rg
+68 679.55 459 12.15 re f
+0 0 0 rg
+0.95 0.95 0.95 rg
+68 667.4 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 672.8 Td
+(    @staticmethod) Tj
+ET
+0.95 0.95 0.95 rg
+68 655.25 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 660.65 Td
+(    def _load_config\(path: str\) -> dict:) Tj
+ET
+0.95 0.95 0.95 rg
+68 643.1 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 648.5 Td
+(        """Load configuration from JSON file.""") Tj
+ET
+0.95 0.95 0.95 rg
+68 630.95 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 636.35 Td
+(        with open\(path, 'r'\) as f:) Tj
+ET
+0.95 0.95 0.95 rg
+68 618.8 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 624.2 Td
+(            return json.load\(f\)) Tj
+ET
+BT
+72 581.2 Td
+/F2 17.34 Tf
+(JavaScript Example) Tj
+ET
+0.95 0.95 0.95 rg
+68 544.26 459 12.15 re f
+0 0 0 rg
+BT
+/F3 8 Tf
+72 549.66 Td
+(javascript) Tj
+ET
+0.95 0.95 0.95 rg
+68 532.11 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 537.51 Td
+(const express = require\('express'\);) Tj
+ET
+0.95 0.95 0.95 rg
+68 519.96 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 525.36 Td
+(const app = express\(\);) Tj
+ET
+0.95 0.95 0.95 rg
+68 507.81 459 12.15 re f
+0 0 0 rg
+0.95 0.95 0.95 rg
+68 495.66 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 501.06 Td
+(// Middleware for JSON parsing) Tj
+ET
+0.95 0.95 0.95 rg
+68 483.51 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 488.91 Td
+(app.use\(express.json\(\)\);) Tj
+ET
+0.95 0.95 0.95 rg
+68 471.36 459 12.15 re f
+0 0 0 rg
+0.95 0.95 0.95 rg
+68 459.21 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 464.61 Td
+(app.get\('/api/documents/:id', async \(req, res\) => {) Tj
+ET
+0.95 0.95 0.95 rg
+68 447.06 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 452.46 Td
+(    const { id } = req.params;) Tj
+ET
+0.95 0.95 0.95 rg
+68 434.91 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 440.31 Td
+(    const limit = parseInt\(req.query.limit\) || 10;) Tj
+ET
+0.95 0.95 0.95 rg
+68 422.76 459 12.15 re f
+0 0 0 rg
+0.95 0.95 0.95 rg
+68 410.61 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 416.01 Td
+(    try {) Tj
+ET
+0.95 0.95 0.95 rg
+68 398.46 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 403.86 Td
+(        const doc = await Document.findById\(id\);) Tj
+ET
+0.95 0.95 0.95 rg
+68 386.31 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 391.71 Td
+(        if \(!doc\) {) Tj
+ET
+0.95 0.95 0.95 rg
+68 374.16 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 379.56 Td
+(            return res.status\(404\).json\({ error: "Not found" }\);) Tj
+ET
+0.95 0.95 0.95 rg
+68 362.01 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 367.41 Td
+(        }) Tj
+ET
+0.95 0.95 0.95 rg
+68 349.86 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 355.26 Td
+(        res.json\({ data: doc, count: limit }\);) Tj
+ET
+0.95 0.95 0.95 rg
+68 337.71 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 343.11 Td
+(    } catch \(err\) {) Tj
+ET
+0.95 0.95 0.95 rg
+68 325.56 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 330.96 Td
+(        console.error\(`Failed to fetch document ${id}:`, err\);) Tj
+ET
+0.95 0.95 0.95 rg
+68 313.41 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 318.81 Td
+(        res.status\(500\).json\({ error: "Internal error" }\);) Tj
+ET
+0.95 0.95 0.95 rg
+68 301.26 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 306.66 Td
+(    }) Tj
+ET
+0.95 0.95 0.95 rg
+68 289.11 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 294.51 Td
+(}\);) Tj
+ET
+0.95 0.95 0.95 rg
+68 276.96 459 12.15 re f
+0 0 0 rg
+0.95 0.95 0.95 rg
+68 264.81 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 270.21 Td
+(app.listen\(3000, \(\) => console.log\('Server running on port 3000'\)\);) Tj
+ET
+BT
+72 227.21 Td
+/F2 17.34 Tf
+(SQL Example) Tj
+ET
+0.95 0.95 0.95 rg
+68 190.27 459 12.15 re f
+0 0 0 rg
+BT
+/F3 8 Tf
+72 195.67 Td
+(sql) Tj
+ET
+0.95 0.95 0.95 rg
+68 178.12 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 183.52 Td
+(SELECT u.username, COUNT\(d.id\) AS document_count,) Tj
+ET
+0.95 0.95 0.95 rg
+68 165.97 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 171.37 Td
+(       MAX\(d.created_at\) AS last_document) Tj
+ET
+0.95 0.95 0.95 rg
+68 153.82 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 159.22 Td
+(FROM users u) Tj
+ET
+0.95 0.95 0.95 rg
+68 141.67 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 147.07 Td
+(LEFT JOIN documents d ON d.author_id = u.id) Tj
+ET
+0.95 0.95 0.95 rg
+68 129.52 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 134.92 Td
+(WHERE u.active = 1) Tj
+ET
+0.95 0.95 0.95 rg
+68 117.37 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 122.77 Td
+(  AND d.created_at >= '2024-01-01') Tj
+ET
+0.95 0.95 0.95 rg
+68 105.22 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 110.62 Td
+(GROUP BY u.username) Tj
+ET
+0.95 0.95 0.95 rg
+68 93.07 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 98.47 Td
+(HAVING COUNT\(d.id\) > 5) Tj
+ET
+0.95 0.95 0.95 rg
+68 80.92 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 86.32 Td
+(ORDER BY document_count DESC) Tj
+ET
+0.95 0.95 0.95 rg
+68 68.77 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 74.17 Td
+(LIMIT 20;) Tj
+ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /MediaBox [0 0 595 842] /Contents 7 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R >> >> /Parent 15 0 R >>
+endobj
+9 0 obj
+<< /Length 4430 >>
+stream
+BT
+72 770 Td
+/F2 17.34 Tf
+(JSON Configuration) Tj
+ET
+0.95 0.95 0.95 rg
+68 733.06 459 12.15 re f
+0 0 0 rg
+BT
+/F3 8 Tf
+72 738.46 Td
+(json) Tj
+ET
+0.95 0.95 0.95 rg
+68 720.91 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 726.31 Td
+({) Tj
+ET
+0.95 0.95 0.95 rg
+68 708.76 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 714.16 Td
+(    "rendering": {) Tj
+ET
+0.95 0.95 0.95 rg
+68 696.61 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 702.01 Td
+(        "syntax_highlighting": true,) Tj
+ET
+0.95 0.95 0.95 rg
+68 684.46 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 689.86 Td
+(        "theme": "default",) Tj
+ET
+0.95 0.95 0.95 rg
+68 672.31 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 677.71 Td
+(        "languages": ["csharp", "python", "javascript", "sql", "json", "xml"],) Tj
+ET
+0.95 0.95 0.95 rg
+68 660.16 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 665.56 Td
+(        "token_count": 9,) Tj
+ET
+0.95 0.95 0.95 rg
+68 648.01 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 653.41 Td
+(        "quality_target": 0.8) Tj
+ET
+0.95 0.95 0.95 rg
+68 635.86 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 641.26 Td
+(    },) Tj
+ET
+0.95 0.95 0.95 rg
+68 623.71 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 629.11 Td
+(    "pdf": {) Tj
+ET
+0.95 0.95 0.95 rg
+68 611.56 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 616.96 Td
+(        "page_size": "A4",) Tj
+ET
+0.95 0.95 0.95 rg
+68 599.41 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 604.81 Td
+(        "margins": [72, 72, 72, 72],) Tj
+ET
+0.95 0.95 0.95 rg
+68 587.26 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 592.66 Td
+(        "font_size": 11.0,) Tj
+ET
+0.95 0.95 0.95 rg
+68 575.11 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 580.51 Td
+(        "enable_hyphenation": false) Tj
+ET
+0.95 0.95 0.95 rg
+68 562.96 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 568.36 Td
+(    }) Tj
+ET
+0.95 0.95 0.95 rg
+68 550.81 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 556.21 Td
+(}) Tj
+ET
+BT
+72 513.21 Td
+/F2 17.34 Tf
+(XML/HTML Example) Tj
+ET
+0.95 0.95 0.95 rg
+68 476.27 459 12.15 re f
+0 0 0 rg
+BT
+/F3 8 Tf
+72 481.67 Td
+(xml) Tj
+ET
+0.95 0.95 0.95 rg
+68 464.12 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 469.52 Td
+(<?xml version="1.0" encoding="UTF-8"?>) Tj
+ET
+0.95 0.95 0.95 rg
+68 451.97 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 457.37 Td
+(<!-- Configuration for the document renderer -->) Tj
+ET
+0.95 0.95 0.95 rg
+68 439.82 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 445.22 Td
+(<renderer version="1.0">) Tj
+ET
+0.95 0.95 0.95 rg
+68 427.67 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 433.07 Td
+(    <output format="pdf">) Tj
+ET
+0.95 0.95 0.95 rg
+68 415.52 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 420.92 Td
+(        <page width="595" height="842" />) Tj
+ET
+0.95 0.95 0.95 rg
+68 403.37 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 408.77 Td
+(        <margins top="72" bottom="72" left="72" right="72" />) Tj
+ET
+0.95 0.95 0.95 rg
+68 391.22 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 396.62 Td
+(    </output>) Tj
+ET
+0.95 0.95 0.95 rg
+68 379.07 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 384.47 Td
+(    <fonts>) Tj
+ET
+0.95 0.95 0.95 rg
+68 366.92 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 372.32 Td
+(        <font name="body" path="/fonts/arial.ttf" />) Tj
+ET
+0.95 0.95 0.95 rg
+68 354.77 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 360.17 Td
+(        <font name="mono" path="/fonts/consola.ttf" />) Tj
+ET
+0.95 0.95 0.95 rg
+68 342.62 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 348.02 Td
+(    </fonts>) Tj
+ET
+0.95 0.95 0.95 rg
+68 330.47 459 12.15 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 335.87 Td
+(</renderer>) Tj
+ET
+BT
+72 292.87 Td
+/F2 20.4 Tf
+(Typography Improvements) Tj
+ET
+BT
+72 245.33 Td
+/F2 17.34 Tf
+(Hyphenation) Tj
+ET
+BT
+72 213.79 Td
+1.94 Tw
+/F1 11 Tf
+(This paragraph demonstrates the Liang/Knuth hyphenation algorithm using standard TeX) Tj
+0 Tw
+ET
+BT
+72 198.94 Td
+0.52 Tw
+/F1 11 Tf
+(US English patterns. The internationalization and standardization of documentation requires) Tj
+0 Tw
+ET
+BT
+72 184.09 Td
+0.74 Tw
+/F1 11 Tf
+(comprehensive consideration of typographical conventions, including proper hyphenation of) Tj
+0 Tw
+ET
+BT
+72 169.24 Td
+1.7 Tw
+/F1 11 Tf
+(polysyllabic words. Without hyphenation, justified text can suffer from unsightly inter-word) Tj
+0 Tw
+ET
+BT
+72 154.39 Td
+3.04 Tw
+/F1 11 Tf
+(spacing, particularly in narrow columns. The implementation handles compound words,) Tj
+0 Tw
+ET
+BT
+72 139.54 Td
+1.82 Tw
+/F1 11 Tf
+(technical terminology, and common English vocabulary with approximately eighty percent) Tj
+0 Tw
+ET
+BT
+72 124.69 Td
+/F1 11 Tf
+(accuracy, which is sufficient for professional documentation.) Tj
+ET
+BT
+72 85.84 Td
+/F2 17.34 Tf
+(Paragraph Spacing) Tj
+ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /MediaBox [0 0 595 842] /Contents 9 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R >> >> /Parent 15 0 R >>
+endobj
+11 0 obj
+<< /Length 3751 >>
+stream
+BT
+72 770 Td
+3.1 Tw
+/F1 11 Tf
+(This is the first paragraph demonstrating configurable paragraph spacing. The spacing) Tj
+0 Tw
+ET
+BT
+72 755.15 Td
+0 Tw
+/F1 11 Tf
+(before and after paragraphs is now independently controllable via ) Tj
+0 Tw
+ET
+BT
+72 740.3 Td
+/F4 11 Tf
+(ParagraphSpacingBefore) Tj
+/F1 11 Tf
+(  and ) Tj
+/F4 11 Tf
+( ParagraphSpacingAfter) Tj
+/F1 11 Tf
+(  properties.) Tj
+ET
+BT
+72 717.45 Td
+4.32 Tw
+/F1 11 Tf
+(This second paragraph follows with the configured spacing. Section spacing is also) Tj
+0 Tw
+ET
+BT
+72 702.6 Td
+/F1 11 Tf
+(independently configurable via the ) Tj
+/F4 11 Tf
+( SectionSpacing) Tj
+/F1 11 Tf
+(  property.) Tj
+ET
+BT
+72 663.75 Td
+/F2 20.4 Tf
+(PDF Styling) Tj
+ET
+BT
+72 616.21 Td
+/F2 17.34 Tf
+(Heading Colors) Tj
+ET
+BT
+72 584.67 Td
+3.52 Tw
+/F1 11 Tf
+(The section headings in this document are rendered with a custom color using the ) Tj
+0 Tw
+ET
+BT
+72 569.82 Td
+/F4 11 Tf
+(HeadingColor) Tj
+/F1 11 Tf
+(  property of ) Tj
+/F4 11 Tf
+( PdfRenderOptions) Tj
+/F1 11 Tf
+( .) Tj
+ET
+BT
+72 530.97 Td
+/F2 17.34 Tf
+(Style Presets) Tj
+ET
+BT
+72 499.43 Td
+/F1 11 Tf
+(Two convenience presets are available:) Tj
+ET
+BT
+72 476.58 Td
+2.2 Tw
+/F1 11 Tf
+(- ) Tj
+/F2 11 Tf
+( Compact) Tj
+/F1 11 Tf
+( : ) Tj
+/F4 11 Tf
+( FontSize=10, LineSpacing=1.25, ParagraphSpacingAfter=6,) Tj
+0 Tw
+ET
+BT
+72 461.73 Td
+6.14 Tw
+/F4 11 Tf
+(MarginTop=54, MarginBottom=54) Tj
+/F1 11 Tf
+(  - ) Tj
+/F2 11 Tf
+( Presentation) Tj
+/F1 11 Tf
+( : ) Tj
+/F4 11 Tf
+( TitleFontSize=30,) Tj
+0 Tw
+ET
+BT
+72 446.88 Td
+/F4 11 Tf
+(FontSize=14, LineSpacing=1.5, HeadingColor=\(0, 0, 0.6\)) Tj
+ET
+BT
+72 408.03 Td
+/F2 20.4 Tf
+(Tables) Tj
+ET
+BT
+/F2 11 Tf
+76 376.49 Td
+(Feature) Tj
+ET
+BT
+/F2 11 Tf
+255.97 376.49 Td
+(Status) Tj
+ET
+BT
+/F2 11 Tf
+421.62 376.49 Td
+(Renderer) Tj
+ET
+0 0 0 RG
+1 w
+72 374.49 m 523 374.49 l S
+BT
+/F1 11 Tf
+76 361.64 Td
+(Syntax highlighting) Tj
+ET
+BT
+/F1 11 Tf
+255.97 361.64 Td
+(7 languages) Tj
+ET
+BT
+/F1 11 Tf
+421.62 361.64 Td
+(HTML + PDF) Tj
+ET
+0.85 0.85 0.85 RG
+0.25 w
+72 359.64 m 523 359.64 l S
+0 0 0 RG
+BT
+/F1 11 Tf
+76 346.79 Td
+(Hyphenation) Tj
+ET
+BT
+/F1 11 Tf
+255.97 346.79 Td
+(English \(US\)) Tj
+ET
+BT
+/F1 11 Tf
+421.62 346.79 Td
+(PDF only) Tj
+ET
+0.85 0.85 0.85 RG
+0.25 w
+72 344.79 m 523 344.79 l S
+0 0 0 RG
+BT
+/F1 11 Tf
+76 331.94 Td
+(Custom themes) Tj
+ET
+BT
+/F1 11 Tf
+255.97 331.94 Td
+(4 built-in) Tj
+ET
+BT
+/F1 11 Tf
+421.62 331.94 Td
+(HTML) Tj
+ET
+0.85 0.85 0.85 RG
+0.25 w
+72 329.94 m 523 329.94 l S
+0 0 0 RG
+BT
+/F1 11 Tf
+76 317.09 Td
+(Style presets) Tj
+ET
+BT
+/F1 11 Tf
+255.97 317.09 Td
+(Compact, Presentation) Tj
+ET
+BT
+/F1 11 Tf
+421.62 317.09 Td
+(PDF) Tj
+ET
+0.85 0.85 0.85 RG
+0.25 w
+72 315.09 m 523 315.09 l S
+0 0 0 RG
+BT
+/F1 11 Tf
+76 302.24 Td
+(Heading colors) Tj
+ET
+BT
+/F1 11 Tf
+255.97 302.24 Td
+(Any RGB) Tj
+ET
+BT
+/F1 11 Tf
+421.62 302.24 Td
+(PDF) Tj
+ET
+BT
+72 263.39 Td
+/F2 20.4 Tf
+(Admonitions) Tj
+ET
+BT
+/F2 11 Tf
+72 231.85 Td
+(NOTE:) Tj
+ET
+BT
+72 217 Td
+1 Tw
+/F1 11 Tf
+(Syntax highlighting defaults to disabled for backward compatibility. Enable it explicitly with ) Tj
+0 Tw
+ET
+BT
+72 202.15 Td
+11.02 Tw
+/F4 11 Tf
+(EnableSyntaxHighlighting = true) Tj
+/F1 11 Tf
+(  \(HTML\) or ) Tj
+/F4 11 Tf
+( SyntaxColors =) Tj
+0 Tw
+ET
+BT
+72 187.3 Td
+/F4 11 Tf
+(SyntaxColorScheme.Default) Tj
+/F1 11 Tf
+(  \(PDF\).) Tj
+ET
+BT
+/F2 11 Tf
+72 164.45 Td
+(TIP:) Tj
+ET
+BT
+72 149.6 Td
+0 Tw
+/F1 11 Tf
+(Use ) Tj
+/F4 11 Tf
+( PdfRenderOptions.Compact) Tj
+/F1 11 Tf
+(  for dense technical documentation and ) Tj
+0 Tw
+ET
+BT
+72 134.75 Td
+/F4 11 Tf
+(PdfRenderOptions.Presentation) Tj
+/F1 11 Tf
+(  for slide-like output.) Tj
+ET
+BT
+/F2 11 Tf
+72 111.9 Td
+(WARNING:) Tj
+ET
+BT
+72 97.05 Td
+1.26 Tw
+/F1 11 Tf
+(The syntax tokenizer targets 80% accuracy. Nested string interpolation, regex literals, and) Tj
+0 Tw
+ET
+BT
+72 82.2 Td
+/F1 11 Tf
+(some multi-line constructs may not highlight correctly.) Tj
+ET
+endstream
+endobj
+12 0 obj
+<< /Type /Page /MediaBox [0 0 595 842] /Contents 11 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R >> >> /Parent 15 0 R >>
+endobj
+13 0 obj
+<< /Length 850 >>
+stream
+BT
+/F2 11 Tf
+72 770 Td
+(IMPORTANT:) Tj
+ET
+BT
+72 755.15 Td
+2.37 Tw
+/F1 11 Tf
+(All PDF output remains fully deterministic. Identical input always produces byte-identical) Tj
+0 Tw
+ET
+BT
+72 740.3 Td
+/F1 11 Tf
+(output.) Tj
+ET
+BT
+72 701.45 Td
+/F2 20.4 Tf
+(Conclusion) Tj
+ET
+BT
+72 669.91 Td
+2.11 Tw
+/F1 11 Tf
+(Beta.4 transforms AdocNet\222s rendering from "correct and readable" to "professional and) Tj
+0 Tw
+ET
+BT
+72 655.06 Td
+/F1 11 Tf
+(customizable" with:) Tj
+ET
+BT
+72 632.21 Td
+3.48 Tw
+/F1 11 Tf
+(- Server-side syntax highlighting for 7 languages - Liang/Knuth hyphenation with TeX) Tj
+0 Tw
+ET
+BT
+72 617.36 Td
+1.12 Tw
+/F1 11 Tf
+(patterns - 4 built-in HTML themes with syntax highlighting CSS - Configurable PDF styling) Tj
+0 Tw
+ET
+BT
+72 602.51 Td
+/F1 11 Tf
+(\(colors, spacing, presets\) - 84 new tests ensuring quality and backward compatibility) Tj
+ET
+endstream
+endobj
+14 0 obj
+<< /Type /Page /MediaBox [0 0 595 842] /Contents 13 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R >> >> /Parent 15 0 R >>
+endobj
+15 0 obj
+<< /Type /Pages /Kids [6 0 R 8 0 R 10 0 R 12 0 R 14 0 R] /Count 5 >>
+endobj
+16 0 obj
+<< /Type /Catalog /Pages 15 0 R >>
+endobj
+17 0 obj
+<< /Producer (AdocNet PDF Renderer) /CreationDate (D:20260101000000+00'00') >>
+endobj
+xref
+0 18
+0000000000 65535 f 
+0000000019 00000 n 
+0000000116 00000 n 
+0000000218 00000 n 
+0000000323 00000 n 
+0000000418 00000 n 
+0000004641 00000 n 
+0000004798 00000 n 
+0000010218 00000 n 
+0000010375 00000 n 
+0000014856 00000 n 
+0000015014 00000 n 
+0000018817 00000 n 
+0000018976 00000 n 
+0000019877 00000 n 
+0000020036 00000 n 
+0000020121 00000 n 
+0000020172 00000 n 
+trailer
+<< /Size 18 /Root 16 0 R /Info 17 0 R >>
+startxref
+20267
+%%EOF

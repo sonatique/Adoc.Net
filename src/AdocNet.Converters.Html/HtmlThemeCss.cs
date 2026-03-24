@@ -11,6 +11,7 @@ internal static class HtmlThemeCss
         HtmlTheme.Default => DefaultTheme,
         HtmlTheme.Asciidoctor => AsciidoctorTheme,
         HtmlTheme.Clean => CleanTheme,
+        HtmlTheme.Github => GithubTheme,
         _ => null,
     };
 
@@ -113,6 +114,14 @@ internal static class HtmlThemeCss
         #footnotes { margin-top: 2em; border-top: 1px solid #e0e0e0; padding-top: 1em; font-size: 0.9em; }
         mark, .highlight { background: #fef08a; padding: 0.1em 0.2em; }
         .verseblock pre { font-family: inherit; background: none; border: none; padding: 0; white-space: pre-wrap; }
+        .hl-kw { color: #0000C0; font-weight: 600; }
+        .hl-s { color: #A31515; }
+        .hl-c { color: #008000; font-style: italic; }
+        .hl-n { color: #098658; }
+        .hl-t { color: #267F99; }
+        .hl-p { color: #505050; }
+        .hl-a { color: #8B008B; }
+        .hl-pp { color: #808080; }
         """;
 
     // ── Asciidoctor Theme ───────────────────────────────────────────────
@@ -206,6 +215,14 @@ internal static class HtmlThemeCss
         #footnotes { margin-top: 2em; border-top: 1px solid #ddddd8; padding-top: 0.5em; font-size: 0.875em; }
         mark, .highlight { background: #ffc14f; }
         .verseblock pre { font-family: "Noto Serif", "DejaVu Serif", serif; background: none; border: none; padding: 0; white-space: pre-wrap; }
+        .hl-kw { color: #7a2518; font-weight: 600; }
+        .hl-s { color: #19407c; }
+        .hl-c { color: #6a6a6a; font-style: italic; }
+        .hl-n { color: #116644; }
+        .hl-t { color: #19407c; }
+        .hl-p { color: rgba(0,0,0,0.6); }
+        .hl-a { color: #7a2518; }
+        .hl-pp { color: #808080; }
         """;
 
     // ── Clean Theme ─────────────────────────────────────────────────────
@@ -264,5 +281,98 @@ internal static class HtmlThemeCss
         #footnotes { margin-top: 3em; border-top: 1px solid #ddd; padding-top: 1em; font-size: 0.85em; }
         mark, .highlight { background: #ff0; }
         .verseblock pre { font-family: Georgia, serif; background: none; border: none; padding: 0; white-space: pre-wrap; }
+        .hl-kw { color: #333; font-weight: 700; }
+        .hl-s { color: #555; }
+        .hl-c { color: #999; font-style: italic; }
+        .hl-n { color: #555; }
+        .hl-t { color: #333; }
+        .hl-p { color: #777; }
+        .hl-a { color: #555; }
+        .hl-pp { color: #999; }
+        """;
+
+    // ── Github Theme ──────────────────────────────────────────────────
+    private const string GithubTheme = """
+        *, *::before, *::after { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+            font-size: 16px;
+            line-height: 1.5;
+            color: #1f2328;
+            background: #fff;
+            max-width: 1012px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem;
+        }
+        h1, h2, h3, h4, h5, h6 {
+            font-weight: 600;
+            color: #1f2328;
+            margin-top: 1.5em;
+            margin-bottom: 0.5em;
+            line-height: 1.25;
+        }
+        h1 { font-size: 2em; border-bottom: 1px solid #d1d9e0; padding-bottom: 0.3em; }
+        h2 { font-size: 1.5em; border-bottom: 1px solid #d1d9e0; padding-bottom: 0.3em; }
+        h3 { font-size: 1.25em; }
+        a { color: #0969da; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        code, .monospace {
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+            font-size: 0.85em;
+            background: rgba(175, 184, 193, 0.2);
+            padding: 0.2em 0.4em;
+            border-radius: 6px;
+        }
+        pre {
+            background: #f6f8fa;
+            border: 1px solid #d1d9e0;
+            border-radius: 6px;
+            padding: 1em;
+            overflow-x: auto;
+            line-height: 1.45;
+        }
+        pre code { background: none; padding: 0; border-radius: 0; }
+        blockquote, .quoteblock {
+            border-left: 4px solid #d1d9e0;
+            margin-left: 0;
+            padding: 0.5em 1em;
+            color: #636c76;
+        }
+        .quoteblock .attribution { font-style: italic; color: #636c76; margin-top: 0.5em; }
+        table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+        th, td { border: 1px solid #d1d9e0; padding: 6px 13px; text-align: left; }
+        th { background: #f6f8fa; font-weight: 600; }
+        .stripes-odd tr:nth-child(odd) td { background: #f6f8fa; }
+        .stripes-even tr:nth-child(even) td { background: #f6f8fa; }
+        .admonitionblock { margin: 1em 0; padding: 0.75em 1em; border-radius: 6px; border-left: 4px solid; }
+        .admonitionblock.note { border-color: #0969da; background: #ddf4ff; }
+        .admonitionblock.tip { border-color: #1a7f37; background: #dafbe1; }
+        .admonitionblock.warning { border-color: #9a6700; background: #fff8c5; }
+        .admonitionblock.caution { border-color: #cf222e; background: #ffebe9; }
+        .admonitionblock.important { border-color: #8250df; background: #fbefff; }
+        .admonitionblock .icon { font-weight: 700; text-transform: uppercase; margin-bottom: 0.25em; }
+        .imageblock { text-align: center; margin: 1em 0; }
+        .imageblock img { max-width: 100%; height: auto; }
+        .title { font-weight: 600; margin-bottom: 0.25em; }
+        .sidebarblock { background: #f6f8fa; border: 1px solid #d1d9e0; border-radius: 6px; padding: 1em; margin: 1em 0; }
+        .exampleblock { border: 1px solid #d1d9e0; border-radius: 6px; padding: 1em; margin: 1em 0; }
+        .listingblock { margin: 1em 0; }
+        .listingblock .title { font-size: 0.85em; color: #636c76; }
+        #toc { margin: 1.5em 0; padding: 1em; background: #f6f8fa; border: 1px solid #d1d9e0; border-radius: 6px; }
+        #toc .title { font-size: 1.1em; font-weight: 600; margin-bottom: 0.5em; }
+        #toc ul { list-style: none; padding-left: 1.5em; }
+        #toc > ul { padding-left: 0; }
+        #toc a { color: #0969da; }
+        #footnotes { margin-top: 2em; border-top: 1px solid #d1d9e0; padding-top: 1em; font-size: 0.85em; }
+        mark, .highlight { background: #fff8c5; padding: 0.1em 0.2em; }
+        .verseblock pre { font-family: inherit; background: none; border: none; padding: 0; white-space: pre-wrap; }
+        .hl-kw { color: #cf222e; font-weight: 600; }
+        .hl-s { color: #0a3069; }
+        .hl-c { color: #6e7781; font-style: italic; }
+        .hl-n { color: #0550ae; }
+        .hl-t { color: #953800; }
+        .hl-p { color: #1f2328; }
+        .hl-a { color: #8250df; }
+        .hl-pp { color: #cf222e; }
         """;
 }

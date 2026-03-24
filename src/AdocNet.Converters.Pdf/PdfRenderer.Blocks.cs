@@ -1,9 +1,32 @@
 using AdocNet.Ast;
-
 namespace AdocNet.Converters.Pdf;
-
 public sealed partial class PdfRenderer
 {
+    /// <summary>
+    /// Renders source content with syntax highlighting, colorizing tokens per line.
+    /// </summary>
+    private void RenderHighlightedVerbatim(PdfWriter w, string content, string language)
+    {
+        foreach (var line in content.Split('\n'))
+        {
+            w.EnsurePage();
+            w.DrawCodeLineBackground();
+            if (line.Length == 0) { w.MoveCursor(_codeLeading); continue; }
+            var tokens = Highlighting.SyntaxTokenizer.Tokenize(line, language);
+            float x = w.MarginLeftValue;
+            foreach (var token in tokens)
+            {
+                var color = _syntaxColors!.GetColor(token.Kind);
+                if (color is { } c) w.SetFillColor(c.R, c.G, c.B);
+                else w.SetFillColor(0, 0, 0);
+                w.WriteText(token.Text, _fontMono, _codeFontSize, x, w.CursorY);
+                x += w.MeasureText(token.Text, _fontMono, _codeFontSize);
+            }
+            w.SetFillColor(0, 0, 0);
+            w.MoveCursor(_codeLeading);
+        }
+    }
+
     private void RenderTable(PdfWriter w, TableNode table, FootnoteState footnotes)
     {
         if (table.Children.Count == 0) return;
@@ -160,7 +183,7 @@ public sealed partial class PdfRenderer
             }
         }
 
-        w.MoveCursor(ParagraphSpacing);
+        w.MoveCursor(_paragraphSpacingAfter);
     }
 
     private void RenderTableRow(PdfWriter w, TableRowNode row, float[] colWidths,
@@ -293,7 +316,7 @@ public sealed partial class PdfRenderer
             w.MoveCursor(68f);
         }
 
-        w.MoveCursor(ParagraphSpacing);
+        w.MoveCursor(_paragraphSpacingAfter);
     }
 
     /// <summary>
@@ -302,29 +325,14 @@ public sealed partial class PdfRenderer
     private bool TryLoadImage(string target, out ImageParser.ImageInfo info)
     {
         info = default;
-
-        if (_baseDirectory is null)
-            return false;
-
+        if (_baseDirectory is null) return false;
         string fullPath = Path.Combine(_baseDirectory, target);
-        if (!File.Exists(fullPath))
-            return false;
-
+        if (!File.Exists(fullPath)) return false;
         byte[] data;
-        try
-        {
-            data = File.ReadAllBytes(fullPath);
-        }
-        catch
-        {
-            return false;
-        }
-
-        // Try JPEG first, then PNG
+        try { data = File.ReadAllBytes(fullPath); }
+        catch { return false; }
         var result = ImageParser.TryParseJpeg(data) ?? ImageParser.TryParsePng(data);
-        if (result is null)
-            return false;
-
+        if (result is null) return false;
         info = result.Value;
         return true;
     }
@@ -336,7 +344,7 @@ public sealed partial class PdfRenderer
         var segments = BuildInlineSegments(entry.Inlines, entry.Text, _fontRegular, _bodyFontSize, footnotes);
         segments.Insert(0, new TextSegment($"[{label}] ", _fontBold, _bodyFontSize));
         w.WriteWrappedSegments(segments, _bodyLeading);
-        w.MoveCursor(ParagraphSpacing / 2);
+        w.MoveCursor(_paragraphSpacingAfter / 2);
     }
 
     private void RenderDescriptionList(PdfWriter w, DescriptionListNode list, int indentLevel, FootnoteState footnotes)
@@ -354,10 +362,10 @@ public sealed partial class PdfRenderer
                 // Description indented
                 var descSegments = BuildInlineSegments(item.DescriptionInlines, item.Description, _fontRegular, _bodyFontSize, footnotes);
                 w.WriteWrappedSegments(descSegments, _bodyLeading);
-                w.MoveCursor(ParagraphSpacing / 2);
+                w.MoveCursor(_paragraphSpacingAfter / 2);
             }
         }
-        w.MoveCursor(ParagraphSpacing);
+        w.MoveCursor(_paragraphSpacingAfter);
     }
 
     private void RenderAdmonition(PdfWriter w, AdmonitionNode admonition, int indentLevel, FootnoteState footnotes)
@@ -379,7 +387,7 @@ public sealed partial class PdfRenderer
             w.WriteWrappedSegments(segments, _bodyLeading);
         }
 
-        w.MoveCursor(ParagraphSpacing);
+        w.MoveCursor(_paragraphSpacingAfter);
     }
 
     // ── Inline segment building ─────────────────────────────────────────

@@ -15,6 +15,7 @@ internal sealed partial class PdfWriter
         if (text.Length == 0)
         {
             EnsurePage();
+            DrawCodeLineBackground();
             _cursorY -= leading;
             return leading;
         }
@@ -27,6 +28,7 @@ internal sealed partial class PdfWriter
             string line = text.Substring(pos, lineLen);
 
             EnsurePage();
+            DrawCodeLineBackground();
             WriteText(line, font, fontSize, MarginLeftValue, _cursorY);
             _cursorY -= leading;
             consumed += leading;
@@ -157,160 +159,6 @@ internal sealed partial class PdfWriter
             total += HelveticaMetrics.MeasureChar(ch, font, fontSize);
 
         return total;
-    }
-
-    // ── Word wrapping ───────────────────────────────────────────────────
-
-    /// <summary>Characters that must never appear at the start of a wrapped line.</summary>
-    private static readonly HashSet<char> NoStartChars =
-    [
-        ')', ']', '}', '>', ',', '.', ';', ':', '!', '?',
-        '\u2014', // em dash
-        '\u2013', // en dash
-        '\u2019', // right single quote
-        '\u201D', // right double quote
-        '\u2010', // hyphen
-        '\u2026', // ellipsis
-    ];
-
-    internal List<string> WrapText(string text, string font, float fontSize, float maxWidth)
-    {
-        var result = new List<string>();
-        if (string.IsNullOrEmpty(text))
-        {
-            result.Add("");
-            return result;
-        }
-
-        var words = text.Split(' ');
-        var currentLine = new StringBuilder();
-        float currentWidth = 0;
-        float spaceWidth = MeasureText(" ", font, fontSize);
-
-        foreach (var word in words)
-        {
-            float wordWidth = MeasureText(word, font, fontSize);
-
-            if (currentLine.Length > 0 && currentWidth + spaceWidth + wordWidth > maxWidth)
-            {
-                result.Add(currentLine.ToString());
-                currentLine.Clear();
-                currentWidth = 0;
-            }
-
-            if (currentLine.Length > 0)
-            {
-                currentLine.Append(' ');
-                currentWidth += spaceWidth;
-            }
-
-            currentLine.Append(word);
-            currentWidth += wordWidth;
-        }
-
-        if (currentLine.Length > 0)
-            result.Add(currentLine.ToString());
-
-        // Post-process: pull no-start punctuation back to previous line
-        FixLineStartPunctuation(result);
-
-        return result;
-    }
-
-    /// <summary>
-    /// If a line starts with a character from <see cref="NoStartChars"/>,
-    /// move that character (and any preceding space) back to the previous line.
-    /// </summary>
-    private static void FixLineStartPunctuation(List<string> lines)
-    {
-        for (int i = 1; i < lines.Count; i++)
-        {
-            if (lines[i].Length > 0 && NoStartChars.Contains(lines[i][0]))
-            {
-                // Find how many leading no-start characters to pull back
-                int pullCount = 0;
-                while (pullCount < lines[i].Length && NoStartChars.Contains(lines[i][pullCount]))
-                    pullCount++;
-
-                string pulled = lines[i].Substring(0, pullCount);
-                string remaining = lines[i].Substring(pullCount).TrimStart();
-
-                lines[i - 1] += pulled;
-
-                if (remaining.Length > 0)
-                    lines[i] = remaining;
-                else
-                {
-                    lines.RemoveAt(i);
-                    i--;
-                }
-            }
-        }
-    }
-
-    internal List<List<TextSegment>> WrapSegments(List<TextSegment> segments, float maxWidth)
-    {
-        var result = new List<List<TextSegment>>();
-        var currentLine = new List<TextSegment>();
-        float currentWidth = 0;
-
-        foreach (var seg in segments)
-        {
-            float spaceWidth = MeasureText(" ", seg.Font, seg.FontSize);
-
-            // Split segment text into words for word-level wrapping
-            var words = seg.Text.Split(' ');
-            var wordBuffer = new StringBuilder();
-
-            for (int i = 0; i < words.Length; i++)
-            {
-                var word = words[i];
-                float wordWidth = MeasureText(word, seg.Font, seg.FontSize);
-                float neededWidth = wordBuffer.Length > 0 || currentWidth > 0
-                    ? spaceWidth + wordWidth
-                    : wordWidth;
-
-                if (currentWidth + neededWidth > maxWidth && (currentLine.Count > 0 || wordBuffer.Length > 0))
-                {
-                    // Flush word buffer as a segment on the current line
-                    if (wordBuffer.Length > 0)
-                    {
-                        currentLine.Add(new TextSegment(wordBuffer.ToString(), seg.Font, seg.FontSize, seg.LinkUri));
-                        wordBuffer.Clear();
-                    }
-
-                    result.Add(currentLine);
-                    currentLine = [];
-                    currentWidth = 0;
-                    neededWidth = wordWidth;
-                }
-
-                if (wordBuffer.Length > 0)
-                    wordBuffer.Append(' ');
-                else if (currentWidth > 0 && i == 0)
-                {
-                    // Add space between previous segment and this one
-                    wordBuffer.Append(' ');
-                }
-
-                wordBuffer.Append(word);
-                currentWidth += neededWidth;
-            }
-
-            // Flush remaining words in buffer
-            if (wordBuffer.Length > 0)
-            {
-                currentLine.Add(new TextSegment(wordBuffer.ToString(), seg.Font, seg.FontSize, seg.LinkUri));
-            }
-        }
-
-        if (currentLine.Count > 0)
-            result.Add(currentLine);
-
-        if (result.Count == 0)
-            result.Add([]);
-
-        return result;
     }
 
     // ── Final PDF assembly ──────────────────────────────────────────────
