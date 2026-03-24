@@ -1,0 +1,163 @@
+= AdocNet v1.0.0-beta.3 — PDF Showcase
+
+== Typography and Unicode
+
+This document demonstrates the new PDF rendering features in beta.3.
+The text you're reading is fully justified with improved line-breaking rules.
+Punctuation like periods, commas, and closing parentheses (like this) will never appear at the start of a wrapped line.
+
+Unicode text works with TrueType fonts: cafe resume naive.
+Special characters: copyright (C), registered (R), trademark (TM).
+Typographic quotes, em dashes -- and ellipsis... are supported.
+
+== Text Formatting
+
+This paragraph has *bold text*, _italic text_, `monospace text`, and combinations of *_bold italic_* formatting.
+You can also use ^superscript^ and ~subscript~ notation.
+
+== Hyperlinks
+
+Visit https://github.com for source code hosting.
+See link:https://asciidoc.org[the AsciiDoc website] for the markup specification.
+The link:https://docs.microsoft.com[Microsoft Docs] are a great .NET reference.
+
+== Lists
+
+=== Unordered List
+
+- First item with some text
+- Second item that is longer and contains enough words to demonstrate how list items wrap across multiple lines when the content exceeds the available width
+- Third item
+  * Nested sub-item A
+  * Nested sub-item B
+
+=== Ordered List
+
+. Step one: prepare the environment
+. Step two: configure the options
+. Step three: render the document
+. Step four: verify the output
+
+== Code Blocks
+
+Here is a C# code example with syntax highlighting label:
+
+[source,csharp]
+----
+var options = new PdfRenderOptions
+{
+    FontSize = 11f,
+    TitleFontSize = 24f,
+    HeadingScale = 0.85f,
+    LineSpacing = 1.35f,
+    ShowPageNumbers = true,
+    FooterText = "Page {page} of {pages}",
+    LinkColor = new PdfColor(0f, 0f, 0.8f),
+};
+
+byte[] pdf = new PdfRenderer()
+    .RenderToBytes(document, options);
+----
+
+And a simple literal block:
+
+....
+This is a literal block.
+It preserves     spacing and
+line breaks exactly as written.
+....
+
+== Tables
+
+=== Simple Table
+
+|===
+| Feature | Status | Notes
+
+| TrueType fonts
+| Complete
+| Embedding with subsetting
+
+| Image embedding
+| Complete
+| JPEG and PNG with alpha
+
+| Hyperlinks
+| Complete
+| URI annotations
+
+| Text quality
+| Complete
+| Punctuation rules, justification cap
+
+| Table improvements
+| Complete
+| Header repeat, cell wrapping
+
+| Headers/footers
+| Complete
+| Page numbers with {pages} total
+
+| Configuration
+| Complete
+| 10 new PdfRenderOptions properties
+|===
+
+=== Column-Weighted Table
+
+[cols="1,3"]
+|===
+| Key | Description
+
+| `FontSize`
+| Base body text font size in points. Default is 11. Controls the size of paragraph text throughout the document.
+
+| `HeadingScale`
+| Scale factor applied to each heading level. H2 = TitleFontSize x scale, H3 = H2 x scale, and so on. Default 0.85.
+
+| `LineSpacing`
+| Line spacing multiplier. The leading (distance between baselines) is calculated as fontSize x lineSpacing. Default 1.35.
+|===
+
+== Admonitions
+
+NOTE: This document showcases all the new features added in beta.3 of AdocNet's PDF renderer.
+
+TIP: Use `PdfRenderOptions` to customize every aspect of the PDF output, from page size to font sizes to visual styling.
+
+WARNING: Interlaced PNGs are not supported. The renderer will fall back to a placeholder for these images.
+
+IMPORTANT: PDF output is fully deterministic. Rendering the same document twice always produces byte-identical output.
+
+== Block Quotes
+
+[quote, The AdocNet Team]
+____
+The PDF renderer is a pure managed PDF 1.4 writer with no external dependencies.
+It writes PDF primitives directly: streams, objects, and cross-reference tables.
+All output is deterministic.
+____
+
+== Description Lists
+
+Font embedding:: TrueType fonts are parsed, subsetted to include only used glyphs, and embedded as CIDFontType2 objects with ToUnicode CMaps for proper text extraction.
+
+Image support:: JPEG images use DCTDecode (raw passthrough). PNG images are decompressed, de-filtered, and re-compressed with FlateDecode. RGBA PNGs get a separate SMask for transparency.
+
+Page layout:: The renderer uses a simple vertical flow model with configurable page size, margins, and content width. No floats or multi-column support.
+
+== Conclusion
+
+This document has demonstrated:
+
+. TrueType font support with Unicode text
+. JPEG and PNG image embedding
+. Clickable hyperlinks with URI annotations
+. Improved text justification with punctuation rules
+. Table rendering with cell wrapping and header repetition
+. Headers and footers with page numbers
+. Configurable typography and visual styling
+. Code blocks with language labels
+. Admonitions, block quotes, and description lists
+
+All rendered by a pure managed C# PDF writer with zero external dependencies.

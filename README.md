@@ -190,7 +190,7 @@ Nine assemblies, each with a single responsibility:
 | AdocNet.Core | `AdocNet` | Diagnostics, options, renderer framework |
 | AdocNet.Parser | `AdocNet.Parser` | Block and inline parsing |
 | AdocNet.Converters.Html | `AdocNet.Converters.Html` | HTML5 renderer with themes |
-| AdocNet.Converters.Pdf | `AdocNet.Converters.Pdf` | Pure managed PDF 1.4 renderer |
+| AdocNet.Converters.Pdf | `AdocNet.Converters.Pdf` | Pure managed PDF 1.4 renderer with TrueType font embedding and Unicode support |
 | AdocNet.Converters.DocBook | `AdocNet.Converters.DocBook` | DocBook 5.0 renderer |
 | AdocNet.Converters.Epub | `AdocNet.Converters.Epub` | EPUB 3.0 renderer |
 | AdocNet.Layout | `AdocNet.Layout` | UI-agnostic layout model and AST-to-layout builder |
@@ -205,6 +205,7 @@ The data flow for the Avalonia viewer is strictly layered: `AST → Layout → A
 | [USAGE.md](docs/USAGE.md) | Library usage, parsing, rendering workflows |
 | [CLI.md](docs/CLI.md) | CLI reference and examples |
 | [RENDERERS.md](docs/RENDERERS.md) | Renderer guide (HTML, PDF, DocBook, EPUB) |
+| [PDF_RENDERER.md](docs/PDF_RENDERER.md) | PDF renderer: fonts, images, links, tables, configuration |
 | [EXTENSIONS.md](docs/EXTENSIONS.md) | Building custom renderers and include readers |
 | [COMPATIBILITY.md](docs/COMPATIBILITY.md) | Asciidoctor conformance and known differences |
 | [SECURITY.md](docs/SECURITY.md) | Security considerations for untrusted input |

@@ -144,6 +144,8 @@ internal sealed class TrueTypeFont
     {
         int numSubtables = ReadUInt16(data, cmapOffset + 2);
 
+        // Prefer format 12 (full Unicode) over format 4 (BMP only).
+        // First pass: look for platform 3 encoding 10 (Windows full Unicode) with format 12
         for (int i = 0; i < numSubtables; i++)
         {
             int recordOffset = cmapOffset + 4 + i * 8;
@@ -151,12 +153,30 @@ internal sealed class TrueTypeFont
             int encodingId = ReadUInt16(data, recordOffset + 2);
             int subtableOffset = (int)ReadUInt32(data, recordOffset + 4);
 
-            // Look for platform 3 (Windows), encoding 1 (Unicode BMP)
+            if (platformId == 3 && encodingId == 10)
+            {
+                int absOffset = cmapOffset + subtableOffset;
+                int format = ReadUInt16(data, absOffset);
+                if (format == 12)
+                {
+                    ParseCmapFormat12(data, absOffset, result);
+                    return;
+                }
+            }
+        }
+
+        // Second pass: platform 3 encoding 1 (Windows BMP) with format 4
+        for (int i = 0; i < numSubtables; i++)
+        {
+            int recordOffset = cmapOffset + 4 + i * 8;
+            int platformId = ReadUInt16(data, recordOffset);
+            int encodingId = ReadUInt16(data, recordOffset + 2);
+            int subtableOffset = (int)ReadUInt32(data, recordOffset + 4);
+
             if (platformId == 3 && encodingId == 1)
             {
                 int absOffset = cmapOffset + subtableOffset;
                 int format = ReadUInt16(data, absOffset);
-
                 if (format == 4)
                 {
                     ParseCmapFormat4(data, absOffset, result);
@@ -165,7 +185,7 @@ internal sealed class TrueTypeFont
             }
         }
 
-        // Fallback: try platform 0 (Unicode), any encoding with format 4
+        // Fallback: platform 0 (Unicode), any encoding
         for (int i = 0; i < numSubtables; i++)
         {
             int recordOffset = cmapOffset + 4 + i * 8;
@@ -176,7 +196,11 @@ internal sealed class TrueTypeFont
             {
                 int absOffset = cmapOffset + subtableOffset;
                 int format = ReadUInt16(data, absOffset);
-
+                if (format == 12)
+                {
+                    ParseCmapFormat12(data, absOffset, result);
+                    return;
+                }
                 if (format == 4)
                 {
                     ParseCmapFormat4(data, absOffset, result);
@@ -231,6 +255,28 @@ internal sealed class TrueTypeFont
 
                 if (glyphId != 0)
                     result[cp] = glyphId;
+            }
+        }
+    }
+
+    private static void ParseCmapFormat12(byte[] data, int offset, Dictionary<int, ushort> result)
+    {
+        // Format 12: Segmented coverage — supports full Unicode (beyond BMP)
+        // Header: uint16 format, uint16 reserved, uint32 length, uint32 language, uint32 numGroups
+        uint numGroups = ReadUInt32(data, offset + 12);
+
+        for (uint g = 0; g < numGroups; g++)
+        {
+            int groupOffset = offset + 16 + (int)(g * 12);
+            uint startCharCode = ReadUInt32(data, groupOffset);
+            uint endCharCode = ReadUInt32(data, groupOffset + 4);
+            uint startGlyphId = ReadUInt32(data, groupOffset + 8);
+
+            for (uint cp = startCharCode; cp <= endCharCode && cp <= 0x10FFFF; cp++)
+            {
+                ushort glyphId = (ushort)(startGlyphId + (cp - startCharCode));
+                if (glyphId != 0)
+                    result[(int)cp] = glyphId;
             }
         }
     }
