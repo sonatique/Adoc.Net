@@ -3,6 +3,28 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0-beta.5] - 2026-03-26
+
+### Added
+- Processing extension system: `IDocumentProcessor`, `IBlockProcessor`, `IInlineProcessor`
+- `AdocEngine.RegisterDocumentProcessor()`, `RegisterBlockProcessor()`, `RegisterInlineProcessor()` with fluent API
+- `AdocEngine.OnWarning` callback for non-fatal processor errors
+- `NodeReplacements` for AST node replacement and removal during processing
+- `ProcessingPipeline` with guaranteed FIFO execution order (document -> block -> inline)
+- `IDiagramToolRunner` abstraction for external diagram tool invocation
+- `ProcessDiagramToolRunner` implementation using `Process.Start` with deterministic output filenames
+- `DiagramBlockProcessor` supporting PlantUML, Mermaid, Ditaa, Graphviz, and DOT languages
+- Built-in example extensions: `IconMacroProcessor`, `DocumentMetadataProcessor`, `AutoIdBlockProcessor`
+- 46 new extension tests (pipeline invocation, ordering, error handling, diagram, integration)
+- Documentation: DIAGRAMS.md, updated EXTENSIONS.md with processor guide
+
+### Compatibility
+- Zero extensions registered = output identical to beta.4
+- All new API is additive; no existing public API changed
+- Registration freezes after first `Convert()` call (throws `InvalidOperationException`)
+- Parser and AST unmodified
+- All existing tests pass without modification
+
 ## [1.0.0-beta.4] - 2026-03-24
 
 ### Added
