@@ -186,6 +186,17 @@ See [docs/CLI.md](docs/CLI.md) for the full reference.
 | Custom styling | Custom CSS override | Color/spacing properties |
 | TrueType font embedding with Unicode | N/A | Full Unicode support |
 
+### Processing Extensions
+
+| Feature | Status |
+|---------|--------|
+| Document processors (`IDocumentProcessor`) | Supported |
+| Block processors (`IBlockProcessor`) | Supported |
+| Inline processors (`IInlineProcessor`) | Supported |
+| Diagram blocks (PlantUML, Mermaid, Ditaa, Graphviz) | Supported (external tool) |
+| Node replacement and removal (`NodeReplacements`) | Supported |
+| Warning callback (`OnWarning`) | Supported |
+
 ### Not yet supported
 
 - Stem/math blocks (MathJax, LaTeX)
@@ -216,7 +227,8 @@ The data flow for the Avalonia viewer is strictly layered: `AST → Layout → A
 | [CLI.md](docs/CLI.md) | CLI reference and examples |
 | [RENDERERS.md](docs/RENDERERS.md) | Renderer guide (HTML, PDF, DocBook, EPUB) |
 | [PDF_RENDERER.md](docs/PDF_RENDERER.md) | PDF renderer: fonts, images, links, tables, configuration |
-| [EXTENSIONS.md](docs/EXTENSIONS.md) | Building custom renderers and include readers |
+| [EXTENSIONS.md](docs/EXTENSIONS.md) | Processing extensions, custom renderers, and include readers |
+| [DIAGRAMS.md](docs/DIAGRAMS.md) | Diagram block processing with external tools |
 | [COMPATIBILITY.md](docs/COMPATIBILITY.md) | Asciidoctor conformance and known differences |
 | [SECURITY.md](docs/SECURITY.md) | Security considerations for untrusted input |
 

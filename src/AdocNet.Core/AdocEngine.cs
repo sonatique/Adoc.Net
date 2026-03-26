@@ -1,4 +1,5 @@
 using AdocNet.Ast;
+using AdocNet.Extensions;
 
 namespace AdocNet;
 
@@ -7,11 +8,23 @@ namespace AdocNet;
 /// </summary>
 public sealed class AdocEngine
 {
+    private readonly List<IDocumentProcessor> _documentProcessors = new();
+    private readonly List<IBlockProcessor> _blockProcessors = new();
+    private readonly List<IInlineProcessor> _inlineProcessors = new();
+    private bool _frozen;
+
     /// <summary>Gets the renderer used to produce output.</summary>
     public IDocumentRenderer Renderer { get; init; }
 
     /// <summary>Gets the parser function that converts AsciiDoc source text into a document AST.</summary>
     public Func<string, DocumentNode> Parser { get; init; }
+
+    /// <summary>
+    /// Optional warning callback. Invoked when a processor throws an exception
+    /// or a non-fatal issue occurs during processing.
+    /// When null, warnings are silently discarded.
+    /// </summary>
+    public Action<string>? OnWarning { get; set; }
 
     /// <summary>
     /// Initializes a new <see cref="AdocEngine"/> with the specified renderer and parser.
@@ -25,6 +38,45 @@ public sealed class AdocEngine
     }
 
     /// <summary>
+    /// Registers a document processor. Processors execute in registration order (FIFO).
+    /// Must be called before the first <see cref="Convert"/> call.
+    /// </summary>
+    /// <param name="processor">The document processor to register.</param>
+    /// <returns>This engine instance for fluent chaining.</returns>
+    public AdocEngine RegisterDocumentProcessor(IDocumentProcessor processor)
+    {
+        ThrowIfFrozen();
+        _documentProcessors.Add(processor ?? throw new ArgumentNullException(nameof(processor)));
+        return this;
+    }
+
+    /// <summary>
+    /// Registers a block processor. Processors execute in registration order (FIFO).
+    /// Must be called before the first <see cref="Convert"/> call.
+    /// </summary>
+    /// <param name="processor">The block processor to register.</param>
+    /// <returns>This engine instance for fluent chaining.</returns>
+    public AdocEngine RegisterBlockProcessor(IBlockProcessor processor)
+    {
+        ThrowIfFrozen();
+        _blockProcessors.Add(processor ?? throw new ArgumentNullException(nameof(processor)));
+        return this;
+    }
+
+    /// <summary>
+    /// Registers an inline processor. Processors execute in registration order (FIFO).
+    /// Must be called before the first <see cref="Convert"/> call.
+    /// </summary>
+    /// <param name="processor">The inline processor to register.</param>
+    /// <returns>This engine instance for fluent chaining.</returns>
+    public AdocEngine RegisterInlineProcessor(IInlineProcessor processor)
+    {
+        ThrowIfFrozen();
+        _inlineProcessors.Add(processor ?? throw new ArgumentNullException(nameof(processor)));
+        return this;
+    }
+
+    /// <summary>
     /// Parses the AsciiDoc <paramref name="input"/> and writes the rendered output to <paramref name="output"/>.
     /// </summary>
     /// <param name="input">The AsciiDoc source text.</param>
@@ -33,7 +85,16 @@ public sealed class AdocEngine
     public void Convert(string input, Stream output, RenderOptions? options = null)
     {
         var doc = Parser(input);
-        Renderer.Render(doc, output, options ?? RenderOptions.Default);
+        var opts = options ?? RenderOptions.Default;
+
+        if (_documentProcessors.Count > 0 || _blockProcessors.Count > 0 || _inlineProcessors.Count > 0)
+        {
+            _frozen = true;
+            var context = new RenderContext(doc, opts);
+            ProcessingPipeline.Run(doc, context, _documentProcessors, _blockProcessors, _inlineProcessors, OnWarning);
+        }
+
+        Renderer.Render(doc, output, opts);
     }
 
     /// <summary>
@@ -46,5 +107,11 @@ public sealed class AdocEngine
     {
         var text = File.ReadAllText(inputPath);
         Convert(text, output, options);
+    }
+
+    private void ThrowIfFrozen()
+    {
+        if (_frozen)
+            throw new InvalidOperationException("Cannot register processors after the first Convert() call.");
     }
 }
