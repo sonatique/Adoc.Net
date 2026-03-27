@@ -196,6 +196,7 @@ See [docs/CLI.md](docs/CLI.md) for the full reference.
 | Diagram blocks (PlantUML, Mermaid, Ditaa, Graphviz) | Supported (external tool) |
 | Node replacement and removal (`NodeReplacements`) | Supported |
 | Warning callback (`OnWarning`) | Supported |
+| Dynamic extension loading (`LoadExtension`, `--extensions`) | Supported |
 
 ### Not yet supported
 
@@ -228,6 +229,7 @@ The data flow for the Avalonia viewer is strictly layered: `AST → Layout → A
 | [RENDERERS.md](docs/RENDERERS.md) | Renderer guide (HTML, PDF, DocBook, EPUB) |
 | [PDF_RENDERER.md](docs/PDF_RENDERER.md) | PDF renderer: fonts, images, links, tables, configuration |
 | [EXTENSIONS.md](docs/EXTENSIONS.md) | Processing extensions, custom renderers, and include readers |
+| [DYNAMIC_EXTENSIONS.md](docs/DYNAMIC_EXTENSIONS.md) | Loading extensions from external DLLs at runtime |
 | [DIAGRAMS.md](docs/DIAGRAMS.md) | Diagram block processing with external tools |
 | [COMPATIBILITY.md](docs/COMPATIBILITY.md) | Asciidoctor conformance and known differences |
 | [SECURITY.md](docs/SECURITY.md) | Security considerations for untrusted input |

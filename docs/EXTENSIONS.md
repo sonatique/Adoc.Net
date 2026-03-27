@@ -358,9 +358,29 @@ examples/ExtensionTemplate/
    blocks, inline markup) to ensure your renderer handles the node combinations that appear
    in practice.
 
+## Dynamic Extension Loading (beta.6)
+
+Extensions can be loaded from external DLLs at runtime using `LoadExtension()` and
+`LoadExtensions()`:
+
+```csharp
+engine.LoadExtension("path/to/MyExtension.dll");
+engine.LoadExtensions("./extensions/");  // loads all *.dll files
+```
+
+The CLI supports `--extensions` and `--extension-dir` flags:
+
+```bash
+adocnet input.adoc --extensions my-ext.dll --extension-dir ./plugins/
+```
+
+See [Dynamic Extensions Guide](DYNAMIC_EXTENSIONS.md) for full documentation on
+building, distributing, and loading extension DLLs.
+
 ## See Also
 
 - [Usage Guide](USAGE.md) — parsing and rendering API
 - [Renderers Guide](RENDERERS.md) — built-in renderer options
 - [Diagrams Guide](DIAGRAMS.md) — diagram block processing with external tools
+- [Dynamic Extensions Guide](DYNAMIC_EXTENSIONS.md) — loading extensions from external DLLs
 - [CLI Reference](CLI.md) — command-line tool

@@ -106,6 +106,8 @@ public static class Program
         bool recursive = false;
         string? configPath = null;
         Dictionary<string, string>? attributes = null;
+        List<string>? extensionPaths = null;
+        List<string>? extensionDirs = null;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -235,6 +237,24 @@ public static class Program
                 continue;
             }
 
+            if (arg is "--extensions")
+            {
+                if (i + 1 >= args.Length)
+                    return new CliArgs.Error("Option --extensions requires a DLL path.");
+                extensionPaths ??= new List<string>();
+                extensionPaths.Add(args[++i]);
+                continue;
+            }
+
+            if (arg is "--extension-dir")
+            {
+                if (i + 1 >= args.Length)
+                    return new CliArgs.Error("Option --extension-dir requires a directory path.");
+                extensionDirs ??= new List<string>();
+                extensionDirs.Add(args[++i]);
+                continue;
+            }
+
             if (arg.StartsWith('-'))
                 return new CliArgs.Error($"Unknown option: {arg}");
 
@@ -259,7 +279,9 @@ public static class Program
             outputPath = Path.ChangeExtension(inputPath, FormatExtension(format));
 
         return new CliArgs.Run(inputPath, outputPath, outDir, dumpAst, format, styled, theme, watch, verbose, quiet, recursive, configPath,
-            attributes is { Count: > 0 } ? attributes : null);
+            attributes is { Count: > 0 } ? attributes : null,
+            extensionPaths is { Count: > 0 } ? extensionPaths : null,
+            extensionDirs is { Count: > 0 } ? extensionDirs : null);
     }
 
     private static CliArgs ParsePreviewArguments(string[] args)
@@ -353,6 +375,8 @@ public static class Program
         writer.WriteLine("  -q, --quiet           Suppress non-error output");
         writer.WriteLine("  -r, --recursive       Process input directories recursively");
         writer.WriteLine("  --config <file>       Load project configuration (default: discover adocnet.json)");
+        writer.WriteLine("  --extensions <path>   Load extensions from a DLL file (repeatable)");
+        writer.WriteLine("  --extension-dir <dir> Load all extension DLLs from directory (repeatable)");
         writer.WriteLine("  -h, --help            Show help");
         writer.WriteLine();
         writer.WriteLine("Examples:");
@@ -398,7 +422,9 @@ internal abstract record CliArgs
         bool Quiet = false,
         bool Recursive = false,
         string? ConfigPath = null,
-        IReadOnlyDictionary<string, string>? Attributes = null) : CliArgs;
+        IReadOnlyDictionary<string, string>? Attributes = null,
+        IReadOnlyList<string>? ExtensionPaths = null,
+        IReadOnlyList<string>? ExtensionDirs = null) : CliArgs;
     internal sealed record ShowHelp() : CliArgs;
     internal sealed record Preview(
         string InputPath,

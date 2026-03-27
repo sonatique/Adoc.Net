@@ -3,6 +3,25 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0-beta.6] - 2026-03-27
+
+### Added
+- Dynamic extension loading from external DLLs via `AdocEngine.LoadExtension(path)` and `AdocEngine.LoadExtensions(directory)`
+- `IExtension` optional metadata interface for extension identification (Name, Version)
+- `ExtensionLoader` public utility class for scanning assemblies for processor types
+- CLI `--extensions <path>` flag for loading extension DLLs (repeatable)
+- CLI `--extension-dir <dir>` flag for loading all DLLs from a directory (repeatable)
+- Deterministic load ordering: alphabetical by DLL filename, sorted by type name within each assembly
+- Error handling for invalid assemblies (`BadImageFormatException`), missing dependencies (`ReflectionTypeLoadException`), and types without parameterless constructors
+- Documentation: DYNAMIC_EXTENSIONS.md guide
+
+### Compatibility
+- Zero extensions loaded = output identical to beta.5
+- All new API is additive; no existing public API changed
+- Uses `Assembly.LoadFrom` for netstandard2.0 compatibility (no AssemblyLoadContext)
+- Parser and AST unmodified
+- All existing tests pass without modification
+
 ## [1.0.0-beta.5] - 2026-03-26
 
 ### Added

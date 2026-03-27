@@ -5,6 +5,7 @@ using AdocNet.Converters.DocBook;
 using AdocNet.Converters.Epub;
 using AdocNet.Converters.Html;
 using AdocNet.Converters.Pdf;
+using AdocNet.Extensions;
 using AdocNet.Parser;
 
 namespace AdocNet.Cli;
@@ -137,49 +138,60 @@ internal sealed class ConvertCommand(ConsoleLogger logger)
     {
         var effectiveOutputPath = outputPath ?? run.OutputPath;
 
-        switch (run.Format)
+        IDocumentRenderer renderer = run.Format switch
         {
-            case OutputFormat.Html:
-            {
-                var renderer = new HtmlRenderer();
-                var htmlOptions = run.Styled
-                    ? new HtmlRenderOptions { Theme = run.Theme, FullDocument = true }
-                    : HtmlRenderOptions.Default;
-                using var ms = new MemoryStream();
-                renderer.Render(document, ms, htmlOptions);
-                string htmlOutput = Encoding.UTF8.GetString(ms.ToArray());
-                WriteTextOutput(effectiveOutputPath, htmlOutput);
-                break;
-            }
+            OutputFormat.Html => new HtmlRenderer(),
+            OutputFormat.Pdf => new PdfRenderer(),
+            OutputFormat.DocBook => new DocBookRenderer(),
+            OutputFormat.Epub => new EpubRenderer(),
+            _ => new HtmlRenderer(),
+        };
 
-            case OutputFormat.Pdf:
-            {
-                var pdfRenderer = new PdfRenderer();
-                using var pdfStream = new MemoryStream();
-                pdfRenderer.Render(document, pdfStream, PdfRenderOptions.Default);
-                WriteBinaryOutput(effectiveOutputPath, pdfStream.ToArray());
-                break;
-            }
+        RenderOptions options = run.Format switch
+        {
+            OutputFormat.Html when run.Styled => new HtmlRenderOptions { Theme = run.Theme, FullDocument = true },
+            OutputFormat.Html => HtmlRenderOptions.Default,
+            OutputFormat.Pdf => PdfRenderOptions.Default,
+            _ => RenderOptions.Default,
+        };
 
-            case OutputFormat.DocBook:
-            {
-                var renderer = new DocBookRenderer();
-                using var ms = new MemoryStream();
-                renderer.Render(document, ms, RenderOptions.Default);
-                string output = Encoding.UTF8.GetString(ms.ToArray());
-                WriteTextOutput(effectiveOutputPath, output);
-                break;
-            }
+        // Run extension pipeline if extensions are configured
+        if (run.ExtensionPaths is { Count: > 0 } || run.ExtensionDirs is { Count: > 0 })
+        {
+            var engine = new AdocEngine(renderer, _ => document);
+            engine.OnWarning = msg => Console.Error.WriteLine($"Warning: {msg}");
+            LoadExtensions(engine, run);
 
-            case OutputFormat.Epub:
-            {
-                var renderer = new EpubRenderer();
-                using var ms = new MemoryStream();
-                renderer.Render(document, ms, RenderOptions.Default);
-                WriteBinaryOutput(effectiveOutputPath, ms.ToArray());
-                break;
-            }
+            using var ms = new MemoryStream();
+            engine.Convert("", ms, options);
+            WriteOutput(effectiveOutputPath, ms.ToArray(), run.Format);
         }
+        else
+        {
+            using var ms = new MemoryStream();
+            renderer.Render(document, ms, options);
+            WriteOutput(effectiveOutputPath, ms.ToArray(), run.Format);
+        }
+    }
+
+    private static void LoadExtensions(AdocEngine engine, CliArgs.Run run)
+    {
+        if (run.ExtensionPaths is { Count: > 0 })
+            foreach (var path in run.ExtensionPaths)
+                engine.LoadExtension(path);
+
+        if (run.ExtensionDirs is { Count: > 0 })
+            foreach (var dir in run.ExtensionDirs)
+                engine.LoadExtensions(dir);
+    }
+
+    private static void WriteOutput(string? outputPath, byte[] content, OutputFormat format)
+    {
+        bool isText = format is OutputFormat.Html or OutputFormat.DocBook;
+        if (isText)
+            WriteTextOutput(outputPath, Encoding.UTF8.GetString(content));
+        else
+            WriteBinaryOutput(outputPath, content);
     }
 
     private static void WriteTextOutput(string? outputPath, string content)
