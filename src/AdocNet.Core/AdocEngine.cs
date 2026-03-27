@@ -77,6 +77,37 @@ public sealed class AdocEngine
     }
 
     /// <summary>
+    /// Loads extensions from a single assembly file. Discovers types implementing
+    /// <see cref="IDocumentProcessor"/>, <see cref="IBlockProcessor"/>, or <see cref="IInlineProcessor"/>
+    /// with parameterless constructors, instantiates them, and registers them.
+    /// Must be called before the first <see cref="Convert"/> call.
+    /// </summary>
+    /// <param name="assemblyPath">Path to the extension assembly DLL.</param>
+    /// <returns>This engine instance for fluent chaining.</returns>
+    public AdocEngine LoadExtension(string assemblyPath)
+    {
+        ThrowIfFrozen();
+        var extensions = ExtensionLoader.LoadAssembly(assemblyPath, OnWarning);
+        RegisterExtensions(extensions);
+        return this;
+    }
+
+    /// <summary>
+    /// Loads extensions from all <c>*.dll</c> files in the specified directory.
+    /// DLLs are loaded in alphabetical order by filename for deterministic behavior.
+    /// Must be called before the first <see cref="Convert"/> call.
+    /// </summary>
+    /// <param name="directoryPath">Path to the directory containing extension DLLs.</param>
+    /// <returns>This engine instance for fluent chaining.</returns>
+    public AdocEngine LoadExtensions(string directoryPath)
+    {
+        ThrowIfFrozen();
+        var extensions = ExtensionLoader.LoadDirectory(directoryPath, OnWarning);
+        RegisterExtensions(extensions);
+        return this;
+    }
+
+    /// <summary>
     /// Parses the AsciiDoc <paramref name="input"/> and writes the rendered output to <paramref name="output"/>.
     /// </summary>
     /// <param name="input">The AsciiDoc source text.</param>
@@ -107,6 +138,19 @@ public sealed class AdocEngine
     {
         var text = File.ReadAllText(inputPath);
         Convert(text, output, options);
+    }
+
+    private void RegisterExtensions(List<object> extensions)
+    {
+        foreach (var instance in extensions)
+        {
+            if (instance is IDocumentProcessor dp)
+                _documentProcessors.Add(dp);
+            if (instance is IBlockProcessor bp)
+                _blockProcessors.Add(bp);
+            if (instance is IInlineProcessor ip)
+                _inlineProcessors.Add(ip);
+        }
     }
 
     private void ThrowIfFrozen()

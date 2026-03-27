@@ -15,6 +15,8 @@
   <Folder Name="/tests/">
     <Project Path="tests/AdocNet.Tests/AdocNet.Tests.csproj" />
     <Project Path="tests/AdocNet.Layout.Tests/AdocNet.Layout.Tests.csproj" />
+    <Project Path="tests/AdocNet.TestExtension/AdocNet.TestExtension.csproj" />
+    <Project Path="tests/AdocNet.TestEmptyExtension/AdocNet.TestEmptyExtension.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="src/AdocNet.Cli/AdocNet.Cli.csproj" />
