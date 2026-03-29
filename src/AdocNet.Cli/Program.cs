@@ -36,6 +36,12 @@ public static class Program
             return ExitUsageError;
         }
 
+        if (parsed is CliArgs.Ext extArgs)
+        {
+            var extCmd = new ExtensionCommands();
+            return extCmd.Execute(extArgs);
+        }
+
         if (parsed is CliArgs.Preview previewArgs)
         {
             var previewLogger = new ConsoleLogger(Console.Out, Console.Error, verbose: true, quiet: false);
@@ -92,6 +98,9 @@ public static class Program
         if (args.Length > 0 && args[0] == "preview")
             return ParsePreviewArguments(args);
 
+        if (args.Length > 0 && args[0] == "ext")
+            return ExtensionCommands.ParseExtArguments(args);
+
         string? inputPath = null;
         string? outputPath = null;
         string? outDir = null;
@@ -108,6 +117,7 @@ public static class Program
         Dictionary<string, string>? attributes = null;
         List<string>? extensionPaths = null;
         List<string>? extensionDirs = null;
+        bool noAutoExtensions = false;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -255,6 +265,12 @@ public static class Program
                 continue;
             }
 
+            if (arg is "--no-auto-extensions")
+            {
+                noAutoExtensions = true;
+                continue;
+            }
+
             if (arg.StartsWith('-'))
                 return new CliArgs.Error($"Unknown option: {arg}");
 
@@ -281,7 +297,8 @@ public static class Program
         return new CliArgs.Run(inputPath, outputPath, outDir, dumpAst, format, styled, theme, watch, verbose, quiet, recursive, configPath,
             attributes is { Count: > 0 } ? attributes : null,
             extensionPaths is { Count: > 0 } ? extensionPaths : null,
-            extensionDirs is { Count: > 0 } ? extensionDirs : null);
+            extensionDirs is { Count: > 0 } ? extensionDirs : null,
+            noAutoExtensions);
     }
 
     private static CliArgs ParsePreviewArguments(string[] args)
@@ -377,6 +394,7 @@ public static class Program
         writer.WriteLine("  --config <file>       Load project configuration (default: discover adocnet.json)");
         writer.WriteLine("  --extensions <path>   Load extensions from a DLL file (repeatable)");
         writer.WriteLine("  --extension-dir <dir> Load all extension DLLs from directory (repeatable)");
+        writer.WriteLine("  --no-auto-extensions  Skip loading installed extensions from ~/.adocnet/extensions/");
         writer.WriteLine("  -h, --help            Show help");
         writer.WriteLine();
         writer.WriteLine("Examples:");
@@ -392,6 +410,11 @@ public static class Program
             writer.WriteLine();
             writer.WriteLine("Preview:");
             writer.WriteLine("  adocnet preview <path> [--port N] [--no-open] [--theme name] [-r]");
+            writer.WriteLine();
+            writer.WriteLine("Extension management:");
+            writer.WriteLine("  adocnet ext list              List installed extensions");
+            writer.WriteLine("  adocnet ext install <path>    Install extension from directory [--force]");
+            writer.WriteLine("  adocnet ext remove <name>     Remove an installed extension");
         }
     }
 }
@@ -424,7 +447,8 @@ internal abstract record CliArgs
         string? ConfigPath = null,
         IReadOnlyDictionary<string, string>? Attributes = null,
         IReadOnlyList<string>? ExtensionPaths = null,
-        IReadOnlyList<string>? ExtensionDirs = null) : CliArgs;
+        IReadOnlyList<string>? ExtensionDirs = null,
+        bool NoAutoExtensions = false) : CliArgs;
     internal sealed record ShowHelp() : CliArgs;
     internal sealed record Preview(
         string InputPath,
@@ -434,4 +458,11 @@ internal abstract record CliArgs
         HtmlTheme Theme = HtmlTheme.Asciidoctor,
         bool Recursive = false) : CliArgs;
     internal sealed record Error(string Message) : CliArgs;
+
+    internal abstract record Ext() : CliArgs
+    {
+        internal sealed record ExtList() : Ext;
+        internal sealed record ExtInstall(string SourcePath, bool Force = false) : Ext;
+        internal sealed record ExtRemove(string Name) : Ext;
+    }
 }

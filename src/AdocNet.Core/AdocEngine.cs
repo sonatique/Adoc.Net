@@ -108,6 +108,35 @@ public sealed class AdocEngine
     }
 
     /// <summary>
+    /// Loads extensions from the default extension directory (<c>~/.adocnet/extensions/</c>).
+    /// Each subdirectory must contain an <c>extension.json</c> manifest.
+    /// Must be called before the first <see cref="Convert"/> call.
+    /// </summary>
+    /// <returns>This engine instance for fluent chaining.</returns>
+    public AdocEngine LoadInstalledExtensions()
+    {
+        ThrowIfFrozen();
+        var extensions = ExtensionDirectoryLoader.LoadInstalledExtensions(null, OnWarning);
+        RegisterExtensions(extensions);
+        return this;
+    }
+
+    /// <summary>
+    /// Loads extensions from a custom extension directory.
+    /// Each subdirectory must contain an <c>extension.json</c> manifest.
+    /// Must be called before the first <see cref="Convert"/> call.
+    /// </summary>
+    /// <param name="extensionsRootDir">Path to the directory containing extension subdirectories.</param>
+    /// <returns>This engine instance for fluent chaining.</returns>
+    public AdocEngine LoadInstalledExtensions(string extensionsRootDir)
+    {
+        ThrowIfFrozen();
+        var extensions = ExtensionDirectoryLoader.LoadInstalledExtensions(extensionsRootDir, OnWarning);
+        RegisterExtensions(extensions);
+        return this;
+    }
+
+    /// <summary>
     /// Parses the AsciiDoc <paramref name="input"/> and writes the rendered output to <paramref name="output"/>.
     /// </summary>
     /// <param name="input">The AsciiDoc source text.</param>

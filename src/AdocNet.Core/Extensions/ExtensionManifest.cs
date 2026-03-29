@@ -1,0 +1,133 @@
+namespace AdocNet.Extensions;
+
+/// <summary>
+/// Represents the parsed contents of an <c>extension.json</c> manifest file
+/// that describes a packaged extension in the extension directory.
+/// </summary>
+public sealed class ExtensionManifest
+{
+    /// <summary>Gets the unique name identifier for the extension.</summary>
+    public string Name { get; }
+
+    /// <summary>Gets the extension version string (e.g. "1.0.0").</summary>
+    public string Version { get; }
+
+    /// <summary>Gets a short human-readable description of the extension.</summary>
+    public string Description { get; }
+
+    /// <summary>Gets the relative path to the entry-point DLL within the extension folder.</summary>
+    public string Entry { get; }
+
+    /// <summary>Gets the minimum compatible AdocNet version, or null if no minimum is specified.</summary>
+    public string? MinAdocNetVersion { get; }
+
+    /// <summary>Gets the full path to the extension directory containing this manifest.</summary>
+    public string DirectoryPath { get; }
+
+    private ExtensionManifest(string name, string version, string description, string entry, string? minAdocNetVersion, string directoryPath)
+    {
+        Name = name;
+        Version = version;
+        Description = description;
+        Entry = entry;
+        MinAdocNetVersion = minAdocNetVersion;
+        DirectoryPath = directoryPath;
+    }
+
+    /// <summary>
+    /// Loads and parses an <c>extension.json</c> manifest from the specified extension directory.
+    /// Returns null if the manifest is missing, corrupt, or fails validation.
+    /// </summary>
+    /// <param name="extensionDirectory">Full path to the extension directory containing <c>extension.json</c>.</param>
+    /// <param name="onWarning">Optional callback for non-fatal warnings.</param>
+    /// <returns>A validated <see cref="ExtensionManifest"/>, or null if loading failed.</returns>
+    public static ExtensionManifest? Load(string extensionDirectory, Action<string>? onWarning)
+    {
+        if (extensionDirectory is null)
+            throw new ArgumentNullException(nameof(extensionDirectory));
+
+        var dirName = Path.GetFileName(extensionDirectory);
+        var manifestPath = Path.Combine(extensionDirectory, "extension.json");
+
+        if (!File.Exists(manifestPath))
+        {
+            onWarning?.Invoke($"Extension '{dirName}': missing extension.json, skipping");
+            return null;
+        }
+
+        string json;
+        try
+        {
+            json = File.ReadAllText(manifestPath);
+        }
+        catch (Exception ex)
+        {
+            onWarning?.Invoke($"Extension '{dirName}': failed to read extension.json: {ex.Message}");
+            return null;
+        }
+
+        return Parse(json, extensionDirectory, onWarning);
+    }
+
+    /// <summary>
+    /// Parses a JSON string as an extension manifest.
+    /// Returns null if the JSON is invalid or fails validation.
+    /// </summary>
+    /// <param name="json">The JSON content of an <c>extension.json</c> file.</param>
+    /// <param name="extensionDirectory">Full path to the extension directory.</param>
+    /// <param name="onWarning">Optional callback for non-fatal warnings.</param>
+    /// <returns>A validated <see cref="ExtensionManifest"/>, or null if parsing failed.</returns>
+    public static ExtensionManifest? Parse(string json, string extensionDirectory, Action<string>? onWarning)
+    {
+        if (json is null)
+            throw new ArgumentNullException(nameof(json));
+        if (extensionDirectory is null)
+            throw new ArgumentNullException(nameof(extensionDirectory));
+
+        var dirName = Path.GetFileName(extensionDirectory);
+
+        Dictionary<string, string> fields;
+        try
+        {
+            fields = SimpleJsonParser.ParseFlatObject(json);
+        }
+        catch (FormatException ex)
+        {
+            onWarning?.Invoke($"Extension '{dirName}': invalid extension.json: {ex.Message}");
+            return null;
+        }
+
+        if (fields.Count == 0)
+        {
+            onWarning?.Invoke($"Extension '{dirName}': extension.json is empty or null");
+            return null;
+        }
+
+        fields.TryGetValue("name", out var name);
+        fields.TryGetValue("version", out var version);
+        fields.TryGetValue("description", out var description);
+        fields.TryGetValue("entry", out var entry);
+        fields.TryGetValue("minAdocNetVersion", out var minVersion);
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            onWarning?.Invoke($"Extension '{dirName}': manifest missing required 'name' field");
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(entry))
+        {
+            onWarning?.Invoke($"Extension '{dirName}': manifest missing required 'entry' field");
+            return null;
+        }
+
+        return new ExtensionManifest(
+            name: name!.Trim(),
+            version: version?.Trim() ?? "0.0.0",
+            description: description?.Trim() ?? "",
+            entry: entry!.Trim(),
+            minAdocNetVersion: string.IsNullOrWhiteSpace(minVersion) ? null : minVersion!.Trim(),
+            directoryPath: extensionDirectory
+        );
+    }
+}

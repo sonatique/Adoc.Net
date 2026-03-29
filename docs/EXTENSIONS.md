@@ -377,10 +377,19 @@ adocnet input.adoc --extensions my-ext.dll --extension-dir ./plugins/
 See [Dynamic Extensions Guide](DYNAMIC_EXTENSIONS.md) for full documentation on
 building, distributing, and loading extension DLLs.
 
+## Extension Packaging (beta.7)
+
+Extensions can be packaged with an `extension.json` manifest and installed to
+`~/.adocnet/extensions/` for automatic loading. Use `adocnet ext install` to
+install, `adocnet ext list` to view, and `adocnet ext remove` to uninstall.
+
+See [Extension Packaging Guide](EXTENSION_PACKAGING.md) for full documentation.
+
 ## See Also
 
 - [Usage Guide](USAGE.md) — parsing and rendering API
 - [Renderers Guide](RENDERERS.md) — built-in renderer options
 - [Diagrams Guide](DIAGRAMS.md) — diagram block processing with external tools
 - [Dynamic Extensions Guide](DYNAMIC_EXTENSIONS.md) — loading extensions from external DLLs
+- [Extension Packaging Guide](EXTENSION_PACKAGING.md) — manifest-based packaging and installation
 - [CLI Reference](CLI.md) — command-line tool

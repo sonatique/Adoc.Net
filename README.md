@@ -197,6 +197,7 @@ See [docs/CLI.md](docs/CLI.md) for the full reference.
 | Node replacement and removal (`NodeReplacements`) | Supported |
 | Warning callback (`OnWarning`) | Supported |
 | Dynamic extension loading (`LoadExtension`, `--extensions`) | Supported |
+| Extension packaging (`ext install`, `ext list`, `ext remove`) | Supported |
 
 ### Not yet supported
 
@@ -230,6 +231,7 @@ The data flow for the Avalonia viewer is strictly layered: `AST → Layout → A
 | [PDF_RENDERER.md](docs/PDF_RENDERER.md) | PDF renderer: fonts, images, links, tables, configuration |
 | [EXTENSIONS.md](docs/EXTENSIONS.md) | Processing extensions, custom renderers, and include readers |
 | [DYNAMIC_EXTENSIONS.md](docs/DYNAMIC_EXTENSIONS.md) | Loading extensions from external DLLs at runtime |
+| [EXTENSION_PACKAGING.md](docs/EXTENSION_PACKAGING.md) | Extension packaging, installation, and automatic loading |
 | [DIAGRAMS.md](docs/DIAGRAMS.md) | Diagram block processing with external tools |
 | [COMPATIBILITY.md](docs/COMPATIBILITY.md) | Asciidoctor conformance and known differences |
 | [SECURITY.md](docs/SECURITY.md) | Security considerations for untrusted input |
