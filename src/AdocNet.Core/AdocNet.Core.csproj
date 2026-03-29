@@ -20,4 +20,5 @@
   <ItemGroup>
     <ProjectReference Include="..\AdocNet.Ast\AdocNet.Ast.csproj" />
   </ItemGroup>
+
 </Project>

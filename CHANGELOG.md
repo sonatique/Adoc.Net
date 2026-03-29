@@ -3,6 +3,29 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0-beta.7] - 2026-03-30
+
+### Added
+- Extension packaging with `extension.json` manifest format (name, version, description, entry, minAdocNetVersion)
+- Standard extension directory at `~/.adocnet/extensions/` with automatic loading
+- `ExtensionManifest` model for parsing and validating manifest files
+- `ExtensionDirectoryLoader` for scanning extension directories and loading entry DLLs
+- `AdocEngine.LoadInstalledExtensions()` for manifest-based extension loading (default and custom directories)
+- Version compatibility checking: `minAdocNetVersion` validated against running AdocNet version
+- CLI `adocnet ext list` — list installed extensions with name, version, and description
+- CLI `adocnet ext install <path>` — install extension from directory (`--force` to overwrite)
+- CLI `adocnet ext remove <name>` — remove an installed extension
+- CLI `--no-auto-extensions` flag to skip automatic loading of installed extensions
+- Minimal JSON parser (`SimpleJsonParser`) for manifest files — zero external NuGet dependencies
+- Documentation: EXTENSION_PACKAGING.md guide
+
+### Compatibility
+- Zero installed extensions = output identical to beta.6
+- All new API is additive; no existing public API changed
+- Core maintains zero external NuGet dependencies (hand-written JSON parser avoids System.Text.Json transitive conflicts)
+- Parser and AST unmodified
+- All existing tests pass without modification
+
 ## [1.0.0-beta.6] - 2026-03-27
 
 ### Added

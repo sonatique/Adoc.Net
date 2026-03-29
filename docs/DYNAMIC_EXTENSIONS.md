@@ -201,8 +201,18 @@ dependencies from:
 Extensions needing constructor arguments should be registered manually via the
 `Register*` methods instead of dynamic loading.
 
+## Manifest-Based Loading (beta.7)
+
+For a more structured approach, extensions can be packaged with an `extension.json`
+manifest and installed to `~/.adocnet/extensions/`. This enables automatic loading
+via `LoadInstalledExtensions()` and CLI management with `adocnet ext` commands.
+
+See [Extension Packaging Guide](EXTENSION_PACKAGING.md) for full documentation on
+manifest format, installation, and automatic loading.
+
 ## See Also
 
 - [Extension Developer Guide](EXTENSIONS.md) — writing custom renderers and processors
+- [Extension Packaging Guide](EXTENSION_PACKAGING.md) — manifest-based packaging and installation
 - [Diagrams Guide](DIAGRAMS.md) — diagram block processing
 - [CLI Reference](CLI.md) — command-line tool

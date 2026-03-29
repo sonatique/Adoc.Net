@@ -155,11 +155,18 @@ internal sealed class ConvertCommand(ConsoleLogger logger)
             _ => RenderOptions.Default,
         };
 
-        // Run extension pipeline if extensions are configured
-        if (run.ExtensionPaths is { Count: > 0 } || run.ExtensionDirs is { Count: > 0 })
+        // Determine if any extensions should be loaded
+        bool hasAutoExtensions = !run.NoAutoExtensions;
+        bool hasExplicitExtensions = run.ExtensionPaths is { Count: > 0 } || run.ExtensionDirs is { Count: > 0 };
+
+        if (hasAutoExtensions || hasExplicitExtensions)
         {
             var engine = new AdocEngine(renderer, _ => document);
             engine.OnWarning = msg => Console.Error.WriteLine($"Warning: {msg}");
+
+            if (hasAutoExtensions)
+                engine.LoadInstalledExtensions();
+
             LoadExtensions(engine, run);
 
             using var ms = new MemoryStream();
