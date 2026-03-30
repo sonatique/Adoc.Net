@@ -385,6 +385,29 @@ install, `adocnet ext list` to view, and `adocnet ext remove` to uninstall.
 
 See [Extension Packaging Guide](EXTENSION_PACKAGING.md) for full documentation.
 
+## Extension Registry (beta.8)
+
+Installed extensions are tracked in a local registry (`~/.adocnet/registry.json`)
+for fast querying. Use `adocnet ext info <name>` for detailed extension info,
+`adocnet ext search <keyword>` to find extensions, and the programmatic API
+(`AdocEngine.GetInstalledExtensions()`, `AdocEngine.FindExtension()`) for
+registry queries from code.
+
+Extensions can also declare dependencies on other extensions:
+
+```json
+{
+  "name": "diagram",
+  "entry": "DiagramExtension.dll",
+  "dependencies": ["syntax-highlight >= 1.0.0"]
+}
+```
+
+Dependencies are validated on install with warnings for missing or incompatible
+versions, but never block loading.
+
+See [Extension Registry Guide](EXTENSION_REGISTRY.md) for full documentation.
+
 ## See Also
 
 - [Usage Guide](USAGE.md) — parsing and rendering API
@@ -392,4 +415,5 @@ See [Extension Packaging Guide](EXTENSION_PACKAGING.md) for full documentation.
 - [Diagrams Guide](DIAGRAMS.md) — diagram block processing with external tools
 - [Dynamic Extensions Guide](DYNAMIC_EXTENSIONS.md) — loading extensions from external DLLs
 - [Extension Packaging Guide](EXTENSION_PACKAGING.md) — manifest-based packaging and installation
+- [Extension Registry Guide](EXTENSION_REGISTRY.md) — registry, search, and dependency validation
 - [CLI Reference](CLI.md) — command-line tool

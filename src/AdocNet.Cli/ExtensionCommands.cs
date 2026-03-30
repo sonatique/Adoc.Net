@@ -3,7 +3,7 @@ using AdocNet.Extensions;
 namespace AdocNet.Cli;
 
 /// <summary>
-/// Implements the <c>adocnet ext list|install|remove</c> subcommands.
+/// Implements the <c>adocnet ext list|install|remove|info|search</c> subcommands.
 /// </summary>
 internal sealed class ExtensionCommands
 {
@@ -13,7 +13,7 @@ internal sealed class ExtensionCommands
     internal static CliArgs ParseExtArguments(string[] args)
     {
         if (args.Length < 2)
-            return new CliArgs.Error("Usage: adocnet ext <list|install|remove> [args]");
+            return new CliArgs.Error("Usage: adocnet ext <list|install|remove|info|search> [args]");
 
         var action = args[1];
 
@@ -53,8 +53,26 @@ internal sealed class ExtensionCommands
                 return new CliArgs.Ext.ExtRemove(args[2]);
             }
 
+            case "info":
+            {
+                if (args.Length < 3)
+                    return new CliArgs.Error("Usage: adocnet ext info <name>");
+                if (args.Length > 3)
+                    return new CliArgs.Error("Usage: adocnet ext info <name>");
+                return new CliArgs.Ext.ExtInfo(args[2]);
+            }
+
+            case "search":
+            {
+                if (args.Length < 3)
+                    return new CliArgs.Error("Usage: adocnet ext search <keyword>");
+                if (args.Length > 3)
+                    return new CliArgs.Error("Usage: adocnet ext search <keyword>");
+                return new CliArgs.Ext.ExtSearch(args[2]);
+            }
+
             default:
-                return new CliArgs.Error($"Unknown ext command: {action}. Available: list, install, remove.");
+                return new CliArgs.Error($"Unknown ext command: {action}. Available: list, install, remove, info, search.");
         }
     }
 
@@ -63,36 +81,23 @@ internal sealed class ExtensionCommands
         CliArgs.Ext.ExtList => ExecuteList(),
         CliArgs.Ext.ExtInstall install => ExecuteInstall(install.SourcePath, install.Force),
         CliArgs.Ext.ExtRemove remove => ExecuteRemove(remove.Name),
+        CliArgs.Ext.ExtInfo info => ExecuteInfo(info.Name),
+        CliArgs.Ext.ExtSearch search => ExecuteSearch(search.Keyword),
         _ => ExitError,
     };
 
     private static int ExecuteList()
     {
-        var extensionsDir = ExtensionDirectoryLoader.GetDefaultExtensionDirectory();
-
-        if (!Directory.Exists(extensionsDir))
-        {
-            Console.WriteLine("No extensions installed.");
-            return ExitSuccess;
-        }
-
-        var subdirs = Directory.GetDirectories(extensionsDir);
-        Array.Sort(subdirs, (a, b) => string.Compare(
-            Path.GetFileName(a), Path.GetFileName(b), StringComparison.Ordinal));
-
-        var manifests = new List<ExtensionManifest>();
-        foreach (var subdir in subdirs)
-        {
-            var manifest = ExtensionManifest.Load(subdir, msg => Console.Error.WriteLine($"Warning: {msg}"));
-            if (manifest is not null)
-                manifests.Add(manifest);
-        }
+        var registry = ExtensionRegistry.Load(null, msg => Console.Error.WriteLine($"Warning: {msg}"));
+        var manifests = registry.GetAll();
 
         if (manifests.Count == 0)
         {
             Console.WriteLine("No extensions installed.");
             return ExitSuccess;
         }
+
+        var extensionsDir = ExtensionDirectoryLoader.GetDefaultExtensionDirectory();
 
         // Calculate column widths
         var nameWidth = Math.Max(4, manifests.Max(m => m.Name.Length));
@@ -155,6 +160,13 @@ internal sealed class ExtensionCommands
         Directory.CreateDirectory(targetDir);
         CopyDirectory(fullSource, targetDir);
 
+        // Update registry
+        var registry = ExtensionRegistry.Load(null, msg => Console.Error.WriteLine($"Warning: {msg}"));
+        var info = ExtensionInfo.FromManifest(
+            ExtensionManifest.Load(targetDir, null) ?? manifest);
+        registry.Add(info);
+        registry.Save();
+
         Console.WriteLine($"Installed extension '{manifest.Name}' v{manifest.Version}.");
         return ExitSuccess;
     }
@@ -171,7 +183,77 @@ internal sealed class ExtensionCommands
         }
 
         Directory.Delete(targetDir, recursive: true);
+
+        // Update registry
+        var registry = ExtensionRegistry.Load(null, msg => Console.Error.WriteLine($"Warning: {msg}"));
+        registry.Remove(name);
+        registry.Save();
+
         Console.WriteLine($"Removed extension '{name}'.");
+        return ExitSuccess;
+    }
+
+    private static int ExecuteInfo(string name)
+    {
+        var registry = ExtensionRegistry.Load(null, msg => Console.Error.WriteLine($"Warning: {msg}"));
+        var info = registry.Find(name);
+
+        if (info is null)
+        {
+            Console.Error.WriteLine($"Error: Extension '{name}' is not installed.");
+            return ExitError;
+        }
+
+        Console.WriteLine($"Extension: {info.Name}");
+        Console.WriteLine($"Version:   {info.Version}");
+        Console.WriteLine($"Description: {info.Description}");
+        Console.WriteLine($"Path:      {info.InstalledPath}");
+
+        // Read additional details from manifest on disk
+        var manifest = ExtensionManifest.Load(info.InstalledPath, null);
+        if (manifest is not null)
+        {
+            Console.WriteLine($"Entry:     {manifest.Entry}");
+            if (manifest.MinAdocNetVersion is not null)
+                Console.WriteLine($"Min AdocNet: {manifest.MinAdocNetVersion}");
+        }
+
+        if (info.Dependencies.Count > 0)
+        {
+            Console.WriteLine("Dependencies:");
+            foreach (var dep in info.Dependencies)
+                Console.WriteLine($"  - {dep}");
+        }
+
+        return ExitSuccess;
+    }
+
+    private static int ExecuteSearch(string keyword)
+    {
+        var registry = ExtensionRegistry.Load(null, msg => Console.Error.WriteLine($"Warning: {msg}"));
+        var matches = registry.Search(keyword);
+
+        if (matches.Count == 0)
+        {
+            Console.WriteLine($"No extensions match '{keyword}'.");
+            return ExitSuccess;
+        }
+
+        var nameWidth = Math.Max(4, matches.Max(m => m.Name.Length));
+        var versionWidth = Math.Max(7, matches.Max(m => m.Version.Length));
+
+        Console.WriteLine($"Search results for \"{keyword}\":");
+        Console.WriteLine();
+        Console.WriteLine($"  {"Name".PadRight(nameWidth)}  {"Version".PadRight(versionWidth)}  Description");
+        Console.WriteLine($"  {new string('-', nameWidth)}  {new string('-', versionWidth)}  -----------");
+
+        foreach (var m in matches)
+        {
+            Console.WriteLine($"  {m.Name.PadRight(nameWidth)}  {m.Version.PadRight(versionWidth)}  {m.Description}");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine($"{matches.Count} extension(s) matched.");
         return ExitSuccess;
     }
 

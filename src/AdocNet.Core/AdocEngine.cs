@@ -169,6 +169,38 @@ public sealed class AdocEngine
         Convert(text, output, options);
     }
 
+    /// <summary>
+    /// Returns metadata for all installed extensions from the registry.
+    /// Does not load or register any extensions — read-only query.
+    /// </summary>
+    /// <param name="extensionsDir">Custom registry directory, or null for default (~/.adocnet/).</param>
+    /// <param name="onWarning">Optional callback for non-fatal warnings.</param>
+    /// <returns>List of installed extension metadata, sorted by name.</returns>
+    public static IReadOnlyList<ExtensionInfo> GetInstalledExtensions(
+        string? extensionsDir = null,
+        Action<string>? onWarning = null)
+    {
+        var registry = ExtensionRegistry.Load(extensionsDir, onWarning);
+        return registry.GetAll();
+    }
+
+    /// <summary>
+    /// Finds a specific installed extension by name from the registry.
+    /// Does not load or register the extension — read-only query.
+    /// </summary>
+    /// <param name="name">Extension name to find.</param>
+    /// <param name="extensionsDir">Custom registry directory, or null for default (~/.adocnet/).</param>
+    /// <param name="onWarning">Optional callback for non-fatal warnings.</param>
+    /// <returns>Extension info if found, null otherwise.</returns>
+    public static ExtensionInfo? FindExtension(
+        string name,
+        string? extensionsDir = null,
+        Action<string>? onWarning = null)
+    {
+        var registry = ExtensionRegistry.Load(extensionsDir, onWarning);
+        return registry.Find(name);
+    }
+
     private void RegisterExtensions(List<object> extensions)
     {
         foreach (var instance in extensions)

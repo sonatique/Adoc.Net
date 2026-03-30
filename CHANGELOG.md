@@ -3,6 +3,35 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0-beta.8] - 2026-03-30
+
+### Added
+- Extension registry system: local `registry.json` index of installed extensions for fast querying
+- `ExtensionInfo` model representing installed extension metadata (name, version, description, path, dependencies)
+- `ExtensionRegistry` class with Load, Save, Add, Remove, Find, Search, and Rebuild operations
+- Atomic registry writes (temp file + rename) to prevent corruption
+- Automatic registry rebuild when `registry.json` is missing, corrupt, or out of sync with filesystem
+- `DependencySpec` parser for dependency strings (`"name >= version"`)
+- `DependencyValidator` for checking extension dependencies against registry (warn-only, never blocks)
+- `dependencies` field in `extension.json` manifest (JSON array or comma-separated string)
+- `AdocEngine.GetInstalledExtensions()` — static read-only query for installed extension metadata
+- `AdocEngine.FindExtension(name)` — static read-only lookup by extension name
+- CLI `adocnet ext info <name>` — show detailed info for an installed extension
+- CLI `adocnet ext search <keyword>` — search installed extensions by name or description
+- CLI `ext list` now reads from registry for faster listing
+- CLI `ext install` and `ext remove` now update the registry automatically
+- Extended `SimpleJsonParser` with `ParseObjectWithArray` and `ParseStringArray` methods
+- `SimpleJsonWriter` for deterministic registry JSON serialization
+- Documentation: EXTENSION_REGISTRY.md guide
+
+### Compatibility
+- Zero installed extensions = output identical to beta.7
+- All new API is additive; no existing public API changed
+- Dependency validation is advisory only — warns but never blocks loading
+- Core maintains zero external NuGet dependencies
+- Parser and AST unmodified
+- All existing tests pass without modification
+
 ## [1.0.0-beta.7] - 2026-03-30
 
 ### Added
