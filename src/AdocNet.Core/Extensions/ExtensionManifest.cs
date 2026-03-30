@@ -24,7 +24,14 @@ public sealed class ExtensionManifest
     /// <summary>Gets the full path to the extension directory containing this manifest.</summary>
     public string DirectoryPath { get; }
 
-    private ExtensionManifest(string name, string version, string description, string entry, string? minAdocNetVersion, string directoryPath)
+    /// <summary>
+    /// Gets the dependency specifications for this extension.
+    /// Each entry is a string like "name >= version" or just "name".
+    /// </summary>
+    public IReadOnlyList<string> Dependencies { get; }
+
+    private ExtensionManifest(string name, string version, string description, string entry,
+        string? minAdocNetVersion, string directoryPath, IReadOnlyList<string> dependencies)
     {
         Name = name;
         Version = version;
@@ -32,6 +39,7 @@ public sealed class ExtensionManifest
         Entry = entry;
         MinAdocNetVersion = minAdocNetVersion;
         DirectoryPath = directoryPath;
+        Dependencies = dependencies;
     }
 
     /// <summary>
@@ -108,6 +116,7 @@ public sealed class ExtensionManifest
         fields.TryGetValue("description", out var description);
         fields.TryGetValue("entry", out var entry);
         fields.TryGetValue("minAdocNetVersion", out var minVersion);
+        fields.TryGetValue("dependencies", out var depsString);
 
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -121,13 +130,53 @@ public sealed class ExtensionManifest
             return null;
         }
 
+        // Parse dependencies: either a comma-separated string or a JSON array
+        IReadOnlyList<string> dependencies;
+        if (depsString is not null)
+        {
+            // Dependencies was a flat string (comma-separated)
+            dependencies = ExtensionInfo.ParseDependencies(depsString);
+        }
+        else
+        {
+            // Try parsing as a JSON array (ParseFlatObject skips arrays)
+            dependencies = ParseDependenciesArray(json);
+        }
+
         return new ExtensionManifest(
             name: name!.Trim(),
             version: version?.Trim() ?? "0.0.0",
             description: description?.Trim() ?? "",
             entry: entry!.Trim(),
             minAdocNetVersion: string.IsNullOrWhiteSpace(minVersion) ? null : minVersion!.Trim(),
-            directoryPath: extensionDirectory
+            directoryPath: extensionDirectory,
+            dependencies: dependencies
         );
+    }
+
+    private static IReadOnlyList<string> ParseDependenciesArray(string json)
+    {
+        // Find "dependencies" key and try to parse its value as a string array
+        var key = "\"dependencies\"";
+        var idx = json.IndexOf(key, StringComparison.Ordinal);
+        if (idx < 0)
+            return Array.Empty<string>();
+
+        idx += key.Length;
+        // Skip whitespace and colon
+        while (idx < json.Length && (char.IsWhiteSpace(json[idx]) || json[idx] == ':'))
+            idx++;
+
+        if (idx >= json.Length || json[idx] != '[')
+            return Array.Empty<string>();
+
+        try
+        {
+            return SimpleJsonParser.ParseStringArray(json, idx).ToArray();
+        }
+        catch (FormatException)
+        {
+            return Array.Empty<string>();
+        }
     }
 }

@@ -200,6 +200,238 @@ internal static class SimpleJsonParser
         return i;
     }
 
+    /// <summary>
+    /// Parses a JSON object containing string properties and one named array of flat objects.
+    /// Returns the top-level string properties as metadata and the array entries as a list.
+    /// </summary>
+    /// <param name="json">The JSON string to parse.</param>
+    /// <param name="arrayKey">The key whose value is an array of flat objects.</param>
+    /// <returns>Tuple of metadata (string fields) and items (list of flat-object dicts).</returns>
+    /// <exception cref="FormatException">Thrown if the JSON is malformed.</exception>
+    internal static (Dictionary<string, string> metadata, List<Dictionary<string, string>> items)
+        ParseObjectWithArray(string json, string arrayKey)
+    {
+        var metadata = new Dictionary<string, string>(StringComparer.Ordinal);
+        var items = new List<Dictionary<string, string>>();
+
+        var i = SkipWhitespace(json, 0);
+        if (i >= json.Length || json[i] != '{')
+            throw new FormatException("Expected '{' at start of JSON object");
+        i = SkipWhitespace(json, i + 1);
+
+        if (i < json.Length && json[i] == '}')
+            return (metadata, items);
+
+        while (i < json.Length)
+        {
+            i = SkipWhitespace(json, i);
+            if (i >= json.Length)
+                throw new FormatException("Unexpected end of JSON");
+
+            if (json[i] != '"')
+                throw new FormatException($"Expected '\"' for key at position {i}");
+
+            var key = ReadString(json, ref i);
+
+            i = SkipWhitespace(json, i);
+            if (i >= json.Length || json[i] != ':')
+                throw new FormatException($"Expected ':' after key at position {i}");
+            i = SkipWhitespace(json, i + 1);
+
+            if (i >= json.Length)
+                throw new FormatException("Unexpected end of JSON after ':'");
+
+            if (key == arrayKey && json[i] == '[')
+            {
+                i = ParseArrayOfFlatObjects(json, i, items);
+            }
+            else if (json[i] == '"')
+            {
+                var value = ReadString(json, ref i);
+                metadata[key] = value;
+            }
+            else
+            {
+                i = SkipValue(json, i);
+            }
+
+            i = SkipWhitespace(json, i);
+            if (i >= json.Length)
+                throw new FormatException("Unexpected end of JSON");
+
+            if (json[i] == '}')
+                break;
+
+            if (json[i] == ',')
+            {
+                i++;
+                continue;
+            }
+
+            throw new FormatException($"Expected ',' or '}}' at position {i}");
+        }
+
+        return (metadata, items);
+    }
+
+    private static int ParseArrayOfFlatObjects(string json, int i,
+        List<Dictionary<string, string>> items)
+    {
+        // skip '['
+        i = SkipWhitespace(json, i + 1);
+
+        if (i < json.Length && json[i] == ']')
+            return i + 1;
+
+        while (i < json.Length)
+        {
+            i = SkipWhitespace(json, i);
+            if (i >= json.Length)
+                throw new FormatException("Unexpected end of JSON in array");
+
+            if (json[i] == '{')
+            {
+                var obj = ParseFlatObjectAt(json, ref i);
+                items.Add(obj);
+            }
+            else
+            {
+                i = SkipValue(json, i);
+            }
+
+            i = SkipWhitespace(json, i);
+            if (i >= json.Length)
+                throw new FormatException("Unexpected end of JSON in array");
+
+            if (json[i] == ']')
+                return i + 1;
+
+            if (json[i] == ',')
+            {
+                i++;
+                continue;
+            }
+
+            throw new FormatException($"Expected ',' or ']' at position {i}");
+        }
+
+        throw new FormatException("Unterminated array");
+    }
+
+    private static Dictionary<string, string> ParseFlatObjectAt(string json, ref int i)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        i = SkipWhitespace(json, i + 1); // skip '{'
+
+        if (i < json.Length && json[i] == '}')
+        {
+            i++;
+            return result;
+        }
+
+        while (i < json.Length)
+        {
+            i = SkipWhitespace(json, i);
+            if (i >= json.Length)
+                throw new FormatException("Unexpected end of JSON in object");
+
+            if (json[i] != '"')
+                throw new FormatException($"Expected '\"' for key at position {i}");
+
+            var key = ReadString(json, ref i);
+
+            i = SkipWhitespace(json, i);
+            if (i >= json.Length || json[i] != ':')
+                throw new FormatException($"Expected ':' after key at position {i}");
+            i = SkipWhitespace(json, i + 1);
+
+            if (i >= json.Length)
+                throw new FormatException("Unexpected end of JSON after ':'");
+
+            if (json[i] == '"')
+            {
+                var value = ReadString(json, ref i);
+                result[key] = value;
+            }
+            else
+            {
+                i = SkipValue(json, i);
+            }
+
+            i = SkipWhitespace(json, i);
+            if (i >= json.Length)
+                throw new FormatException("Unexpected end of JSON in object");
+
+            if (json[i] == '}')
+            {
+                i++;
+                break;
+            }
+
+            if (json[i] == ',')
+            {
+                i++;
+                continue;
+            }
+
+            throw new FormatException($"Expected ',' or '}}' at position {i}");
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Parses a JSON array of strings. Returns an empty list for non-array values.
+    /// </summary>
+    internal static List<string> ParseStringArray(string json, int startIndex)
+    {
+        var result = new List<string>();
+        var i = SkipWhitespace(json, startIndex);
+
+        if (i >= json.Length || json[i] != '[')
+            return result;
+
+        i = SkipWhitespace(json, i + 1);
+
+        if (i < json.Length && json[i] == ']')
+            return result;
+
+        while (i < json.Length)
+        {
+            i = SkipWhitespace(json, i);
+            if (i >= json.Length)
+                throw new FormatException("Unexpected end of JSON in array");
+
+            if (json[i] == '"')
+            {
+                var value = ReadString(json, ref i);
+                result.Add(value);
+            }
+            else
+            {
+                i = SkipValue(json, i);
+            }
+
+            i = SkipWhitespace(json, i);
+            if (i >= json.Length)
+                throw new FormatException("Unexpected end of JSON in array");
+
+            if (json[i] == ']')
+                break;
+
+            if (json[i] == ',')
+            {
+                i++;
+                continue;
+            }
+
+            throw new FormatException($"Expected ',' or ']' at position {i}");
+        }
+
+        return result;
+    }
+
     private static int SkipWhitespace(string json, int i)
     {
         while (i < json.Length && char.IsWhiteSpace(json[i]))

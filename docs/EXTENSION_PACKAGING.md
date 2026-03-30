@@ -241,8 +241,30 @@ with a warning via `OnWarning`:
 | Version incompatible | Warning, skip extension |
 | DLL load failure | Warning, skip (delegated to ExtensionLoader) |
 
+## Extension Registry (beta.8)
+
+Installed extensions are tracked in a local registry (`~/.adocnet/registry.json`)
+that provides fast querying and dependency validation. The registry is automatically
+maintained — `ext install` and `ext remove` update it, and it self-repairs if
+corrupted or out of sync with the filesystem.
+
+Extensions can declare dependencies in their manifest:
+
+```json
+{
+  "name": "diagram",
+  "version": "1.0.0",
+  "entry": "DiagramExtension.dll",
+  "dependencies": ["syntax-highlight >= 1.0.0"]
+}
+```
+
+See [Extension Registry Guide](EXTENSION_REGISTRY.md) for full documentation
+on the registry format, search commands, and dependency validation.
+
 ## See Also
 
 - [Extension Developer Guide](EXTENSIONS.md) — writing processors and renderers
 - [Dynamic Extensions Guide](DYNAMIC_EXTENSIONS.md) — loading from raw DLL paths
+- [Extension Registry Guide](EXTENSION_REGISTRY.md) — registry, search, and dependency validation
 - [CLI Reference](CLI.md) — command-line tool
