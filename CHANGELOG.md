@@ -3,6 +3,28 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0-beta.9] - 2026-03-31
+
+### Added
+- `ExtensionState` enum: `Loaded`, `Failed`, `Disabled`, `Incompatible` for per-extension state tracking
+- `ExtensionLoadResult` structured load result with Name, State, FailureReason, and Processors
+- Failure-based disabling: processors automatically disabled after consecutive failures (configurable via `MaxProcessorFailures`, default 3)
+- `AdocEngine.ExtensionApiVersion` constant ("1.0") for extension API version compatibility
+- `apiVersion` field in `extension.json` manifest for declaring required API version
+- `AdocEngine.LoadExtensionSafe()` and `LoadExtensionsSafe()` returning `IReadOnlyList<ExtensionLoadResult>`
+- CLI `adocnet ext status` command showing per-extension load state, version, and failure reasons
+- `IsApiVersionCompatible()` check: extension major must match host, extension minor must be <= host
+- Documentation: EXTENSION_SAFETY.md guide
+
+### Compatibility
+- Zero extensions loaded = output identical to beta.8 (when `MaxProcessorFailures = 0`)
+- Default `MaxProcessorFailures = 3` introduces automatic disabling (new behavior vs. beta.8)
+- All new API is additive; no existing public API changed
+- Existing `LoadExtension()` / `LoadExtensions()` unchanged
+- Core maintains zero external NuGet dependencies
+- Parser and AST unmodified
+- All existing tests pass without modification
+
 ## [1.0.0-beta.8] - 2026-03-30
 
 ### Added

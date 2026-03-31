@@ -25,13 +25,21 @@ public sealed class ExtensionManifest
     public string DirectoryPath { get; }
 
     /// <summary>
+    /// Gets the required extension API version, or null if not specified.
+    /// When null, the extension is assumed compatible (pre-beta.9 extensions).
+    /// Format: "major.minor" (e.g. "1.0").
+    /// </summary>
+    public string? ApiVersion { get; }
+
+    /// <summary>
     /// Gets the dependency specifications for this extension.
     /// Each entry is a string like "name >= version" or just "name".
     /// </summary>
     public IReadOnlyList<string> Dependencies { get; }
 
     private ExtensionManifest(string name, string version, string description, string entry,
-        string? minAdocNetVersion, string directoryPath, IReadOnlyList<string> dependencies)
+        string? minAdocNetVersion, string directoryPath, string? apiVersion,
+        IReadOnlyList<string> dependencies)
     {
         Name = name;
         Version = version;
@@ -39,6 +47,7 @@ public sealed class ExtensionManifest
         Entry = entry;
         MinAdocNetVersion = minAdocNetVersion;
         DirectoryPath = directoryPath;
+        ApiVersion = apiVersion;
         Dependencies = dependencies;
     }
 
@@ -116,6 +125,7 @@ public sealed class ExtensionManifest
         fields.TryGetValue("description", out var description);
         fields.TryGetValue("entry", out var entry);
         fields.TryGetValue("minAdocNetVersion", out var minVersion);
+        fields.TryGetValue("apiVersion", out var apiVersion);
         fields.TryGetValue("dependencies", out var depsString);
 
         if (string.IsNullOrWhiteSpace(name))
@@ -150,6 +160,7 @@ public sealed class ExtensionManifest
             entry: entry!.Trim(),
             minAdocNetVersion: string.IsNullOrWhiteSpace(minVersion) ? null : minVersion!.Trim(),
             directoryPath: extensionDirectory,
+            apiVersion: string.IsNullOrWhiteSpace(apiVersion) ? null : apiVersion!.Trim(),
             dependencies: dependencies
         );
     }

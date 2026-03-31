@@ -466,5 +466,6 @@ internal abstract record CliArgs
         internal sealed record ExtRemove(string Name) : Ext;
         internal sealed record ExtInfo(string Name) : Ext;
         internal sealed record ExtSearch(string Keyword) : Ext;
+        internal sealed record ExtStatus() : Ext;
     }
 }

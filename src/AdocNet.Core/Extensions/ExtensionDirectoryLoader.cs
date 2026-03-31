@@ -121,6 +121,30 @@ public static class ExtensionDirectoryLoader
         return string.Compare(curPrerelease, minPrerelease, StringComparison.Ordinal) >= 0;
     }
 
+    /// <summary>
+    /// Returns true if the extension's declared API version is compatible with the host.
+    /// Compatible when: extension major == host major and extension minor &lt;= host minor.
+    /// A null extension API version is always compatible (pre-beta.9 extension).
+    /// </summary>
+    internal static bool IsApiVersionCompatible(string hostApiVersion, string? extensionApiVersion)
+    {
+        if (extensionApiVersion is null)
+            return true;
+
+        var hostParts = hostApiVersion.Split('.');
+        var extParts = extensionApiVersion.Split('.');
+
+        if (hostParts.Length < 2 || extParts.Length < 2)
+            return false;
+
+        if (!int.TryParse(hostParts[0], out var hostMajor) || !int.TryParse(hostParts[1], out var hostMinor))
+            return false;
+        if (!int.TryParse(extParts[0], out var extMajor) || !int.TryParse(extParts[1], out var extMinor))
+            return false;
+
+        return extMajor == hostMajor && extMinor <= hostMinor;
+    }
+
     private static void ParseVersion(string version, out string numeric, out string? prerelease)
     {
         var dashIdx = version.IndexOf('-');
