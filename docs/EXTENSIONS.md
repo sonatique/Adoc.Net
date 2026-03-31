@@ -385,6 +385,15 @@ install, `adocnet ext list` to view, and `adocnet ext remove` to uninstall.
 
 See [Extension Packaging Guide](EXTENSION_PACKAGING.md) for full documentation.
 
+## Extension Safety (beta.9)
+
+Extensions are hardened for production use with per-extension state tracking,
+failure-based disabling (configurable via `MaxProcessorFailures`), API version
+compatibility, and structured load reporting via `LoadExtensionSafe()`.
+Use `adocnet ext status` to check the load state of all installed extensions.
+
+See [Extension Safety Guide](EXTENSION_SAFETY.md) for full documentation.
+
 ## Extension Registry (beta.8)
 
 Installed extensions are tracked in a local registry (`~/.adocnet/registry.json`)
@@ -416,4 +425,5 @@ See [Extension Registry Guide](EXTENSION_REGISTRY.md) for full documentation.
 - [Dynamic Extensions Guide](DYNAMIC_EXTENSIONS.md) — loading extensions from external DLLs
 - [Extension Packaging Guide](EXTENSION_PACKAGING.md) — manifest-based packaging and installation
 - [Extension Registry Guide](EXTENSION_REGISTRY.md) — registry, search, and dependency validation
+- [Extension Safety Guide](EXTENSION_SAFETY.md) — failure disabling, API version, structured loading
 - [CLI Reference](CLI.md) — command-line tool

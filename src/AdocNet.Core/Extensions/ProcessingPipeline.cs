@@ -18,29 +18,59 @@ internal static class ProcessingPipeline
         IReadOnlyList<IDocumentProcessor> documentProcessors,
         IReadOnlyList<IBlockProcessor> blockProcessors,
         IReadOnlyList<IInlineProcessor> inlineProcessors,
-        Action<string>? onWarning)
+        Action<string>? onWarning,
+        Dictionary<object, int>? failureCounts = null,
+        HashSet<object>? disabledProcessors = null,
+        int maxFailures = 0)
     {
         // Phase 1: Document processors (FIFO)
         foreach (var processor in documentProcessors)
         {
+            if (disabledProcessors is not null && disabledProcessors.Contains(processor))
+                continue;
+
             try
             {
                 processor.Process(document);
+                failureCounts?.Remove(processor);
             }
             catch (Exception ex)
             {
                 onWarning?.Invoke(
                     $"Processor {processor.GetType().Name} threw {ex.GetType().Name}: {ex.Message}");
+                TrackFailure(processor, failureCounts, disabledProcessors, maxFailures, onWarning);
             }
         }
 
         // Phase 2: Block processors (depth-first walk)
         if (blockProcessors.Count > 0)
-            WalkBlocks(document, blockProcessors, context, onWarning);
+            WalkBlocks(document, blockProcessors, context, onWarning, failureCounts, disabledProcessors, maxFailures);
 
         // Phase 3: Inline processors (depth-first walk)
         if (inlineProcessors.Count > 0)
-            WalkAllInlines(document, inlineProcessors, context, onWarning);
+            WalkAllInlines(document, inlineProcessors, context, onWarning, failureCounts, disabledProcessors, maxFailures);
+    }
+
+    private static void TrackFailure(
+        object processor,
+        Dictionary<object, int>? failureCounts,
+        HashSet<object>? disabledProcessors,
+        int maxFailures,
+        Action<string>? onWarning)
+    {
+        if (failureCounts is null || disabledProcessors is null || maxFailures <= 0)
+            return;
+
+        failureCounts.TryGetValue(processor, out var count);
+        count++;
+        failureCounts[processor] = count;
+
+        if (count >= maxFailures)
+        {
+            disabledProcessors.Add(processor);
+            onWarning?.Invoke(
+                $"Processor {processor.GetType().Name} disabled after {count} consecutive failure(s)");
+        }
     }
 
     // ── Block walk ───────────────────────────────────────────────────────
@@ -49,7 +79,10 @@ internal static class ProcessingPipeline
         AstNode parent,
         IReadOnlyList<IBlockProcessor> processors,
         RenderContext context,
-        Action<string>? onWarning)
+        Action<string>? onWarning,
+        Dictionary<object, int>? failureCounts,
+        HashSet<object>? disabledProcessors,
+        int maxFailures)
     {
         for (int i = 0; i < parent.Children.Count; i++)
         {
@@ -59,15 +92,22 @@ internal static class ProcessingPipeline
             // Run all processors on this block (FIFO)
             foreach (var processor in processors)
             {
+                if (disabledProcessors is not null && disabledProcessors.Contains(processor))
+                    continue;
+
                 try
                 {
                     if (processor.CanProcess(block))
+                    {
                         processor.Process(block, context);
+                        failureCounts?.Remove(processor);
+                    }
                 }
                 catch (Exception ex)
                 {
                     onWarning?.Invoke(
                         $"Processor {processor.GetType().Name} threw {ex.GetType().Name}: {ex.Message}");
+                    TrackFailure(processor, failureCounts, disabledProcessors, maxFailures, onWarning);
                 }
             }
 
@@ -83,7 +123,7 @@ internal static class ProcessingPipeline
             }
 
             // Recurse into the block's children
-            WalkBlocks(block, processors, context, onWarning);
+            WalkBlocks(block, processors, context, onWarning, failureCounts, disabledProcessors, maxFailures);
         }
     }
 
@@ -93,7 +133,10 @@ internal static class ProcessingPipeline
         AstNode parent,
         IReadOnlyList<IInlineProcessor> processors,
         RenderContext context,
-        Action<string>? onWarning)
+        Action<string>? onWarning,
+        Dictionary<object, int>? failureCounts,
+        HashSet<object>? disabledProcessors,
+        int maxFailures)
     {
         // Walk block nodes in Children to find inline containers
         for (int i = 0; i < parent.Children.Count; i++)
@@ -103,11 +146,11 @@ internal static class ProcessingPipeline
             // Extract inline lists from block nodes that contain them
             if (child is BlockNode)
             {
-                ProcessInlineLists(child, processors, context, onWarning);
+                ProcessInlineLists(child, processors, context, onWarning, failureCounts, disabledProcessors, maxFailures);
             }
 
             // Recurse into children (sections contain blocks, blocks may nest)
-            WalkAllInlines(child, processors, context, onWarning);
+            WalkAllInlines(child, processors, context, onWarning, failureCounts, disabledProcessors, maxFailures);
         }
     }
 
@@ -115,33 +158,36 @@ internal static class ProcessingPipeline
         AstNode node,
         IReadOnlyList<IInlineProcessor> processors,
         RenderContext context,
-        Action<string>? onWarning)
+        Action<string>? onWarning,
+        Dictionary<object, int>? failureCounts,
+        HashSet<object>? disabledProcessors,
+        int maxFailures)
     {
         // Each block type stores inlines in different properties.
         // We must enumerate them explicitly since they are not in AstNode.Children.
         switch (node)
         {
             case ParagraphNode p:
-                WalkInlineList(p.Inlines, processors, context, onWarning);
+                WalkInlineList(p.Inlines, processors, context, onWarning, failureCounts, disabledProcessors, maxFailures);
                 break;
             case ListItemNode li:
-                WalkInlineList(li.Inlines, processors, context, onWarning);
+                WalkInlineList(li.Inlines, processors, context, onWarning, failureCounts, disabledProcessors, maxFailures);
                 break;
             case AdmonitionNode a:
-                WalkInlineList(a.Inlines, processors, context, onWarning);
+                WalkInlineList(a.Inlines, processors, context, onWarning, failureCounts, disabledProcessors, maxFailures);
                 break;
             case SectionNode s:
-                WalkInlineList(s.TitleInlines, processors, context, onWarning);
+                WalkInlineList(s.TitleInlines, processors, context, onWarning, failureCounts, disabledProcessors, maxFailures);
                 break;
             case TableCellNode tc:
-                WalkInlineList(tc.Inlines, processors, context, onWarning);
+                WalkInlineList(tc.Inlines, processors, context, onWarning, failureCounts, disabledProcessors, maxFailures);
                 break;
             case DescriptionItemNode di:
-                WalkInlineList(di.TermInlines, processors, context, onWarning);
-                WalkInlineList(di.DescriptionInlines, processors, context, onWarning);
+                WalkInlineList(di.TermInlines, processors, context, onWarning, failureCounts, disabledProcessors, maxFailures);
+                WalkInlineList(di.DescriptionInlines, processors, context, onWarning, failureCounts, disabledProcessors, maxFailures);
                 break;
             case BibliographyEntryNode be:
-                WalkInlineList(be.Inlines, processors, context, onWarning);
+                WalkInlineList(be.Inlines, processors, context, onWarning, failureCounts, disabledProcessors, maxFailures);
                 break;
         }
     }
@@ -150,7 +196,10 @@ internal static class ProcessingPipeline
         IReadOnlyList<InlineNode> inlines,
         IReadOnlyList<IInlineProcessor> processors,
         RenderContext context,
-        Action<string>? onWarning)
+        Action<string>? onWarning,
+        Dictionary<object, int>? failureCounts,
+        HashSet<object>? disabledProcessors,
+        int maxFailures)
     {
         for (int i = 0; i < inlines.Count; i++)
         {
@@ -159,15 +208,22 @@ internal static class ProcessingPipeline
             // Run all processors on this inline (FIFO)
             foreach (var processor in processors)
             {
+                if (disabledProcessors is not null && disabledProcessors.Contains(processor))
+                    continue;
+
                 try
                 {
                     if (processor.CanProcess(inline))
+                    {
                         processor.Process(inline, context);
+                        failureCounts?.Remove(processor);
+                    }
                 }
                 catch (Exception ex)
                 {
                     onWarning?.Invoke(
                         $"Processor {processor.GetType().Name} threw {ex.GetType().Name}: {ex.Message}");
+                    TrackFailure(processor, failureCounts, disabledProcessors, maxFailures, onWarning);
                 }
             }
 
@@ -185,19 +241,19 @@ internal static class ProcessingPipeline
             switch (inline)
             {
                 case StrongInlineNode strong:
-                    WalkInlineList(strong.Children, processors, context, onWarning);
+                    WalkInlineList(strong.Children, processors, context, onWarning, failureCounts, disabledProcessors, maxFailures);
                     break;
                 case EmphasisInlineNode emphasis:
-                    WalkInlineList(emphasis.Children, processors, context, onWarning);
+                    WalkInlineList(emphasis.Children, processors, context, onWarning, failureCounts, disabledProcessors, maxFailures);
                     break;
                 case MonospaceInlineNode mono:
-                    WalkInlineList(mono.Children, processors, context, onWarning);
+                    WalkInlineList(mono.Children, processors, context, onWarning, failureCounts, disabledProcessors, maxFailures);
                     break;
                 case HighlightInlineNode highlight:
-                    WalkInlineList(highlight.Children, processors, context, onWarning);
+                    WalkInlineList(highlight.Children, processors, context, onWarning, failureCounts, disabledProcessors, maxFailures);
                     break;
                 case FootnoteInlineNode footnote:
-                    WalkInlineList(footnote.Inlines, processors, context, onWarning);
+                    WalkInlineList(footnote.Inlines, processors, context, onWarning, failureCounts, disabledProcessors, maxFailures);
                     break;
             }
         }

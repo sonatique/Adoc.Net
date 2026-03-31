@@ -13,7 +13,7 @@ internal sealed class ExtensionCommands
     internal static CliArgs ParseExtArguments(string[] args)
     {
         if (args.Length < 2)
-            return new CliArgs.Error("Usage: adocnet ext <list|install|remove|info|search> [args]");
+            return new CliArgs.Error("Usage: adocnet ext <list|install|remove|info|search|status> [args]");
 
         var action = args[1];
 
@@ -71,8 +71,11 @@ internal sealed class ExtensionCommands
                 return new CliArgs.Ext.ExtSearch(args[2]);
             }
 
+            case "status":
+                return new CliArgs.Ext.ExtStatus();
+
             default:
-                return new CliArgs.Error($"Unknown ext command: {action}. Available: list, install, remove, info, search.");
+                return new CliArgs.Error($"Unknown ext command: {action}. Available: list, install, remove, info, search, status.");
         }
     }
 
@@ -83,6 +86,7 @@ internal sealed class ExtensionCommands
         CliArgs.Ext.ExtRemove remove => ExecuteRemove(remove.Name),
         CliArgs.Ext.ExtInfo info => ExecuteInfo(info.Name),
         CliArgs.Ext.ExtSearch search => ExecuteSearch(search.Keyword),
+        CliArgs.Ext.ExtStatus => ExecuteStatus(),
         _ => ExitError,
     };
 
@@ -254,6 +258,111 @@ internal sealed class ExtensionCommands
 
         Console.WriteLine();
         Console.WriteLine($"{matches.Count} extension(s) matched.");
+        return ExitSuccess;
+    }
+
+    private static int ExecuteStatus()
+    {
+        var extensionsDir = ExtensionDirectoryLoader.GetDefaultExtensionDirectory();
+
+        if (!Directory.Exists(extensionsDir))
+        {
+            Console.WriteLine("No extensions installed.");
+            return ExitSuccess;
+        }
+
+        var subdirs = Directory.GetDirectories(extensionsDir);
+        Array.Sort(subdirs, (a, b) => string.Compare(
+            Path.GetFileName(a), Path.GetFileName(b), StringComparison.Ordinal));
+
+        if (subdirs.Length == 0)
+        {
+            Console.WriteLine("No extensions installed.");
+            return ExitSuccess;
+        }
+
+        var results = new List<(string Name, string Version, ExtensionState State, string Reason)>();
+
+        foreach (var subdir in subdirs)
+        {
+            var warnings = new List<string>();
+            var manifest = ExtensionManifest.Load(subdir, msg => warnings.Add(msg));
+
+            if (manifest is null)
+            {
+                var dirName = Path.GetFileName(subdir);
+                results.Add((dirName, "?", ExtensionState.Failed,
+                    warnings.Count > 0 ? warnings[0] : "Invalid manifest"));
+                continue;
+            }
+
+            // Check API version compatibility using simple major.minor comparison
+            if (manifest.ApiVersion is not null)
+            {
+                var hostParts = AdocEngine.ExtensionApiVersion.Split('.');
+                var extParts = manifest.ApiVersion.Split('.');
+                if (hostParts.Length >= 2 && extParts.Length >= 2 &&
+                    int.TryParse(hostParts[0], out var hMaj) && int.TryParse(hostParts[1], out var hMin) &&
+                    int.TryParse(extParts[0], out var eMaj) && int.TryParse(extParts[1], out var eMin))
+                {
+                    if (eMaj != hMaj || eMin > hMin)
+                    {
+                        results.Add((manifest.Name, manifest.Version, ExtensionState.Incompatible,
+                            $"Requires API version {manifest.ApiVersion}"));
+                        continue;
+                    }
+                }
+            }
+
+            // Try loading the entry DLL
+            var entryPath = Path.Combine(subdir, manifest.Entry);
+            if (!File.Exists(entryPath))
+            {
+                results.Add((manifest.Name, manifest.Version, ExtensionState.Failed,
+                    $"Entry DLL not found: {manifest.Entry}"));
+                continue;
+            }
+
+            var loadWarnings = new List<string>();
+            var processors = ExtensionLoader.LoadAssembly(entryPath, msg => loadWarnings.Add(msg));
+
+            if (processors.Count == 0 && loadWarnings.Count > 0)
+            {
+                results.Add((manifest.Name, manifest.Version, ExtensionState.Failed,
+                    loadWarnings[0]));
+            }
+            else
+            {
+                var reason = $"{processors.Count} processor(s)";
+                results.Add((manifest.Name, manifest.Version, ExtensionState.Loaded, reason));
+            }
+        }
+
+        if (results.Count == 0)
+        {
+            Console.WriteLine("No extensions installed.");
+            return ExitSuccess;
+        }
+
+        var nameWidth = Math.Max(4, results.Max(r => r.Name.Length));
+        var versionWidth = Math.Max(7, results.Max(r => r.Version.Length));
+        var stateWidth = Math.Max(5, results.Max(r => r.State.ToString().Length));
+
+        Console.WriteLine($"Extension status ({extensionsDir}):");
+        Console.WriteLine();
+        Console.WriteLine($"  {"Name".PadRight(nameWidth)}  {"Version".PadRight(versionWidth)}  {"State".PadRight(stateWidth)}  Reason");
+        Console.WriteLine($"  {new string('-', nameWidth)}  {new string('-', versionWidth)}  {new string('-', stateWidth)}  ------");
+
+        foreach (var (name, version, state, reason) in results)
+        {
+            Console.WriteLine($"  {name.PadRight(nameWidth)}  {version.PadRight(versionWidth)}  {state.ToString().PadRight(stateWidth)}  {reason}");
+        }
+
+        Console.WriteLine();
+        var loaded = results.Count(r => r.State == ExtensionState.Loaded);
+        var failed = results.Count(r => r.State == ExtensionState.Failed);
+        var incompatible = results.Count(r => r.State == ExtensionState.Incompatible);
+        Console.WriteLine($"{results.Count} extension(s): {loaded} loaded, {failed} failed, {incompatible} incompatible.");
         return ExitSuccess;
     }
 
