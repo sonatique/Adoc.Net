@@ -236,6 +236,7 @@ The data flow for the Avalonia viewer is strictly layered: `AST → Layout → A
 | [EXTENSION_PACKAGING.md](docs/EXTENSION_PACKAGING.md) | Extension packaging, installation, and automatic loading |
 | [EXTENSION_REGISTRY.md](docs/EXTENSION_REGISTRY.md) | Extension registry, search, and dependency validation |
 | [EXTENSION_SAFETY.md](docs/EXTENSION_SAFETY.md) | Extension safety: failure disabling, API version, structured loading |
+| [PERFORMANCE.md](docs/PERFORMANCE.md) | Performance caching: parse cache, render cache, configuration |
 | [DIAGRAMS.md](docs/DIAGRAMS.md) | Diagram block processing with external tools |
 | [COMPATIBILITY.md](docs/COMPATIBILITY.md) | Asciidoctor conformance and known differences |
 | [SECURITY.md](docs/SECURITY.md) | Security considerations for untrusted input |

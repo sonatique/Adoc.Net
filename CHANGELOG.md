@@ -3,6 +3,32 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0-beta.10] - 2026-04-05
+
+### Added
+- Parse caching: SHA-256-keyed LRU cache avoids re-parsing identical input strings
+- Render caching: composite-keyed LRU cache avoids re-rendering when input and options are unchanged
+- `AdocEngine.EnableCaching` property (bool, default false) for opt-in caching
+- `AdocEngine.MaxCacheEntries` property (int, default 16) for configurable cache size with LRU eviction
+- `AdocEngine.ClearCache()` method for manual cache invalidation
+- `CachedRenderBenchmarks` benchmark suite measuring cold vs cached performance
+- Thread-safe `LruCache<TKey, TValue>` with O(1) lookup and eviction
+- Documentation: PERFORMANCE.md guide covering caching configuration and performance numbers
+
+### Performance
+- Cache hit: 15x faster (small docs), 27x faster (medium), 45x faster (large ~500KB)
+- Cache hit memory: 14-19x less allocation vs uncached path
+- No regression on cold (uncached) path
+- Cached output is byte-identical to non-cached output (verified by automated tests)
+
+### Compatibility
+- Caching is opt-in (`EnableCaching = false` by default) — zero behavior change for existing users
+- All new API is additive; no existing public API changed
+- Both caches work correctly with registered extensions
+- Core maintains zero external NuGet dependencies
+- Parser and AST unmodified
+- All existing tests pass without modification
+
 ## [1.0.0-beta.9] - 2026-03-31
 
 ### Added
