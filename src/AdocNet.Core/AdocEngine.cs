@@ -1,4 +1,5 @@
 using AdocNet.Ast;
+using AdocNet.Caching;
 using AdocNet.Extensions;
 
 namespace AdocNet;
@@ -21,6 +22,10 @@ public sealed class AdocEngine
     private readonly Dictionary<object, int> _failureCounts = new();
     private readonly HashSet<object> _disabledProcessors = new();
     private bool _frozen;
+    private bool _enableCaching;
+    private int _maxCacheEntries = 16;
+    private LruCache<string, DocumentNode>? _parseCache;
+    private LruCache<string, byte[]>? _renderCache;
 
     /// <summary>Gets the renderer used to produce output.</summary>
     public IDocumentRenderer Renderer { get; init; }
@@ -40,6 +45,44 @@ public sealed class AdocEngine
     /// Default: 3. Set to 0 to never disable processors (beta.8 behavior).
     /// </summary>
     public int MaxProcessorFailures { get; set; } = 3;
+
+    /// <summary>
+    /// Enables parse and render caching. When true, repeated <see cref="Convert"/> calls
+    /// with the same input and options return cached results.
+    /// Default: false (opt-in). Setting to false clears all caches.
+    /// </summary>
+    public bool EnableCaching
+    {
+        get => _enableCaching;
+        set
+        {
+            _enableCaching = value;
+            if (!value)
+            {
+                _parseCache?.Clear();
+                _renderCache?.Clear();
+                _parseCache = null;
+                _renderCache = null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Maximum number of entries in each cache (parse and render caches are sized independently).
+    /// Default: 16. Minimum: 1. Uses LRU eviction when full.
+    /// </summary>
+    public int MaxCacheEntries
+    {
+        get => _maxCacheEntries;
+        set
+        {
+            if (value < 1)
+                throw new ArgumentOutOfRangeException(nameof(value), "MaxCacheEntries must be at least 1.");
+            _maxCacheEntries = value;
+            if (_parseCache is not null) _parseCache.Capacity = value;
+            if (_renderCache is not null) _renderCache.Capacity = value;
+        }
+    }
 
     /// <summary>
     /// Initializes a new <see cref="AdocEngine"/> with the specified renderer and parser.
@@ -62,6 +105,7 @@ public sealed class AdocEngine
     {
         ThrowIfFrozen();
         _documentProcessors.Add(processor ?? throw new ArgumentNullException(nameof(processor)));
+        ClearCacheInternal();
         return this;
     }
 
@@ -75,6 +119,7 @@ public sealed class AdocEngine
     {
         ThrowIfFrozen();
         _blockProcessors.Add(processor ?? throw new ArgumentNullException(nameof(processor)));
+        ClearCacheInternal();
         return this;
     }
 
@@ -88,6 +133,7 @@ public sealed class AdocEngine
     {
         ThrowIfFrozen();
         _inlineProcessors.Add(processor ?? throw new ArgumentNullException(nameof(processor)));
+        ClearCacheInternal();
         return this;
     }
 
@@ -159,18 +205,40 @@ public sealed class AdocEngine
     /// <param name="options">Optional render options. Uses <see cref="RenderOptions.Default"/> when null.</param>
     public void Convert(string input, Stream output, RenderOptions? options = null)
     {
-        var doc = Parser(input);
         var opts = options ?? RenderOptions.Default;
 
-        if (_documentProcessors.Count > 0 || _blockProcessors.Count > 0 || _inlineProcessors.Count > 0)
+        if (!_enableCaching)
         {
-            _frozen = true;
-            var context = new RenderContext(doc, opts);
-            ProcessingPipeline.Run(doc, context, _documentProcessors, _blockProcessors, _inlineProcessors,
-                OnWarning, _failureCounts, _disabledProcessors, MaxProcessorFailures);
+            ConvertUncached(input, output, opts);
+            return;
         }
 
-        Renderer.Render(doc, output, opts);
+        EnsureCaches();
+        var inputHash = CacheKeyBuilder.ComputeInputHash(input);
+
+        // Check render cache first (skips parse + extensions + render)
+        var renderKey = CacheKeyBuilder.ComputeRenderKey(inputHash, Renderer.Format, opts);
+        if (_renderCache!.TryGet(renderKey, out var cachedBytes))
+        {
+            output.Write(cachedBytes, 0, cachedBytes.Length);
+            return;
+        }
+
+        // Check parse cache (skips parse only)
+        if (!_parseCache!.TryGet(inputHash, out var doc))
+        {
+            doc = Parser(input);
+            _parseCache.Set(inputHash, doc);
+        }
+
+        RunExtensions(doc, opts);
+
+        // Render to buffer, cache, and copy to output
+        using var buffer = new MemoryStream();
+        Renderer.Render(doc, buffer, opts);
+        var bytes = buffer.ToArray();
+        _renderCache.Set(renderKey, bytes);
+        output.Write(bytes, 0, bytes.Length);
     }
 
     /// <summary>
@@ -282,6 +350,46 @@ public sealed class AdocEngine
                 return meta.Name;
         }
         return Path.GetFileNameWithoutExtension(source);
+    }
+
+    /// <summary>
+    /// Clears all cached parse results and render outputs.
+    /// Call this if external state affecting extensions has changed.
+    /// </summary>
+    public void ClearCache()
+    {
+        _parseCache?.Clear();
+        _renderCache?.Clear();
+    }
+
+    private void ClearCacheInternal()
+    {
+        _parseCache?.Clear();
+        _renderCache?.Clear();
+    }
+
+    private void ConvertUncached(string input, Stream output, RenderOptions opts)
+    {
+        var doc = Parser(input);
+        RunExtensions(doc, opts);
+        Renderer.Render(doc, output, opts);
+    }
+
+    private void RunExtensions(DocumentNode doc, RenderOptions opts)
+    {
+        if (_documentProcessors.Count > 0 || _blockProcessors.Count > 0 || _inlineProcessors.Count > 0)
+        {
+            _frozen = true;
+            var context = new RenderContext(doc, opts);
+            ProcessingPipeline.Run(doc, context, _documentProcessors, _blockProcessors, _inlineProcessors,
+                OnWarning, _failureCounts, _disabledProcessors, MaxProcessorFailures);
+        }
+    }
+
+    private void EnsureCaches()
+    {
+        _parseCache ??= new LruCache<string, DocumentNode>(_maxCacheEntries);
+        _renderCache ??= new LruCache<string, byte[]>(_maxCacheEntries);
     }
 
     private void RegisterExtensions(List<object> extensions)
