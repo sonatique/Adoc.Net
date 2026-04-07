@@ -1,5 +1,6 @@
 using AdocNet.Ast;
 using AdocNet.Caching;
+using AdocNet.Editor;
 using AdocNet.Extensions;
 
 namespace AdocNet;
@@ -19,6 +20,8 @@ public sealed class AdocEngine
     private readonly List<IDocumentProcessor> _documentProcessors = new();
     private readonly List<IBlockProcessor> _blockProcessors = new();
     private readonly List<IInlineProcessor> _inlineProcessors = new();
+    private readonly List<IOutputProcessor> _outputProcessors = new();
+    private readonly List<IExtensionLifecycle> _lifecycleExtensions = new();
     private readonly Dictionary<object, int> _failureCounts = new();
     private readonly HashSet<object> _disabledProcessors = new();
     private bool _frozen;
@@ -45,6 +48,13 @@ public sealed class AdocEngine
     /// Default: 3. Set to 0 to never disable processors (beta.8 behavior).
     /// </summary>
     public int MaxProcessorFailures { get; set; } = 3;
+
+    /// <summary>
+    /// Diagnostics emitted by extensions during the most recent <see cref="Convert"/> call.
+    /// Empty if no extensions ran or no diagnostics were emitted.
+    /// Cleared and repopulated on each <see cref="Convert"/> call.
+    /// </summary>
+    public IReadOnlyList<Diagnostic> LastExtensionDiagnostics { get; private set; } = Array.Empty<Diagnostic>();
 
     /// <summary>
     /// Enables parse and render caching. When true, repeated <see cref="Convert"/> calls
@@ -138,6 +148,19 @@ public sealed class AdocEngine
     }
 
     /// <summary>
+    /// Registers an output processor. Processors execute in registration order (FIFO)
+    /// after rendering completes. Must be called before the first <see cref="Convert"/> call.
+    /// </summary>
+    /// <param name="processor">The output processor to register.</param>
+    /// <returns>This engine instance for fluent chaining.</returns>
+    public AdocEngine RegisterOutputProcessor(IOutputProcessor processor)
+    {
+        ThrowIfFrozen();
+        _outputProcessors.Add(processor ?? throw new ArgumentNullException(nameof(processor)));
+        return this;
+    }
+
+    /// <summary>
     /// Loads extensions from a single assembly file. Discovers types implementing
     /// <see cref="IDocumentProcessor"/>, <see cref="IBlockProcessor"/>, or <see cref="IInlineProcessor"/>
     /// with parameterless constructors, instantiates them, and registers them.
@@ -220,7 +243,9 @@ public sealed class AdocEngine
         var renderKey = CacheKeyBuilder.ComputeRenderKey(inputHash, Renderer.Format, opts);
         if (_renderCache!.TryGet(renderKey, out var cachedBytes))
         {
-            output.Write(cachedBytes, 0, cachedBytes.Length);
+            var finalCached = RunOutputProcessors(cachedBytes);
+            output.Write(finalCached, 0, finalCached.Length);
+            LastExtensionDiagnostics = Array.Empty<Diagnostic>();
             return;
         }
 
@@ -233,12 +258,13 @@ public sealed class AdocEngine
 
         RunExtensions(doc, opts);
 
-        // Render to buffer, cache, and copy to output
+        // Render to buffer, cache pre-processor output, run processors, write
         using var buffer = new MemoryStream();
         Renderer.Render(doc, buffer, opts);
         var bytes = buffer.ToArray();
         _renderCache.Set(renderKey, bytes);
-        output.Write(bytes, 0, bytes.Length);
+        var final = RunOutputProcessors(bytes);
+        output.Write(final, 0, final.Length);
     }
 
     /// <summary>
@@ -353,6 +379,34 @@ public sealed class AdocEngine
     }
 
     /// <summary>
+    /// Parses a snapshot's text using the cache-assisted incremental approach.
+    /// If caching is enabled and the text matches a cached parse, returns the cached result.
+    /// Otherwise performs a full re-parse. Returns a new snapshot with the parse result populated.
+    /// </summary>
+    /// <param name="snapshot">The snapshot containing the text to parse.</param>
+    /// <returns>A new snapshot with <see cref="DocumentSnapshot.Document"/> populated.</returns>
+    public DocumentSnapshot ParseIncremental(DocumentSnapshot snapshot)
+    {
+        if (snapshot is null) throw new ArgumentNullException(nameof(snapshot));
+
+        if (_enableCaching)
+        {
+            EnsureCaches();
+            var inputHash = CacheKeyBuilder.ComputeInputHash(snapshot.Text);
+
+            if (_parseCache!.TryGet(inputHash, out var cachedDoc))
+                return new DocumentSnapshot(snapshot.Version, snapshot.Text, cachedDoc);
+
+            var doc = Parser(snapshot.Text);
+            _parseCache.Set(inputHash, doc);
+            return new DocumentSnapshot(snapshot.Version, snapshot.Text, doc);
+        }
+
+        var parsed = Parser(snapshot.Text);
+        return new DocumentSnapshot(snapshot.Version, snapshot.Text, parsed);
+    }
+
+    /// <summary>
     /// Clears all cached parse results and render outputs.
     /// Call this if external state affecting extensions has changed.
     /// </summary>
@@ -372,7 +426,17 @@ public sealed class AdocEngine
     {
         var doc = Parser(input);
         RunExtensions(doc, opts);
-        Renderer.Render(doc, output, opts);
+
+        if (_outputProcessors.Count == 0)
+        {
+            Renderer.Render(doc, output, opts);
+            return;
+        }
+
+        using var buffer = new MemoryStream();
+        Renderer.Render(doc, buffer, opts);
+        var bytes = RunOutputProcessors(buffer.ToArray());
+        output.Write(bytes, 0, bytes.Length);
     }
 
     private void RunExtensions(DocumentNode doc, RenderOptions opts)
@@ -383,13 +447,54 @@ public sealed class AdocEngine
             var context = new RenderContext(doc, opts);
             ProcessingPipeline.Run(doc, context, _documentProcessors, _blockProcessors, _inlineProcessors,
                 OnWarning, _failureCounts, _disabledProcessors, MaxProcessorFailures);
+            LastExtensionDiagnostics = context.Diagnostics;
         }
+        else
+        {
+            LastExtensionDiagnostics = Array.Empty<Diagnostic>();
+        }
+    }
+
+    private byte[] RunOutputProcessors(byte[] rendered)
+    {
+        var result = rendered;
+        foreach (var processor in _outputProcessors)
+        {
+            try
+            {
+                result = processor.Process(result, Renderer.Format);
+            }
+            catch (Exception ex)
+            {
+                OnWarning?.Invoke($"Output processor {processor.GetType().Name} failed: {ex.Message}");
+            }
+        }
+        return result;
     }
 
     private void EnsureCaches()
     {
         _parseCache ??= new LruCache<string, DocumentNode>(_maxCacheEntries);
         _renderCache ??= new LruCache<string, byte[]>(_maxCacheEntries);
+    }
+
+    /// <summary>
+    /// Calls <see cref="IExtensionLifecycle.Dispose"/> on all loaded extensions that
+    /// implement the lifecycle interface. Call when the engine is no longer needed.
+    /// </summary>
+    public void Shutdown()
+    {
+        foreach (var lifecycle in _lifecycleExtensions)
+        {
+            try
+            {
+                lifecycle.Dispose();
+            }
+            catch (Exception ex)
+            {
+                OnWarning?.Invoke($"Extension lifecycle Dispose failed: {ex.Message}");
+            }
+        }
     }
 
     private void RegisterExtensions(List<object> extensions)
@@ -402,6 +507,21 @@ public sealed class AdocEngine
                 _blockProcessors.Add(bp);
             if (instance is IInlineProcessor ip)
                 _inlineProcessors.Add(ip);
+            if (instance is IOutputProcessor op)
+                _outputProcessors.Add(op);
+
+            if (instance is IExtensionLifecycle lifecycle)
+            {
+                try
+                {
+                    lifecycle.Initialize();
+                    _lifecycleExtensions.Add(lifecycle);
+                }
+                catch (Exception ex)
+                {
+                    OnWarning?.Invoke($"Extension lifecycle Initialize failed: {ex.Message}");
+                }
+            }
         }
     }
 

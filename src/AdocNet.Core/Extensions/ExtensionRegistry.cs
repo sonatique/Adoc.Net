@@ -9,7 +9,7 @@ public sealed class ExtensionRegistry
 {
     private const string RegistryFileName = "registry.json";
     private const string RegistryVersion = "1";
-    private static readonly string[] FieldOrder = { "name", "version", "description", "path", "dependencies" };
+    private static readonly string[] FieldOrder = { "name", "version", "description", "path", "dependencies", "enabled" };
 
     private readonly List<ExtensionInfo> _extensions = new();
     private readonly string _registryDir;
@@ -146,7 +146,8 @@ public sealed class ExtensionRegistry
                 ["version"] = ext.Version,
                 ["description"] = ext.Description,
                 ["path"] = ext.InstalledPath,
-                ["dependencies"] = ext.DependenciesToString()
+                ["dependencies"] = ext.DependenciesToString(),
+                ["enabled"] = ext.Enabled ? "true" : "false"
             };
             items.Add(dict);
         }
@@ -200,6 +201,24 @@ public sealed class ExtensionRegistry
             return false;
 
         _extensions.RemoveAt(index);
+        return true;
+    }
+
+    /// <summary>
+    /// Sets the enabled state for a named extension. Returns true if found and updated.
+    /// Does NOT save automatically — call <see cref="Save"/> after.
+    /// </summary>
+    public bool SetEnabled(string name, bool enabled)
+    {
+        if (name is null) throw new ArgumentNullException(nameof(name));
+
+        var index = _extensions.FindIndex(e =>
+            string.Equals(e.Name, name, StringComparison.Ordinal));
+
+        if (index < 0)
+            return false;
+
+        _extensions[index] = _extensions[index].WithEnabled(enabled);
         return true;
     }
 

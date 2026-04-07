@@ -3,6 +3,37 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0-beta.11] - 2026-04-06
+
+### Added — Editor Integration
+- `DocumentChange` immutable struct for representing text edits (offset, length, newText)
+- `DocumentSnapshot` versioned document state with text and optional parsed AST
+- `AdocEngine.ParseIncremental()` cache-aware re-parse method for editor scenarios
+- Parse cache integration: identical text returns cached AST without re-parsing
+
+### Added — Developer Experience
+- `IOutputProcessor` interface for post-render transformations (HTML minification, watermarking)
+- `AdocEngine.RegisterOutputProcessor()` with FIFO chaining after renderer output
+- `KrokiDiagramToolRunner` HTTP-based diagram generation via Kroki API (opt-in)
+- `IExtensionLifecycle` optional interface with Initialize/Dispose for resource-holding extensions
+- `AdocEngine.Shutdown()` calls Dispose on all lifecycle extensions
+- Extension diagnostics: `RenderContext.AddDiagnostic()` + `AdocEngine.LastExtensionDiagnostics`
+- Zip-based extension install: `adocnet ext install myext.zip`
+- Extension enable/disable: `adocnet ext enable/disable <name>` with registry persistence
+- `ExtensionInfo.Enabled` property with `ExtensionRegistry.SetEnabled()` method
+
+### Changed
+- `ext list` now shows `[disabled]` indicator for disabled extensions
+- `ext status` shows `Disabled` state for disabled extensions
+- `ExtensionDirectoryLoader` skips disabled extensions during loading
+
+### Compatibility
+- All new API is additive; no existing public API changed
+- Zero-extension behavior is byte-identical to beta.10
+- Parser and AST unmodified
+- Core maintains zero external NuGet dependencies
+- Both netstandard2.0 and net10.0 supported
+
 ## [1.0.0-beta.10] - 2026-04-05
 
 ### Added

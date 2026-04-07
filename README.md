@@ -200,6 +200,21 @@ See [docs/CLI.md](docs/CLI.md) for the full reference.
 | Extension packaging (`ext install`, `ext list`, `ext remove`) | Supported |
 | Extension registry (`ext info`, `ext search`, dependency validation) | Supported |
 | Extension safety (`ext status`, failure disabling, API version) | Supported |
+| Output processors (`IOutputProcessor`, post-render transforms) | Supported |
+| Kroki diagram runner (HTTP-based, no local tools needed) | Supported |
+| Extension lifecycle (`IExtensionLifecycle`) | Supported |
+| Extension enable/disable (`ext enable`, `ext disable`) | Supported |
+| Zip-based extension install (`ext install myext.zip`) | Supported |
+| Extension diagnostics (`RenderContext.AddDiagnostic`) | Supported |
+
+### Editor Integration
+
+| Feature | Status |
+|---------|--------|
+| DocumentChange model for incremental edits | Supported |
+| DocumentSnapshot versioned document state | Supported |
+| Cache-aware incremental re-parse (`ParseIncremental`) | Supported |
+| Extension diagnostics after Convert() | Supported |
 
 ### Not yet supported
 
@@ -237,6 +252,7 @@ The data flow for the Avalonia viewer is strictly layered: `AST → Layout → A
 | [EXTENSION_REGISTRY.md](docs/EXTENSION_REGISTRY.md) | Extension registry, search, and dependency validation |
 | [EXTENSION_SAFETY.md](docs/EXTENSION_SAFETY.md) | Extension safety: failure disabling, API version, structured loading |
 | [PERFORMANCE.md](docs/PERFORMANCE.md) | Performance caching: parse cache, render cache, configuration |
+| [EDITOR_INTEGRATION.md](docs/EDITOR_INTEGRATION.md) | Editor APIs: DocumentChange, DocumentSnapshot, ParseIncremental |
 | [DIAGRAMS.md](docs/DIAGRAMS.md) | Diagram block processing with external tools |
 | [COMPATIBILITY.md](docs/COMPATIBILITY.md) | Asciidoctor conformance and known differences |
 | [SECURITY.md](docs/SECURITY.md) | Security considerations for untrusted input |

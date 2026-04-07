@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using AdocNet.Extensions;
 
 namespace AdocNet.Cli;
@@ -13,7 +14,7 @@ internal sealed class ExtensionCommands
     internal static CliArgs ParseExtArguments(string[] args)
     {
         if (args.Length < 2)
-            return new CliArgs.Error("Usage: adocnet ext <list|install|remove|info|search|status> [args]");
+            return new CliArgs.Error("Usage: adocnet ext <list|install|remove|info|search|status|enable|disable> [args]");
 
         var action = args[1];
 
@@ -74,8 +75,26 @@ internal sealed class ExtensionCommands
             case "status":
                 return new CliArgs.Ext.ExtStatus();
 
+            case "enable":
+            {
+                if (args.Length < 3)
+                    return new CliArgs.Error("Usage: adocnet ext enable <name>");
+                if (args.Length > 3)
+                    return new CliArgs.Error("Usage: adocnet ext enable <name>");
+                return new CliArgs.Ext.ExtEnable(args[2]);
+            }
+
+            case "disable":
+            {
+                if (args.Length < 3)
+                    return new CliArgs.Error("Usage: adocnet ext disable <name>");
+                if (args.Length > 3)
+                    return new CliArgs.Error("Usage: adocnet ext disable <name>");
+                return new CliArgs.Ext.ExtDisable(args[2]);
+            }
+
             default:
-                return new CliArgs.Error($"Unknown ext command: {action}. Available: list, install, remove, info, search, status.");
+                return new CliArgs.Error($"Unknown ext command: {action}. Available: list, install, remove, info, search, status, enable, disable.");
         }
     }
 
@@ -87,6 +106,8 @@ internal sealed class ExtensionCommands
         CliArgs.Ext.ExtInfo info => ExecuteInfo(info.Name),
         CliArgs.Ext.ExtSearch search => ExecuteSearch(search.Keyword),
         CliArgs.Ext.ExtStatus => ExecuteStatus(),
+        CliArgs.Ext.ExtEnable enable => ExecuteEnable(enable.Name),
+        CliArgs.Ext.ExtDisable disable => ExecuteDisable(disable.Name),
         _ => ExitError,
     };
 
@@ -114,7 +135,8 @@ internal sealed class ExtensionCommands
 
         foreach (var m in manifests)
         {
-            Console.WriteLine($"  {m.Name.PadRight(nameWidth)}  {m.Version.PadRight(versionWidth)}  {m.Description}");
+            var status = m.Enabled ? "" : " [disabled]";
+            Console.WriteLine($"  {m.Name.PadRight(nameWidth)}  {m.Version.PadRight(versionWidth)}  {m.Description}{status}");
         }
 
         Console.WriteLine();
@@ -126,6 +148,66 @@ internal sealed class ExtensionCommands
     {
         var fullSource = Path.GetFullPath(sourcePath);
 
+        // Zip file install
+        if (fullSource.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) && File.Exists(fullSource))
+            return ExecuteInstallFromZip(fullSource, force);
+
+        // Directory install
+        return ExecuteInstallFromDirectory(fullSource, force);
+    }
+
+    private static int ExecuteInstallFromZip(string zipPath, bool force)
+    {
+        string? tempDir = null;
+        try
+        {
+            tempDir = Path.Combine(Path.GetTempPath(), "adocnet-install-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+
+            try
+            {
+                ZipFile.ExtractToDirectory(zipPath, tempDir);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Error: Failed to extract zip: {ex.Message}");
+                return ExitError;
+            }
+
+            // Find manifest: at root or in single top-level subdirectory
+            var sourceDir = ResolveExtractedDirectory(tempDir);
+            if (sourceDir is null)
+            {
+                Console.Error.WriteLine("Error: No extension.json found in zip archive.");
+                return ExitError;
+            }
+
+            return ExecuteInstallFromDirectory(sourceDir, force);
+        }
+        finally
+        {
+            if (tempDir is not null)
+            {
+                try { Directory.Delete(tempDir, recursive: true); }
+                catch { /* best-effort cleanup */ }
+            }
+        }
+    }
+
+    private static string? ResolveExtractedDirectory(string extractedDir)
+    {
+        if (File.Exists(Path.Combine(extractedDir, "extension.json")))
+            return extractedDir;
+
+        var subdirs = Directory.GetDirectories(extractedDir);
+        if (subdirs.Length == 1 && File.Exists(Path.Combine(subdirs[0], "extension.json")))
+            return subdirs[0];
+
+        return null;
+    }
+
+    private static int ExecuteInstallFromDirectory(string fullSource, bool force)
+    {
         if (!Directory.Exists(fullSource))
         {
             Console.Error.WriteLine($"Error: Source path not found: {fullSource}");
@@ -281,6 +363,7 @@ internal sealed class ExtensionCommands
             return ExitSuccess;
         }
 
+        var registry = ExtensionRegistry.Load(null, msg => { });
         var results = new List<(string Name, string Version, ExtensionState State, string Reason)>();
 
         foreach (var subdir in subdirs)
@@ -293,6 +376,15 @@ internal sealed class ExtensionCommands
                 var dirName = Path.GetFileName(subdir);
                 results.Add((dirName, "?", ExtensionState.Failed,
                     warnings.Count > 0 ? warnings[0] : "Invalid manifest"));
+                continue;
+            }
+
+            // Check enabled state from registry
+            var regEntry = registry.Find(manifest.Name);
+            if (regEntry is not null && !regEntry.Enabled)
+            {
+                results.Add((manifest.Name, manifest.Version, ExtensionState.Disabled,
+                    "Disabled by user"));
                 continue;
             }
 
@@ -362,7 +454,34 @@ internal sealed class ExtensionCommands
         var loaded = results.Count(r => r.State == ExtensionState.Loaded);
         var failed = results.Count(r => r.State == ExtensionState.Failed);
         var incompatible = results.Count(r => r.State == ExtensionState.Incompatible);
-        Console.WriteLine($"{results.Count} extension(s): {loaded} loaded, {failed} failed, {incompatible} incompatible.");
+        var disabled = results.Count(r => r.State == ExtensionState.Disabled);
+        Console.WriteLine($"{results.Count} extension(s): {loaded} loaded, {failed} failed, {incompatible} incompatible, {disabled} disabled.");
+        return ExitSuccess;
+    }
+
+    private static int ExecuteEnable(string name)
+    {
+        var registry = ExtensionRegistry.Load(null, msg => Console.Error.WriteLine($"Warning: {msg}"));
+        if (!registry.SetEnabled(name, true))
+        {
+            Console.Error.WriteLine($"Error: Extension '{name}' is not installed.");
+            return ExitError;
+        }
+        registry.Save();
+        Console.WriteLine($"Enabled extension '{name}'.");
+        return ExitSuccess;
+    }
+
+    private static int ExecuteDisable(string name)
+    {
+        var registry = ExtensionRegistry.Load(null, msg => Console.Error.WriteLine($"Warning: {msg}"));
+        if (!registry.SetEnabled(name, false))
+        {
+            Console.Error.WriteLine($"Error: Extension '{name}' is not installed.");
+            return ExitError;
+        }
+        registry.Save();
+        Console.WriteLine($"Disabled extension '{name}'.");
         return ExitSuccess;
     }
 

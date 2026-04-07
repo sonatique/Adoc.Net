@@ -23,16 +23,28 @@ public sealed class ExtensionInfo
     /// </summary>
     public IReadOnlyList<string> Dependencies { get; }
 
+    /// <summary>Whether this extension is enabled for loading. Default: true.</summary>
+    public bool Enabled { get; }
+
     /// <summary>
     /// Creates a new <see cref="ExtensionInfo"/> with the specified metadata.
     /// </summary>
-    public ExtensionInfo(string name, string version, string description, string installedPath, IReadOnlyList<string> dependencies)
+    public ExtensionInfo(string name, string version, string description, string installedPath, IReadOnlyList<string> dependencies, bool enabled = true)
     {
         Name = name ?? throw new ArgumentNullException(nameof(name));
         Version = version ?? throw new ArgumentNullException(nameof(version));
         Description = description ?? throw new ArgumentNullException(nameof(description));
         InstalledPath = installedPath ?? throw new ArgumentNullException(nameof(installedPath));
         Dependencies = dependencies ?? throw new ArgumentNullException(nameof(dependencies));
+        Enabled = enabled;
+    }
+
+    /// <summary>
+    /// Returns a copy of this info with the specified enabled state.
+    /// </summary>
+    public ExtensionInfo WithEnabled(bool enabled)
+    {
+        return new ExtensionInfo(Name, Version, Description, InstalledPath, Dependencies, enabled);
     }
 
     /// <summary>
@@ -66,18 +78,21 @@ public sealed class ExtensionInfo
         fields.TryGetValue("description", out var description);
         fields.TryGetValue("path", out var path);
         fields.TryGetValue("dependencies", out var deps);
+        fields.TryGetValue("enabled", out var enabledStr);
 
         if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(path))
             return null;
 
         var depList = ParseDependencies(deps);
+        var enabled = !string.Equals(enabledStr, "false", StringComparison.OrdinalIgnoreCase);
 
         return new ExtensionInfo(
             name: name!.Trim(),
             version: version?.Trim() ?? "0.0.0",
             description: description?.Trim() ?? "",
             installedPath: path!.Trim(),
-            dependencies: depList);
+            dependencies: depList,
+            enabled: enabled);
     }
 
     /// <summary>
