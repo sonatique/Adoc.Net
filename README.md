@@ -206,6 +206,17 @@ See [docs/CLI.md](docs/CLI.md) for the full reference.
 | Extension enable/disable (`ext enable`, `ext disable`) | Supported |
 | Zip-based extension install (`ext install myext.zip`) | Supported |
 | Extension diagnostics (`RenderContext.AddDiagnostic`) | Supported |
+| Extension capabilities (`IExtensionCapabilities`, determinism declaration) | Supported |
+| Extension priority (`IExtensionPriority`, execution ordering) | Supported |
+| Max engine version (`maxAdocNetVersion` in manifest) | Supported |
+
+### Performance
+
+| Feature | Status |
+|---------|--------|
+| Parse cache (SHA-256 keyed LRU) | Supported |
+| Render cache (composite key, deterministic extensions only) | Supported |
+| Persistent cache (disk-based, cross-session render cache) | Supported |
 
 ### Editor Integration
 

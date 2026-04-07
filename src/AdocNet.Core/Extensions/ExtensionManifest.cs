@@ -31,6 +31,9 @@ public sealed class ExtensionManifest
     /// </summary>
     public string? ApiVersion { get; }
 
+    /// <summary>Gets the maximum compatible AdocNet version, or null if no maximum is specified.</summary>
+    public string? MaxAdocNetVersion { get; }
+
     /// <summary>
     /// Gets the dependency specifications for this extension.
     /// Each entry is a string like "name >= version" or just "name".
@@ -38,14 +41,15 @@ public sealed class ExtensionManifest
     public IReadOnlyList<string> Dependencies { get; }
 
     private ExtensionManifest(string name, string version, string description, string entry,
-        string? minAdocNetVersion, string directoryPath, string? apiVersion,
-        IReadOnlyList<string> dependencies)
+        string? minAdocNetVersion, string? maxAdocNetVersion, string directoryPath,
+        string? apiVersion, IReadOnlyList<string> dependencies)
     {
         Name = name;
         Version = version;
         Description = description;
         Entry = entry;
         MinAdocNetVersion = minAdocNetVersion;
+        MaxAdocNetVersion = maxAdocNetVersion;
         DirectoryPath = directoryPath;
         ApiVersion = apiVersion;
         Dependencies = dependencies;
@@ -125,6 +129,7 @@ public sealed class ExtensionManifest
         fields.TryGetValue("description", out var description);
         fields.TryGetValue("entry", out var entry);
         fields.TryGetValue("minAdocNetVersion", out var minVersion);
+        fields.TryGetValue("maxAdocNetVersion", out var maxVersion);
         fields.TryGetValue("apiVersion", out var apiVersion);
         fields.TryGetValue("dependencies", out var depsString);
 
@@ -159,6 +164,7 @@ public sealed class ExtensionManifest
             description: description?.Trim() ?? "",
             entry: entry!.Trim(),
             minAdocNetVersion: string.IsNullOrWhiteSpace(minVersion) ? null : minVersion!.Trim(),
+            maxAdocNetVersion: string.IsNullOrWhiteSpace(maxVersion) ? null : maxVersion!.Trim(),
             directoryPath: extensionDirectory,
             apiVersion: string.IsNullOrWhiteSpace(apiVersion) ? null : apiVersion!.Trim(),
             dependencies: dependencies
