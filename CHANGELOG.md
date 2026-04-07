@@ -3,6 +3,33 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0-beta.12] - 2026-04-07
+
+### Added — Performance II
+- `IExtensionCapabilities` interface with `IsDeterministic` property for declaring processor determinism
+- Render cache now works with extensions when all processors declare `IsDeterministic = true`
+- Persistent (disk-based) render cache via `EnablePersistentCache` for cross-session reuse
+- `PersistentCacheDirectory` and `MaxPersistentCacheEntries` configuration properties
+- Atomic writes (temp file + rename) for crash-safe persistent cache
+
+### Added — Extension Maturity
+- `IExtensionPriority` interface with `int Priority` for controlling processor execution order
+- `maxAdocNetVersion` field in `extension.json` for forward-compatibility boundaries
+- Priority-based processor sorting: lower priority values execute first, FIFO within same priority
+
+### Changed
+- Render cache disabled when any registered processor is non-deterministic (safety fix)
+- Parse cache bypassed when non-deterministic extensions are present to prevent AST double-mutation
+- `ClearCache()` now also clears persistent cache files on disk
+- Processors sorted by priority on first Convert() call (stable sort preserving FIFO)
+
+### Compatibility
+- All new API is additive; no existing public API changed
+- Zero-extension behavior is byte-identical to beta.11
+- Parser and AST unmodified
+- Core maintains zero external NuGet dependencies
+- Both netstandard2.0 and net10.0 supported
+
 ## [1.0.0-beta.11] - 2026-04-06
 
 ### Added — Editor Integration

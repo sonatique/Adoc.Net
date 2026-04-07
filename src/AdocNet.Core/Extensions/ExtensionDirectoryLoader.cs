@@ -50,13 +50,25 @@ public static class ExtensionDirectoryLoader
             if (registryEntry is not null && !registryEntry.Enabled)
                 continue;
 
+            var currentVersion = GetCurrentAdocNetVersion();
+
             if (manifest.MinAdocNetVersion is not null)
             {
-                var currentVersion = GetCurrentAdocNetVersion();
                 if (!IsVersionCompatible(currentVersion, manifest.MinAdocNetVersion))
                 {
                     onWarning?.Invoke(
                         $"Extension '{manifest.Name}' requires AdocNet >= {manifest.MinAdocNetVersion}, " +
+                        $"current is {currentVersion}, skipping");
+                    continue;
+                }
+            }
+
+            if (manifest.MaxAdocNetVersion is not null)
+            {
+                if (!IsVersionCompatible(manifest.MaxAdocNetVersion, currentVersion))
+                {
+                    onWarning?.Invoke(
+                        $"Extension '{manifest.Name}' requires AdocNet <= {manifest.MaxAdocNetVersion}, " +
                         $"current is {currentVersion}, skipping");
                     continue;
                 }

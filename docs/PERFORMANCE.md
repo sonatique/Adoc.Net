@@ -112,27 +112,41 @@ output stream. Parse and render allocations are completely eliminated:
 | Medium (~50 KB) | 825 KB          | 44 KB              |
 | Large (~500 KB) | 22,513 KB       | 1,620 KB           |
 
-## Extensions and Caching
+## Extensions and Caching (beta.12)
 
-Both caches work correctly when extensions are registered:
+### Render Cache with Deterministic Extensions
 
-- **Parse cache**: Returns the pre-extension AST. Extensions still run on
-  every Convert() call (even on cache hit). This is correct because extensions
-  are deterministic — same AST in, same mutations out.
+The render cache is only enabled when ALL registered processors declare
+themselves as deterministic via `IExtensionCapabilities`:
 
-- **Render cache**: Returns the final rendered bytes (after extensions have run).
-  Valid because extensions are frozen after the first Convert() call and are
-  deterministic.
+```csharp
+public class MyProcessor : IBlockProcessor, IExtensionCapabilities
+{
+    public bool IsDeterministic => true;  // enables render cache
+    // ...
+}
+```
+
+- If ALL processors implement `IExtensionCapabilities` and return `true`,
+  the render cache works normally (same input → same output, cache hit).
+- If ANY processor does not implement `IExtensionCapabilities`, or returns
+  `false`, the render cache is disabled (parse cache still works).
+- With no extensions registered, the render cache always works.
+
+### Parse Cache
+
+The parse cache stores the pre-extension AST. It works independently of
+extension determinism when the render cache is active (render cache protects
+against double-mutation). When the render cache is disabled (non-deterministic
+extensions), the parse cache is also bypassed to prevent AST mutation bugs.
 
 ### When to Disable Caching
 
 Disable caching (`EnableCaching = false`) or call `ClearCache()` if:
 
 - You register extensions that depend on **external mutable state** (files,
-  network responses, timestamps). The render cache assumes deterministic output.
-- You modify extension configuration between Convert() calls (extensions are
-  frozen after the first call, but if you create a new engine with different
-  extensions, caching is per-engine and won't cross-contaminate).
+  network responses, timestamps) and don't implement `IExtensionCapabilities`.
+- You modify extension configuration between Convert() calls.
 
 ### Cache Invalidation on Registration
 
@@ -171,6 +185,48 @@ engine.MaxCacheEntries = 4;  // for large documents
 ```
 
 The default of 16 entries works well for typical documentation projects.
+
+## Persistent Cache (beta.12)
+
+The persistent cache writes render cache entries to disk for cross-session reuse.
+When a document was rendered in a previous session, the next session can skip
+parsing, extensions, and rendering entirely.
+
+```csharp
+var engine = new AdocEngine(renderer, parser)
+{
+    EnableCaching = true,
+    EnablePersistentCache = true,                    // opt-in (default: false)
+    PersistentCacheDirectory = "~/.adocnet/cache/",  // default location
+    MaxPersistentCacheEntries = 256                   // default: 256
+};
+```
+
+### What Is Persisted
+
+**Render cache only.** The parse cache stores in-memory object references
+(`DocumentNode`) which are not serializable. The render cache stores `byte[]`
+which is trivially persisted.
+
+### Invalidation
+
+- **Version mismatch**: cache files include the AdocNet version. If the engine
+  version changes, old entries are discarded on read.
+- **Manual clear**: `ClearCache()` clears both in-memory and disk caches.
+- **Capacity eviction**: oldest files are deleted when count exceeds
+  `MaxPersistentCacheEntries`.
+
+### File Layout
+
+Cache files are stored one-per-entry in a versioned subdirectory:
+
+```
+~/.adocnet/cache/v1/
+    A1B2C3D4...F0.bin
+    E5F6A7B8...12.bin
+```
+
+Writes use atomic temp-file-plus-rename to prevent corruption.
 
 ## Implementation Details
 

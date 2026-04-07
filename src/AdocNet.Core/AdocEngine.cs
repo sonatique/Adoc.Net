@@ -8,7 +8,7 @@ namespace AdocNet;
 /// <summary>
 /// High-level facade that combines parsing and rendering of AsciiDoc source text.
 /// </summary>
-public sealed class AdocEngine
+public sealed partial class AdocEngine
 {
     /// <summary>
     /// The extension API version supported by this build.
@@ -25,11 +25,6 @@ public sealed class AdocEngine
     private readonly Dictionary<object, int> _failureCounts = new();
     private readonly HashSet<object> _disabledProcessors = new();
     private bool _frozen;
-    private bool _enableCaching;
-    private int _maxCacheEntries = 16;
-    private LruCache<string, DocumentNode>? _parseCache;
-    private LruCache<string, byte[]>? _renderCache;
-
     /// <summary>Gets the renderer used to produce output.</summary>
     public IDocumentRenderer Renderer { get; init; }
 
@@ -57,44 +52,6 @@ public sealed class AdocEngine
     public IReadOnlyList<Diagnostic> LastExtensionDiagnostics { get; private set; } = Array.Empty<Diagnostic>();
 
     /// <summary>
-    /// Enables parse and render caching. When true, repeated <see cref="Convert"/> calls
-    /// with the same input and options return cached results.
-    /// Default: false (opt-in). Setting to false clears all caches.
-    /// </summary>
-    public bool EnableCaching
-    {
-        get => _enableCaching;
-        set
-        {
-            _enableCaching = value;
-            if (!value)
-            {
-                _parseCache?.Clear();
-                _renderCache?.Clear();
-                _parseCache = null;
-                _renderCache = null;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Maximum number of entries in each cache (parse and render caches are sized independently).
-    /// Default: 16. Minimum: 1. Uses LRU eviction when full.
-    /// </summary>
-    public int MaxCacheEntries
-    {
-        get => _maxCacheEntries;
-        set
-        {
-            if (value < 1)
-                throw new ArgumentOutOfRangeException(nameof(value), "MaxCacheEntries must be at least 1.");
-            _maxCacheEntries = value;
-            if (_parseCache is not null) _parseCache.Capacity = value;
-            if (_renderCache is not null) _renderCache.Capacity = value;
-        }
-    }
-
-    /// <summary>
     /// Initializes a new <see cref="AdocEngine"/> with the specified renderer and parser.
     /// </summary>
     /// <param name="renderer">The renderer used to produce output.</param>
@@ -115,6 +72,7 @@ public sealed class AdocEngine
     {
         ThrowIfFrozen();
         _documentProcessors.Add(processor ?? throw new ArgumentNullException(nameof(processor)));
+        _allProcessorsDeterministic = null;
         ClearCacheInternal();
         return this;
     }
@@ -129,6 +87,7 @@ public sealed class AdocEngine
     {
         ThrowIfFrozen();
         _blockProcessors.Add(processor ?? throw new ArgumentNullException(nameof(processor)));
+        _allProcessorsDeterministic = null;
         ClearCacheInternal();
         return this;
     }
@@ -143,6 +102,7 @@ public sealed class AdocEngine
     {
         ThrowIfFrozen();
         _inlineProcessors.Add(processor ?? throw new ArgumentNullException(nameof(processor)));
+        _allProcessorsDeterministic = null;
         ClearCacheInternal();
         return this;
     }
@@ -238,31 +198,64 @@ public sealed class AdocEngine
 
         EnsureCaches();
         var inputHash = CacheKeyBuilder.ComputeInputHash(input);
+        var useRenderCache = CanUseRenderCache();
 
         // Check render cache first (skips parse + extensions + render)
-        var renderKey = CacheKeyBuilder.ComputeRenderKey(inputHash, Renderer.Format, opts);
-        if (_renderCache!.TryGet(renderKey, out var cachedBytes))
+        if (useRenderCache)
         {
-            var finalCached = RunOutputProcessors(cachedBytes);
-            output.Write(finalCached, 0, finalCached.Length);
-            LastExtensionDiagnostics = Array.Empty<Diagnostic>();
-            return;
+            var renderKey = CacheKeyBuilder.ComputeRenderKey(inputHash, Renderer.Format, opts);
+            if (_renderCache!.TryGet(renderKey, out var cachedBytes))
+            {
+                var finalCached = RunOutputProcessors(cachedBytes);
+                output.Write(finalCached, 0, finalCached.Length);
+                LastExtensionDiagnostics = Array.Empty<Diagnostic>();
+                return;
+            }
+
+            // Check persistent cache (second tier)
+            var persistent = GetPersistentCache();
+            if (persistent is not null && persistent.TryLoad(renderKey, out var diskBytes))
+            {
+                _renderCache.Set(renderKey, diskBytes);
+                var finalDisk = RunOutputProcessors(diskBytes);
+                output.Write(finalDisk, 0, finalDisk.Length);
+                LastExtensionDiagnostics = Array.Empty<Diagnostic>();
+                return;
+            }
         }
 
-        // Check parse cache (skips parse only)
-        if (!_parseCache!.TryGet(inputHash, out var doc))
+        // Parse cache: safe when render cache protects us or when no extensions mutate the AST.
+        // When extensions are present but render cache is disabled, skip parse cache because
+        // extensions mutate the cached AST reference in-place (double-mutation on cache hit).
+        var hasExtensions = _documentProcessors.Count > 0 ||
+                            _blockProcessors.Count > 0 ||
+                            _inlineProcessors.Count > 0;
+        var useParseCache = useRenderCache || !hasExtensions;
+
+        DocumentNode doc;
+        if (useParseCache && _parseCache!.TryGet(inputHash, out var cachedDoc))
+        {
+            doc = cachedDoc;
+        }
+        else
         {
             doc = Parser(input);
-            _parseCache.Set(inputHash, doc);
+            if (useParseCache)
+                _parseCache!.Set(inputHash, doc);
         }
 
         RunExtensions(doc, opts);
 
-        // Render to buffer, cache pre-processor output, run processors, write
+        // Render to buffer, optionally cache, run output processors, write
         using var buffer = new MemoryStream();
         Renderer.Render(doc, buffer, opts);
         var bytes = buffer.ToArray();
-        _renderCache.Set(renderKey, bytes);
+        if (useRenderCache)
+        {
+            var rk = CacheKeyBuilder.ComputeRenderKey(inputHash, Renderer.Format, opts);
+            _renderCache!.Set(rk, bytes);
+            GetPersistentCache()?.Save(rk, bytes);
+        }
         var final = RunOutputProcessors(bytes);
         output.Write(final, 0, final.Length);
     }
@@ -406,44 +399,17 @@ public sealed class AdocEngine
         return new DocumentSnapshot(snapshot.Version, snapshot.Text, parsed);
     }
 
-    /// <summary>
-    /// Clears all cached parse results and render outputs.
-    /// Call this if external state affecting extensions has changed.
-    /// </summary>
-    public void ClearCache()
-    {
-        _parseCache?.Clear();
-        _renderCache?.Clear();
-    }
-
-    private void ClearCacheInternal()
-    {
-        _parseCache?.Clear();
-        _renderCache?.Clear();
-    }
-
-    private void ConvertUncached(string input, Stream output, RenderOptions opts)
-    {
-        var doc = Parser(input);
-        RunExtensions(doc, opts);
-
-        if (_outputProcessors.Count == 0)
-        {
-            Renderer.Render(doc, output, opts);
-            return;
-        }
-
-        using var buffer = new MemoryStream();
-        Renderer.Render(doc, buffer, opts);
-        var bytes = RunOutputProcessors(buffer.ToArray());
-        output.Write(bytes, 0, bytes.Length);
-    }
-
     private void RunExtensions(DocumentNode doc, RenderOptions opts)
     {
         if (_documentProcessors.Count > 0 || _blockProcessors.Count > 0 || _inlineProcessors.Count > 0)
         {
-            _frozen = true;
+            if (!_frozen)
+            {
+                _frozen = true;
+                SortByPriority(_documentProcessors);
+                SortByPriority(_blockProcessors);
+                SortByPriority(_inlineProcessors);
+            }
             var context = new RenderContext(doc, opts);
             ProcessingPipeline.Run(doc, context, _documentProcessors, _blockProcessors, _inlineProcessors,
                 OnWarning, _failureCounts, _disabledProcessors, MaxProcessorFailures);
@@ -453,29 +419,6 @@ public sealed class AdocEngine
         {
             LastExtensionDiagnostics = Array.Empty<Diagnostic>();
         }
-    }
-
-    private byte[] RunOutputProcessors(byte[] rendered)
-    {
-        var result = rendered;
-        foreach (var processor in _outputProcessors)
-        {
-            try
-            {
-                result = processor.Process(result, Renderer.Format);
-            }
-            catch (Exception ex)
-            {
-                OnWarning?.Invoke($"Output processor {processor.GetType().Name} failed: {ex.Message}");
-            }
-        }
-        return result;
-    }
-
-    private void EnsureCaches()
-    {
-        _parseCache ??= new LruCache<string, DocumentNode>(_maxCacheEntries);
-        _renderCache ??= new LruCache<string, byte[]>(_maxCacheEntries);
     }
 
     /// <summary>
@@ -523,6 +466,23 @@ public sealed class AdocEngine
                 }
             }
         }
+    }
+
+    private static void SortByPriority<T>(List<T> processors) where T : class
+    {
+        if (processors.Count <= 1)
+            return;
+
+        // Stable sort: OrderBy priority, ThenBy registration index (preserves FIFO for same priority)
+        var sorted = processors
+            .Select((p, i) => (processor: p, index: i))
+            .OrderBy(x => x.processor is IExtensionPriority ep ? ep.Priority : 1000)
+            .ThenBy(x => x.index)
+            .Select(x => x.processor)
+            .ToList();
+
+        processors.Clear();
+        processors.AddRange(sorted);
     }
 
     private void ThrowIfFrozen()

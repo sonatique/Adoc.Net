@@ -499,6 +499,57 @@ context.AddDiagnostic(new Diagnostic(
 
 After `Convert()`, read `engine.LastExtensionDiagnostics`.
 
+## Extension Capabilities (beta.12)
+
+Processors can declare their determinism to enable render cache optimizations:
+
+```csharp
+public class MyProcessor : IBlockProcessor, IExtensionCapabilities
+{
+    public bool IsDeterministic => true;
+    // ... IBlockProcessor members
+}
+```
+
+When ALL registered processors implement `IExtensionCapabilities` and return
+`IsDeterministic = true`, the render cache is enabled even with extensions.
+Processors that don't implement the interface are treated as non-deterministic
+(safe default — render cache disabled).
+
+## Extension Priority (beta.12)
+
+Processors can declare their execution priority. Lower values execute first:
+
+```csharp
+public class EarlyProcessor : IDocumentProcessor, IExtensionPriority
+{
+    public int Priority => 100;  // runs before default (1000)
+    public void Process(DocumentNode document) { /* ... */ }
+}
+```
+
+- Default priority (no `IExtensionPriority`): **1000**
+- Same priority: FIFO registration order preserved
+- Output processors are NOT sorted by priority (always FIFO)
+- Typical ranges: 0-100 (early), 500 (normal), 900-1000 (late)
+
+## Max Engine Version (beta.12)
+
+Extensions can declare a maximum compatible AdocNet version in `extension.json`:
+
+```json
+{
+  "name": "my-extension",
+  "entry": "MyExtension.dll",
+  "minAdocNetVersion": "1.0.0-beta.7",
+  "maxAdocNetVersion": "2.0.0"
+}
+```
+
+If the current engine version exceeds `maxAdocNetVersion`, the extension is
+skipped with a warning and state `Incompatible`. This allows extension authors
+to declare forward-compatibility boundaries.
+
 ## See Also
 
 - [Usage Guide](USAGE.md) — parsing and rendering API
