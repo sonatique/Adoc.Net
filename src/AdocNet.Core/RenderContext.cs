@@ -8,6 +8,7 @@ namespace AdocNet;
 public sealed class RenderContext
 {
     private readonly Dictionary<Type, object> _state = new();
+    private readonly List<Diagnostic> _diagnostics = new();
 
     /// <summary>Gets the document being rendered.</summary>
     public DocumentNode Document { get; }
@@ -19,6 +20,11 @@ public sealed class RenderContext
     public IReadOnlyDictionary<string, string> Attributes => Document.Attributes;
 
     /// <summary>
+    /// Gets all diagnostics emitted by extensions during processing.
+    /// </summary>
+    public IReadOnlyList<Diagnostic> Diagnostics => _diagnostics;
+
+    /// <summary>
     /// Initializes a new <see cref="RenderContext"/> for the given document and options.
     /// </summary>
     /// <param name="document">The document AST to render.</param>
@@ -27,6 +33,15 @@ public sealed class RenderContext
     {
         Document = document ?? throw new ArgumentNullException(nameof(document));
         Options = options ?? throw new ArgumentNullException(nameof(options));
+    }
+
+    /// <summary>
+    /// Adds a diagnostic produced during extension processing.
+    /// </summary>
+    /// <param name="diagnostic">The diagnostic to add.</param>
+    public void AddDiagnostic(Diagnostic diagnostic)
+    {
+        _diagnostics.Add(diagnostic ?? throw new ArgumentNullException(nameof(diagnostic)));
     }
 
     /// <summary>

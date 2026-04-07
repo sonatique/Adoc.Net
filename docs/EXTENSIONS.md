@@ -417,6 +417,88 @@ versions, but never block loading.
 
 See [Extension Registry Guide](EXTENSION_REGISTRY.md) for full documentation.
 
+## Output Processors (beta.11+)
+
+Output processors transform rendered output **after** the renderer completes.
+The pipeline becomes: Parse → Extensions → Render → **Output Processors**.
+
+```csharp
+public class HtmlMinifier : IOutputProcessor
+{
+    public byte[] Process(byte[] renderedOutput, string format)
+    {
+        if (format != "html") return renderedOutput;
+        var html = Encoding.UTF8.GetString(renderedOutput);
+        var minified = MinifyHtml(html);
+        return Encoding.UTF8.GetBytes(minified);
+    }
+}
+
+engine.RegisterOutputProcessor(new HtmlMinifier());
+```
+
+Multiple output processors chain sequentially in registration order.
+The render cache stores pre-processor output; processors always run.
+
+## Kroki Diagram Runner (beta.11+)
+
+`KrokiDiagramToolRunner` generates diagrams via the Kroki HTTP API instead of requiring
+local tool installations. Pass it to `DiagramBlockProcessor`:
+
+```csharp
+var kroki = new KrokiDiagramToolRunner("https://kroki.io");
+engine.RegisterBlockProcessor(new DiagramBlockProcessor(kroki, "./images"));
+```
+
+Supports all Kroki-supported languages: PlantUML, Mermaid, Graphviz, Ditaa, and more.
+This is opt-in — it introduces a network dependency.
+
+## Extension Lifecycle (beta.11+)
+
+Extensions that hold resources can implement `IExtensionLifecycle`:
+
+```csharp
+public class MyExtension : IBlockProcessor, IExtensionLifecycle
+{
+    public void Initialize() { /* open connections */ }
+    public void Dispose() { /* release resources */ }
+    // ... IBlockProcessor members
+}
+```
+
+`Initialize()` is called during dynamic loading. `Dispose()` is called via `engine.Shutdown()`.
+
+## Zip Install (beta.11+)
+
+Extensions can be installed from `.zip` files:
+
+```bash
+adocnet ext install myext.zip
+```
+
+The zip is extracted, validated for an `extension.json` manifest, and installed normally.
+
+## Enable/Disable Extensions (beta.11+)
+
+Extensions can be disabled without removing them:
+
+```bash
+adocnet ext disable myext    # stops loading, keeps files
+adocnet ext enable myext     # re-enables loading
+adocnet ext list             # shows [disabled] indicator
+```
+
+## Extension Diagnostics (beta.11+)
+
+Extensions can emit structured diagnostics during processing:
+
+```csharp
+context.AddDiagnostic(new Diagnostic(
+    DiagnosticSeverity.Warning, "Tool not found", node.Source));
+```
+
+After `Convert()`, read `engine.LastExtensionDiagnostics`.
+
 ## See Also
 
 - [Usage Guide](USAGE.md) — parsing and rendering API

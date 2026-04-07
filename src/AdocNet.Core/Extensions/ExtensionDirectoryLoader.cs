@@ -31,6 +31,10 @@ public static class ExtensionDirectoryLoader
         if (!Directory.Exists(dir))
             return results;
 
+        // Load registry to check enabled state
+        var registryDir = Path.GetDirectoryName(dir);
+        var registry = ExtensionRegistry.Load(registryDir, onWarning);
+
         var subdirs = Directory.GetDirectories(dir);
         Array.Sort(subdirs, (a, b) => string.Compare(
             Path.GetFileName(a), Path.GetFileName(b), StringComparison.Ordinal));
@@ -39,6 +43,11 @@ public static class ExtensionDirectoryLoader
         {
             var manifest = ExtensionManifest.Load(subdir, onWarning);
             if (manifest is null)
+                continue;
+
+            // Skip disabled extensions
+            var registryEntry = registry.Find(manifest.Name);
+            if (registryEntry is not null && !registryEntry.Enabled)
                 continue;
 
             if (manifest.MinAdocNetVersion is not null)
