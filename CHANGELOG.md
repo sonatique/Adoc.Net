@@ -3,6 +3,35 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0-beta.13] - 2026-04-08
+
+### Changed — API Improvement
+- `IDocumentProcessor.Process` now returns `bool` and receives `RenderContext` (was `void Process(DocumentNode)`)
+- `IBlockProcessor.Process` now returns `bool` (was `void`)
+- `IInlineProcessor.Process` now returns `bool` (was `void`)
+- `ProcessingPipeline` short-circuits when `Process()` returns `true` — remaining processors of the same type are skipped for that node
+- All built-in processors (`DocumentMetadataProcessor`, `AutoIdBlockProcessor`, `DiagramBlockProcessor`, `IconMacroProcessor`) return `false` to preserve existing behavior
+
+### Added — Extension Isolation
+- `ExtensionLoadContext` (net6.0+): each extension DLL loads in its own collectible `AssemblyLoadContext`
+- Host assemblies (AdocNet.Core, runtime) are never duplicated across contexts
+- Extension dependencies resolve from the extension's directory first, then fall back to the host
+- On netstandard2.0: `Assembly.LoadFrom()` fallback (no isolation)
+
+### Added — Hot-Reload
+- `AdocEngine.EnableHotReload` property watches extension directories for DLL changes
+- `ExtensionHotReloader` with 500ms debounce coalesces rapid file system events
+- Reload cycle: unfreeze → dispose lifecycle → clear processors → unload contexts → reload → re-freeze
+- `ClearCache()` called automatically after reload
+- `Shutdown()` stops all watchers and unloads extension contexts
+- Hot-reload requires net6.0+ (`NotSupportedException` on netstandard2.0)
+
+### Compatibility
+- Parser and AST unmodified
+- Core maintains zero external NuGet dependencies
+- Both netstandard2.0 and net10.0 compile
+- No backward compatibility constraint (no users/extensions/forks exist)
+
 ## [1.0.0-beta.12] - 2026-04-07
 
 ### Added — Performance II

@@ -92,17 +92,17 @@ public class ExtensionRegistrationTests
             return false;
         }
 
-        public void Process(BlockNode node, RenderContext context) { }
+        public bool Process(BlockNode node, RenderContext context) { return false; }
     }
 
     private sealed class StubDocumentProcessor : IDocumentProcessor
     {
-        public void Process(DocumentNode document) { }
+        public bool Process(DocumentNode document, RenderContext context) { return false; }
     }
 
     private sealed class StubInlineProcessor : IInlineProcessor
     {
         public bool CanProcess(InlineNode node) => false;
-        public void Process(InlineNode node, RenderContext context) { }
+        public bool Process(InlineNode node, RenderContext context) { return false; }
     }
 }

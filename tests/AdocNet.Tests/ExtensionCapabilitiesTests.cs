@@ -17,9 +17,10 @@ public class ExtensionCapabilitiesTests
     {
         public bool IsDeterministic => true;
 
-        public void Process(DocumentNode document)
+        public bool Process(DocumentNode document, RenderContext context)
         {
             // No-op — deterministic processor used for cache behavior testing
+            return false;
         }
     }
 
@@ -28,18 +29,20 @@ public class ExtensionCapabilitiesTests
     {
         public bool IsDeterministic => false;
 
-        public void Process(DocumentNode document)
+        public bool Process(DocumentNode document, RenderContext context)
         {
             // No-op — non-deterministic declaration disables render cache
+            return false;
         }
     }
 
     /// <summary>Processor that does NOT implement IExtensionCapabilities.</summary>
     private sealed class UndeclaredDocProcessor : IDocumentProcessor
     {
-        public void Process(DocumentNode document)
+        public bool Process(DocumentNode document, RenderContext context)
         {
             // No-op — absence of IExtensionCapabilities = non-deterministic
+            return false;
         }
     }
 
@@ -48,7 +51,7 @@ public class ExtensionCapabilitiesTests
     {
         public bool IsDeterministic => true;
         public bool CanProcess(BlockNode node) => false;
-        public void Process(BlockNode node, RenderContext context) { }
+        public bool Process(BlockNode node, RenderContext context) { return false; }
     }
 
     // ── Render cache with deterministic extensions ──────────────────────

@@ -29,9 +29,10 @@ public class ExtensionPriorityTests
             Priority = priority;
         }
 
-        public void Process(DocumentNode document)
+        public bool Process(DocumentNode document, RenderContext context)
         {
             // No AST mutation — just track order via a side channel
+            return false;
         }
     }
 
@@ -48,9 +49,10 @@ public class ExtensionPriorityTests
             _tracker = tracker;
         }
 
-        public void Process(DocumentNode document)
+        public bool Process(DocumentNode document, RenderContext context)
         {
             _tracker.ExecutionOrder.Add(_name);
+            return false;
         }
     }
 
@@ -65,9 +67,10 @@ public class ExtensionPriorityTests
             _tracker = tracker;
         }
 
-        public void Process(DocumentNode document)
+        public bool Process(DocumentNode document, RenderContext context)
         {
             _tracker.ExecutionOrder.Add(_name);
+            return false;
         }
     }
 

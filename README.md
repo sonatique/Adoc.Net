@@ -209,6 +209,9 @@ See [docs/CLI.md](docs/CLI.md) for the full reference.
 | Extension capabilities (`IExtensionCapabilities`, determinism declaration) | Supported |
 | Extension priority (`IExtensionPriority`, execution ordering) | Supported |
 | Max engine version (`maxAdocNetVersion` in manifest) | Supported |
+| bool Process() return with short-circuiting | Supported |
+| AssemblyLoadContext isolation (net6.0+) | Supported |
+| Extension hot-reload (`EnableHotReload`, FileSystemWatcher) | Supported |
 
 ### Performance
 

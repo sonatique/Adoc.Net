@@ -24,7 +24,7 @@ public sealed class AutoIdBlockProcessor : IBlockProcessor
         => node is SectionNode { Id: null };
 
     /// <inheritdoc />
-    public void Process(BlockNode node, RenderContext context)
+    public bool Process(BlockNode node, RenderContext context)
     {
         var section = (SectionNode)node;
         var slug = section.Title
@@ -33,5 +33,6 @@ public sealed class AutoIdBlockProcessor : IBlockProcessor
             .Replace(".", "")
             .Replace(",", "");
         section.Id = _prefix + slug;
+        return false;
     }
 }

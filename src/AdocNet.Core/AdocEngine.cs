@@ -24,6 +24,9 @@ public sealed partial class AdocEngine
     private readonly List<IExtensionLifecycle> _lifecycleExtensions = new();
     private readonly Dictionary<object, int> _failureCounts = new();
     private readonly HashSet<object> _disabledProcessors = new();
+#if NET6_0_OR_GREATER
+    private readonly List<Extensions.ExtensionLoadContext> _loadContexts = new();
+#endif
     private bool _frozen;
     /// <summary>Gets the renderer used to produce output.</summary>
     public IDocumentRenderer Renderer { get; init; }
@@ -131,7 +134,13 @@ public sealed partial class AdocEngine
     public AdocEngine LoadExtension(string assemblyPath)
     {
         ThrowIfFrozen();
+#if NET6_0_OR_GREATER
+        var (extensions, ctx) = ExtensionLoader.LoadAssemblyIsolated(assemblyPath, OnWarning);
+        if (ctx is not null)
+            _loadContexts.Add(ctx);
+#else
         var extensions = ExtensionLoader.LoadAssembly(assemblyPath, OnWarning);
+#endif
         RegisterExtensions(extensions);
         return this;
     }
@@ -146,7 +155,13 @@ public sealed partial class AdocEngine
     public AdocEngine LoadExtensions(string directoryPath)
     {
         ThrowIfFrozen();
+#if NET6_0_OR_GREATER
+        var (extensions, contexts) = ExtensionLoader.LoadDirectoryIsolated(directoryPath, OnWarning);
+        _loadContexts.AddRange(contexts);
+        StartWatching(directoryPath);
+#else
         var extensions = ExtensionLoader.LoadDirectory(directoryPath, OnWarning);
+#endif
         RegisterExtensions(extensions);
         return this;
     }
@@ -315,7 +330,13 @@ public sealed partial class AdocEngine
     {
         ThrowIfFrozen();
         var warnings = new List<string>();
+#if NET6_0_OR_GREATER
+        var (extensions, ctx) = ExtensionLoader.LoadAssemblyIsolated(assemblyPath, msg => warnings.Add(msg));
+        if (ctx is not null)
+            _loadContexts.Add(ctx);
+#else
         var extensions = ExtensionLoader.LoadAssembly(assemblyPath, msg => warnings.Add(msg));
+#endif
         var results = BuildLoadResults(assemblyPath, extensions, warnings);
         RegisterExtensions(extensions);
         return results;
@@ -332,7 +353,12 @@ public sealed partial class AdocEngine
     {
         ThrowIfFrozen();
         var warnings = new List<string>();
+#if NET6_0_OR_GREATER
+        var (extensions, contexts) = ExtensionLoader.LoadDirectoryIsolated(directoryPath, msg => warnings.Add(msg));
+        _loadContexts.AddRange(contexts);
+#else
         var extensions = ExtensionLoader.LoadDirectory(directoryPath, msg => warnings.Add(msg));
+#endif
         var results = BuildLoadResults(directoryPath, extensions, warnings);
         RegisterExtensions(extensions);
         return results;
@@ -438,7 +464,33 @@ public sealed partial class AdocEngine
                 OnWarning?.Invoke($"Extension lifecycle Dispose failed: {ex.Message}");
             }
         }
+
+#if NET6_0_OR_GREATER
+        StopAllWatchers();
+        UnloadAllExtensionContexts();
+#endif
     }
+
+#if NET6_0_OR_GREATER
+    /// <summary>
+    /// Unloads all extension AssemblyLoadContexts. Called during Shutdown and hot-reload.
+    /// </summary>
+    internal void UnloadAllExtensionContexts()
+    {
+        foreach (var ctx in _loadContexts)
+        {
+            try
+            {
+                ctx.Unload();
+            }
+            catch (Exception ex)
+            {
+                OnWarning?.Invoke($"Failed to unload extension context: {ex.Message}");
+            }
+        }
+        _loadContexts.Clear();
+    }
+#endif
 
     private void RegisterExtensions(List<object> extensions)
     {

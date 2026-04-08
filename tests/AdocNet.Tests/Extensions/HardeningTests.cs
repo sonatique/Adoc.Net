@@ -173,7 +173,7 @@ public class HardeningTests
     {
         public int InvokeCount { get; private set; }
         public bool CanProcess(BlockNode node) => true;
-        public void Process(BlockNode node, RenderContext context)
+        public bool Process(BlockNode node, RenderContext context)
         {
             InvokeCount++;
             throw new InvalidOperationException("always fails");
@@ -185,11 +185,12 @@ public class HardeningTests
         public int InvokeCount { get; private set; }
         public bool ShouldThrow { get; set; }
         public bool CanProcess(BlockNode node) => true;
-        public void Process(BlockNode node, RenderContext context)
+        public bool Process(BlockNode node, RenderContext context)
         {
             InvokeCount++;
             if (ShouldThrow)
                 throw new InvalidOperationException("conditional failure");
+            return false;
         }
     }
 
@@ -197,9 +198,10 @@ public class HardeningTests
     {
         public int InvokeCount { get; private set; }
         public bool CanProcess(BlockNode node) => true;
-        public void Process(BlockNode node, RenderContext context)
+        public bool Process(BlockNode node, RenderContext context)
         {
             InvokeCount++;
+            return false;
         }
     }
 

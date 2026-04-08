@@ -1,3 +1,4 @@
+using AdocNet;
 using AdocNet.Ast;
 using AdocNet.Extensions;
 
@@ -9,8 +10,9 @@ namespace AdocNet.TestExtension;
 public sealed class TestDocumentProcessor : IDocumentProcessor
 {
     /// <inheritdoc />
-    public void Process(DocumentNode document)
+    public bool Process(DocumentNode document, RenderContext context)
     {
         document.SetAttribute("test-extension-loaded", "true");
+        return false;
     }
 }

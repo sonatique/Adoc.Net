@@ -31,8 +31,10 @@ internal static class ProcessingPipeline
 
             try
             {
-                processor.Process(document);
+                var handled = processor.Process(document, context);
                 failureCounts?.Remove(processor);
+                if (handled)
+                    break;
             }
             catch (Exception ex)
             {
@@ -99,8 +101,10 @@ internal static class ProcessingPipeline
                 {
                     if (processor.CanProcess(block))
                     {
-                        processor.Process(block, context);
+                        var handled = processor.Process(block, context);
                         failureCounts?.Remove(processor);
+                        if (handled)
+                            break;
                     }
                 }
                 catch (Exception ex)
@@ -215,8 +219,10 @@ internal static class ProcessingPipeline
                 {
                     if (processor.CanProcess(inline))
                     {
-                        processor.Process(inline, context);
+                        var handled = processor.Process(inline, context);
                         failureCounts?.Remove(processor);
+                        if (handled)
+                            break;
                     }
                 }
                 catch (Exception ex)

@@ -11,7 +11,11 @@ public interface IDocumentProcessor
     /// <summary>
     /// Processes the document. May mutate the tree (add/remove/replace children,
     /// modify attributes, set title).
+    /// Returns true if this processor handled the document and remaining document
+    /// processors should be skipped.
     /// </summary>
     /// <param name="document">The root document node.</param>
-    void Process(DocumentNode document);
+    /// <param name="context">The render context for per-render state and diagnostics.</param>
+    /// <returns>True to skip remaining document processors; false to continue.</returns>
+    bool Process(DocumentNode document, RenderContext context);
 }

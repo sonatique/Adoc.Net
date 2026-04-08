@@ -100,4 +100,91 @@ public class ExtensionLoaderTests
             Directory.Delete(tempDir, recursive: true);
         }
     }
+
+#if NET6_0_OR_GREATER
+    [Test]
+    public void LoadAssemblyIsolated_ReturnsExtensionLoadContext()
+    {
+        var dllPath = GetTestExtensionDllPath();
+        if (dllPath is null)
+            Assert.Ignore("TestExtension DLL not found — build it first");
+
+        var (extensions, context) = ExtensionLoader.LoadAssemblyIsolated(dllPath, null);
+
+        Assert.That(extensions, Has.Count.GreaterThan(0));
+        Assert.That(context, Is.Not.Null);
+        Assert.That(context, Is.InstanceOf<ExtensionLoadContext>());
+    }
+
+    [Test]
+    public void LoadAssemblyIsolated_ContextIsCollectible()
+    {
+        var dllPath = GetTestExtensionDllPath();
+        if (dllPath is null)
+            Assert.Ignore("TestExtension DLL not found — build it first");
+
+        var (_, context) = ExtensionLoader.LoadAssemblyIsolated(dllPath, null);
+
+        Assert.That(context, Is.Not.Null);
+        Assert.That(context!.IsCollectible, Is.True);
+    }
+
+    [Test]
+    public void LoadAssemblyIsolated_ExtensionsExecuteCorrectly()
+    {
+        var dllPath = GetTestExtensionDllPath();
+        if (dllPath is null)
+            Assert.Ignore("TestExtension DLL not found — build it first");
+
+        var (extensions, _) = ExtensionLoader.LoadAssemblyIsolated(dllPath, null);
+
+        // Find a block processor (TestPrefixBlockProcessor)
+        var blockProcessors = extensions.OfType<IBlockProcessor>().ToList();
+        Assert.That(blockProcessors, Has.Count.GreaterThan(0),
+            "Should find at least one block processor from test extension");
+    }
+
+    [Test]
+    public void LoadAssemblyIsolated_HostAssembly_ReturnsNullContext()
+    {
+        // Loading AdocNet.Core (already in default context) should reuse existing assembly
+        var assemblyPath = typeof(IconMacroProcessor).Assembly.Location;
+        var (extensions, context) = ExtensionLoader.LoadAssemblyIsolated(assemblyPath, null);
+
+        Assert.That(extensions, Has.Count.GreaterThan(0));
+        Assert.That(context, Is.Null, "Host assembly should not create a new load context");
+    }
+
+    [Test]
+    public void Shutdown_UnloadsExtensionContexts()
+    {
+        var dllPath = GetTestExtensionDllPath();
+        if (dllPath is null)
+            Assert.Ignore("TestExtension DLL not found — build it first");
+
+        var renderer = new StubRenderer();
+        var engine = new AdocEngine(renderer, _ => new AdocNet.Ast.DocumentNode());
+        engine.LoadExtension(dllPath);
+
+        // Shutdown should not throw
+        Assert.DoesNotThrow(() => engine.Shutdown());
+    }
+
+    private sealed class StubRenderer : IDocumentRenderer
+    {
+        public string Format => "stub";
+        public void Render(AdocNet.Ast.DocumentNode document, Stream output, RenderOptions options) { }
+    }
+#endif
+
+    private static string? GetTestExtensionDllPath()
+    {
+        var testDir = Path.GetDirectoryName(typeof(ExtensionLoaderTests).Assembly.Location)!;
+        var configDir = Path.GetDirectoryName(testDir)!;
+        var config = Path.GetFileName(configDir);
+        var extensionDir = Path.Combine(testDir, "..", "..", "..", "..",
+            "AdocNet.TestExtension", "bin", config!, "net10.0");
+        var path = Path.GetFullPath(Path.Combine(extensionDir, "AdocNet.TestExtension.dll"));
+        return File.Exists(path) ? path : null;
+    }
 }

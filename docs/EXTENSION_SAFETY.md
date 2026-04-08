@@ -148,6 +148,39 @@ For each extension, `ext status`:
 Note: `ext status` cannot show the `Disabled` state because disabling is a runtime
 phenomenon that occurs during rendering. Use `ext status` for pre-flight checks.
 
+## AssemblyLoadContext Isolation (beta.13, net6.0+)
+
+On .NET 6.0 and later, each extension DLL is loaded in its own `AssemblyLoadContext`.
+This prevents version conflicts between extensions that depend on different versions
+of the same third-party library.
+
+- Each extension gets an `ExtensionLoadContext` (collectible, enabling unloading)
+- Dependencies are resolved from the extension's directory first, then from the host
+- Host assemblies (AdocNet.Core, runtime libraries) are never duplicated
+- On netstandard2.0: `Assembly.LoadFrom()` is used (no isolation)
+
+## Hot-Reload (beta.13, net6.0+)
+
+The engine can watch extension directories for DLL changes and automatically reload:
+
+```csharp
+var engine = new AdocEngine(renderer, parser);
+engine.EnableHotReload = true;
+engine.LoadExtensions("./my-extensions/");
+```
+
+When a DLL is modified, created, or deleted:
+1. A 500ms debounce waits for writes to complete
+2. Old extension contexts are unloaded
+3. New DLLs are loaded in fresh isolated contexts
+4. Processor lists are rebuilt and caches cleared
+5. `OnWarning` fires with a reload notification
+
+**Limitations:**
+- Hot-reload requires .NET 6.0+ (setting `EnableHotReload = true` on ns2.0 throws `NotSupportedException`)
+- All caches are cleared on reload (parse + render + persistent)
+- `Shutdown()` stops all file watchers and unloads extension contexts
+
 ## Best Practices
 
 1. **Set `MaxProcessorFailures` explicitly** in production applications. The default

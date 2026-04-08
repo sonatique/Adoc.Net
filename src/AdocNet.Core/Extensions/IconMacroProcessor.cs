@@ -13,7 +13,7 @@ public sealed class IconMacroProcessor : IInlineProcessor
         => node is InlineMacroNode { Name: "icon" };
 
     /// <inheritdoc />
-    public void Process(InlineNode node, RenderContext context)
+    public bool Process(InlineNode node, RenderContext context)
     {
         var macro = (InlineMacroNode)node;
         var symbol = macro.Target switch
@@ -28,5 +28,6 @@ public sealed class IconMacroProcessor : IInlineProcessor
         var text = new TextInlineNode { Value = symbol };
         var replacements = context.GetOrCreate(() => new NodeReplacements());
         replacements.Replace(node, text);
+        return false;
     }
 }

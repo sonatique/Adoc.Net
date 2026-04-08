@@ -34,7 +34,27 @@ public static class ExtensionLoader
         Assembly assembly;
         try
         {
+#if NET6_0_OR_GREATER
+            // Check if this assembly is already loaded in the default context.
+            // Loading a host assembly (e.g. AdocNet.Core) in a separate ALC would
+            // create duplicate types, breaking interface assignability checks.
+            var assemblyName = System.Reflection.AssemblyName.GetAssemblyName(fullPath);
+            var defaultLoaded = AppDomain.CurrentDomain.GetAssemblies()
+                .FirstOrDefault(a => string.Equals(a.GetName().Name, assemblyName.Name, StringComparison.Ordinal));
+            if (defaultLoaded is not null)
+            {
+                assembly = defaultLoaded;
+            }
+            else
+            {
+                var dir = Path.GetDirectoryName(fullPath) ?? ".";
+                var contextName = $"ext:{Path.GetFileNameWithoutExtension(fullPath)}";
+                var context = new ExtensionLoadContext(contextName, dir);
+                assembly = context.LoadFromAssemblyPath(fullPath);
+            }
+#else
             assembly = Assembly.LoadFrom(fullPath);
+#endif
         }
         catch (BadImageFormatException)
         {
@@ -136,6 +156,69 @@ public static class ExtensionLoader
 
         return results;
     }
+
+#if NET6_0_OR_GREATER
+    /// <summary>
+    /// Loads extensions from a single assembly file using an isolated load context.
+    /// Returns both the extensions and the context for future unloading.
+    /// </summary>
+    internal static (List<object> extensions, ExtensionLoadContext? context) LoadAssemblyIsolated(
+        string assemblyPath, Action<string>? onWarning)
+    {
+        var extensions = LoadAssembly(assemblyPath, onWarning);
+        // The context was already created inside LoadAssembly — we need to retrieve it.
+        // Since the assembly is already loaded, find it from its context.
+        if (extensions.Count > 0)
+        {
+            var asm = extensions[0].GetType().Assembly;
+            var ctx = System.Runtime.Loader.AssemblyLoadContext.GetLoadContext(asm);
+            if (ctx is ExtensionLoadContext elc)
+                return (extensions, elc);
+        }
+        return (extensions, null);
+    }
+
+    /// <summary>
+    /// Loads extensions from all DLLs in a directory, returning contexts for each assembly.
+    /// </summary>
+    internal static (List<object> extensions, List<ExtensionLoadContext> contexts) LoadDirectoryIsolated(
+        string directoryPath, Action<string>? onWarning)
+    {
+        var allExtensions = new List<object>();
+        var contexts = new List<ExtensionLoadContext>();
+
+        if (directoryPath is null)
+            throw new ArgumentNullException(nameof(directoryPath));
+
+        var fullPath = Path.GetFullPath(directoryPath);
+
+        if (!Directory.Exists(fullPath))
+        {
+            onWarning?.Invoke($"Extension directory not found: {fullPath}");
+            return (allExtensions, contexts);
+        }
+
+        var dlls = Directory.GetFiles(fullPath, "*.dll")
+            .OrderBy(p => Path.GetFileName(p), StringComparer.Ordinal)
+            .ToArray();
+
+        if (dlls.Length == 0)
+        {
+            onWarning?.Invoke($"No extension DLLs found in: {fullPath}");
+            return (allExtensions, contexts);
+        }
+
+        foreach (var dll in dlls)
+        {
+            var (exts, ctx) = LoadAssemblyIsolated(dll, onWarning);
+            allExtensions.AddRange(exts);
+            if (ctx is not null)
+                contexts.Add(ctx);
+        }
+
+        return (allExtensions, contexts);
+    }
+#endif
 
     private static bool IsProcessorType(Type type)
         => typeof(IDocumentProcessor).IsAssignableFrom(type)

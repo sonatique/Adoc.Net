@@ -20,5 +20,5 @@ public sealed class NoCtorProcessor : IBlockProcessor
     public bool CanProcess(BlockNode node) => false;
 
     /// <inheritdoc />
-    public void Process(BlockNode node, RenderContext context) { }
+    public bool Process(BlockNode node, RenderContext context) { return false; }
 }
