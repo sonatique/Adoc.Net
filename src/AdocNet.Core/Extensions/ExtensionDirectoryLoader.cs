@@ -35,9 +35,12 @@ public static class ExtensionDirectoryLoader
         var registryDir = Path.GetDirectoryName(dir);
         var registry = ExtensionRegistry.Load(registryDir, onWarning);
 
+        // Pass 1: Read and validate all manifests (don't load DLLs yet)
         var subdirs = Directory.GetDirectories(dir);
         Array.Sort(subdirs, (a, b) => string.Compare(
             Path.GetFileName(a), Path.GetFileName(b), StringComparison.Ordinal));
+        var validManifests = new List<ExtensionManifest>();
+        var currentVersion = GetCurrentAdocNetVersion();
 
         foreach (var subdir in subdirs)
         {
@@ -49,8 +52,6 @@ public static class ExtensionDirectoryLoader
             var registryEntry = registry.Find(manifest.Name);
             if (registryEntry is not null && !registryEntry.Enabled)
                 continue;
-
-            var currentVersion = GetCurrentAdocNetVersion();
 
             if (manifest.MinAdocNetVersion is not null)
             {
@@ -82,10 +83,117 @@ public static class ExtensionDirectoryLoader
                 continue;
             }
 
+            // Verify public key token if specified in manifest
+            if (manifest.PublicKeyToken is not null)
+            {
+                if (!VerifyPublicKeyToken(entryPath, manifest.PublicKeyToken, manifest.Name, onWarning))
+                    continue;
+            }
+
+            validManifests.Add(manifest);
+        }
+
+        // Pass 2: Sort by dependency order, then load DLLs
+        var orderedManifests = ResolveLoadOrder(validManifests, onWarning);
+
+        foreach (var manifest in orderedManifests)
+        {
+            var entryPath = Path.Combine(manifest.DirectoryPath, manifest.Entry);
             results.AddRange(ExtensionLoader.LoadAssembly(entryPath, onWarning));
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// Verifies that the DLL at the given path has the expected public key token.
+    /// Uses AssemblyName.GetAssemblyName() to read the token without loading the assembly.
+    /// </summary>
+    /// <returns>True if the token matches or verification succeeds; false to skip the extension.</returns>
+    private static bool VerifyPublicKeyToken(
+        string entryPath, string expectedToken, string extensionName, Action<string>? onWarning)
+    {
+        try
+        {
+            var assemblyName = System.Reflection.AssemblyName.GetAssemblyName(entryPath);
+            var actualBytes = assemblyName.GetPublicKeyToken();
+            var actualToken = SigningHelper.ToHexString(actualBytes);
+
+            if (actualToken.Length == 0)
+            {
+                onWarning?.Invoke(
+                    $"Extension '{extensionName}': DLL is unsigned but manifest expects " +
+                    $"publicKeyToken '{expectedToken}', skipping");
+                return false;
+            }
+
+            if (!string.Equals(actualToken, expectedToken, StringComparison.OrdinalIgnoreCase))
+            {
+                onWarning?.Invoke(
+                    $"Extension '{extensionName}': publicKeyToken mismatch — " +
+                    $"expected '{expectedToken}', got '{actualToken}', skipping");
+                return false;
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            onWarning?.Invoke(
+                $"Extension '{extensionName}': failed to read assembly token: {ex.Message}, skipping");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Resolves the load order for a list of validated manifests using topological sort.
+    /// Falls back to alphabetical order if a dependency cycle is detected.
+    /// </summary>
+    private static IReadOnlyList<ExtensionManifest> ResolveLoadOrder(
+        List<ExtensionManifest> manifests, Action<string>? onWarning)
+    {
+        if (manifests.Count <= 1)
+            return manifests;
+
+        var input = new List<(string Name, IReadOnlyList<string> Dependencies)>(manifests.Count);
+        foreach (var m in manifests)
+        {
+            // Extract dependency names from dependency specs
+            var depNames = new List<string>();
+            foreach (var dep in m.Dependencies)
+            {
+                var parsed = DependencySpec.Parse(dep);
+                if (parsed is not null)
+                    depNames.Add(parsed.Name);
+            }
+            input.Add((m.Name, depNames));
+        }
+
+        IReadOnlyList<string> order;
+        try
+        {
+            order = DependencyResolver.Resolve(input);
+        }
+        catch (InvalidOperationException ex)
+        {
+            onWarning?.Invoke($"Dependency resolution failed: {ex.Message}. Falling back to alphabetical order.");
+            manifests.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.Ordinal));
+            return manifests;
+        }
+
+        // Build lookup by name and reorder
+        var byName = new Dictionary<string, ExtensionManifest>(StringComparer.Ordinal);
+        foreach (var m in manifests)
+            byName[m.Name] = m;
+
+        var result = new List<ExtensionManifest>(manifests.Count);
+        foreach (var name in order)
+        {
+            if (byName.TryGetValue(name, out var m))
+                result.Add(m);
+        }
+
+        return result;
     }
 
     /// <summary>

@@ -569,6 +569,71 @@ If the current engine version exceeds `maxAdocNetVersion`, the extension is
 skipped with a warning and state `Incompatible`. This allows extension authors
 to declare forward-compatibility boundaries.
 
+## Dependency-Ordered Loading (beta.14)
+
+Extensions are loaded in dependency order using topological sort. If extension A
+depends on extension B, B is guaranteed to load before A:
+
+```json
+{
+  "name": "my-extension",
+  "entry": "MyExtension.dll",
+  "dependencies": ["base-utils >= 1.0.0"]
+}
+```
+
+The loader reads all manifests first, builds a dependency graph, and sorts
+using Kahn's algorithm. If a dependency cycle is detected, a warning is emitted
+and extensions fall back to alphabetical loading order.
+
+Dependencies referencing extensions not installed are ignored during ordering
+(but `DependencyValidator` still emits a warning).
+
+## Extension Signing (beta.14)
+
+Extensions can declare an expected strong-name public key token in `extension.json`:
+
+```json
+{
+  "name": "trusted-extension",
+  "entry": "TrustedExtension.dll",
+  "publicKeyToken": "ab40020b151f4aae"
+}
+```
+
+On load, the engine reads the DLL's public key token via `AssemblyName.GetAssemblyName()`
+and compares it to the manifest value. If the tokens don't match (or the DLL is
+unsigned but a token is expected), the extension is skipped with a warning.
+
+This is strong-name token verification — it proves the DLL was signed with a
+specific key pair. It is **not** full PKI or certificate-based signing.
+
+To get your extension's token: sign with `<SignAssembly>true</SignAssembly>` and
+`<AssemblyOriginatorKeyFile>key.snk</AssemblyOriginatorKeyFile>` in your `.csproj`,
+then read the token with `sn -T MyExtension.dll`.
+
+## Extension Validation Tool (beta.14)
+
+Validate an extension directory before publishing:
+
+```bash
+adocnet ext validate ./my-extension/
+adocnet ext validate myext.zip          # also accepts zip files
+```
+
+Checks performed:
+1. `extension.json` exists and is valid
+2. Required fields (name, version, entry) present
+3. Entry DLL exists
+4. DLL loads and contains processor types
+5. API version compatible
+6. minAdocNetVersion / maxAdocNetVersion compatible
+7. Dependencies satisfiable (checked against local registry)
+8. Public key token matches (if specified)
+
+Output shows `[PASS]`, `[FAIL]`, `[WARN]`, or `[SKIP]` per check with an
+overall verdict. Exit code 0 = all pass, 1 = any failure.
+
 ## See Also
 
 - [Usage Guide](USAGE.md) — parsing and rendering API
