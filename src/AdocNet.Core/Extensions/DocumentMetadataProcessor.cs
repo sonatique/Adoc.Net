@@ -20,9 +20,10 @@ public sealed class DocumentMetadataProcessor : IDocumentProcessor
     }
 
     /// <inheritdoc />
-    public void Process(DocumentNode document)
+    public bool Process(DocumentNode document, RenderContext context)
     {
         var para = new ParagraphNode { Text = _text, Inlines = [new TextInlineNode { Value = _text }] };
         document.InsertChild(0, para);
+        return false;
     }
 }

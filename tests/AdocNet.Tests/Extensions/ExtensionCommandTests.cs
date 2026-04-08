@@ -270,7 +270,7 @@ public class ExtensionCommandTests
 
     private sealed class DummyDocProcessor : AdocNet.Extensions.IDocumentProcessor
     {
-        public void Process(AdocNet.Ast.DocumentNode document) { }
+        public bool Process(AdocNet.Ast.DocumentNode document, RenderContext context) { return false; }
     }
 
     private static string? GetTestExtensionDllPath()

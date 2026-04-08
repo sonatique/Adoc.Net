@@ -32,12 +32,12 @@ public sealed class DiagramBlockProcessor : IBlockProcessor
     }
 
     /// <inheritdoc />
-    public void Process(BlockNode node, RenderContext context)
+    public bool Process(BlockNode node, RenderContext context)
     {
         var block = (DelimitedBlockNode)node;
 
         if (!_runner.IsAvailable)
-            return; // Fallback: leave as code block
+            return false; // Fallback: leave as code block
 
         string? imagePath;
         try
@@ -46,11 +46,11 @@ public sealed class DiagramBlockProcessor : IBlockProcessor
         }
         catch
         {
-            return; // Fallback: leave as code block (pipeline catches and warns)
+            return false; // Fallback: leave as code block (pipeline catches and warns)
         }
 
         if (imagePath is null)
-            return; // Fallback: tool returned nothing
+            return false; // Fallback: tool returned nothing
 
         var imageNode = new BlockImageNode
         {
@@ -62,6 +62,7 @@ public sealed class DiagramBlockProcessor : IBlockProcessor
 
         var replacements = context.GetOrCreate(() => new NodeReplacements());
         replacements.Replace(node, imageNode);
+        return false;
     }
 
     private static bool IsDiagramLanguage(string? language)

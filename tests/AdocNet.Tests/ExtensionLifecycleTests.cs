@@ -70,7 +70,7 @@ public class ExtensionLifecycleTests
         public int DisposeCount { get; private set; }
 
         public bool CanProcess(BlockNode node) => false;
-        public void Process(BlockNode node, RenderContext context) { }
+        public bool Process(BlockNode node, RenderContext context) { return false; }
         public void Initialize() => InitializeCount++;
         public void Dispose() => DisposeCount++;
     }

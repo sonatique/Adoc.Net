@@ -163,6 +163,6 @@ public class ExtensionIntegrationTests
         private readonly List<string> _order;
         public OrderTrackingBlockProcessor(List<string> order) => _order = order;
         public bool CanProcess(BlockNode node) => node is ParagraphNode;
-        public void Process(BlockNode node, RenderContext context) => _order.Add("block");
+        public bool Process(BlockNode node, RenderContext context) { _order.Add("block"); return false; }
     }
 }

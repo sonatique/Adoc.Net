@@ -19,8 +19,11 @@ public interface IInlineProcessor
     /// <summary>
     /// Processes the inline node. May mutate the node's properties or use
     /// <see cref="RenderContext.GetOrCreate{T}"/> to register node replacements.
+    /// Returns true if this processor handled the node and remaining inline
+    /// processors should be skipped for this node.
     /// </summary>
     /// <param name="node">The inline node to process.</param>
     /// <param name="context">The render context for per-render state.</param>
-    void Process(InlineNode node, RenderContext context);
+    /// <returns>True to skip remaining inline processors for this node; false to continue.</returns>
+    bool Process(InlineNode node, RenderContext context);
 }

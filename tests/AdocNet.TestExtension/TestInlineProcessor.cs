@@ -14,11 +14,12 @@ public sealed class TestInlineProcessor : IInlineProcessor
         => node is TextInlineNode t && t.Value != t.Value.ToUpperInvariant();
 
     /// <inheritdoc />
-    public void Process(InlineNode node, RenderContext context)
+    public bool Process(InlineNode node, RenderContext context)
     {
         var text = (TextInlineNode)node;
         var upper = new TextInlineNode { Value = text.Value.ToUpperInvariant() };
         var replacements = context.GetOrCreate(() => new NodeReplacements());
         replacements.Replace(node, upper);
+        return false;
     }
 }

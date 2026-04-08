@@ -84,10 +84,11 @@ public class ExtensionDiagnosticsTests
     {
         public bool CanProcess(BlockNode node) => true;
 
-        public void Process(BlockNode node, RenderContext context)
+        public bool Process(BlockNode node, RenderContext context)
         {
             context.AddDiagnostic(new Diagnostic(
                 DiagnosticSeverity.Info, "processed block", node.Source));
+            return false;
         }
     }
 }

@@ -20,8 +20,9 @@ public sealed class TestPrefixBlockProcessor : IBlockProcessor, IExtension
     public bool CanProcess(BlockNode node) => node is ParagraphNode { Id: null };
 
     /// <inheritdoc />
-    public void Process(BlockNode node, RenderContext context)
+    public bool Process(BlockNode node, RenderContext context)
     {
         node.Id = "test-processed";
+        return false;
     }
 }

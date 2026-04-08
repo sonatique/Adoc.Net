@@ -152,8 +152,11 @@ Processors must be registered **before** the first `Convert()` call. Registratio
 ### IDocumentProcessor
 
 Processes the entire document tree. Use for global transformations.
+Returns `bool`: `true` to short-circuit (skip remaining document processors), `false` to continue.
+Receives `RenderContext` for diagnostics, options, and per-render state (added in beta.13).
 
 ```csharp
+using AdocNet;
 using AdocNet.Ast;
 using AdocNet.Extensions;
 
@@ -163,7 +166,7 @@ public class DocumentMetadataProcessor : IDocumentProcessor
 
     public DocumentMetadataProcessor(string text) => _text = text;
 
-    public void Process(DocumentNode document)
+    public bool Process(DocumentNode document, RenderContext context)
     {
         var para = new ParagraphNode
         {
@@ -171,6 +174,7 @@ public class DocumentMetadataProcessor : IDocumentProcessor
             Inlines = [new TextInlineNode { Value = _text }],
         };
         document.InsertChild(0, para);
+        return false; // Continue to next document processor
     }
 }
 ```
@@ -178,6 +182,7 @@ public class DocumentMetadataProcessor : IDocumentProcessor
 ### IBlockProcessor
 
 Targets specific block nodes. `CanProcess` filters which blocks to handle.
+Returns `bool`: `true` to short-circuit (skip remaining block processors for THIS node), `false` to continue.
 
 ```csharp
 using AdocNet.Ast;
@@ -188,10 +193,11 @@ public class CustomBlockProcessor : IBlockProcessor
     public bool CanProcess(BlockNode node)
         => node is DelimitedBlockNode { BlockKind: DelimitedBlockKind.Example };
 
-    public void Process(BlockNode node, RenderContext context)
+    public bool Process(BlockNode node, RenderContext context)
     {
         var block = (DelimitedBlockNode)node;
         // Modify block properties, add children, or register replacements
+        return false; // Continue to next block processor for this node
     }
 }
 ```
@@ -199,6 +205,7 @@ public class CustomBlockProcessor : IBlockProcessor
 ### IInlineProcessor
 
 Targets specific inline nodes. Commonly used for custom inline macros.
+Returns `bool`: `true` to short-circuit (skip remaining inline processors for THIS node), `false` to continue.
 
 ```csharp
 using AdocNet.Ast;
@@ -209,7 +216,7 @@ public class IconMacroProcessor : IInlineProcessor
     public bool CanProcess(InlineNode node)
         => node is InlineMacroNode { Name: "icon" };
 
-    public void Process(InlineNode node, RenderContext context)
+    public bool Process(InlineNode node, RenderContext context)
     {
         var macro = (InlineMacroNode)node;
         var symbol = macro.Target switch
@@ -223,9 +230,21 @@ public class IconMacroProcessor : IInlineProcessor
         var text = new TextInlineNode { Value = symbol };
         var replacements = context.GetOrCreate(() => new NodeReplacements());
         replacements.Replace(node, text);
+        return false; // Continue to next inline processor for this node
     }
 }
 ```
+
+### Short-Circuiting (bool Process Return)
+
+When `Process()` returns `true`, remaining processors of the same type are skipped for that node:
+
+- **Document processors**: `true` skips remaining document processors entirely.
+- **Block processors**: `true` skips remaining block processors for THIS block node only.
+  The next block node in the tree walk still runs all processors.
+- **Inline processors**: same per-node behavior as block processors.
+
+This enables the "first handler wins" pattern and explicit "I handled this" intent.
 
 ### Node Replacement
 
@@ -524,7 +543,7 @@ Processors can declare their execution priority. Lower values execute first:
 public class EarlyProcessor : IDocumentProcessor, IExtensionPriority
 {
     public int Priority => 100;  // runs before default (1000)
-    public void Process(DocumentNode document) { /* ... */ }
+    public bool Process(DocumentNode document, RenderContext context) { /* ... */ return false; }
 }
 ```
 
