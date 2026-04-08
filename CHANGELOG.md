@@ -3,6 +3,33 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0-beta.14] - 2026-04-09
+
+### Added — Dependency-Ordered Loading
+- `DependencyResolver` topological sort using Kahn's algorithm for extension load ordering
+- Extensions now load in dependency order: if A depends on B, B loads before A
+- Cycle detection with descriptive error messages; falls back to alphabetical on cycle
+- Two-pass loading: all manifests read first, then DLLs loaded in resolved order
+
+### Added — Extension Signing Verification
+- `publicKeyToken` field in `extension.json` for strong-name token verification
+- Pre-load token check via `AssemblyName.GetAssemblyName()` (DLL not loaded if mismatch)
+- `SigningHelper` internal utility for hex conversion and token format validation
+- Unsigned DLLs with token expectation are skipped with warning
+
+### Added — Extension Validation Tool
+- `adocnet ext validate <path>` CLI command for pre-publish extension checking
+- `ExtensionValidator` class with 10 checks: manifest, fields, DLL, processors, API version, min/max version, dependencies, signing
+- Supports both directory and zip inputs
+- Structured output with `[PASS]`/`[FAIL]`/`[WARN]`/`[SKIP]` per check
+- `ValidationResult` and `ValidationStatus` public types for programmatic use
+
+### Compatibility
+- Parser and AST unmodified
+- Processor interfaces unmodified (stable from beta.13)
+- Core maintains zero external NuGet dependencies
+- Both netstandard2.0 and net10.0 compile
+
 ## [1.0.0-beta.13] - 2026-04-08
 
 ### Changed — API Improvement

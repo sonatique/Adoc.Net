@@ -14,7 +14,7 @@ internal sealed class ExtensionCommands
     internal static CliArgs ParseExtArguments(string[] args)
     {
         if (args.Length < 2)
-            return new CliArgs.Error("Usage: adocnet ext <list|install|remove|info|search|status|enable|disable> [args]");
+            return new CliArgs.Error("Usage: adocnet ext <list|install|remove|info|search|status|enable|disable|validate> [args]");
 
         var action = args[1];
 
@@ -93,8 +93,17 @@ internal sealed class ExtensionCommands
                 return new CliArgs.Ext.ExtDisable(args[2]);
             }
 
+            case "validate":
+            {
+                if (args.Length < 3)
+                    return new CliArgs.Error("Usage: adocnet ext validate <extension-path>");
+                if (args.Length > 3)
+                    return new CliArgs.Error("Usage: adocnet ext validate <extension-path>");
+                return new CliArgs.Ext.ExtValidate(args[2]);
+            }
+
             default:
-                return new CliArgs.Error($"Unknown ext command: {action}. Available: list, install, remove, info, search, status, enable, disable.");
+                return new CliArgs.Error($"Unknown ext command: {action}. Available: list, install, remove, info, search, status, enable, disable, validate.");
         }
     }
 
@@ -108,6 +117,7 @@ internal sealed class ExtensionCommands
         CliArgs.Ext.ExtStatus => ExecuteStatus(),
         CliArgs.Ext.ExtEnable enable => ExecuteEnable(enable.Name),
         CliArgs.Ext.ExtDisable disable => ExecuteDisable(disable.Name),
+        CliArgs.Ext.ExtValidate validate => ExecuteValidate(validate.Path),
         _ => ExitError,
     };
 
@@ -483,6 +493,89 @@ internal sealed class ExtensionCommands
         registry.Save();
         Console.WriteLine($"Disabled extension '{name}'.");
         return ExitSuccess;
+    }
+
+    private static int ExecuteValidate(string extensionPath)
+    {
+        var fullPath = Path.GetFullPath(extensionPath);
+        string? tempDir = null;
+
+        try
+        {
+            // Handle zip files
+            if (fullPath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) && File.Exists(fullPath))
+            {
+                tempDir = Path.Combine(Path.GetTempPath(), "adocnet-validate-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(tempDir);
+                try
+                {
+                    ZipFile.ExtractToDirectory(fullPath, tempDir);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Error: Failed to extract zip: {ex.Message}");
+                    return ExitError;
+                }
+                fullPath = ResolveExtractedDirectory(tempDir) ?? tempDir;
+            }
+
+            if (!Directory.Exists(fullPath))
+            {
+                Console.Error.WriteLine($"Error: Path not found: {fullPath}");
+                return ExitError;
+            }
+
+            Console.WriteLine($"Validating extension at: {fullPath}");
+            Console.WriteLine();
+
+            var registry = ExtensionRegistry.Load(null, _ => { });
+            var validator = new ExtensionValidator(registry);
+            var results = validator.Validate(fullPath);
+
+            int passed = 0, failed = 0, warned = 0, skipped = 0;
+
+            foreach (var result in results)
+            {
+                var prefix = result.Status switch
+                {
+                    ValidationStatus.Pass => "[PASS]",
+                    ValidationStatus.Fail => "[FAIL]",
+                    ValidationStatus.Warn => "[WARN]",
+                    ValidationStatus.Skip => "[SKIP]",
+                    _ => "[????]"
+                };
+
+                Console.WriteLine($"  {prefix} {result.CheckName}: {result.Message}");
+
+                switch (result.Status)
+                {
+                    case ValidationStatus.Pass: passed++; break;
+                    case ValidationStatus.Fail: failed++; break;
+                    case ValidationStatus.Warn: warned++; break;
+                    case ValidationStatus.Skip: skipped++; break;
+                }
+            }
+
+            Console.WriteLine();
+            var total = passed + failed + warned + skipped;
+
+            if (failed == 0)
+            {
+                Console.WriteLine($"Validation PASSED ({passed}/{total} passed, {warned} warnings, {skipped} skipped)");
+                return ExitSuccess;
+            }
+
+            Console.WriteLine($"Validation FAILED ({passed}/{total} passed, {failed} failed, {warned} warnings, {skipped} skipped)");
+            return ExitError;
+        }
+        finally
+        {
+            if (tempDir is not null)
+            {
+                try { Directory.Delete(tempDir, recursive: true); }
+                catch { /* best-effort cleanup */ }
+            }
+        }
     }
 
     private static void CopyDirectory(string source, string target)

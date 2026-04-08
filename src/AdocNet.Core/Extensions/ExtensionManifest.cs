@@ -35,6 +35,13 @@ public sealed class ExtensionManifest
     public string? MaxAdocNetVersion { get; }
 
     /// <summary>
+    /// Gets the expected public key token of the entry DLL, or null if not specified.
+    /// Format: 16-character lowercase hexadecimal string (e.g., "b77a5c561934e089").
+    /// When specified, the DLL's strong-name token is verified on load.
+    /// </summary>
+    public string? PublicKeyToken { get; }
+
+    /// <summary>
     /// Gets the dependency specifications for this extension.
     /// Each entry is a string like "name >= version" or just "name".
     /// </summary>
@@ -42,7 +49,7 @@ public sealed class ExtensionManifest
 
     private ExtensionManifest(string name, string version, string description, string entry,
         string? minAdocNetVersion, string? maxAdocNetVersion, string directoryPath,
-        string? apiVersion, IReadOnlyList<string> dependencies)
+        string? apiVersion, IReadOnlyList<string> dependencies, string? publicKeyToken)
     {
         Name = name;
         Version = version;
@@ -53,6 +60,7 @@ public sealed class ExtensionManifest
         DirectoryPath = directoryPath;
         ApiVersion = apiVersion;
         Dependencies = dependencies;
+        PublicKeyToken = publicKeyToken;
     }
 
     /// <summary>
@@ -132,6 +140,7 @@ public sealed class ExtensionManifest
         fields.TryGetValue("maxAdocNetVersion", out var maxVersion);
         fields.TryGetValue("apiVersion", out var apiVersion);
         fields.TryGetValue("dependencies", out var depsString);
+        fields.TryGetValue("publicKeyToken", out var publicKeyToken);
 
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -158,6 +167,23 @@ public sealed class ExtensionManifest
             dependencies = ParseDependenciesArray(json);
         }
 
+        // Validate publicKeyToken format if present
+        string? validatedToken = null;
+        if (!string.IsNullOrWhiteSpace(publicKeyToken))
+        {
+            var trimmedToken = publicKeyToken!.Trim();
+            if (SigningHelper.IsValidTokenFormat(trimmedToken))
+            {
+                validatedToken = trimmedToken.ToLowerInvariant();
+            }
+            else
+            {
+                onWarning?.Invoke(
+                    $"Extension '{dirName}': invalid publicKeyToken format '{trimmedToken}' " +
+                    "(expected 16 hex characters), ignoring");
+            }
+        }
+
         return new ExtensionManifest(
             name: name!.Trim(),
             version: version?.Trim() ?? "0.0.0",
@@ -167,7 +193,8 @@ public sealed class ExtensionManifest
             maxAdocNetVersion: string.IsNullOrWhiteSpace(maxVersion) ? null : maxVersion!.Trim(),
             directoryPath: extensionDirectory,
             apiVersion: string.IsNullOrWhiteSpace(apiVersion) ? null : apiVersion!.Trim(),
-            dependencies: dependencies
+            dependencies: dependencies,
+            publicKeyToken: validatedToken
         );
     }
 

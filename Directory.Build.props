@@ -8,9 +8,15 @@
     <Deterministic>true</Deterministic>
   </PropertyGroup>
 
+  <!-- Suppress transitive NuGet vulnerability warnings that cannot be fixed
+       until upstream packages release patched versions. -->
+  <ItemGroup>
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-xrw6-gwf8-vvr9" />
+  </ItemGroup>
+
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.0-beta.13</Version>
+    <Version>1.0.0-beta.14</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) Sylvain Fasel</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

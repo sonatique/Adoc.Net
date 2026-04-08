@@ -212,6 +212,9 @@ See [docs/CLI.md](docs/CLI.md) for the full reference.
 | bool Process() return with short-circuiting | Supported |
 | AssemblyLoadContext isolation (net6.0+) | Supported |
 | Extension hot-reload (`EnableHotReload`, FileSystemWatcher) | Supported |
+| Dependency-ordered loading (topological sort) | Supported |
+| Extension signing verification (`publicKeyToken`) | Supported |
+| Extension validation tool (`ext validate`) | Supported |
 
 ### Performance
 
