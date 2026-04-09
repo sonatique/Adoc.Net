@@ -21,4 +21,16 @@ public abstract class BlockNode : AstNode
     /// When null, the block uses its type's default substitution set.
     /// </summary>
     public SubstitutionKind? Substitutions { get; set; }
+
+    /// <inheritdoc />
+    protected override int MixAdditionalState(int hash)
+    {
+        if (Id is not null) hash = FnvMixString(hash, Id);
+        if (Reftext is not null) hash = FnvMixString(hash, Reftext);
+        for (int i = 0; i < Roles.Count; i++)
+            hash = FnvMixString(hash, Roles[i]);
+        if (Substitutions is not null)
+            hash = FnvMix(hash, (int)Substitutions.Value);
+        return hash;
+    }
 }

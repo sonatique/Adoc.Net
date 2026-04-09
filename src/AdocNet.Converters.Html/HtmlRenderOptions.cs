@@ -54,6 +54,14 @@ public sealed class HtmlRenderOptions : RenderOptions
     /// <summary>Whether the output should be a full HTML document.</summary>
     internal bool IsFullDocument => FullDocument || Theme != HtmlTheme.None;
 
+    /// <summary>
+    /// When true, wraps each top-level block in HTML comment markers
+    /// (<c>&lt;!-- sect:N --&gt;</c> / <c>&lt;!-- /sect:N --&gt;</c>) to enable
+    /// incremental rendering. The markers are invisible and do not affect visual output.
+    /// Default: false.
+    /// </summary>
+    public bool EnableIncrementalMarkers { get; init; }
+
     /// <summary>Convenience: full document with Default theme.</summary>
     public static HtmlRenderOptions Styled => new() { Theme = HtmlTheme.Default };
 }

@@ -19,4 +19,7 @@ public sealed class BibliographyEntryNode : BlockNode
             yield return new("Label", Label);
         yield return new("Text", Text);
     }
+
+    /// <inheritdoc />
+    protected override IEnumerable<AstNode> GetStructuralInlines() => Inlines;
 }

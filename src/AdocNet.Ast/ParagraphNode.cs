@@ -37,4 +37,7 @@ public sealed class ParagraphNode : BlockNode
         if (Inlines.Count == 0)
             yield return new("Text", Text);
     }
+
+    /// <inheritdoc />
+    protected override IEnumerable<AstNode> GetStructuralInlines() => Inlines;
 }

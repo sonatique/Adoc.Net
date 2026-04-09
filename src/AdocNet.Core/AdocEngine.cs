@@ -425,6 +425,32 @@ public sealed partial class AdocEngine
         return new DocumentSnapshot(snapshot.Version, snapshot.Text, parsed);
     }
 
+    /// <summary>
+    /// Performs an incremental HTML render by comparing two document snapshots,
+    /// identifying changed sections, and splicing only the modified sections into
+    /// the previous HTML output. Falls back to full render when incremental is not
+    /// possible (no markers, metadata changed, sections added/removed).
+    /// </summary>
+    /// <param name="oldSnapshot">The previous document snapshot (must have Document populated).</param>
+    /// <param name="newSnapshot">The new document snapshot (must have Document populated).</param>
+    /// <param name="previousHtml">The HTML from the previous render (with section markers).</param>
+    /// <param name="options">Render options. Should have EnableIncrementalMarkers = true.</param>
+    /// <returns>Updated HTML string.</returns>
+    public string ConvertIncrementalHtml(
+        DocumentSnapshot oldSnapshot,
+        DocumentSnapshot newSnapshot,
+        string previousHtml,
+        RenderOptions? options = null)
+    {
+        if (oldSnapshot is null) throw new ArgumentNullException(nameof(oldSnapshot));
+        if (newSnapshot is null) throw new ArgumentNullException(nameof(newSnapshot));
+        if (oldSnapshot.Document is null) throw new ArgumentException("Old snapshot must have a parsed document.", nameof(oldSnapshot));
+        if (newSnapshot.Document is null) throw new ArgumentException("New snapshot must have a parsed document.", nameof(newSnapshot));
+
+        var incremental = new IncrementalHtmlRenderer(Renderer, Parser);
+        return incremental.Render(oldSnapshot.Document, newSnapshot.Document, previousHtml, options);
+    }
+
     private void RunExtensions(DocumentNode doc, RenderOptions opts)
     {
         if (_documentProcessors.Count > 0 || _blockProcessors.Count > 0 || _inlineProcessors.Count > 0)

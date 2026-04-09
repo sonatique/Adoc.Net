@@ -33,4 +33,7 @@ public sealed class SectionNode : BlockNode
         yield return new("Level", Level.ToString());
         yield return new("Title", Title);
     }
+
+    /// <inheritdoc />
+    protected override IEnumerable<AstNode> GetStructuralInlines() => TitleInlines;
 }

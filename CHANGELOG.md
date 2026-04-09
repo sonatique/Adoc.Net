@@ -3,6 +3,20 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0-beta.15] - 2026-04-10
+
+### Added — Incremental Rendering
+- `AstNode.StructuralHash` property: deterministic FNV-1a hash of node structure, properties, and children
+- `AstNode.InvalidateStructuralHash()` method for clearing cached hash after AST mutation
+- `GetStructuralInlines()` virtual method on AstNode for hashing side-channel inline collections
+- `MixAdditionalState()` virtual method for hashing BlockNode.Id/Reftext/Roles and inline Roles
+- `AstDiffer.DiffSections()`: two-pass (ID-based + positional) section-level tree diff algorithm
+- `AstDiffEntry` struct and `AstDiffChangeType` enum for structured diff results
+- `IncrementalHtmlRenderer`: re-renders only changed sections, splices into previous HTML
+- `AdocEngine.ConvertIncrementalHtml()` convenience method for incremental HTML rendering
+- `HtmlRenderOptions.EnableIncrementalMarkers`: opt-in section comment markers in HTML output
+- HTML section markers (`<!-- sect:N -->` / `<!-- /sect:N -->`) for incremental splice points
+
 ## [1.0.0-beta.14] - 2026-04-09
 
 ### Added — Dependency-Ordered Loading

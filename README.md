@@ -231,6 +231,9 @@ See [docs/CLI.md](docs/CLI.md) for the full reference.
 | DocumentChange model for incremental edits | Supported |
 | DocumentSnapshot versioned document state | Supported |
 | Cache-aware incremental re-parse (`ParseIncremental`) | Supported |
+| AST structural hashing (`StructuralHash`) | Supported |
+| Section-level tree diff (`AstDiffer`) | Supported |
+| Incremental HTML rendering (`IncrementalHtmlRenderer`) | Supported |
 | Extension diagnostics after Convert() | Supported |
 
 ### Not yet supported
@@ -270,6 +273,7 @@ The data flow for the Avalonia viewer is strictly layered: `AST → Layout → A
 | [EXTENSION_SAFETY.md](docs/EXTENSION_SAFETY.md) | Extension safety: failure disabling, API version, structured loading |
 | [PERFORMANCE.md](docs/PERFORMANCE.md) | Performance caching: parse cache, render cache, configuration |
 | [EDITOR_INTEGRATION.md](docs/EDITOR_INTEGRATION.md) | Editor APIs: DocumentChange, DocumentSnapshot, ParseIncremental |
+| [INCREMENTAL_RENDERING.md](docs/INCREMENTAL_RENDERING.md) | Incremental rendering: structural hashing, tree diff, HTML splicing |
 | [DIAGRAMS.md](docs/DIAGRAMS.md) | Diagram block processing with external tools |
 | [COMPATIBILITY.md](docs/COMPATIBILITY.md) | Asciidoctor conformance and known differences |
 | [SECURITY.md](docs/SECURITY.md) | Security considerations for untrusted input |

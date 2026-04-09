@@ -55,9 +55,10 @@ public class AllocationGuardTests
     [Test]
     public void Parse_MediumDocument_AllocationWithinBaseline()
     {
-        // Baseline: parsing a ~50KB document should allocate < 800 KB
+        // Baseline: parsing a ~50KB document should allocate < 850 KB
         // This catches regressions like accidental string copies or list resizing
-        const long maxBytes = 800 * 1024;
+        // Bumped from 800KB after beta.15 added StructuralHash fields to AstNode
+        const long maxBytes = 850 * 1024;
 
         var before = GC.GetTotalAllocatedBytes(precise: true);
         var result = AdocParser.Parse(_mediumDoc);

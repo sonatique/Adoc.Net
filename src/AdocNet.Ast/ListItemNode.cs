@@ -26,4 +26,7 @@ public sealed class ListItemNode : BlockNode
         if (Checked is not null)
             yield return new("Checked", Checked.Value.ToString());
     }
+
+    /// <inheritdoc />
+    protected override IEnumerable<AstNode> GetStructuralInlines() => Inlines;
 }
