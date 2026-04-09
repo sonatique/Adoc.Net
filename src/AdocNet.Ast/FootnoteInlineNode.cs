@@ -30,4 +30,7 @@ public sealed class FootnoteInlineNode : InlineNode
         if (Text is not null)
             yield return new("Text", Text);
     }
+
+    /// <inheritdoc />
+    protected override IEnumerable<AstNode> GetStructuralInlines() => Inlines;
 }

@@ -40,4 +40,7 @@ public sealed class TableCellNode : AstNode
         if (ContentStyle != TableCellStyle.Default)
             yield return new("ContentStyle", ContentStyle.ToString());
     }
+
+    /// <inheritdoc />
+    protected override IEnumerable<AstNode> GetStructuralInlines() => Inlines;
 }

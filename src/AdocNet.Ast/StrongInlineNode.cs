@@ -20,6 +20,18 @@ public sealed class StrongInlineNode : InlineNode
 
     public override IEnumerable<KeyValuePair<string, string>> GetProperties() => [];
 
+    /// <inheritdoc />
+    protected override IEnumerable<AstNode> GetStructuralInlines() => Children;
+
+    /// <inheritdoc />
+    protected override int MixAdditionalState(int hash)
+    {
+        if (Roles is not null)
+            for (int i = 0; i < Roles.Count; i++)
+                hash = FnvMixString(hash, Roles[i]);
+        return hash;
+    }
+
     private static string GetPlainText(IReadOnlyList<InlineNode> children)
     {
         if (children.Count == 1 && children[0] is TextInlineNode t)

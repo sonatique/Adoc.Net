@@ -17,4 +17,11 @@ public sealed class DescriptionItemNode : BlockNode
         yield return new("Term", Term);
         yield return new("Description", Description);
     }
+
+    /// <inheritdoc />
+    protected override IEnumerable<AstNode> GetStructuralInlines()
+    {
+        foreach (var i in TermInlines) yield return i;
+        foreach (var i in DescriptionInlines) yield return i;
+    }
 }

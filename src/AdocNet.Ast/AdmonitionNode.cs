@@ -26,4 +26,7 @@ public sealed class AdmonitionNode : BlockNode
         if (Text is not null)
             yield return new("Text", Text);
     }
+
+    /// <inheritdoc />
+    protected override IEnumerable<AstNode> GetStructuralInlines() => Inlines;
 }

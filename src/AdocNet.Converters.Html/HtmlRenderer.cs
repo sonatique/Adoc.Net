@@ -27,6 +27,7 @@ public sealed class HtmlRenderer : DocumentRendererBase
         public int FigureCounter { get; set; } = 1;
         public int ExampleCounter { get; set; } = 1;
         public bool EnableSyntaxHighlighting { get; set; }
+        public bool EnableIncrementalMarkers { get; set; }
     }
 
     /// <summary>
@@ -157,6 +158,7 @@ public sealed class HtmlRenderer : DocumentRendererBase
 
         var htmlOptions = context.Options as HtmlRenderOptions;
         state.EnableSyntaxHighlighting = htmlOptions?.EnableSyntaxHighlighting ?? false;
+        state.EnableIncrementalMarkers = htmlOptions?.EnableIncrementalMarkers ?? false;
         bool fullDoc = htmlOptions?.IsFullDocument == true;
 
         var sb = new StringBuilder();
@@ -280,7 +282,46 @@ public sealed class HtmlRenderer : DocumentRendererBase
         bool useIconFont = document.Attributes.TryGetValue("icons", out var iconsValue)
             && string.Equals(iconsValue, "font", StringComparison.OrdinalIgnoreCase);
 
-        RenderChildBlocks(sb, document.Children, useIconFont, footnotes, secCtx, state);
+        if (state.EnableIncrementalMarkers)
+            RenderChildBlocksWithMarkers(sb, document.Children, useIconFont, footnotes, secCtx, state);
+        else
+            RenderChildBlocks(sb, document.Children, useIconFont, footnotes, secCtx, state);
+    }
+
+    private void RenderChildBlocksWithMarkers(StringBuilder sb, IReadOnlyList<AstNode> children, bool useIconFont, FootnoteState footnotes, SectionNumberingContext secCtx, HtmlRenderState state)
+    {
+        bool inBibList = false;
+        for (int i = 0; i < children.Count; i++)
+        {
+            sb.Append("<!-- sect:");
+            sb.Append(i);
+            sb.Append(" -->\n");
+
+            if (children[i] is BibliographyEntryNode bibEntry)
+            {
+                if (!inBibList)
+                {
+                    sb.Append("<ul class=\"bibliography\">\n");
+                    inBibList = true;
+                }
+                RenderBibliographyEntry(sb, bibEntry, footnotes, state);
+            }
+            else
+            {
+                if (inBibList)
+                {
+                    sb.Append("</ul>\n");
+                    inBibList = false;
+                }
+                RenderBlock(sb, children[i], useIconFont, footnotes, secCtx, state);
+            }
+
+            sb.Append("<!-- /sect:");
+            sb.Append(i);
+            sb.Append(" -->\n");
+        }
+        if (inBibList)
+            sb.Append("</ul>\n");
     }
 
     /// <summary>
