@@ -40,4 +40,6 @@ public enum AstNodeKind
     IndexTerm,
     IndexTermHidden,
     Index,
+    StemBlock,
+    StemInline,
 }

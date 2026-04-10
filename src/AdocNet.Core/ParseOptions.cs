@@ -61,6 +61,13 @@ public sealed class ParseOptions
     /// </summary>
     public bool AllowUriRead { get; init; }
 
+    /// <summary>
+    /// The safe mode for document processing.
+    /// Controls restrictions on includes, file I/O, and attribute overrides.
+    /// Default: <see cref="SafeMode.Unsafe"/> (no restrictions).
+    /// </summary>
+    public SafeMode SafeMode { get; init; } = SafeMode.Unsafe;
+
     /// <summary>A shared default instance with no options set.</summary>
     public static ParseOptions Default { get; } = new();
 

@@ -235,10 +235,12 @@ See [docs/CLI.md](docs/CLI.md) for the full reference.
 | Section-level tree diff (`AstDiffer`) | Supported |
 | Incremental HTML rendering (`IncrementalHtmlRenderer`) | Supported |
 | Extension diagnostics after Convert() | Supported |
-
-### Not yet supported
-
-- Stem/math blocks (MathJax, LaTeX)
+| Collapsible blocks (`[%collapsible]` with `<details>/<summary>`) | Supported |
+| Data URI embedding (`:data-uri:` for inline base64 images) | Supported |
+| Font Awesome CSS injection (`:icons: font`) | Supported |
+| Docinfo injection (`:docinfo:` header/footer files) | Supported |
+| Safe modes (Unsafe, Safe, Server, Secure) | Supported |
+| STEM/Math (MathJax, `stem:[]`, `latexmath:[]`, `asciimath:[]`) | Supported |
 
 ## Architecture
 

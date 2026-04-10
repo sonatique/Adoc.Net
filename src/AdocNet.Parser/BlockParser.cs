@@ -105,6 +105,8 @@ internal static class BlockParser
         int? pendingListStart = null;
         string? pendingListStyle = null;
         List<string>? pendingBlockOptions = null;
+        bool pendingCollapsible = false;
+        string? pendingStem = null;
 
         // Computes the effective "normal" substitutions: smart punctuation (PostReplacements)
         // is enabled by default and can be disabled via :!smartquotes:.
@@ -263,6 +265,8 @@ internal static class BlockParser
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
+                pendingCollapsible = false;
+                pendingStem = null;
                 pendingQuoteAttribution = null;
                 pendingQuoteCitation = null;
 
@@ -285,6 +289,7 @@ internal static class BlockParser
                 pendingDiscrete = false;
                 pendingHardbreaks = false;
                 pendingAbstract = false;
+                pendingStem = null;
                 continue;
             }
 
@@ -335,6 +340,8 @@ internal static class BlockParser
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
+                pendingCollapsible = false;
+                pendingStem = null;
                 pendingQuoteAttribution = null;
                 pendingQuoteCitation = null;
 
@@ -530,7 +537,9 @@ internal static class BlockParser
                 if (blockAttrs is not null && blockAttrs.Options.Count > 0)
                 {
                     var downstreamOptions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                        { "hardbreaks", "header", "footer", "autowidth" };
+                        { "hardbreaks", "header", "footer", "autowidth", "collapsible" };
+                    if (blockAttrs.Options.Any(o => o.Equals("collapsible", StringComparison.OrdinalIgnoreCase)))
+                        pendingCollapsible = true;
                     var mediaOptions = blockAttrs.Options.Where(o => !downstreamOptions.Contains(o)).ToList();
                     if (mediaOptions.Count > 0)
                     {
@@ -563,6 +572,8 @@ internal static class BlockParser
                                 hasPendingFooter = true;
                             else if (opt.Equals("autowidth", StringComparison.OrdinalIgnoreCase))
                                 hasPendingAutoWidth = true;
+                            else if (opt.Equals("collapsible", StringComparison.OrdinalIgnoreCase))
+                                pendingCollapsible = true;
                         }
                         continue;
                     }
@@ -585,6 +596,29 @@ internal static class BlockParser
                     listFrames.Clear();
                     dlFrames.Clear();
                     pendingAbstract = true;
+                    if (blockAttrs.Id is not null)
+                        pendingBlockId = blockAttrs.Id;
+                    if (blockAttrs.Roles.Count > 0)
+                        pendingBlockRoles = blockAttrs.Roles;
+                    continue;
+                }
+                // [stem], [latexmath], [asciimath] — mark next open block as a stem block.
+                if (blockAttrs is not null && blockAttrs.Style is not null
+                    && blockAttrs.Style is "stem" or "latexmath" or "asciimath")
+                {
+                    FlushParagraph(currentContainer, paragraphLines, ref paragraphStartLine, lineNumber - 1, document.Attributes);
+                    listFrames.Clear();
+                    dlFrames.Clear();
+                    if (string.Equals(blockAttrs.Style, "stem", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // [stem] uses the document-level :stem: attribute value, default "latexmath"
+                        pendingStem = document.Attributes.TryGetValue("stem", out var stemAttr) && stemAttr.Length > 0
+                            ? stemAttr : "latexmath";
+                    }
+                    else
+                    {
+                        pendingStem = blockAttrs.Style.ToLowerInvariant();
+                    }
                     if (blockAttrs.Id is not null)
                         pendingBlockId = blockAttrs.Id;
                     if (blockAttrs.Roles.Count > 0)
@@ -1044,6 +1078,8 @@ internal static class BlockParser
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
+                pendingCollapsible = false;
+                pendingStem = null;
                 pendingQuoteAttribution = null;
                 pendingQuoteCitation = null;
 
@@ -1140,6 +1176,8 @@ internal static class BlockParser
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
+                pendingCollapsible = false;
+                pendingStem = null;
                 pendingQuoteAttribution = null;
                 pendingQuoteCitation = null;
 
@@ -1164,6 +1202,8 @@ internal static class BlockParser
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
+                pendingCollapsible = false;
+                pendingStem = null;
                 pendingQuoteAttribution = null;
                 pendingQuoteCitation = null;
 
@@ -1248,33 +1288,55 @@ internal static class BlockParser
                     openIsStructural = true;
                 }
 
-                var openDefaultSubs = openIsStructural ? EffectiveNormal() : SubstitutionKind.Verbatim;
-                var openBlock = new DelimitedBlockNode
+                // Stem blocks: create StemBlockNode instead of DelimitedBlockNode
+                if (pendingStem is not null)
                 {
-                    BlockKind = openKind,
-                    Content = openIsStructural ? null : openRawContent,
-                    Title = pendingBlockTitle,
-                    Style = (openKind == DelimitedBlockKind.Open && pendingAbstract) ? "abstract" : null,
-                    Language = openKind == DelimitedBlockKind.Source ? pendingSourceLang : null,
-                    Attribution = (openKind is DelimitedBlockKind.Quote or DelimitedBlockKind.Verse) ? pendingQuoteAttribution : null,
-                    CitationSource = (openKind is DelimitedBlockKind.Quote or DelimitedBlockKind.Verse) ? pendingQuoteCitation : null,
-                    Substitutions = ResolvePendingSubs(openDefaultSubs),
-                    Source = openClosingIdx < lines.Length
-                        ? new SourceRange(new(lineNumber, 1), new(openClosingIdx + 1, lines[openClosingIdx].Length))
-                        : new SourceRange(new(lineNumber, 1), new(lines.Length, lines[^1].Length)),
-                };
-                ApplyPendingId(openBlock, lineNumber, line.Length);
-                if (pendingBlockRoles is not null)
-                    openBlock.Roles = pendingBlockRoles;
-
-                if (openIsStructural)
-                {
-                    var innerResult = BlockParser.Parse(openRawContent, document.Attributes);
-                    foreach (var child in innerResult.Document.Children)
-                        openBlock.AddChild(child);
+                    var stemBlock = new StemBlockNode
+                    {
+                        Content = openRawContent,
+                        StemType = pendingStem,
+                        Title = pendingBlockTitle,
+                        Substitutions = SubstitutionKind.Verbatim,
+                        Source = openClosingIdx < lines.Length
+                            ? new SourceRange(new(lineNumber, 1), new(openClosingIdx + 1, lines[openClosingIdx].Length))
+                            : new SourceRange(new(lineNumber, 1), new(lines.Length, lines[^1].Length)),
+                    };
+                    ApplyPendingId(stemBlock, lineNumber, line.Length);
+                    if (pendingBlockRoles is not null)
+                        stemBlock.Roles = pendingBlockRoles;
+                    currentContainer.AddChild(stemBlock);
                 }
+                else
+                {
+                    var openDefaultSubs = openIsStructural ? EffectiveNormal() : SubstitutionKind.Verbatim;
+                    var openBlock = new DelimitedBlockNode
+                    {
+                        BlockKind = openKind,
+                        Content = openIsStructural ? null : openRawContent,
+                        Title = pendingBlockTitle,
+                        Style = (openKind == DelimitedBlockKind.Open && pendingAbstract) ? "abstract" : null,
+                        Language = openKind == DelimitedBlockKind.Source ? pendingSourceLang : null,
+                        Attribution = (openKind is DelimitedBlockKind.Quote or DelimitedBlockKind.Verse) ? pendingQuoteAttribution : null,
+                        CitationSource = (openKind is DelimitedBlockKind.Quote or DelimitedBlockKind.Verse) ? pendingQuoteCitation : null,
+                        IsCollapsible = pendingCollapsible,
+                        Substitutions = ResolvePendingSubs(openDefaultSubs),
+                        Source = openClosingIdx < lines.Length
+                            ? new SourceRange(new(lineNumber, 1), new(openClosingIdx + 1, lines[openClosingIdx].Length))
+                            : new SourceRange(new(lineNumber, 1), new(lines.Length, lines[^1].Length)),
+                    };
+                    ApplyPendingId(openBlock, lineNumber, line.Length);
+                    if (pendingBlockRoles is not null)
+                        openBlock.Roles = pendingBlockRoles;
 
-                currentContainer.AddChild(openBlock);
+                    if (openIsStructural)
+                    {
+                        var innerResult = BlockParser.Parse(openRawContent, document.Attributes);
+                        foreach (var child in innerResult.Document.Children)
+                            openBlock.AddChild(child);
+                    }
+
+                    currentContainer.AddChild(openBlock);
+                }
 
                 pendingBlockTitle = null;
                 pendingSourceLang = null;
@@ -1285,6 +1347,8 @@ internal static class BlockParser
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
+                pendingCollapsible = false;
+                pendingStem = null;
                 pendingQuoteAttribution = null;
                 pendingQuoteCitation = null;
                 hasPendingOptionsHeader = false;
@@ -1304,6 +1368,7 @@ internal static class BlockParser
                 pendingSubsToAdd = SubstitutionKind.None;
                 pendingSubsToRemove = SubstitutionKind.None;
                 pendingAbstract = false;
+                pendingStem = null;
                 i = openClosingIdx;
                 continue;
             }
@@ -1510,6 +1575,7 @@ internal static class BlockParser
                         Language = delimKind == DelimitedBlockKind.Source ? pendingSourceLang : null,
                         Attribution = delimKind is DelimitedBlockKind.Quote or DelimitedBlockKind.Verse ? pendingQuoteAttribution : null,
                         CitationSource = delimKind is DelimitedBlockKind.Quote or DelimitedBlockKind.Verse ? pendingQuoteCitation : null,
+                        IsCollapsible = pendingCollapsible,
                         Callouts = calloutEntries,
                         Substitutions = ResolvePendingSubs(delimDefaultSubs),
                         Source = closingIdx < lines.Length
@@ -1540,6 +1606,8 @@ internal static class BlockParser
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
+                pendingCollapsible = false;
+                pendingStem = null;
                 pendingQuoteAttribution = null;
                 pendingQuoteCitation = null;
 
@@ -1610,6 +1678,8 @@ internal static class BlockParser
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
+                pendingCollapsible = false;
+                pendingStem = null;
                 pendingQuoteAttribution = null;
                 pendingQuoteCitation = null;
 
@@ -1795,6 +1865,8 @@ internal static class BlockParser
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
+                pendingCollapsible = false;
+                pendingStem = null;
                 pendingQuoteAttribution = null;
                 pendingQuoteCitation = null;
 
@@ -1841,6 +1913,8 @@ internal static class BlockParser
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
+                pendingCollapsible = false;
+                pendingStem = null;
                 pendingQuoteAttribution = null;
                 pendingQuoteCitation = null;
 
@@ -2139,6 +2213,8 @@ internal static class BlockParser
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
+                pendingCollapsible = false;
+                pendingStem = null;
                 pendingQuoteAttribution = null;
                 pendingQuoteCitation = null;
 
@@ -2266,6 +2342,8 @@ internal static class BlockParser
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
+                pendingCollapsible = false;
+                pendingStem = null;
                 pendingQuoteAttribution = null;
                 pendingQuoteCitation = null;
                 hasPendingOptionsHeader = false;

@@ -54,7 +54,8 @@ public static class AdocParser
         {
             var baseDir = options.ResolveBaseDirectory()!;
             var expandResult = IncludeExpander.Expand(
-                sourceText, baseDir, reader: options.IncludeReader, maxDepth: options.IncludeMaxDepth, attributes: options.Attributes, allowUriRead: options.AllowUriRead);
+                sourceText, baseDir, reader: options.IncludeReader, maxDepth: options.IncludeMaxDepth,
+                attributes: options.Attributes, allowUriRead: options.AllowUriRead, safeMode: options.SafeMode);
             sourceText = expandResult.Text;
             allDiagnostics.AddRange(expandResult.Diagnostics);
         }
