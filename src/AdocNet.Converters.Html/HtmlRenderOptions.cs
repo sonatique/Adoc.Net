@@ -62,6 +62,12 @@ public sealed class HtmlRenderOptions : RenderOptions
     /// </summary>
     public bool EnableIncrementalMarkers { get; init; }
 
+    /// <summary>
+    /// Base directory for resolving relative image paths when <c>:data-uri:</c> is set.
+    /// Also used for docinfo file lookup. When null, data-uri falls back to literal paths.
+    /// </summary>
+    public string? BaseDirectory { get; init; }
+
     /// <summary>Convenience: full document with Default theme.</summary>
     public static HtmlRenderOptions Styled => new() { Theme = HtmlTheme.Default };
 }

@@ -118,6 +118,7 @@ public static class Program
         List<string>? extensionPaths = null;
         List<string>? extensionDirs = null;
         bool noAutoExtensions = false;
+        SafeMode safeMode = SafeMode.Unsafe;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -271,6 +272,24 @@ public static class Program
                 continue;
             }
 
+            if (arg is "--safe-mode" or "-S")
+            {
+                if (i + 1 >= args.Length)
+                    return new CliArgs.Error("Option --safe-mode requires a value (unsafe, safe, server, secure).");
+                var modeStr = args[++i].ToLowerInvariant();
+                safeMode = modeStr switch
+                {
+                    "unsafe" => SafeMode.Unsafe,
+                    "safe" => SafeMode.Safe,
+                    "server" => SafeMode.Server,
+                    "secure" => SafeMode.Secure,
+                    _ => (SafeMode)(-1),
+                };
+                if ((int)safeMode < 0)
+                    return new CliArgs.Error($"Unknown safe mode: {modeStr}. Available: unsafe, safe, server, secure.");
+                continue;
+            }
+
             if (arg.StartsWith('-'))
                 return new CliArgs.Error($"Unknown option: {arg}");
 
@@ -298,7 +317,7 @@ public static class Program
             attributes is { Count: > 0 } ? attributes : null,
             extensionPaths is { Count: > 0 } ? extensionPaths : null,
             extensionDirs is { Count: > 0 } ? extensionDirs : null,
-            noAutoExtensions);
+            noAutoExtensions, safeMode);
     }
 
     private static CliArgs ParsePreviewArguments(string[] args)
@@ -395,6 +414,7 @@ public static class Program
         writer.WriteLine("  --extensions <path>   Load extensions from a DLL file (repeatable)");
         writer.WriteLine("  --extension-dir <dir> Load all extension DLLs from directory (repeatable)");
         writer.WriteLine("  --no-auto-extensions  Skip loading installed extensions from ~/.adocnet/extensions/");
+        writer.WriteLine("  -S, --safe-mode <m>   Set safe mode: unsafe, safe, server, secure (default: unsafe)");
         writer.WriteLine("  -h, --help            Show help");
         writer.WriteLine();
         writer.WriteLine("Examples:");
@@ -448,7 +468,8 @@ internal abstract record CliArgs
         IReadOnlyDictionary<string, string>? Attributes = null,
         IReadOnlyList<string>? ExtensionPaths = null,
         IReadOnlyList<string>? ExtensionDirs = null,
-        bool NoAutoExtensions = false) : CliArgs;
+        bool NoAutoExtensions = false,
+        SafeMode SafeMode = SafeMode.Unsafe) : CliArgs;
     internal sealed record ShowHelp() : CliArgs;
     internal sealed record Preview(
         string InputPath,

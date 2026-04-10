@@ -308,10 +308,11 @@ internal static class InlineParser
 
             // ── Generic inline macros: kbd:[...], btn:[...], menu:target[...], icon:name[...] ──
             // kbd:, btn:, menu: require :experimental: attribute; icon: is always available
-            if (doMacros && (c == 'k' || c == 'b' || c == 'm' || c == 'i'))
+            if (doMacros && (c == 'k' || c == 'b' || c == 'm' || c == 'i' || c == 's' || c == 'l' || c == 'a'))
             {
                 // Skip kbd/btn/menu when :experimental: is not set
-                bool isExperimentalMacro = c != 'i'; // icon: is always available
+                // icon:, stem:, latexmath:, asciimath: are always available
+                bool isExperimentalMacro = c is 'k' or 'b' or 'm';
                 if (!isExperimentalMacro || doExperimental)
                 {
                     if (TryParseGenericMacro(text, i, endIndex, out var genericMacro, out var gmEnd))
@@ -1150,14 +1151,15 @@ internal static class InlineParser
         return true;
     }
 
-    private static readonly HashSet<string> KnownMacroNames = ["kbd", "btn", "menu", "icon"];
+    private static readonly HashSet<string> KnownMacroNames = ["kbd", "btn", "menu", "icon", "stem", "latexmath", "asciimath"];
+    private static readonly HashSet<string> StemMacroNames = ["stem", "latexmath", "asciimath"];
 
     /// <summary>
     /// Tries to parse a generic inline macro (kbd, btn, menu) at position <paramref name="pos"/>.
     /// Forms: <c>name:[content]</c> or <c>name:target[content]</c>.
     /// </summary>
     private static bool TryParseGenericMacro(string text, int pos, int endIndex,
-        out InlineMacroNode node, out int endPos)
+        out InlineNode node, out int endPos)
     {
         node = null!;
         endPos = pos;
@@ -1200,7 +1202,15 @@ internal static class InlineParser
 
         var content = text[(openBracket + 1)..closeBracket];
 
-        node = new InlineMacroNode { Name = name, Target = target, Content = content };
+        if (StemMacroNames.Contains(name))
+        {
+            var stemType = name == "stem" ? "latexmath" : name;
+            node = new StemInlineNode { Content = content, StemType = stemType };
+        }
+        else
+        {
+            node = new InlineMacroNode { Name = name, Target = target, Content = content };
+        }
         endPos = closeBracket + 1;
         return true;
     }

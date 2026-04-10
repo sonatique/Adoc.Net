@@ -42,6 +42,7 @@ internal sealed class ConvertCommand(ConsoleLogger logger)
         {
             SourceFilePath = Path.GetFullPath(inputPath),
             Attributes = options.Attributes,
+            SafeMode = options.SafeMode,
         };
 
         var result = AdocParser.Parse(sourceText, parseOptions);

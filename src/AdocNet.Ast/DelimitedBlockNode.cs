@@ -33,12 +33,19 @@ public sealed class DelimitedBlockNode : BlockNode
     /// </summary>
     public string? Style { get; init; }
 
+    /// <summary>
+    /// Whether this block was marked with <c>[%collapsible]</c>.
+    /// When true, the HTML renderer wraps the block in &lt;details&gt;/&lt;summary&gt;.
+    /// </summary>
+    public bool IsCollapsible { get; init; }
+
     /// <summary>Callout explanations associated with source/listing blocks. Null when no callouts present.</summary>
     public IReadOnlyList<CalloutEntry>? Callouts { get; init; }
 
     public override IEnumerable<KeyValuePair<string, string>> GetProperties()
     {
         yield return new("BlockKind", BlockKind.ToString());
+        if (IsCollapsible)              yield return new("IsCollapsible", "true");
         if (Style is not null)          yield return new("Style", Style);
         if (Title is not null)          yield return new("Title", Title);
         if (Language is not null)       yield return new("Language", Language);

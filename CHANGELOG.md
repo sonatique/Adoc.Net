@@ -3,6 +3,25 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0-beta.16] - 2026-04-10
+
+### Added — Asciidoctor Parity
+- Collapsible blocks: `[%collapsible]` option renders `<details>/<summary>` in HTML
+- Data URI embedding: `:data-uri:` attribute converts images to inline base64 `data:` URIs
+- Font Awesome CSS injection: automatic CDN link when `:icons: font` is set (FA 4.7.0)
+- Custom icon font CDN: `:iconfont-cdn:` attribute overrides the default FA URL
+- Docinfo injection: `:docinfo:` attribute injects `docinfo.html` / `docinfo-footer.html` content
+- Private docinfo: `{docname}-docinfo.html` per-document header/footer injection
+- Safe modes: `SafeMode` enum (Unsafe, Safe, Server, Secure) on `ParseOptions`
+- Safe mode enforcement: include path restrictions, attribute locking, file I/O controls
+- CLI `--safe-mode` / `-S` flag for safe mode selection
+- STEM/Math: `StemBlockNode` and `StemInlineNode` AST types for mathematical notation
+- Block-level math: `[stem]`, `[latexmath]`, `[asciimath]` on open blocks
+- Inline math: `stem:[]`, `latexmath:[]`, `asciimath:[]` macros
+- MathJax v3 script injection: automatic `<script>` tag when `:stem:` attribute is set
+- AsciiMath support: `:stem: asciimath` configures MathJax for AsciiMath input
+- `HtmlRenderOptions.BaseDirectory` property for image and docinfo file resolution
+
 ## [1.0.0-beta.15] - 2026-04-10
 
 ### Added — Incremental Rendering

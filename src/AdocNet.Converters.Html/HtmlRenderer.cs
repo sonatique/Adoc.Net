@@ -28,6 +28,9 @@ public sealed class HtmlRenderer : DocumentRendererBase
         public int ExampleCounter { get; set; } = 1;
         public bool EnableSyntaxHighlighting { get; set; }
         public bool EnableIncrementalMarkers { get; set; }
+        public bool DataUriEnabled { get; set; }
+        public string? BaseDirectory { get; set; }
+        public string? ImagesDir { get; set; }
     }
 
     /// <summary>
@@ -159,6 +162,9 @@ public sealed class HtmlRenderer : DocumentRendererBase
         var htmlOptions = context.Options as HtmlRenderOptions;
         state.EnableSyntaxHighlighting = htmlOptions?.EnableSyntaxHighlighting ?? false;
         state.EnableIncrementalMarkers = htmlOptions?.EnableIncrementalMarkers ?? false;
+        state.DataUriEnabled = document.Attributes.ContainsKey("data-uri");
+        state.BaseDirectory = htmlOptions?.BaseDirectory;
+        state.ImagesDir = document.Attributes.TryGetValue("imagesdir", out var imgDir) ? imgDir : null;
         bool fullDoc = htmlOptions?.IsFullDocument == true;
 
         var sb = new StringBuilder();
@@ -172,7 +178,7 @@ public sealed class HtmlRenderer : DocumentRendererBase
         RenderFootnotesSection(sb, footnotes, state);
 
         if (fullDoc)
-            AppendDocumentEpilogue(sb);
+            AppendDocumentEpilogue(sb, document, htmlOptions);
 
         var bytes = Encoding.UTF8.GetBytes(sb.ToString());
         output.Write(bytes, 0, bytes.Length);
@@ -207,8 +213,37 @@ public sealed class HtmlRenderer : DocumentRendererBase
             sb.Append("</style>\n");
         }
 
+        // Font Awesome CSS when icons=font
+        if (document.Attributes.TryGetValue("icons", out var iconsVal)
+            && string.Equals(iconsVal, "font", StringComparison.OrdinalIgnoreCase))
+        {
+            var cdnUrl = document.Attributes.TryGetValue("iconfont-cdn", out var customCdn)
+                ? customCdn
+                : "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css";
+            sb.Append("<link rel=\"stylesheet\" href=\"");
+            EscapeTo(sb, cdnUrl);
+            sb.Append("\">\n");
+        }
+
+        // MathJax script when :stem: attribute is set
+        if (document.Attributes.ContainsKey("stem"))
+        {
+            var stemType = document.Attributes.TryGetValue("stem", out var sv) && sv.Length > 0
+                ? sv : "latexmath";
+            if (string.Equals(stemType, "asciimath", StringComparison.OrdinalIgnoreCase))
+            {
+                sb.Append("<script>\nMathJax = {\n  loader: {load: ['input/asciimath']},\n  asciimath: {delimiters: [['\\\\$','\\\\$']]}\n};\n</script>\n");
+            }
+            sb.Append("<script src=\"https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js\"></script>\n");
+        }
+
         if (options.ExtraHead is not null)
             sb.Append(options.ExtraHead).Append('\n');
+
+        // Docinfo header injection
+        var docinfoHead = DocinfoHelper.ReadHeaderDocinfo(document.Attributes, options.BaseDirectory);
+        if (docinfoHead is not null)
+            sb.Append(docinfoHead).Append('\n');
 
         sb.Append("</head>\n");
         sb.Append("<body>\n");
@@ -217,8 +252,14 @@ public sealed class HtmlRenderer : DocumentRendererBase
     /// <summary>
     /// Appends the HTML document epilogue: &lt;/body&gt;&lt;/html&gt;.
     /// </summary>
-    private static void AppendDocumentEpilogue(StringBuilder sb)
+    private static void AppendDocumentEpilogue(StringBuilder sb, DocumentNode document, HtmlRenderOptions? options)
     {
+        // Docinfo footer injection
+        var docinfoFooter = DocinfoHelper.ReadFooterDocinfo(
+            document.Attributes, options?.BaseDirectory);
+        if (docinfoFooter is not null)
+            sb.Append(docinfoFooter).Append('\n');
+
         sb.Append("</body>\n");
         sb.Append("</html>\n");
     }
@@ -383,6 +424,9 @@ public sealed class HtmlRenderer : DocumentRendererBase
                 break;
             case BlockImageNode blockImage:
                 RenderBlockImage(sb, blockImage, state);
+                break;
+            case StemBlockNode stemBlock:
+                RenderStemBlock(sb, stemBlock);
                 break;
             case VideoNode video:
                 RenderVideo(sb, video);
@@ -612,6 +656,21 @@ public sealed class HtmlRenderer : DocumentRendererBase
 
     private void RenderDelimitedBlock(StringBuilder sb, DelimitedBlockNode block, FootnoteState footnotes, SectionNumberingContext secCtx, HtmlRenderState state)
     {
+        // Collapsible blocks wrap in <details>/<summary>.
+        if (block.IsCollapsible)
+        {
+            sb.Append("<details>\n<summary class=\"title\">");
+            if (block.Title is not null)
+                EscapeTo(sb, block.Title);
+            else
+                sb.Append("Details");
+            sb.Append("</summary>\n<div class=\"content\">\n");
+            // Render block content without normal title (already in <summary>).
+            RenderDelimitedBlockContent(sb, block, footnotes, secCtx, state);
+            sb.Append("</div>\n</details>\n");
+            return;
+        }
+
         // Passthrough blocks emit raw content — no title rendering.
         if (block.Title is not null && block.BlockKind != DelimitedBlockKind.Passthrough)
         {
@@ -632,6 +691,11 @@ public sealed class HtmlRenderer : DocumentRendererBase
             }
         }
 
+        RenderDelimitedBlockContent(sb, block, footnotes, secCtx, state);
+    }
+
+    private void RenderDelimitedBlockContent(StringBuilder sb, DelimitedBlockNode block, FootnoteState footnotes, SectionNumberingContext secCtx, HtmlRenderState state)
+    {
         switch (block.BlockKind)
         {
             case DelimitedBlockKind.Literal:
@@ -1323,6 +1387,21 @@ public sealed class HtmlRenderer : DocumentRendererBase
         sb.Append("</tr>\n");
     }
 
+    private static void AppendImageSrc(StringBuilder sb, string target, HtmlRenderState state)
+    {
+        if (state.DataUriEnabled)
+        {
+            var dataUri = DataUriHelper.TryConvertToDataUri(target, state.BaseDirectory, state.ImagesDir);
+            if (dataUri is not null)
+            {
+                sb.Append(dataUri);
+                return;
+            }
+        }
+
+        EscapeTo(sb, target);
+    }
+
     private static void RenderBlockImage(StringBuilder sb, BlockImageNode image, HtmlRenderState state)
     {
         sb.Append("<div class=\"imageblock\"");
@@ -1334,7 +1413,7 @@ public sealed class HtmlRenderer : DocumentRendererBase
         }
         sb.Append(">\n");
         sb.Append("<img src=\"");
-        EscapeTo(sb, image.Target);
+        AppendImageSrc(sb, image.Target, state);
         sb.Append("\" alt=\"");
         EscapeTo(sb, image.Alt);
         sb.Append("\">\n");
@@ -1348,6 +1427,31 @@ public sealed class HtmlRenderer : DocumentRendererBase
             sb.Append("</div>\n");
         }
         sb.Append("</div>\n");
+    }
+
+    private static void RenderStemBlock(StringBuilder sb, StemBlockNode block)
+    {
+        sb.Append("<div class=\"stemblock\">\n");
+        if (block.Title is not null)
+        {
+            sb.Append("<div class=\"title\">");
+            EscapeTo(sb, block.Title);
+            sb.Append("</div>\n");
+        }
+        sb.Append("<div class=\"content\">\n");
+        if (string.Equals(block.StemType, "asciimath", StringComparison.OrdinalIgnoreCase))
+        {
+            sb.Append("\\$");
+            sb.Append(block.Content);
+            sb.Append("\\$");
+        }
+        else
+        {
+            sb.Append("\\[");
+            sb.Append(block.Content);
+            sb.Append("\\]");
+        }
+        sb.Append("\n</div>\n</div>\n");
     }
 
     private static void RenderVideo(StringBuilder sb, VideoNode video)
@@ -1557,7 +1661,7 @@ public sealed class HtmlRenderer : DocumentRendererBase
 
             case InlineImageNode inlineImage:
                 sb.Append("<span class=\"image\"><img src=\"");
-                EscapeTo(sb, inlineImage.Target);
+                AppendImageSrc(sb, inlineImage.Target, state);
                 sb.Append("\" alt=\"");
                 EscapeTo(sb, inlineImage.Alt);
                 sb.Append("\"></span>");
@@ -1662,6 +1766,21 @@ public sealed class HtmlRenderer : DocumentRendererBase
                 sb.Append("<a id=\"");
                 EscapeTo(sb, anchor.Id);
                 sb.Append("\"></a>");
+                break;
+
+            case StemInlineNode stemInline:
+                if (string.Equals(stemInline.StemType, "asciimath", StringComparison.OrdinalIgnoreCase))
+                {
+                    sb.Append("\\$");
+                    sb.Append(stemInline.Content);
+                    sb.Append("\\$");
+                }
+                else
+                {
+                    sb.Append("\\(");
+                    sb.Append(stemInline.Content);
+                    sb.Append("\\)");
+                }
                 break;
 
             case InlineMacroNode macro:

@@ -83,6 +83,19 @@ internal static class IncludeExpander
         int maxDepth,
         IReadOnlyDictionary<string, string>? attributes,
         bool allowUriRead)
+        => Expand(text, baseDirectory, reader, maxDepth, attributes, allowUriRead, SafeMode.Unsafe);
+
+    /// <summary>
+    /// Expands all <c>include::</c> directives in <paramref name="text"/> with safe mode enforcement.
+    /// </summary>
+    public static ExpandResult Expand(
+        string text,
+        string baseDirectory,
+        IIncludeReader? reader,
+        int maxDepth,
+        IReadOnlyDictionary<string, string>? attributes,
+        bool allowUriRead,
+        SafeMode safeMode)
     {
         Guard.NotNull(text);
         Guard.NotNull(baseDirectory);
@@ -94,7 +107,7 @@ internal static class IncludeExpander
         // First pass: build preliminary attribute map from document attribute definitions.
         var attrMap = BuildAttributeMap(text, attributes);
 
-        var expanded = ExpandRecursive(text, baseDirectory, reader, diagnostics, visitedPaths, 0, maxDepth, attrMap, allowUriRead);
+        var expanded = ExpandRecursive(text, baseDirectory, reader, diagnostics, visitedPaths, 0, maxDepth, attrMap, allowUriRead, safeMode);
         return new ExpandResult(expanded, diagnostics);
     }
 
@@ -107,7 +120,8 @@ internal static class IncludeExpander
         int currentDepth,
         int maxDepth,
         IReadOnlyDictionary<string, string>? attributes,
-        bool allowUriRead = false)
+        bool allowUriRead = false,
+        SafeMode safeMode = SafeMode.Unsafe)
     {
         var lines = TextUtility.SplitLines(text);
         var result = new StringBuilder();
@@ -147,6 +161,19 @@ internal static class IncludeExpander
 
             var rawPath = match.Groups[1].Value.Trim();
             var bracketContent = match.Groups[2].Value.Trim();
+
+            // ── Safe mode enforcement ──
+            if (safeMode >= SafeMode.Server)
+            {
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticSeverity.Warning,
+                    $"Include disabled by safe mode ({safeMode}): {rawPath} (line {lineNumber})",
+                    new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length))));
+                if (result.Length > 0 || i > 0)
+                    result.Append('\n');
+                result.Append(line);
+                continue;
+            }
 
             // ── Parse bracket attributes ──
             string? linesValue = null;
@@ -288,7 +315,7 @@ internal static class IncludeExpander
 
                 var urlExpanded = ExpandRecursive(
                     urlContent, baseDirectory, reader, diagnostics, visitedPaths,
-                    currentDepth + 1, maxDepth, attributes, allowUriRead);
+                    currentDepth + 1, maxDepth, attributes, allowUriRead, safeMode);
 
                 urlExpanded = urlExpanded.TrimEnd('\n');
 
@@ -343,6 +370,23 @@ internal static class IncludeExpander
             var resolvedPath = Path.IsPathRooted(rawPath)
                 ? Path.GetFullPath(rawPath)
                 : Path.GetFullPath(Path.Combine(baseDirectory, rawPath));
+
+            // ── Safe mode: restrict to base directory ──
+            if (safeMode >= SafeMode.Safe)
+            {
+                var normalizedBase = Path.GetFullPath(baseDirectory);
+                if (!resolvedPath.StartsWith(normalizedBase, StringComparison.OrdinalIgnoreCase))
+                {
+                    diagnostics.Add(new Diagnostic(
+                        DiagnosticSeverity.Warning,
+                        $"Include path outside base directory blocked by safe mode: {rawPath} (line {lineNumber})",
+                        new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length))));
+                    if (result.Length > 0 || i > 0)
+                        result.Append('\n');
+                    result.Append(line);
+                    continue;
+                }
+            }
 
             // ── Circular include detection ──
             if (!visitedPaths.Add(resolvedPath))
@@ -467,7 +511,7 @@ internal static class IncludeExpander
 
             var expandedContent = ExpandRecursive(
                 includeContent, includeDir, reader, diagnostics, visitedPaths,
-                currentDepth + 1, maxDepth, attributes, allowUriRead);
+                currentDepth + 1, maxDepth, attributes, allowUriRead, safeMode);
 
             // Remove trailing newline from included content to avoid double-blank-lines.
             expandedContent = expandedContent.TrimEnd('\n');
