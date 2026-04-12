@@ -180,6 +180,7 @@ internal static class IncludeExpander
             string? tagValue = null;
             string? tagsValue = null;
             int? levelOffset = null;
+            int? indentValue = null;
             bool hasUnsupportedAttributes = false;
 
             if (bracketContent.Length > 0)
@@ -196,6 +197,11 @@ internal static class IncludeExpander
                     if (int.TryParse(lo, out var parsed))
                         levelOffset = parsed;
                 }
+                if (attrs.TryGetValue("indent", out var iv))
+                {
+                    if (int.TryParse(iv, out var parsed) && parsed >= 0)
+                        indentValue = parsed;
+                }
 
                 // Warn about any attributes we don't support yet.
                 foreach (var key in attrs.Keys)
@@ -203,7 +209,8 @@ internal static class IncludeExpander
                     if (!string.Equals(key, "lines", StringComparison.OrdinalIgnoreCase) &&
                         !string.Equals(key, "tag", StringComparison.OrdinalIgnoreCase) &&
                         !string.Equals(key, "tags", StringComparison.OrdinalIgnoreCase) &&
-                        !string.Equals(key, "leveloffset", StringComparison.OrdinalIgnoreCase))
+                        !string.Equals(key, "leveloffset", StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(key, "indent", StringComparison.OrdinalIgnoreCase))
                         hasUnsupportedAttributes = true;
                 }
 
@@ -309,6 +316,9 @@ internal static class IncludeExpander
                     }
                     urlContent = string.Join("\n", urlFiltered);
                 }
+
+                if (indentValue is not null)
+                    urlContent = ApplyIndent(urlContent, indentValue.Value);
 
                 if (levelOffset is not null && levelOffset.Value != 0)
                     urlContent = ApplyLevelOffset(urlContent, levelOffset.Value);
@@ -501,6 +511,12 @@ internal static class IncludeExpander
                 includeContent = string.Join("\n", filtered);
             }
 
+            // ── Apply indent ──
+            if (indentValue is not null)
+            {
+                includeContent = ApplyIndent(includeContent, indentValue.Value);
+            }
+
             // ── Apply level offset ──
             if (levelOffset is not null && levelOffset.Value != 0)
             {
@@ -582,6 +598,31 @@ internal static class IncludeExpander
         var bracketStart = trimmed.IndexOf('[', prefixLength);
         if (bracketStart < 0) return string.Empty;
         return trimmed[prefixLength..bracketStart].Trim();
+    }
+
+    /// <summary>
+    /// Adjusts indentation of each line in <paramref name="text"/>.
+    /// When <paramref name="indent"/> is 0, strips all leading whitespace.
+    /// When positive, prepends that many spaces to each line.
+    /// </summary>
+    internal static string ApplyIndent(string text, int indent)
+    {
+        var lines = TextUtility.SplitLines(text);
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < lines.Length; i++)
+        {
+            if (i > 0) sb.Append('\n');
+            if (indent == 0)
+            {
+                sb.Append(lines[i].TrimStart());
+            }
+            else
+            {
+                sb.Append(' ', indent);
+                sb.Append(lines[i]);
+            }
+        }
+        return sb.ToString();
     }
 
     /// <summary>

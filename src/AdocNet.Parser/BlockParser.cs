@@ -107,6 +107,7 @@ internal static class BlockParser
         List<string>? pendingBlockOptions = null;
         bool pendingCollapsible = false;
         string? pendingStem = null;
+        string? pendingDlStyle = null;
 
         // Computes the effective "normal" substitutions: smart punctuation (PostReplacements)
         // is enabled by default and can be disabled via :!smartquotes:.
@@ -267,6 +268,7 @@ internal static class BlockParser
                 hasPendingSidebar = false;
                 pendingCollapsible = false;
                 pendingStem = null;
+                pendingDlStyle = null;
                 pendingQuoteAttribution = null;
                 pendingQuoteCitation = null;
 
@@ -324,9 +326,23 @@ internal static class BlockParser
                 // Malformed: fall through to other body parsing (no diagnostic added).
             }
 
-            // Section title: two or more '=' followed by a space.
+            // Section title: two or more '=' followed by a space, OR
+            // Markdown-compatible: one or more '#' followed by a space (# = level 0, ## = level 1, etc.).
             var equalsCount = CountLeadingEquals(line);
+            var hashCount = CountLeadingHashes(line);
+            int sectionPrefixLen = 0;
+            int sectionLevel = -1;
             if (equalsCount >= 2 && line.Length > equalsCount && line[equalsCount] == ' ')
+            {
+                sectionPrefixLen = equalsCount;
+                sectionLevel = equalsCount - 1;
+            }
+            else if (hashCount >= 2 && hashCount <= 6 && line.Length > hashCount && line[hashCount] == ' ')
+            {
+                sectionPrefixLen = hashCount;
+                sectionLevel = hashCount - 1;
+            }
+            if (sectionLevel >= 1)
             {
                 FlushParagraph(currentContainer, paragraphLines, ref paragraphStartLine, lineNumber - 1, document.Attributes);
                 listFrames.Clear();
@@ -342,6 +358,7 @@ internal static class BlockParser
                 hasPendingSidebar = false;
                 pendingCollapsible = false;
                 pendingStem = null;
+                pendingDlStyle = null;
                 pendingQuoteAttribution = null;
                 pendingQuoteCitation = null;
 
@@ -355,7 +372,10 @@ internal static class BlockParser
                 pendingFormat = null;
                 pendingAdmonitionType = null;
 
-                var titleText = line[(equalsCount + 1)..].Trim();
+                var titleText = line[(sectionPrefixLen + 1)..].Trim();
+                // Strip trailing '#' for Markdown-style headings (e.g. "## Title ##" → "Title")
+                if (hashCount >= 2 && titleText.Length > 0 && titleText[^1] == '#')
+                    titleText = titleText.TrimEnd('#').TrimEnd();
 
                 if (pendingDiscrete)
                 {
@@ -370,7 +390,7 @@ internal static class BlockParser
                     }
                     var discreteSection = new SectionNode
                     {
-                        Level           = equalsCount - 1,
+                        Level           = sectionLevel,
                         Title           = titleText,
                         TitleInlines    = InlineParser.Parse(titleText, EffectiveNormal(), document.Attributes),
                         Source          = new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length)),
@@ -415,7 +435,7 @@ internal static class BlockParser
                 }
                 var section = new SectionNode
                 {
-                    Level           = equalsCount - 1,
+                    Level           = sectionLevel,
                     Title           = titleText,
                     TitleInlines    = InlineParser.Parse(titleText, EffectiveNormal(), document.Attributes),
                     Source          = new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length)),
@@ -436,6 +456,80 @@ internal static class BlockParser
                 pendingSubsIsIncremental = false;
                 pendingSubsToAdd = SubstitutionKind.None;
                 pendingSubsToRemove = SubstitutionKind.None;
+                continue;
+            }
+
+            // Markdown blockquote: lines starting with "> " or bare ">".
+            if (paragraphLines.Count == 0 && line.Length >= 1 && line[0] == '>'
+                && (line.Length == 1 || line[1] == ' '))
+            {
+                FlushParagraph(currentContainer, paragraphLines, ref paragraphStartLine, lineNumber - 1, document.Attributes);
+                listFrames.Clear();
+                dlFrames.Clear();
+
+                // Accumulate blockquote lines.
+                var quoteLines = new List<string>();
+                string firstContent = line.Length > 2 ? line[2..] : (line.Length == 2 ? "" : "");
+                quoteLines.Add(firstContent);
+                int quoteStartLine = lineNumber;
+
+                while (i + 1 < lines.Length)
+                {
+                    var nextLine = lines[i + 1];
+                    if (nextLine.Length >= 2 && nextLine[0] == '>' && nextLine[1] == ' ')
+                    {
+                        quoteLines.Add(nextLine[2..]);
+                        i++;
+                    }
+                    else if (nextLine == ">")
+                    {
+                        quoteLines.Add("");
+                        i++;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                // Detect attribution: last non-empty line matching "-- Author"
+                string? quoteAttribution = null;
+                int lastNonEmpty = quoteLines.Count - 1;
+                while (lastNonEmpty >= 0 && string.IsNullOrWhiteSpace(quoteLines[lastNonEmpty]))
+                    lastNonEmpty--;
+                if (lastNonEmpty >= 0 && quoteLines[lastNonEmpty].StartsWith("-- "))
+                {
+                    quoteAttribution = quoteLines[lastNonEmpty][3..].Trim();
+                    quoteLines.RemoveAt(lastNonEmpty);
+                    // Trim trailing blank lines after removing attribution
+                    while (quoteLines.Count > 0 && string.IsNullOrWhiteSpace(quoteLines[^1]))
+                        quoteLines.RemoveAt(quoteLines.Count - 1);
+                }
+
+                var quoteContent = string.Join("\n", quoteLines);
+                var innerResult = BlockParser.Parse(quoteContent, document.Attributes);
+                var quoteBlock = new DelimitedBlockNode
+                {
+                    BlockKind = DelimitedBlockKind.Quote,
+                    Attribution = quoteAttribution ?? pendingQuoteAttribution,
+                    CitationSource = pendingQuoteCitation,
+                    Title = pendingBlockTitle,
+                    Source = new SourceRange(new(quoteStartLine, 1), new(i + 1, lines[i].Length)),
+                };
+                ApplyPendingId(quoteBlock, quoteStartLine, line.Length);
+                if (pendingBlockRoles is not null)
+                    quoteBlock.Roles = pendingBlockRoles;
+                foreach (var child in innerResult.Document.Children)
+                    quoteBlock.AddChild(child);
+
+                currentContainer.AddChild(quoteBlock);
+                pendingBlockTitle = null;
+                pendingBlockId = null;
+                pendingBlockReftext = null;
+                pendingBlockRoles = null;
+                pendingQuoteAttribution = null;
+                pendingQuoteCitation = null;
+                hasPendingQuote = false;
                 continue;
             }
 
@@ -646,12 +740,15 @@ internal static class BlockParser
                         pendingBlockRoles = blockAttrs.Roles;
                     continue;
                 }
-                // [horizontal] — style for description lists (consumed as pending style, applied to next dlist).
-                if (blockAttrs is not null && string.Equals(blockAttrs.Style, "horizontal", StringComparison.OrdinalIgnoreCase))
+                // [horizontal] / [qanda] — style for description lists (consumed as pending style, applied to next dlist).
+                if (blockAttrs is not null && (
+                    string.Equals(blockAttrs.Style, "horizontal", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(blockAttrs.Style, "qanda", StringComparison.OrdinalIgnoreCase)))
                 {
                     FlushParagraph(currentContainer, paragraphLines, ref paragraphStartLine, lineNumber - 1, document.Attributes);
                     listFrames.Clear();
                     dlFrames.Clear();
+                    pendingDlStyle = blockAttrs.Style!.ToLowerInvariant();
                     if (blockAttrs.Id is not null)
                         pendingBlockId = blockAttrs.Id;
                     if (blockAttrs.Roles.Count > 0)
@@ -1080,6 +1177,7 @@ internal static class BlockParser
                 hasPendingSidebar = false;
                 pendingCollapsible = false;
                 pendingStem = null;
+                pendingDlStyle = null;
                 pendingQuoteAttribution = null;
                 pendingQuoteCitation = null;
 
@@ -1178,6 +1276,7 @@ internal static class BlockParser
                 hasPendingSidebar = false;
                 pendingCollapsible = false;
                 pendingStem = null;
+                pendingDlStyle = null;
                 pendingQuoteAttribution = null;
                 pendingQuoteCitation = null;
 
@@ -1204,6 +1303,7 @@ internal static class BlockParser
                 hasPendingSidebar = false;
                 pendingCollapsible = false;
                 pendingStem = null;
+                pendingDlStyle = null;
                 pendingQuoteAttribution = null;
                 pendingQuoteCitation = null;
 
@@ -1349,6 +1449,7 @@ internal static class BlockParser
                 hasPendingSidebar = false;
                 pendingCollapsible = false;
                 pendingStem = null;
+                pendingDlStyle = null;
                 pendingQuoteAttribution = null;
                 pendingQuoteCitation = null;
                 hasPendingOptionsHeader = false;
@@ -1608,6 +1709,7 @@ internal static class BlockParser
                 hasPendingSidebar = false;
                 pendingCollapsible = false;
                 pendingStem = null;
+                pendingDlStyle = null;
                 pendingQuoteAttribution = null;
                 pendingQuoteCitation = null;
 
@@ -1680,6 +1782,7 @@ internal static class BlockParser
                 hasPendingSidebar = false;
                 pendingCollapsible = false;
                 pendingStem = null;
+                pendingDlStyle = null;
                 pendingQuoteAttribution = null;
                 pendingQuoteCitation = null;
 
@@ -1744,6 +1847,11 @@ internal static class BlockParser
                     else
                     {
                         dl = new DescriptionListNode();
+                        if (pendingDlStyle is not null)
+                        {
+                            dl.Style = pendingDlStyle;
+                            pendingDlStyle = null;
+                        }
                         ApplyPendingId(dl, lineNumber, line.Length);
                         currentContainer.AddChild(dl);
                         dlFrames.Add((dl, dlDepth, null));
@@ -1867,6 +1975,7 @@ internal static class BlockParser
                 hasPendingSidebar = false;
                 pendingCollapsible = false;
                 pendingStem = null;
+                pendingDlStyle = null;
                 pendingQuoteAttribution = null;
                 pendingQuoteCitation = null;
 
@@ -1915,6 +2024,7 @@ internal static class BlockParser
                 hasPendingSidebar = false;
                 pendingCollapsible = false;
                 pendingStem = null;
+                pendingDlStyle = null;
                 pendingQuoteAttribution = null;
                 pendingQuoteCitation = null;
 
@@ -2215,6 +2325,7 @@ internal static class BlockParser
                 hasPendingSidebar = false;
                 pendingCollapsible = false;
                 pendingStem = null;
+                pendingDlStyle = null;
                 pendingQuoteAttribution = null;
                 pendingQuoteCitation = null;
 
@@ -2344,6 +2455,7 @@ internal static class BlockParser
                 hasPendingSidebar = false;
                 pendingCollapsible = false;
                 pendingStem = null;
+                pendingDlStyle = null;
                 pendingQuoteAttribution = null;
                 pendingQuoteCitation = null;
                 hasPendingOptionsHeader = false;
@@ -2984,7 +3096,8 @@ internal static class BlockParser
     }
 
     private static bool IsDocTitle(string line) =>
-        line.Length > 2 && line[0] == '=' && line[1] == ' ';
+        (line.Length > 2 && line[0] == '=' && line[1] == ' ') ||
+        (line.Length > 2 && line[0] == '#' && line[1] == ' ' && (line.Length < 3 || line[2] != '#'));
 
     private static bool TryParseAttribute(
         string line,
@@ -3053,6 +3166,13 @@ internal static class BlockParser
     {
         int count = 0;
         while (count < line.Length && line[count] == '=') count++;
+        return count;
+    }
+
+    private static int CountLeadingHashes(string line)
+    {
+        int count = 0;
+        while (count < line.Length && line[count] == '#') count++;
         return count;
     }
 
@@ -4308,9 +4428,12 @@ internal static class BlockParser
     /// </summary>
     private static bool IsSectionHeader(string line)
     {
-        return line.Length >= 3 && line[0] == '='
+        return (line.Length >= 3 && line[0] == '='
             && (line.StartsWith("= ") || line.StartsWith("== ") || line.StartsWith("=== ")
-                || line.StartsWith("==== ") || line.StartsWith("===== "));
+                || line.StartsWith("==== ") || line.StartsWith("===== ")))
+            || (line.Length >= 3 && line[0] == '#'
+            && (line.StartsWith("# ") || line.StartsWith("## ") || line.StartsWith("### ")
+                || line.StartsWith("#### ") || line.StartsWith("##### ") || line.StartsWith("###### ")));
     }
 
     /// <summary>
