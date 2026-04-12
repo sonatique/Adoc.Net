@@ -142,15 +142,16 @@ See [docs/CLI.md](docs/CLI.md) for the full reference.
 | Feature | Status |
 |---------|--------|
 | Document title, author, revision | Supported |
-| Section headings (`==` through `======`) | Supported |
+| Section headings (`==`/`##` through `======`/`######`) | Supported |
 | Paragraphs | Supported |
-| Unordered, ordered, description, and nested lists | Supported |
+| Unordered, ordered, description (Q&A, horizontal), and nested lists | Supported |
 | Checklists | Supported |
 | Tables (header/footer, column specs, spans, alignment, cell styles) | Supported |
 | Source blocks with language and callouts | Supported |
 | Listing, literal, example, open, sidebar, verse, quote blocks | Supported |
+| Markdown-compatible blockquotes (`> ` prefix) | Supported |
 | Admonitions (NOTE, TIP, WARNING, IMPORTANT, CAUTION) | Supported |
-| Include directives (files, partial includes, leveloffset) | Supported |
+| Include directives (files, partial includes, leveloffset, indent) | Supported |
 | Conditional directives (ifdef, ifndef, ifeval) | Supported |
 | Document attributes (`:name: value`) | Supported |
 | Table of contents (`:toc:`) | Supported |

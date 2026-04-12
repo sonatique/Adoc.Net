@@ -212,10 +212,10 @@ public class IncludeExpanderTests
         var reader = new DictReader()
             .Add(Path.Combine(BaseDir, "tagged.adoc"), "Tagged content.");
 
-        var text = "include::tagged.adoc[indent=0]";
+        var text = "include::tagged.adoc[encoding=utf-8]";
         var result = IncludeExpander.Expand(text, BaseDir, reader);
 
-        // Content still included (attributes ignored).
+        // Content still included (unsupported attributes ignored).
         Assert.That(result.Text, Is.EqualTo("Tagged content."));
         Assert.That(result.Diagnostics, Has.Count.EqualTo(1));
         Assert.That(result.Diagnostics[0].Severity, Is.EqualTo(DiagnosticSeverity.Warning));

@@ -3,6 +3,20 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0-beta.18] - 2026-04-12
+
+### Added — Asciidoctor Parity
+- Markdown-compatible headings: `#` through `######` as alternative to `=` headings
+- Markdown-compatible blockquotes: `> ` prefix lines with multi-line support and `-- Author` attribution
+- Q&A description list style: `[qanda]` renders as numbered `<ol class="qanda">` list
+- Horizontal description list style: `[horizontal]` renders as `<table>` layout within `<div class="hdlist">`
+- Include `indent=` attribute: `indent=N` prepends N spaces, `indent=0` strips leading whitespace
+- `Style` property on `DescriptionListNode` for qanda/horizontal style tracking
+- Trailing `#` stripping on Markdown headings (`## Title ##` → "Title")
+
+### Changed
+- `[horizontal]` block attribute now propagated to `DescriptionListNode.Style` (was parsed but lost)
+
 ## [1.0.0-beta.17] - 2026-04-11
 
 ### Added — Converters and Templates

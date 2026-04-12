@@ -123,6 +123,17 @@ public sealed partial class HtmlRenderer
 
     private void RenderDescriptionList(StringBuilder sb, DescriptionListNode list, bool useIconFont, FootnoteState footnotes, SectionNumberingContext secCtx, HtmlRenderState state)
     {
+        if (list.Style == "qanda")
+        {
+            RenderQandaList(sb, list, footnotes, state);
+            return;
+        }
+        if (list.Style == "horizontal")
+        {
+            RenderHorizontalList(sb, list, footnotes, state);
+            return;
+        }
+
         sb.Append("<dl");
         if (list.Id is not null)
         {
@@ -179,5 +190,49 @@ public sealed partial class HtmlRenderer
             }
         }
         sb.Append("</dl>\n");
+    }
+
+    private void RenderQandaList(StringBuilder sb, DescriptionListNode list, FootnoteState footnotes, HtmlRenderState state)
+    {
+        sb.Append("<div class=\"qlist qanda\">\n<ol>\n");
+        foreach (var child in list.Children)
+        {
+            if (child is DescriptionItemNode item)
+            {
+                sb.Append("<li>\n<p><em>");
+                RenderInlines(sb, item.TermInlines, item.Term, footnotes, state);
+                sb.Append("</em></p>\n");
+                if (!string.IsNullOrEmpty(item.Description))
+                {
+                    sb.Append("<p>");
+                    RenderInlines(sb, item.DescriptionInlines, item.Description, footnotes, state);
+                    sb.Append("</p>\n");
+                }
+                sb.Append("</li>\n");
+            }
+        }
+        sb.Append("</ol>\n</div>\n");
+    }
+
+    private void RenderHorizontalList(StringBuilder sb, DescriptionListNode list, FootnoteState footnotes, HtmlRenderState state)
+    {
+        sb.Append("<div class=\"hdlist\">\n<table>\n");
+        foreach (var child in list.Children)
+        {
+            if (child is DescriptionItemNode item)
+            {
+                sb.Append("<tr>\n<td class=\"hdlist1\">\n");
+                RenderInlines(sb, item.TermInlines, item.Term, footnotes, state);
+                sb.Append("\n</td>\n<td class=\"hdlist2\">\n");
+                if (!string.IsNullOrEmpty(item.Description))
+                {
+                    sb.Append("<p>");
+                    RenderInlines(sb, item.DescriptionInlines, item.Description, footnotes, state);
+                    sb.Append("</p>");
+                }
+                sb.Append("\n</td>\n</tr>\n");
+            }
+        }
+        sb.Append("</table>\n</div>\n");
     }
 }
