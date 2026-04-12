@@ -20,6 +20,8 @@
     <ProjectReference Include="..\..\src\AdocNet.Converters.DocBook\AdocNet.Converters.DocBook.csproj" />
     <ProjectReference Include="..\..\src\AdocNet.Converters.Pdf\AdocNet.Converters.Pdf.csproj" />
     <ProjectReference Include="..\..\src\AdocNet.Converters.Epub\AdocNet.Converters.Epub.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Converters.Man\AdocNet.Converters.Man.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Converters.Revealjs\AdocNet.Converters.Revealjs.csproj" />
     <ProjectReference Include="..\..\src\AdocNet.Cli\AdocNet.Cli.csproj" />
     <ProjectReference Include="..\..\src\AdocNet.LanguageServer\AdocNet.LanguageServer.csproj" />
     <ProjectReference Include="..\..\tools\DifferentialTester\DifferentialTester.csproj" />

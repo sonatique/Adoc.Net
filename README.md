@@ -2,7 +2,7 @@
 
 A pure managed C# AsciiDoc library for .NET. No external runtime dependencies.
 
-Adoc.Net parses AsciiDoc into a typed AST and renders it to **HTML5**, **PDF**, **DocBook 5.0**, or **EPUB 3.0**. It targets both **.NET 10** (optimized) and **.NET Standard 2.0** (broad compatibility: .NET Framework 4.6.1+, .NET Core 2.0+, Mono, Unity, Xamarin).
+Adoc.Net parses AsciiDoc into a typed AST and renders it to **HTML5**, **PDF**, **DocBook 5.0**, **EPUB 3.0**, **man pages**, or **reveal.js slides**. HTML rendering supports custom per-node templates via `INodeTemplate`. It targets both **.NET 10** (optimized) and **.NET Standard 2.0** (broad compatibility: .NET Framework 4.6.1+, .NET Core 2.0+, Mono, Unity, Xamarin).
 
 ## Installation
 
@@ -244,7 +244,7 @@ See [docs/CLI.md](docs/CLI.md) for the full reference.
 
 ## Architecture
 
-Nine assemblies, each with a single responsibility:
+Eleven assemblies, each with a single responsibility:
 
 | Assembly | Namespace | Description |
 |----------|-----------|-------------|
@@ -255,6 +255,8 @@ Nine assemblies, each with a single responsibility:
 | AdocNet.Converters.Pdf | `AdocNet.Converters.Pdf` | Pure managed PDF 1.4 renderer with TrueType font embedding and Unicode support |
 | AdocNet.Converters.DocBook | `AdocNet.Converters.DocBook` | DocBook 5.0 renderer |
 | AdocNet.Converters.Epub | `AdocNet.Converters.Epub` | EPUB 3.0 renderer |
+| AdocNet.Converters.Man | `AdocNet.Converters.Man` | Man page (roff) renderer |
+| AdocNet.Converters.Revealjs | `AdocNet.Converters.Revealjs` | Reveal.js slides renderer |
 | AdocNet.Layout | `AdocNet.Layout` | UI-agnostic layout model and AST-to-layout builder |
 | AdocNet.Avalonia | `AdocNet.Avalonia` | Avalonia UI renderer (layout tree to controls) |
 

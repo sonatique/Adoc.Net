@@ -29,5 +29,7 @@
     <ProjectReference Include="..\AdocNet.Converters.Pdf\AdocNet.Converters.Pdf.csproj" />
     <ProjectReference Include="..\AdocNet.Converters.DocBook\AdocNet.Converters.DocBook.csproj" />
     <ProjectReference Include="..\AdocNet.Converters.Epub\AdocNet.Converters.Epub.csproj" />
+    <ProjectReference Include="..\AdocNet.Converters.Man\AdocNet.Converters.Man.csproj" />
+    <ProjectReference Include="..\AdocNet.Converters.Revealjs\AdocNet.Converters.Revealjs.csproj" />
   </ItemGroup>
 </Project>

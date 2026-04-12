@@ -6,6 +6,8 @@
     <Project Path="src/AdocNet.Converters.DocBook/AdocNet.Converters.DocBook.csproj" />
     <Project Path="src/AdocNet.Converters.Pdf/AdocNet.Converters.Pdf.csproj" />
     <Project Path="src/AdocNet.Converters.Epub/AdocNet.Converters.Epub.csproj" />
+    <Project Path="src/AdocNet.Converters.Man/AdocNet.Converters.Man.csproj" />
+    <Project Path="src/AdocNet.Converters.Revealjs/AdocNet.Converters.Revealjs.csproj" />
     <Project Path="src/AdocNet.Core/AdocNet.Core.csproj" />
     <Project Path="src/AdocNet.Parser/AdocNet.Parser.csproj" />
     <Project Path="src/AdocNet.LanguageServer/AdocNet.LanguageServer.csproj" />
@@ -24,6 +26,8 @@
     <Project Path="src/AdocNet.Cli.Pdf/AdocNet.Cli.Pdf.csproj" />
     <Project Path="src/AdocNet.Cli.Epub/AdocNet.Cli.Epub.csproj" />
     <Project Path="src/AdocNet.Cli.DocBook/AdocNet.Cli.DocBook.csproj" />
+    <Project Path="src/AdocNet.Cli.Man/AdocNet.Cli.Man.csproj" />
+    <Project Path="src/AdocNet.Cli.Revealjs/AdocNet.Cli.Revealjs.csproj" />
     <Project Path="tools/DifferentialTester/DifferentialTester.csproj" />
   </Folder>
   <Folder Name="/benchmarks/">

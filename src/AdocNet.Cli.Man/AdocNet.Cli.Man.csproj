@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>adocnet-man</AssemblyName>
+    <RootNamespace>AdocNet.Cli.Man</RootNamespace>
+    <Description>AsciiDoc to man page converter. Equivalent to: adocnet -b man</Description>
+
+    <!-- NuGet tool packaging -->
+    <PackageId>AdocNet.Man</PackageId>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>adocnet-man</ToolCommandName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AdocNet.Cli\AdocNet.Cli.csproj" />
+  </ItemGroup>
+</Project>

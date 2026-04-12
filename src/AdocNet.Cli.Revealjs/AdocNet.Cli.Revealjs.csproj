@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>adocnet-revealjs</AssemblyName>
+    <RootNamespace>AdocNet.Cli.Revealjs</RootNamespace>
+    <Description>AsciiDoc to reveal.js slides converter. Equivalent to: adocnet -b revealjs</Description>
+
+    <!-- NuGet tool packaging -->
+    <PackageId>AdocNet.Revealjs</PackageId>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>adocnet-revealjs</ToolCommandName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AdocNet.Cli\AdocNet.Cli.csproj" />
+  </ItemGroup>
+</Project>

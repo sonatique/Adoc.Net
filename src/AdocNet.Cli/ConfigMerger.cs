@@ -18,6 +18,8 @@ internal static class ConfigMerger
                 "pdf" => OutputFormat.Pdf,
                 "docbook" or "xml" => OutputFormat.DocBook,
                 "epub" => OutputFormat.Epub,
+                "man" or "manpage" => OutputFormat.Man,
+                "revealjs" => OutputFormat.Revealjs,
                 _ => format,
             };
         }

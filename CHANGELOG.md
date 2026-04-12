@@ -3,6 +3,24 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0-beta.17] - 2026-04-11
+
+### Added — Converters and Templates
+- Man page converter: new `AdocNet.Converters.Man` project producing roff-format man pages
+- Man page rendering: `.TH` header, `.SH`/`.SS` sections, bold/italic font escapes, `.nf`/`.fi` code blocks, lists, tables, admonitions
+- Man page CLI: `adocnet -b man` and standalone `adocnet-man` tool
+- Reveal.js slides converter: new `AdocNet.Converters.Revealjs` project producing reveal.js HTML presentations
+- Reveal.js slide mapping: level-1 sections → horizontal slides, level-2 → vertical (nested) slides
+- Reveal.js attributes: `:revealjs_theme:`, `:revealjs_transition:`, `:revealjs_controls:`, `:revealjs_progress:`, `:revealjs_slideNumber:`
+- Reveal.js speaker notes: `[.notes]` role on blocks renders `<aside class="notes">`
+- Reveal.js CLI: `adocnet -b revealjs` and standalone `adocnet-revealjs` tool
+- Converter templates: `INodeTemplate` interface for custom per-node HTML rendering
+- Template registration: `HtmlRenderOptions.Templates` property (first match wins)
+- Template hooks in both block and inline rendering paths
+
+### Changed
+- HtmlRenderer extracted into 8 partial class files for maintainability (< 500 lines per file)
+
 ## [1.0.0-beta.16] - 2026-04-10
 
 ### Added — Asciidoctor Parity

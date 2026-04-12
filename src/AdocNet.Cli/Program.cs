@@ -180,10 +180,12 @@ public static class Program
                     "pdf" => OutputFormat.Pdf,
                     "docbook" or "docbook5" or "xml" => OutputFormat.DocBook,
                     "epub" => OutputFormat.Epub,
+                    "man" or "manpage" => OutputFormat.Man,
+                    "revealjs" or "reveal.js" => OutputFormat.Revealjs,
                     _ => OutputFormat.Html,
                 };
-                if (formatStr is not "html" and not "html5" and not "pdf" and not "docbook" and not "docbook5" and not "xml" and not "epub")
-                    return new CliArgs.Error($"Unknown format: {formatStr}. Supported formats: html, html5, pdf, docbook, docbook5, epub.");
+                if (formatStr is not "html" and not "html5" and not "pdf" and not "docbook" and not "docbook5" and not "xml" and not "epub" and not "man" and not "manpage" and not "revealjs" and not "reveal.js")
+                    return new CliArgs.Error($"Unknown format: {formatStr}. Supported formats: html, html5, pdf, docbook, docbook5, epub, man, revealjs.");
                 continue;
             }
 
@@ -383,6 +385,8 @@ public static class Program
         OutputFormat.Pdf => ".pdf",
         OutputFormat.DocBook => ".xml",
         OutputFormat.Epub => ".epub",
+        OutputFormat.Man => ".1",
+        OutputFormat.Revealjs => ".html",
         _ => ".html",
     };
 
@@ -398,7 +402,7 @@ public static class Program
         writer.WriteLine("extension. Use -o - for stdout.");
         writer.WriteLine();
         writer.WriteLine("Options:");
-        writer.WriteLine($"  -b, --backend <fmt>   Output format: html5, pdf, docbook5, epub (default: {fmtName})");
+        writer.WriteLine($"  -b, --backend <fmt>   Output format: html5, pdf, docbook5, epub, man, revealjs (default: {fmtName})");
         writer.WriteLine("  -o <file>             Write output to file (use '-' for stdout)");
         writer.WriteLine("  -D, --destination-dir <dir>  Write output files to directory");
         writer.WriteLine("  -a, --attribute <k=v> Set a document attribute");
@@ -445,6 +449,8 @@ public enum OutputFormat
     Pdf,
     DocBook,
     Epub,
+    Man,
+    Revealjs,
 }
 
 /// <summary>

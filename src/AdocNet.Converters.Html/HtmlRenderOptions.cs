@@ -1,4 +1,5 @@
 using AdocNet;
+using AdocNet.Ast;
 
 namespace AdocNet.Converters.Html;
 
@@ -67,6 +68,13 @@ public sealed class HtmlRenderOptions : RenderOptions
     /// Also used for docinfo file lookup. When null, data-uri falls back to literal paths.
     /// </summary>
     public string? BaseDirectory { get; init; }
+
+    /// <summary>
+    /// Optional list of custom node templates. When rendering a node, the renderer
+    /// checks each template in order — the first whose <see cref="INodeTemplate.CanRender"/>
+    /// returns true produces the output. When null or empty, built-in rendering is used.
+    /// </summary>
+    public IReadOnlyList<INodeTemplate>? Templates { get; init; }
 
     /// <summary>Convenience: full document with Default theme.</summary>
     public static HtmlRenderOptions Styled => new() { Theme = HtmlTheme.Default };

@@ -101,6 +101,8 @@ internal sealed class WatchCommand(ConvertCommand convertCommand, ConsoleLogger 
         OutputFormat.Pdf => ".pdf",
         OutputFormat.DocBook => ".xml",
         OutputFormat.Epub => ".epub",
+        OutputFormat.Man => ".1",
+        OutputFormat.Revealjs => ".html",
         _ => ".html",
     };
 }
