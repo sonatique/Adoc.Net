@@ -4,7 +4,9 @@ using AdocNet.Ast;
 using AdocNet.Converters.DocBook;
 using AdocNet.Converters.Epub;
 using AdocNet.Converters.Html;
+using AdocNet.Converters.Man;
 using AdocNet.Converters.Pdf;
+using AdocNet.Converters.Revealjs;
 using AdocNet.Extensions;
 using AdocNet.Parser;
 
@@ -110,6 +112,8 @@ internal sealed class ConvertCommand(ConsoleLogger logger)
         OutputFormat.Pdf => ".pdf",
         OutputFormat.DocBook => ".xml",
         OutputFormat.Epub => ".epub",
+        OutputFormat.Man => ".1",
+        OutputFormat.Revealjs => ".html",
         _ => ".html",
     };
 
@@ -145,6 +149,8 @@ internal sealed class ConvertCommand(ConsoleLogger logger)
             OutputFormat.Pdf => new PdfRenderer(),
             OutputFormat.DocBook => new DocBookRenderer(),
             OutputFormat.Epub => new EpubRenderer(),
+            OutputFormat.Man => new ManRenderer(),
+            OutputFormat.Revealjs => new RevealjsRenderer(),
             _ => new HtmlRenderer(),
         };
 
@@ -195,7 +201,7 @@ internal sealed class ConvertCommand(ConsoleLogger logger)
 
     private static void WriteOutput(string? outputPath, byte[] content, OutputFormat format)
     {
-        bool isText = format is OutputFormat.Html or OutputFormat.DocBook;
+        bool isText = format is OutputFormat.Html or OutputFormat.DocBook or OutputFormat.Man or OutputFormat.Revealjs;
         if (isText)
             WriteTextOutput(outputPath, Encoding.UTF8.GetString(content));
         else

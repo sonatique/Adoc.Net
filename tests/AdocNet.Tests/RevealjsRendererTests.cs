@@ -1,0 +1,322 @@
+using System.Text;
+using AdocNet.Ast;
+using AdocNet.Converters.Revealjs;
+
+namespace AdocNet.Tests;
+
+[TestFixture]
+public class RevealjsRendererTests
+{
+    private static string Render(DocumentNode doc)
+    {
+        var renderer = new RevealjsRenderer();
+        using var ms = new MemoryStream();
+        renderer.Render(doc, ms, RenderOptions.Default);
+        return Encoding.UTF8.GetString(ms.ToArray());
+    }
+
+    // ── Format ──────────────────────────────────────────────────────────
+
+    [Test]
+    public void Format_is_revealjs()
+    {
+        var renderer = new RevealjsRenderer();
+        Assert.That(renderer.Format, Is.EqualTo("revealjs"));
+    }
+
+    // ── Document structure ──────────────────────────────────────────────
+
+    [Test]
+    public void Output_contains_reveal_js_structure()
+    {
+        var doc = new DocumentNode { Title = "My Presentation" };
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain("<!DOCTYPE html>"));
+        Assert.That(output, Does.Contain("<div class=\"reveal\">"));
+        Assert.That(output, Does.Contain("<div class=\"slides\">"));
+        Assert.That(output, Does.Contain("reveal.js"));
+        Assert.That(output, Does.Contain("Reveal.initialize("));
+    }
+
+    [Test]
+    public void Title_generates_title_slide()
+    {
+        var doc = new DocumentNode { Title = "Hello World" };
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain("<section>\n<h1>Hello World</h1>\n</section>"));
+    }
+
+    [Test]
+    public void Output_includes_reveal_js_scripts()
+    {
+        var doc = new DocumentNode { Title = "Test" };
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain("reveal.js\"></script>"));
+        Assert.That(output, Does.Contain("Reveal.initialize("));
+    }
+
+    // ── Section-to-slide mapping ────────────────────────────────────────
+
+    [Test]
+    public void Level1_section_renders_as_horizontal_slide()
+    {
+        var doc = new DocumentNode { Title = "Pres" };
+        var section = new SectionNode { Level = 1, Title = "Introduction" };
+        section.AddChild(new ParagraphNode { Text = "Hello" });
+        doc.AddChild(section);
+
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain("<section>\n<h2>Introduction</h2>\n<p>Hello</p>\n</section>"));
+    }
+
+    [Test]
+    public void Level2_sections_render_as_vertical_slides()
+    {
+        var doc = new DocumentNode { Title = "Pres" };
+        var section = new SectionNode { Level = 1, Title = "Chapter" };
+        var sub1 = new SectionNode { Level = 2, Title = "Part A" };
+        sub1.AddChild(new ParagraphNode { Text = "Content A" });
+        section.AddChild(sub1);
+        var sub2 = new SectionNode { Level = 2, Title = "Part B" };
+        sub2.AddChild(new ParagraphNode { Text = "Content B" });
+        section.AddChild(sub2);
+        doc.AddChild(section);
+
+        var output = Render(doc);
+
+        // Outer section wraps the vertical group
+        Assert.That(output, Does.Contain("<section>\n<section>\n<h2>Chapter</h2>"));
+        // Vertical slides
+        Assert.That(output, Does.Contain("<section>\n<h3>Part A</h3>\n<p>Content A</p>\n</section>"));
+        Assert.That(output, Does.Contain("<section>\n<h3>Part B</h3>\n<p>Content B</p>\n</section>"));
+    }
+
+    [Test]
+    public void Multiple_level1_sections_create_multiple_slides()
+    {
+        var doc = new DocumentNode { Title = "Pres" };
+        var s1 = new SectionNode { Level = 1, Title = "Slide One" };
+        s1.AddChild(new ParagraphNode { Text = "First" });
+        doc.AddChild(s1);
+        var s2 = new SectionNode { Level = 1, Title = "Slide Two" };
+        s2.AddChild(new ParagraphNode { Text = "Second" });
+        doc.AddChild(s2);
+
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain("<h2>Slide One</h2>"));
+        Assert.That(output, Does.Contain("<h2>Slide Two</h2>"));
+    }
+
+    // ── Theme and attributes ────────────────────────────────────────────
+
+    [Test]
+    public void Default_theme_is_black()
+    {
+        var doc = new DocumentNode { Title = "Test" };
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain("/theme/black.css"));
+    }
+
+    [Test]
+    public void Custom_theme_attribute_changes_CSS_link()
+    {
+        var doc = new DocumentNode { Title = "Test" };
+        doc.SetAttribute("revealjs_theme", "moon");
+
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain("/theme/moon.css"));
+        Assert.That(output, Does.Not.Contain("/theme/black.css"));
+    }
+
+    [Test]
+    public void Transition_attribute_appears_in_initialize()
+    {
+        var doc = new DocumentNode { Title = "Test" };
+        doc.SetAttribute("revealjs_transition", "fade");
+
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain("transition: 'fade'"));
+    }
+
+    [Test]
+    public void Default_transition_is_slide()
+    {
+        var doc = new DocumentNode { Title = "Test" };
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain("transition: 'slide'"));
+    }
+
+    [Test]
+    public void Controls_attribute_appears_in_initialize()
+    {
+        var doc = new DocumentNode { Title = "Test" };
+        doc.SetAttribute("revealjs_controls", "false");
+
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain("controls: false"));
+    }
+
+    [Test]
+    public void SlideNumber_attribute_appears_in_initialize()
+    {
+        var doc = new DocumentNode { Title = "Test" };
+        doc.SetAttribute("revealjs_slideNumber", "true");
+
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain("slideNumber: true"));
+    }
+
+    // ── Content rendering ───────────────────────────────────────────────
+
+    [Test]
+    public void Paragraph_renders_as_p_in_slide()
+    {
+        var doc = new DocumentNode { Title = "Test" };
+        var section = new SectionNode { Level = 1, Title = "Slide" };
+        section.AddChild(new ParagraphNode { Text = "Some text here" });
+        doc.AddChild(section);
+
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain("<p>Some text here</p>"));
+    }
+
+    [Test]
+    public void Bold_inline_renders_as_strong()
+    {
+        var doc = new DocumentNode { Title = "Test" };
+        var section = new SectionNode { Level = 1, Title = "Slide" };
+        section.AddChild(new ParagraphNode
+        {
+            Text = "test",
+            Inlines = new InlineNode[]
+            {
+                new StrongInlineNode
+                {
+                    Children = new[] { new TextInlineNode { Value = "bold" } }
+                }
+            }
+        });
+        doc.AddChild(section);
+
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain("<strong>bold</strong>"));
+    }
+
+    [Test]
+    public void Source_block_renders_as_pre_code()
+    {
+        var doc = new DocumentNode { Title = "Test" };
+        var section = new SectionNode { Level = 1, Title = "Code" };
+        section.AddChild(new DelimitedBlockNode
+        {
+            BlockKind = DelimitedBlockKind.Source,
+            Content = "console.log('hi');",
+            Language = "javascript"
+        });
+        doc.AddChild(section);
+
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain("<pre><code class=\"language-javascript\">"));
+        Assert.That(output, Does.Contain("console.log(&#39;hi&#39;);"));
+    }
+
+    [Test]
+    public void List_renders_in_slide()
+    {
+        var doc = new DocumentNode { Title = "Test" };
+        var section = new SectionNode { Level = 1, Title = "Items" };
+        var list = new ListNode { ListKind = ListKind.Unordered };
+        list.AddChild(new ListItemNode { Text = "Item one" });
+        list.AddChild(new ListItemNode { Text = "Item two" });
+        section.AddChild(list);
+        doc.AddChild(section);
+
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain("<ul>\n<li>Item one</li>\n<li>Item two</li>\n</ul>"));
+    }
+
+    // ── Speaker notes ───────────────────────────────────────────────────
+
+    [Test]
+    public void Notes_role_renders_as_aside()
+    {
+        var doc = new DocumentNode { Title = "Test" };
+        var section = new SectionNode { Level = 1, Title = "Slide" };
+        section.AddChild(new DelimitedBlockNode
+        {
+            BlockKind = DelimitedBlockKind.Open,
+            Content = "Speaker notes here"
+        });
+
+        // Set the notes role — need to check how roles are set
+        var notesBlock = new DelimitedBlockNode
+        {
+            BlockKind = DelimitedBlockKind.Sidebar,
+            Content = "These are my notes"
+        };
+        notesBlock.Roles = new[] { "notes" };
+        section.AddChild(notesBlock);
+        doc.AddChild(section);
+
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain("<aside class=\"notes\">"));
+    }
+
+    // ── Special characters ──────────────────────────────────────────────
+
+    [Test]
+    public void Special_characters_are_escaped()
+    {
+        var doc = new DocumentNode { Title = "A & B" };
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain("<title>A &amp; B</title>"));
+        Assert.That(output, Does.Contain("<h1>A &amp; B</h1>"));
+    }
+
+    // ── Integration ─────────────────────────────────────────────────────
+
+    [Test]
+    public void Full_presentation_round_trip()
+    {
+        var doc = new DocumentNode { Title = "My Talk" };
+        doc.SetAttribute("revealjs_theme", "white");
+        doc.SetAttribute("revealjs_transition", "none");
+
+        var intro = new SectionNode { Level = 1, Title = "Introduction" };
+        intro.AddChild(new ParagraphNode { Text = "Welcome!" });
+        doc.AddChild(intro);
+
+        var details = new SectionNode { Level = 1, Title = "Details" };
+        var d1 = new SectionNode { Level = 2, Title = "Part 1" };
+        d1.AddChild(new ParagraphNode { Text = "Detail one" });
+        details.AddChild(d1);
+        doc.AddChild(details);
+
+        var output = Render(doc);
+
+        // Structure checks
+        Assert.That(output, Does.Contain("/theme/white.css"));
+        Assert.That(output, Does.Contain("transition: 'none'"));
+        Assert.That(output, Does.Contain("<h1>My Talk</h1>"));
+        Assert.That(output, Does.Contain("<h2>Introduction</h2>"));
+        Assert.That(output, Does.Contain("<h3>Part 1</h3>"));
+        Assert.That(output, Does.Contain("Detail one"));
+    }
+}
