@@ -61,6 +61,12 @@ public abstract class AstNode
         _children.Insert(index, child);
     }
 
+    /// <summary>Removes the child at the given index.</summary>
+    public void RemoveChildAt(int index)
+    {
+        _children.RemoveAt(index);
+    }
+
     /// <summary>
     /// Returns node-specific properties for pretty-printing.
     /// Override in subclasses that have meaningful properties beyond children.

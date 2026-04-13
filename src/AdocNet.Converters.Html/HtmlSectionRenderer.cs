@@ -34,9 +34,37 @@ public sealed partial class HtmlRenderer
         // Asciidoctor renders section roles on the wrapper <div class="sect1 role">,
         // not on the heading tag itself. Since we don't emit wrapper divs, omit role classes.
         sb.Append('>');
-        if (prefix is not null)
+        // :sectanchors: — anchor icon before heading content
+        if (section.Id is not null && state.DocumentAttributes.ContainsKey("sectanchors"))
+        {
+            sb.Append("<a class=\"anchor\" href=\"#");
+            EscapeTo(sb, section.Id);
+            sb.Append("\"></a>");
+        }
+        // :sectlinks: — wrap heading content in self-link
+        var sectlinkId = section.Id is not null && state.DocumentAttributes.ContainsKey("sectlinks")
+            ? section.Id : null;
+        if (sectlinkId is not null)
+        {
+            sb.Append("<a class=\"link\" href=\"#");
+            EscapeTo(sb, sectlinkId);
+            sb.Append("\">");
+        }
+        // Appendix prefix: "Appendix A: ", "Appendix B: ", etc.
+        if (string.Equals(section.Style, "appendix", StringComparison.OrdinalIgnoreCase))
+        {
+            char letter = (char)('A' + state.AppendixCounter++);
+            sb.Append("Appendix ");
+            sb.Append(letter);
+            sb.Append(": ");
+        }
+        else if (prefix is not null)
+        {
             sb.Append(prefix);
+        }
         RenderInlines(sb, section.TitleInlines, section.Title, footnotes, state);
+        if (sectlinkId is not null)
+            sb.Append("</a>");
         sb.Append("</");
         sb.Append(tag);
         sb.Append(">\n");

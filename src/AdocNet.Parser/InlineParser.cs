@@ -80,7 +80,7 @@ internal static class InlineParser
         // kbd:[], btn:[], menu:[] require :experimental: attribute to be set
         var doExperimental      = attributes is not null && attributes.ContainsKey("experimental");
 
-        return ParseInlines(text, 0, text.Length, ActiveMarkers.None, doFormatting, doMacros, doReplacements, doPostReplacements, doExperimental);
+        return ParseInlines(text, 0, text.Length, ActiveMarkers.None, doFormatting, doMacros, doReplacements, doPostReplacements, doExperimental, attributes);
     }
 
     /// <summary>
@@ -91,7 +91,7 @@ internal static class InlineParser
     private static List<InlineNode> ParseInlines(
         string text, int startIndex, int endIndex,
         ActiveMarkers activeMarkers, bool doFormatting, bool doMacros, bool doReplacements, bool doPostReplacements,
-        bool doExperimental = false)
+        bool doExperimental = false, IReadOnlyDictionary<string, string>? linkAttributes = null)
     {
         var nodes = new List<InlineNode>();
         var plain = new StringBuilder();
@@ -273,7 +273,7 @@ internal static class InlineParser
             // ── Inline macros: link:target[label], image:target[alt] ──────────
             if (doMacros && (c == 'l' || c == 'i'))
             {
-                if (TryParseInlineMacro(text, i, endIndex, out var macroNode, out var macroEnd))
+                if (TryParseInlineMacro(text, i, endIndex, linkAttributes, out var macroNode, out var macroEnd))
                 {
                     FlushPlain(nodes, plain, doReplacements, doPostReplacements);
                     nodes.Add(macroNode);
@@ -965,7 +965,7 @@ internal static class InlineParser
     /// Supported forms: <c>link:target[label]</c> and <c>image:target[alt]</c>.
     /// Single colon only (double-colon is a block macro, handled by BlockParser).
     /// </summary>
-    private static bool TryParseInlineMacro(string text, int pos, int endIndex, out InlineNode node, out int endPos)
+    private static bool TryParseInlineMacro(string text, int pos, int endIndex, IReadOnlyDictionary<string, string>? attributes, out InlineNode node, out int endPos)
     {
         node = null!;
         endPos = pos;
@@ -1019,8 +1019,16 @@ internal static class InlineParser
 
         if (macroName == "link")
         {
-            var label = bracketContent.Length > 0 ? bracketContent : target;
-            node = new InlineLinkMacroNode { Url = target, Label = label };
+            bool linkattrs = attributes is not null && attributes.ContainsKey("linkattrs");
+            if (linkattrs && bracketContent.Contains(','))
+            {
+                ParseLinkAttributes(bracketContent, target, out node);
+            }
+            else
+            {
+                var label = bracketContent.Length > 0 ? bracketContent : target;
+                node = new InlineLinkMacroNode { Url = target, Label = label };
+            }
         }
         else // image
         {
@@ -1029,6 +1037,45 @@ internal static class InlineParser
 
         endPos = closeBracket + 1;
         return true;
+    }
+
+    /// <summary>
+    /// Parses link bracket content with named attributes (when :linkattrs: is enabled).
+    /// Format: "label, window=_blank, role=external"
+    /// </summary>
+    private static void ParseLinkAttributes(string bracketContent, string target, out InlineNode node)
+    {
+        string label = "";
+        string? window = null;
+        string? role = null;
+
+        var parts = bracketContent.Split(',');
+        for (int pi = 0; pi < parts.Length; pi++)
+        {
+            var part = parts[pi].Trim();
+            var eqIdx = part.IndexOf('=');
+            if (eqIdx > 0)
+            {
+                var key = part[..eqIdx].Trim();
+                var value = part[(eqIdx + 1)..].Trim();
+                // Strip surrounding quotes
+                if (value.Length >= 2 && ((value[0] == '"' && value[^1] == '"') || (value[0] == '\'' && value[^1] == '\'')))
+                    value = value[1..^1];
+                if (string.Equals(key, "window", StringComparison.OrdinalIgnoreCase))
+                    window = value;
+                else if (string.Equals(key, "role", StringComparison.OrdinalIgnoreCase))
+                    role = value;
+            }
+            else if (pi == 0)
+            {
+                label = part;
+            }
+        }
+
+        if (label.Length == 0)
+            label = target;
+
+        node = new InlineLinkMacroNode { Url = target, Label = label, Window = window, Role = role };
     }
 
     /// <summary>

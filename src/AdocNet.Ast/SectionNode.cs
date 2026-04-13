@@ -26,14 +26,30 @@ public sealed class SectionNode : BlockNode
     /// <summary>Parsed inline nodes of the section title. Empty when set directly in tests.</summary>
     public IReadOnlyList<InlineNode> TitleInlines { get; init; } = [];
 
+    /// <summary>
+    /// Optional section style for book doctype. Values: "appendix", "glossary",
+    /// "colophon", "dedication", "preface", or null for normal sections.
+    /// </summary>
+    public string? Style { get; init; }
+
     public override AstNodeKind Kind => AstNodeKind.Section;
 
     public override IEnumerable<KeyValuePair<string, string>> GetProperties()
     {
         yield return new("Level", Level.ToString());
         yield return new("Title", Title);
+        if (Style is not null) yield return new("Style", Style);
     }
 
     /// <inheritdoc />
     protected override IEnumerable<AstNode> GetStructuralInlines() => TitleInlines;
+
+    /// <inheritdoc />
+    protected override int MixAdditionalState(int hash)
+    {
+        hash = base.MixAdditionalState(hash);
+        if (Style is not null)
+            hash = unchecked(hash * 16777619 ^ Style.GetHashCode());
+        return hash;
+    }
 }

@@ -136,24 +136,29 @@ public sealed partial class HtmlRenderer
 
             case DelimitedBlockKind.Source:
             {
+                // Resolve effective language: explicit > :source-language: attribute > null.
+                var effectiveLang = block.Language;
+                if (effectiveLang is null)
+                    state.DocumentAttributes.TryGetValue("source-language", out effectiveLang);
+
                 // Asciidoctor adds highlightjs/hljs classes when source-highlighter is set.
                 bool useHighlightJs = state.DocumentAttributes.TryGetValue("source-highlighter", out var highlighter)
                     && highlighter is "highlight.js" or "highlightjs";
                 sb.Append(useHighlightJs ? "<pre class=\"highlight highlightjs\"><code" : "<pre class=\"highlight\"><code");
-                if (block.Language is not null)
+                if (effectiveLang is not null)
                 {
                     sb.Append(useHighlightJs ? " class=\"hljs language-" : " class=\"language-");
-                    EscapeTo(sb, block.Language);
+                    EscapeTo(sb, effectiveLang);
                     sb.Append("\" data-lang=\"");
-                    EscapeTo(sb, block.Language);
+                    EscapeTo(sb, effectiveLang);
                     sb.Append('"');
                 }
                 sb.Append('>');
 
                 // Use server-side syntax highlighting when available and enabled
                 if (!useHighlightJs && state.EnableSyntaxHighlighting
-                    && block.Language is not null
-                    && Highlighting.SyntaxTokenizer.IsLanguageSupported(block.Language))
+                    && effectiveLang is not null
+                    && Highlighting.SyntaxTokenizer.IsLanguageSupported(effectiveLang))
                 {
                     RenderHighlightedContent(sb, block);
                 }

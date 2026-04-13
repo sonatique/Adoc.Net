@@ -3,6 +3,30 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0-beta.19] - 2026-04-13
+
+### Added — Parser Features
+- Markdown fenced code blocks: triple-backtick (```) delimiters with optional language identifier
+- Book doctype section styles: `[appendix]`, `[glossary]`, `[colophon]`, `[dedication]`, `[preface]` on sections
+- `Style` property on `SectionNode` for section style tracking
+- `toc::[]` block macro for manual TOC placement when `:toc: macro` is set
+- `RemoveChildAt()` method on `AstNode` for child replacement
+
+### Added — Rendering Attributes
+- `:showtitle:` / `:notitle:` attributes for controlling document title display
+- `:nofooter:` attribute to suppress the footer div in full-document HTML output
+- `:nofootnotes:` attribute to suppress the footnote definitions section
+- `:source-language:` attribute for default source block language fallback
+- `:linkattrs:` attribute enabling named attribute parsing on `link:` macros (`window=`, `role=`)
+- `:sectanchors:` attribute adding anchor links before section headings
+- `:sectlinks:` attribute making section titles self-linking
+- `:hide-uri-scheme:` attribute stripping `http://`/`https://` from displayed bare URLs
+- `:webfonts:` attribute for Google Fonts CSS injection in HTML head
+- `:last-update-label:` attribute customizing the footer label text
+- `Window` and `Role` properties on `InlineLinkMacroNode` for link attributes
+- Footer div (`<div id="footer">`) in full-document HTML output
+- Appendix prefix rendering ("Appendix A:", "Appendix B:", etc.) for `[appendix]` sections
+
 ## [1.0.0-beta.18] - 2026-04-12
 
 ### Added — Asciidoctor Parity
