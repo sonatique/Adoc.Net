@@ -31,6 +31,7 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
         public bool DataUriEnabled { get; set; }
         public string? BaseDirectory { get; set; }
         public string? ImagesDir { get; set; }
+        public int AppendixCounter { get; set; }
     }
 
     /// <summary>
@@ -180,7 +181,7 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
 
         var footnotes = new FootnoteState();
 
-        RenderDocumentBody(sb, document, footnotes, state);
+        RenderDocumentBody(sb, document, footnotes, state, fullDoc);
         RenderFootnotesSection(sb, footnotes, state);
 
         if (fullDoc)
@@ -192,14 +193,20 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
 
     // Document prologue/epilogue, BuildIdTitleMap, CollectTitles -> HtmlDocumentRenderer.cs
 
-    private void RenderDocumentBody(StringBuilder sb, DocumentNode document, FootnoteState footnotes, HtmlRenderState state)
+    private void RenderDocumentBody(StringBuilder sb, DocumentNode document, FootnoteState footnotes, HtmlRenderState state, bool fullDoc = false)
     {
         var secCtx = new SectionNumberingContext(document);
 
-        if (document.Title is not null)
+        // In full-document mode, always show title.
+        // In embedded mode, only show title when :showtitle: attribute is set.
+        // Render document title as <h1> unless suppressed.
+        // :showtitle: forces title display even in embedded mode (Asciidoctor compat).
+        // :notitle: suppresses the title entirely.
+        if (document.Title is { } docTitle
+            && !document.Attributes.ContainsKey("notitle"))
         {
             sb.Append("<h1>");
-            EscapeTo(sb, document.Title);
+            EscapeTo(sb, docTitle);
             sb.Append("</h1>\n");
         }
 
@@ -254,6 +261,7 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
     private void RenderFootnotesSection(StringBuilder sb, FootnoteState footnotes, HtmlRenderState state)
     {
         if (footnotes.Footnotes.Count == 0) return;
+        if (state.DocumentAttributes.ContainsKey("nofootnotes")) return;
 
         sb.Append("<div id=\"footnotes\">\n");
         sb.Append("<hr>\n");
@@ -481,6 +489,16 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
             if (r > 0) sb.Append(' ');
             EscapeTo(sb, roles[r]);
         }
+    }
+
+    /// <summary>Strips http:// or https:// prefix from a URL for display purposes.</summary>
+    private static string StripUriScheme(string url)
+    {
+        if (url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            return url[8..];
+        if (url.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            return url[7..];
+        return url;
     }
 
     private static bool NeedsEscaping(string value)

@@ -108,6 +108,7 @@ internal static class BlockParser
         bool pendingCollapsible = false;
         string? pendingStem = null;
         string? pendingDlStyle = null;
+        string? pendingSectionStyle = null;
 
         // Computes the effective "normal" substitutions: smart punctuation (PostReplacements)
         // is enabled by default and can be disabled via :!smartquotes:.
@@ -442,6 +443,7 @@ internal static class BlockParser
                     Id              = sectionId,
                     Reftext         = pendingBlockReftext,
                     SectnumsEnabled = document.Attributes.ContainsKey("sectnums"),
+                    Style           = pendingSectionStyle,
                 };
                 if (pendingBlockRoles is not null)
                     section.Roles = pendingBlockRoles;
@@ -452,6 +454,7 @@ internal static class BlockParser
                 pendingBlockId = null;
                 pendingBlockReftext = null;
                 pendingBlockRoles = null;
+                pendingSectionStyle = null;
                 pendingSubs = null;
                 pendingSubsIsIncremental = false;
                 pendingSubsToAdd = SubstitutionKind.None;
@@ -606,6 +609,20 @@ internal static class BlockParser
                     listFrames.Clear();
                     dlFrames.Clear();
                     pendingDiscrete = true;
+                    if (blockAttrs.Id is not null)
+                        pendingBlockId = blockAttrs.Id;
+                    if (blockAttrs.Roles.Count > 0)
+                        pendingBlockRoles = blockAttrs.Roles;
+                    continue;
+                }
+                // [appendix], [glossary], [colophon], [dedication], [preface] — section styles.
+                if (blockAttrs is not null && blockAttrs.Style is not null
+                    && IsSectionStyleName(blockAttrs.Style))
+                {
+                    FlushParagraph(currentContainer, paragraphLines, ref paragraphStartLine, lineNumber - 1, document.Attributes);
+                    listFrames.Clear();
+                    dlFrames.Clear();
+                    pendingSectionStyle = blockAttrs.Style.ToLowerInvariant();
                     if (blockAttrs.Id is not null)
                         pendingBlockId = blockAttrs.Id;
                     if (blockAttrs.Roles.Count > 0)
@@ -1008,7 +1025,11 @@ internal static class BlockParser
                     blockMacroNode!.Source = new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length));
                     if (blockMacroNode is BlockNode blockMacroBlock)
                         ApplyPendingId(blockMacroBlock, lineNumber, line.Length);
-                    currentContainer.AddChild(blockMacroNode);
+                    // toc::[] placeholder always goes to document level for post-parse replacement.
+                    if (blockMacroNode is TocNode)
+                        document.AddChild(blockMacroNode);
+                    else
+                        currentContainer.AddChild(blockMacroNode);
                     pendingBlockTitle = null;
                     pendingSourceLang = null;
                     hasPendingSource = false;
@@ -1471,6 +1492,192 @@ internal static class BlockParser
                 pendingAbstract = false;
                 pendingStem = null;
                 i = openClosingIdx;
+                continue;
+            }
+
+            // Fenced code block: ``` or ```lang
+            if (TryParseFencedCodeOpening(line, out var fencedLang))
+            {
+                FlushParagraph(currentContainer, paragraphLines, ref paragraphStartLine, lineNumber - 1, document.Attributes);
+                listFrames.Clear();
+                dlFrames.Clear();
+
+                // Scan forward for closing fence (3+ backticks, no language).
+                int fenceClosingIdx = -1;
+                for (int j = i + 1; j < lines.Length; j++)
+                {
+                    if (IsClosingFence(lines[j]))
+                    {
+                        fenceClosingIdx = j;
+                        break;
+                    }
+                }
+
+                if (fenceClosingIdx < 0)
+                {
+                    diagnostics.Add(new Diagnostic(
+                        DiagnosticSeverity.Warning,
+                        $"Unclosed fenced code block starting at line {lineNumber}",
+                        new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length))));
+                    fenceClosingIdx = lines.Length;
+                }
+
+                var fenceContentLines = lines[(i + 1)..fenceClosingIdx];
+                if (fenceClosingIdx >= lines.Length)
+                {
+                    int contentEnd = fenceContentLines.Length;
+                    while (contentEnd > 0 && fenceContentLines[contentEnd - 1].Length == 0)
+                        contentEnd--;
+                    if (contentEnd < fenceContentLines.Length)
+                        fenceContentLines = fenceContentLines[..contentEnd];
+                }
+
+                // Use pending [source,lang] language if fenced has no language.
+                var effectiveLang = fencedLang ?? (hasPendingSource ? pendingSourceLang : null);
+
+                // Strip callout markers from fenced source blocks.
+                string fenceContent;
+                List<CalloutEntry>? fenceCalloutEntries = null;
+                Dictionary<int, List<int>>? fenceCalloutMap = null;
+                {
+                    var strippedLines = new string[fenceContentLines.Length];
+                    int autoNumber = 1;
+                    for (int cl = 0; cl < fenceContentLines.Length; cl++)
+                    {
+                        strippedLines[cl] = StripCalloutMarker(fenceContentLines[cl], out var nums);
+                        if (nums is { Count: > 0 })
+                        {
+                            fenceCalloutMap ??= [];
+                            for (int ni = 0; ni < nums.Count; ni++)
+                            {
+                                int num = nums[ni] == -1 ? autoNumber++ : nums[ni];
+                                if (!fenceCalloutMap.TryGetValue(num, out var lineList))
+                                {
+                                    lineList = [];
+                                    fenceCalloutMap[num] = lineList;
+                                }
+                                lineList.Add(cl);
+                            }
+                        }
+                    }
+
+                    for (int cl = 0; cl < strippedLines.Length; cl++)
+                    {
+                        if (strippedLines[cl].StartsWith('\\') &&
+                            (strippedLines[cl].AsSpan(1).StartsWith("ifdef::") ||
+                             strippedLines[cl].AsSpan(1).StartsWith("ifndef::") ||
+                             strippedLines[cl].AsSpan(1).StartsWith("endif::") ||
+                             strippedLines[cl].AsSpan(1).StartsWith("ifeval::") ||
+                             strippedLines[cl].AsSpan(1).StartsWith("include::")))
+                        {
+                            strippedLines[cl] = strippedLines[cl][1..];
+                        }
+                    }
+
+                    fenceContent = string.Join("\n", strippedLines);
+                }
+
+                // Parse callout list entries after the closing delimiter.
+                int fenceAfterClosing = fenceClosingIdx;
+                {
+                    int ci = fenceClosingIdx + 1;
+                    while (ci < lines.Length)
+                    {
+                        if (TryParseCalloutEntry(lines[ci], out int calloutNum, out string calloutText))
+                        {
+                            fenceCalloutEntries ??= [];
+                            int entryNumber = calloutNum > 0 ? calloutNum : fenceCalloutEntries.Count + 1;
+                            int lineNum = -1;
+                            if (fenceCalloutMap is not null && fenceCalloutMap.TryGetValue(entryNumber, out var lineList) && lineList.Count > 0)
+                            {
+                                lineNum = lineList[0];
+                                lineList.RemoveAt(0);
+                            }
+                            fenceCalloutEntries.Add(new CalloutEntry
+                            {
+                                Number = entryNumber,
+                                Text = calloutText,
+                                Inlines = InlineParser.Parse(calloutText, EffectiveNormal(), document.Attributes),
+                                LineNumber = lineNum,
+                            });
+                            ci++;
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                    fenceAfterClosing = ci - 1;
+
+                    if (fenceCalloutEntries is null && fenceCalloutMap is { Count: > 0 })
+                    {
+                        fenceCalloutEntries = [];
+                        foreach (var (num, lineNums) in fenceCalloutMap.OrderBy(kv => kv.Key))
+                        {
+                            foreach (var ln in lineNums)
+                            {
+                                fenceCalloutEntries.Add(new CalloutEntry
+                                {
+                                    Number = num,
+                                    Text = string.Empty,
+                                    Inlines = [],
+                                    LineNumber = ln,
+                                });
+                            }
+                        }
+                    }
+                }
+
+                var fenceBlock = new DelimitedBlockNode
+                {
+                    BlockKind = DelimitedBlockKind.Source,
+                    Content = fenceContent,
+                    Title = pendingBlockTitle,
+                    Language = effectiveLang,
+                    Callouts = fenceCalloutEntries,
+                    Substitutions = ResolvePendingSubs(SubstitutionKind.Verbatim),
+                    Source = fenceClosingIdx < lines.Length
+                        ? new SourceRange(new(lineNumber, 1), new(fenceClosingIdx + 1, lines[fenceClosingIdx].Length))
+                        : new SourceRange(new(lineNumber, 1), new(lines.Length, lines[^1].Length)),
+                };
+                ApplyPendingId(fenceBlock, lineNumber, line.Length);
+                if (pendingBlockRoles is not null)
+                    fenceBlock.Roles = pendingBlockRoles;
+
+                currentContainer.AddChild(fenceBlock);
+
+                pendingBlockTitle = null;
+                pendingSourceLang = null;
+                hasPendingSource = false;
+                hasPendingVerse = false;
+                hasPendingQuote = false;
+                hasPendingListing = false;
+                hasPendingLiteral = false;
+                hasPendingExample = false;
+                hasPendingSidebar = false;
+                pendingCollapsible = false;
+                pendingStem = null;
+                pendingDlStyle = null;
+                pendingQuoteAttribution = null;
+                pendingQuoteCitation = null;
+                hasPendingOptionsHeader = false;
+                hasPendingAutoWidth = false;
+                hasPendingFooter = false;
+                pendingColSpec = null;
+                pendingStripes = null;
+                pendingGrid = null;
+                pendingFrame = null;
+                pendingFormat = null;
+                pendingAdmonitionType = null;
+                pendingBlockId = null;
+                pendingBlockReftext = null;
+                pendingBlockRoles = null;
+                pendingSubs = null;
+                pendingSubsIsIncremental = false;
+                pendingSubsToAdd = SubstitutionKind.None;
+                pendingSubsToRemove = SubstitutionKind.None;
+                pendingBlockOptions = null;
+                i = fenceAfterClosing < fenceClosingIdx ? fenceClosingIdx : fenceAfterClosing;
                 continue;
             }
 
@@ -2604,8 +2811,31 @@ internal static class BlockParser
                 Entries = entries,
             };
 
-            // Insert TOC as first child of document (before section content).
-            document.InsertChild(0, tocNode);
+            if (placement == TocPlacement.Macro)
+            {
+                // Find the toc::[] placeholder and replace it with the populated TocNode.
+                bool replaced = false;
+                for (int ci = 0; ci < document.Children.Count; ci++)
+                {
+                    if (document.Children[ci] is TocNode placeholder
+                        && placeholder.Placement == TocPlacement.Macro
+                        && placeholder.Entries.Count == 0)
+                    {
+                        document.RemoveChildAt(ci);
+                        document.InsertChild(ci, tocNode);
+                        replaced = true;
+                        break;
+                    }
+                }
+                // If no placeholder found, fall back to position 0.
+                if (!replaced)
+                    document.InsertChild(0, tocNode);
+            }
+            else
+            {
+                // Insert TOC as first child of document (before section content).
+                document.InsertChild(0, tocNode);
+            }
         }
 
         // Populate IndexNode entries by collecting all index terms from the document.
@@ -2745,6 +2975,38 @@ internal static class BlockParser
         return false;
     }
 
+    /// <summary>
+    /// Detects a Markdown fenced code block opening: 3+ backticks optionally
+    /// followed by a language identifier.
+    /// </summary>
+    private static bool TryParseFencedCodeOpening(string line, out string? language)
+    {
+        language = null;
+        int len = line.Length;
+        int backtickCount = 0;
+        while (backtickCount < len && line[backtickCount] == '`')
+            backtickCount++;
+        if (backtickCount < 3)
+            return false;
+
+        // Everything after backticks is the optional language identifier.
+        var rest = line[backtickCount..].Trim();
+        language = rest.Length > 0 ? rest : null;
+        return true;
+    }
+
+    /// <summary>
+    /// Detects a fenced code block closing line: 3+ backticks with no language.
+    /// </summary>
+    private static bool IsClosingFence(string line)
+    {
+        int len = TextUtility.TrimmedEndLength(line);
+        if (len < 3) return false;
+        for (int i = 0; i < len; i++)
+            if (line[i] != '`') return false;
+        return true;
+    }
+
     private static bool IsDelimiterLine(string line, char ch)
     {
         int len = TextUtility.TrimmedEndLength(line);
@@ -2773,6 +3035,12 @@ internal static class BlockParser
         int len = TextUtility.TrimmedEndLength(line);
         return len == 2 && line[0] == '-' && line[1] == '-';
     }
+
+    private static readonly string[] SectionStyleNames =
+        ["appendix", "glossary", "colophon", "dedication", "preface"];
+
+    private static bool IsSectionStyleName(string style)
+        => Array.Exists(SectionStyleNames, s => string.Equals(s, style, StringComparison.OrdinalIgnoreCase));
 
     private static bool TryParseBlockTitle(string line, out string title)
     {
@@ -3683,6 +3951,13 @@ internal static class BlockParser
         var macroName = line[..doubleColon];
         var target = line[(doubleColon + 2)..openBracket];
         var bracketContent = line[(openBracket + 1)..closeBracket];
+
+        if (macroName == "toc")
+        {
+            // toc::[] is a placement marker for the TOC when :toc: macro is set.
+            node = new TocNode { Placement = TocPlacement.Macro };
+            return true;
+        }
 
         if (macroName == "image")
         {

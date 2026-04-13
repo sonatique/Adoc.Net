@@ -58,6 +58,16 @@ public sealed partial class HtmlRenderer
             sb.Append("<script src=\"https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js\"></script>\n");
         }
 
+        // Google Fonts when :webfonts: is set
+        if (document.Attributes.TryGetValue("webfonts", out var webfontsUrl))
+        {
+            const string defaultFontUrl = "https://fonts.googleapis.com/css?family=Open+Sans:300,300italic,400,400italic,600,600italic%7CNoto+Serif:400,400italic,700,700italic%7CDroid+Sans+Mono:400,700";
+            var fontUrl = webfontsUrl.Length > 0 ? webfontsUrl : defaultFontUrl;
+            sb.Append("<link rel=\"stylesheet\" href=\"");
+            EscapeTo(sb, fontUrl);
+            sb.Append("\">\n");
+        }
+
         if (options.ExtraHead is not null)
             sb.Append(options.ExtraHead).Append('\n');
 
@@ -75,6 +85,19 @@ public sealed partial class HtmlRenderer
     /// </summary>
     private static void AppendDocumentEpilogue(StringBuilder sb, DocumentNode document, HtmlRenderOptions? options)
     {
+        // Footer div (unless suppressed by :nofooter:)
+        if (!document.Attributes.ContainsKey("nofooter"))
+        {
+            sb.Append("<div id=\"footer\">\n");
+            sb.Append("<div id=\"footer-text\">\n");
+            var lastUpdateLabel = document.Attributes.TryGetValue("last-update-label", out var lul)
+                ? lul : "Last updated";
+            sb.Append(lastUpdateLabel);
+            sb.Append('\n');
+            sb.Append("</div>\n");
+            sb.Append("</div>\n");
+        }
+
         // Docinfo footer injection
         var docinfoFooter = DocinfoHelper.ReadFooterDocinfo(
             document.Attributes, options?.BaseDirectory);

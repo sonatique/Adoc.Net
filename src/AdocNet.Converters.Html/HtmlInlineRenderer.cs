@@ -112,7 +112,10 @@ public sealed partial class HtmlRenderer
                 sb.Append("<a class=\"bare\" href=\"");
                 EscapeTo(sb, link.Url);
                 sb.Append("\">");
-                EscapeTo(sb, link.Url);
+                var displayUrl = state.DocumentAttributes.ContainsKey("hide-uri-scheme")
+                    ? StripUriScheme(link.Url)
+                    : link.Url;
+                EscapeTo(sb, displayUrl);
                 sb.Append("</a>");
                 break;
 
@@ -123,11 +126,26 @@ public sealed partial class HtmlRenderer
                 bool isBare = string.IsNullOrEmpty(linkMacro.Label) ||
                               linkMacro.Label == linkMacro.Url;
                 sb.Append("<a");
-                if (isBare)
+                if (linkMacro.Role is not null)
+                {
+                    sb.Append(" class=\"");
+                    EscapeTo(sb, linkMacro.Role);
+                    sb.Append('"');
+                }
+                else if (isBare)
+                {
                     sb.Append(" class=\"bare\"");
+                }
                 sb.Append(" href=\"");
                 EscapeTo(sb, linkMacro.Url);
-                sb.Append("\">");
+                sb.Append('"');
+                if (linkMacro.Window is not null)
+                {
+                    sb.Append(" target=\"");
+                    EscapeTo(sb, linkMacro.Window);
+                    sb.Append('"');
+                }
+                sb.Append('>');
                 EscapeTo(sb, isBare ? linkMacro.Url : linkMacro.Label);
                 sb.Append("</a>");
                 break;

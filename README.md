@@ -148,13 +148,15 @@ See [docs/CLI.md](docs/CLI.md) for the full reference.
 | Checklists | Supported |
 | Tables (header/footer, column specs, spans, alignment, cell styles) | Supported |
 | Source blocks with language and callouts | Supported |
+| Markdown fenced code blocks (`` ``` `` with optional language) | Supported |
 | Listing, literal, example, open, sidebar, verse, quote blocks | Supported |
 | Markdown-compatible blockquotes (`> ` prefix) | Supported |
 | Admonitions (NOTE, TIP, WARNING, IMPORTANT, CAUTION) | Supported |
 | Include directives (files, partial includes, leveloffset, indent) | Supported |
 | Conditional directives (ifdef, ifndef, ifeval) | Supported |
 | Document attributes (`:name: value`) | Supported |
-| Table of contents (`:toc:`) | Supported |
+| Table of contents (`:toc:`, `toc::[]` macro placement) | Supported |
+| Book doctype section styles (`[appendix]`, `[glossary]`, etc.) | Supported |
 | Block images, video, audio macros | Supported |
 | Anchors, cross-references, inter-document xrefs | Supported |
 | Footnotes with back-references | Supported |
@@ -242,6 +244,9 @@ See [docs/CLI.md](docs/CLI.md) for the full reference.
 | Docinfo injection (`:docinfo:` header/footer files) | Supported |
 | Safe modes (Unsafe, Safe, Server, Secure) | Supported |
 | STEM/Math (MathJax, `stem:[]`, `latexmath:[]`, `asciimath:[]`) | Supported |
+| Rendering attributes: `:sectanchors:`, `:sectlinks:`, `:hide-uri-scheme:` | Supported |
+| Rendering attributes: `:source-language:`, `:linkattrs:`, `:webfonts:` | Supported |
+| Rendering attributes: `:nofooter:`, `:nofootnotes:`, `:notitle:`, `:last-update-label:` | Supported |
 
 ## Architecture
 
