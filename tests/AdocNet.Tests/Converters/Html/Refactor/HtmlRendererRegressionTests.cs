@@ -71,6 +71,107 @@ public class HtmlRendererRegressionTests
         Assert.That(html, Does.Contain("<h2>2. Second</h2>"));
     }
 
+    [Test]
+    public void HtmlSectionRenderer_Level2_GeneratesH3()
+    {
+        var doc = new DocumentNode();
+        var s1 = new SectionNode { Level = 1, Title = "Parent" };
+        s1.AddChild(new SectionNode { Level = 2, Title = "Child" });
+        doc.AddChild(s1);
+        var html = Render(doc);
+
+        Assert.That(html, Does.Contain("<h3>Child</h3>"));
+    }
+
+    [Test]
+    public void HtmlSectionRenderer_Appendix_GeneratesPrefix()
+    {
+        var doc = new DocumentNode();
+        doc.AddChild(new SectionNode { Level = 1, Title = "Changelog", Style = "appendix" });
+        var html = Render(doc);
+
+        Assert.That(html, Does.Contain("Appendix A: Changelog"));
+    }
+
+    [Test]
+    public void HtmlSectionRenderer_Sectanchors_GeneratesAnchorLink()
+    {
+        var doc = new DocumentNode();
+        doc.SetAttribute("sectanchors", "");
+        doc.AddChild(new SectionNode { Level = 1, Title = "Intro", Id = "_intro" });
+        var html = Render(doc);
+
+        Assert.That(html, Does.Contain("<a class=\"anchor\" href=\"#_intro\"></a>"));
+    }
+
+    [Test]
+    public void HtmlSectionRenderer_Level0_BookDoctype_GeneratesH1WithPartPrefix()
+    {
+        var doc = new DocumentNode();
+        doc.SetAttribute("doctype", "book");
+        doc.AddChild(new SectionNode { Level = 0, Title = "Getting Started" });
+        var html = Render(doc);
+
+        Assert.That(html, Does.Contain("<h1>Part I. Getting Started</h1>"));
+    }
+
+    [Test]
+    public void HtmlSectionRenderer_Level0_BookDoctype_TwoParts()
+    {
+        var doc = new DocumentNode();
+        doc.SetAttribute("doctype", "book");
+        doc.AddChild(new SectionNode { Level = 0, Title = "Basics" });
+        doc.AddChild(new SectionNode { Level = 0, Title = "Advanced" });
+        var html = Render(doc);
+
+        Assert.That(html, Does.Contain("<h1>Part I. Basics</h1>"));
+        Assert.That(html, Does.Contain("<h1>Part II. Advanced</h1>"));
+    }
+
+    [Test]
+    public void HtmlSectionRenderer_Level1_BookDoctype_StillH2()
+    {
+        var doc = new DocumentNode();
+        doc.SetAttribute("doctype", "book");
+        doc.AddChild(new SectionNode { Level = 1, Title = "Chapter One" });
+        var html = Render(doc);
+
+        Assert.That(html, Does.Contain("<h2>Chapter One</h2>"));
+    }
+
+    [Test]
+    public void HtmlSectionRenderer_Level1_ArticleDoctype_StillH2()
+    {
+        var doc = new DocumentNode();
+        doc.SetAttribute("doctype", "article");
+        doc.AddChild(new SectionNode { Level = 1, Title = "Introduction" });
+        var html = Render(doc);
+
+        Assert.That(html, Does.Contain("<h2>Introduction</h2>"));
+    }
+
+    [Test]
+    public void HtmlSectionRenderer_Level0_NoBookDoctype_H1WithoutPartPrefix()
+    {
+        var doc = new DocumentNode();
+        doc.AddChild(new SectionNode { Level = 0, Title = "Solo" });
+        var html = Render(doc);
+
+        Assert.That(html, Does.Contain("<h1>Solo</h1>"));
+        Assert.That(html, Does.Not.Contain("Part"));
+    }
+
+    [Test]
+    public void HtmlSectionRenderer_Appendix_StillWorks_WithBookDoctype()
+    {
+        var doc = new DocumentNode();
+        doc.SetAttribute("doctype", "book");
+        doc.AddChild(new SectionNode { Level = 1, Title = "References", Style = "appendix" });
+        var html = Render(doc);
+
+        Assert.That(html, Does.Contain("Appendix A: References"));
+    }
+
     // ── HtmlBlockRenderer ───────────────────────────────────────────────
 
     [Test]

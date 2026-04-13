@@ -916,6 +916,30 @@ internal static class InlineParser
                     continue;
                 }
 
+                // ── Conditional attribute substitution: {foo?yes} / {foo!no} ──
+                int qIdx = name.IndexOf('?');
+                int bIdx = qIdx < 0 ? name.IndexOf('!') : -1; // ? takes precedence over !
+                if (qIdx > 0 || bIdx > 0)
+                {
+                    bool isIfSet = qIdx > 0;
+                    int opIdx = isIfSet ? qIdx : bIdx;
+                    var attrName = name[..opIdx];
+                    var condValue = name[(opIdx + 1)..];
+                    if (IsValidAttributeName(attrName))
+                    {
+                        bool defined = attributes.ContainsKey(attrName);
+                        // Flush preceding plain text
+                        if (i > segmentStart)
+                            sb.Append(text.AsSpan(segmentStart, i - segmentStart));
+                        // {foo?yes}: emit condValue when defined; {foo!no}: emit condValue when NOT defined
+                        if (isIfSet ? defined : !defined)
+                            sb.Append(condValue);
+                        i = close;
+                        segmentStart = close + 1;
+                        continue;
+                    }
+                }
+
                 if (IsValidAttributeName(name) && attributes.TryGetValue(name, out var value))
                 {
                     // Flush preceding plain text as a bulk copy.

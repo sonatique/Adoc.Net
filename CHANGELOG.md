@@ -3,6 +3,18 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0-beta.20] - 2026-04-13
+
+### Added
+- Inline conditional attribute substitution: `{foo?yes}` (if-set) and `{foo!no}` (if-unset)
+- Attribute value line continuation with trailing ` \` for multi-line attribute values
+- Book doctype part rendering: level-0 sections render as `<h1>` with "Part I", "Part II" Roman numeral prefix
+- Level-0 sections now map to `<h1>` tag (previously fell through to `<h6>`)
+- 41 new tests covering conditional substitution, line continuation, and part rendering
+
+### Fixed
+- Level-0 section heading tag: was `<h6>` (wildcard fallback), now correctly `<h1>`
+
 ## [1.0.0-beta.19] - 2026-04-13
 
 ### Added — Parser Features

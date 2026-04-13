@@ -241,7 +241,9 @@ internal static class BlockParser
                     {
                         if (lockedAttributes?.Contains(name!) == true)
                             continue;
-                        value = ExpandAttributeValue(value!, document.Attributes);
+                        value = ApplyLineContinuation(value!, lines, ref i);
+                        lineNumber = i + 1;
+                        value = ExpandAttributeValue(value, document.Attributes);
                         document.SetAttribute(name!, value);
                         continue;
                     }
@@ -320,7 +322,9 @@ internal static class BlockParser
                     FlushParagraph(currentContainer, paragraphLines, ref paragraphStartLine, lineNumber - 1, document.Attributes);
                     listFrames.Clear();
                 dlFrames.Clear();
-                    attrValue = ExpandAttributeValue(attrValue!, document.Attributes);
+                    attrValue = ApplyLineContinuation(attrValue!, lines, ref i);
+                    lineNumber = i + 1;
+                    attrValue = ExpandAttributeValue(attrValue, document.Attributes);
                     document.SetAttribute(attrName!, attrValue);
                     continue;
                 }
@@ -4486,6 +4490,30 @@ internal static class BlockParser
         if (attributes.Count == 0 || !value.Contains('{'))
             return value;
         return InlineParser.ExpandAttributes(value, attributes);
+    }
+
+    /// <summary>
+    /// Applies Asciidoctor-style attribute value line continuation.
+    /// When a value ends with <c> \</c> (space + backslash) or is exactly <c>\</c>,
+    /// the next line is appended with a space separator.
+    /// </summary>
+    private static string ApplyLineContinuation(string value, string[] lines, ref int i)
+    {
+        while (value.EndsWith(" \\") || value == "\\")
+        {
+            value = value.EndsWith(" \\") ? value[..^2] : "";
+            if (i + 1 >= lines.Length)
+                break;
+            var nextLine = lines[i + 1].Trim();
+            if (nextLine.Length == 0)
+                break;
+            // Stop if the next line looks like an attribute entry (:name: ...)
+            if (nextLine[0] == ':')
+                break;
+            i++;
+            value = value.Length > 0 ? value + " " + nextLine : nextLine;
+        }
+        return value;
     }
 
     // ── Block anchor / section ID helpers ──────────────────────────────────
