@@ -10,9 +10,10 @@ public sealed partial class HtmlRenderer
 {
     private void RenderSection(StringBuilder sb, SectionNode section, bool useIconFont, FootnoteState footnotes, SectionNumberingContext secCtx, HtmlRenderState state)
     {
-        // Level 1 = ==  -> <h2>, Level 2 = === -> <h3>, etc.
+        // Level 0 = = (book parts) -> <h1>, Level 1 = == -> <h2>, etc.
         var tag = section.Level switch
         {
+            0 => "h1",
             1 => "h2",
             2 => "h3",
             3 => "h4",
@@ -50,8 +51,18 @@ public sealed partial class HtmlRenderer
             EscapeTo(sb, sectlinkId);
             sb.Append("\">");
         }
+        // Book part prefix: "Part I. ", "Part II. ", etc. (:doctype: book + level 0)
+        if (section.Level == 0
+            && state.DocumentAttributes.TryGetValue("doctype", out var doctype)
+            && string.Equals(doctype, "book", StringComparison.OrdinalIgnoreCase))
+        {
+            state.PartCounter++;
+            sb.Append("Part ");
+            sb.Append(ToRoman(state.PartCounter));
+            sb.Append(". ");
+        }
         // Appendix prefix: "Appendix A: ", "Appendix B: ", etc.
-        if (string.Equals(section.Style, "appendix", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(section.Style, "appendix", StringComparison.OrdinalIgnoreCase))
         {
             char letter = (char)('A' + state.AppendixCounter++);
             sb.Append("Appendix ");
@@ -134,5 +145,23 @@ public sealed partial class HtmlRenderer
             }
         }
         sb.Append("</ul>\n");
+    }
+
+    private static readonly int[] RomanValues = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1];
+    private static readonly string[] RomanNumerals = ["M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"];
+
+    private static string ToRoman(int number)
+    {
+        if (number <= 0) return number.ToString();
+        var sb = new StringBuilder();
+        for (int j = 0; j < RomanValues.Length; j++)
+        {
+            while (number >= RomanValues[j])
+            {
+                sb.Append(RomanNumerals[j]);
+                number -= RomanValues[j];
+            }
+        }
+        return sb.ToString();
     }
 }

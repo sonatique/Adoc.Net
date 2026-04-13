@@ -32,6 +32,7 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
         public string? BaseDirectory { get; set; }
         public string? ImagesDir { get; set; }
         public int AppendixCounter { get; set; }
+        public int PartCounter { get; set; }
     }
 
     /// <summary>

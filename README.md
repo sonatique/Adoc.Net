@@ -154,9 +154,11 @@ See [docs/CLI.md](docs/CLI.md) for the full reference.
 | Admonitions (NOTE, TIP, WARNING, IMPORTANT, CAUTION) | Supported |
 | Include directives (files, partial includes, leveloffset, indent) | Supported |
 | Conditional directives (ifdef, ifndef, ifeval) | Supported |
-| Document attributes (`:name: value`) | Supported |
+| Document attributes (`:name: value`, line continuation with `\`) | Supported |
+| Conditional attribute substitution (`{foo?yes}`, `{foo!no}`) | Supported |
 | Table of contents (`:toc:`, `toc::[]` macro placement) | Supported |
 | Book doctype section styles (`[appendix]`, `[glossary]`, etc.) | Supported |
+| Book doctype parts (level-0 sections as "Part I", "Part II") | Supported |
 | Block images, video, audio macros | Supported |
 | Anchors, cross-references, inter-document xrefs | Supported |
 | Footnotes with back-references | Supported |

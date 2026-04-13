@@ -498,6 +498,266 @@ public class AttributeTests
     private static string JoinTextInlines(IReadOnlyList<InlineNode> inlines) =>
         string.Join("", inlines.OfType<TextInlineNode>().Select(t => t.Value));
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // Part 7: ExpandAttributes regression tests (beta.20 — lock existing behavior)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test]
+    public void ExpandAttributes_defined_attribute_substituted()
+    {
+        var attrs = new Dictionary<string, string> { ["name"] = "Alice" };
+        Assert.That(InlineParser.ExpandAttributes("{name}", attrs), Is.EqualTo("Alice"));
+    }
+
+    [Test]
+    public void ExpandAttributes_undefined_attribute_preserved_literally()
+    {
+        var attrs = new Dictionary<string, string>();
+        Assert.That(InlineParser.ExpandAttributes("{name}", attrs), Is.EqualTo("{name}"));
+    }
+
+    [Test]
+    public void ExpandAttributes_defined_empty_value_returns_empty()
+    {
+        var attrs = new Dictionary<string, string> { ["name"] = "" };
+        Assert.That(InlineParser.ExpandAttributes("{name}", attrs), Is.EqualTo(""));
+    }
+
+    [Test]
+    public void ExpandAttributes_backslash_escape_returns_literal()
+    {
+        var attrs = new Dictionary<string, string> { ["name"] = "Alice" };
+        Assert.That(InlineParser.ExpandAttributes("\\{name}", attrs), Is.EqualTo("{name}"));
+    }
+
+    [Test]
+    public void ExpandAttributes_counter_returns_1_first_time()
+    {
+        var attrs = new Dictionary<string, string>();
+        Assert.That(InlineParser.ExpandAttributes("{counter:x}", attrs), Is.EqualTo("1"));
+    }
+
+    [Test]
+    public void ExpandAttributes_mixed_text_and_attribute()
+    {
+        var attrs = new Dictionary<string, string> { ["name"] = "Alice" };
+        Assert.That(InlineParser.ExpandAttributes("Hello {name}, welcome", attrs), Is.EqualTo("Hello Alice, welcome"));
+    }
+
+    [Test]
+    public void ExpandAttributes_unknown_attribute_preserved()
+    {
+        var attrs = new Dictionary<string, string> { ["other"] = "val" };
+        Assert.That(InlineParser.ExpandAttributes("{unknown}", attrs), Is.EqualTo("{unknown}"));
+    }
+
+    [Test]
+    public void ExpandAttributes_no_braces_returns_original()
+    {
+        var attrs = new Dictionary<string, string> { ["name"] = "Alice" };
+        var input = "no braces here";
+        Assert.That(InlineParser.ExpandAttributes(input, attrs), Is.SameAs(input));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Part 8: Conditional attribute substitution (beta.20)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test]
+    public void Conditional_if_set_with_defined_attribute_emits_value()
+    {
+        var attrs = new Dictionary<string, string> { ["foo"] = "bar" };
+        Assert.That(InlineParser.ExpandAttributes("{foo?yes}", attrs), Is.EqualTo("yes"));
+    }
+
+    [Test]
+    public void Conditional_if_set_with_undefined_attribute_emits_nothing()
+    {
+        var attrs = new Dictionary<string, string>();
+        Assert.That(InlineParser.ExpandAttributes("{foo?yes}", attrs), Is.EqualTo(""));
+    }
+
+    [Test]
+    public void Conditional_if_unset_with_defined_attribute_emits_nothing()
+    {
+        var attrs = new Dictionary<string, string> { ["foo"] = "bar" };
+        Assert.That(InlineParser.ExpandAttributes("{foo!no}", attrs), Is.EqualTo(""));
+    }
+
+    [Test]
+    public void Conditional_if_unset_with_undefined_attribute_emits_value()
+    {
+        var attrs = new Dictionary<string, string>();
+        Assert.That(InlineParser.ExpandAttributes("{foo!no}", attrs), Is.EqualTo("no"));
+    }
+
+    [Test]
+    public void Conditional_if_set_empty_value_emits_empty()
+    {
+        var attrs = new Dictionary<string, string> { ["foo"] = "bar" };
+        Assert.That(InlineParser.ExpandAttributes("{foo?}", attrs), Is.EqualTo(""));
+    }
+
+    [Test]
+    public void Conditional_if_unset_empty_value_emits_empty()
+    {
+        var attrs = new Dictionary<string, string>();
+        Assert.That(InlineParser.ExpandAttributes("{foo!}", attrs), Is.EqualTo(""));
+    }
+
+    [Test]
+    public void Conditional_hyphenated_attribute_name()
+    {
+        var attrs = new Dictionary<string, string> { ["my-attr"] = "val" };
+        Assert.That(InlineParser.ExpandAttributes("{my-attr?present}", attrs), Is.EqualTo("present"));
+    }
+
+    [Test]
+    public void Conditional_if_set_and_if_unset_in_same_text_defined()
+    {
+        var attrs = new Dictionary<string, string> { ["flag"] = "1" };
+        Assert.That(InlineParser.ExpandAttributes("Text {flag?ON}{flag!OFF} end", attrs), Is.EqualTo("Text ON end"));
+    }
+
+    [Test]
+    public void Conditional_if_set_and_if_unset_in_same_text_undefined()
+    {
+        var attrs = new Dictionary<string, string>();
+        Assert.That(InlineParser.ExpandAttributes("Text {flag?ON}{flag!OFF} end", attrs), Is.EqualTo("Text OFF end"));
+    }
+
+    [Test]
+    public void Conditional_normal_substitution_still_works()
+    {
+        var attrs = new Dictionary<string, string> { ["name"] = "Alice" };
+        Assert.That(InlineParser.ExpandAttributes("{name}", attrs), Is.EqualTo("Alice"));
+    }
+
+    [Test]
+    public void Conditional_backslash_escape_prevents_conditional()
+    {
+        var attrs = new Dictionary<string, string> { ["foo"] = "bar" };
+        Assert.That(InlineParser.ExpandAttributes("\\{foo?yes}", attrs), Is.EqualTo("{foo?yes}"));
+    }
+
+    [Test]
+    public void Conditional_invalid_attribute_name_preserved_literally()
+    {
+        var attrs = new Dictionary<string, string>();
+        Assert.That(InlineParser.ExpandAttributes("{2bad?yes}", attrs), Is.EqualTo("{2bad?yes}"));
+    }
+
+    [Test]
+    public void Conditional_end_to_end_in_paragraph()
+    {
+        var result = BlockParser.Parse("= Doc\n:env: prod\n\nRunning in {env?production}{env!development} mode.");
+        var para = (ParagraphNode)result.Document.Children[0];
+        var text = JoinTextInlines(para.Inlines);
+        Assert.That(text, Is.EqualTo("Running in production mode."));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Part 9: Attribute entry parsing regression tests (beta.20 — lock before continuation)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test]
+    public void Regression_attribute_entry_sets_value()
+    {
+        var result = BlockParser.Parse("= Doc\n:name: value\n\n{name}.");
+        var para = (ParagraphNode)result.Document.Children[0];
+        Assert.That(JoinTextInlines(para.Inlines), Is.EqualTo("value."));
+    }
+
+    [Test]
+    public void Regression_attribute_unset_removes()
+    {
+        var result = BlockParser.Parse("= Doc\n:name: hello\n:!name:\n\n{name}.");
+        var para = (ParagraphNode)result.Document.Children[0];
+        Assert.That(JoinTextInlines(para.Inlines), Is.EqualTo("{name}."));
+    }
+
+    [Test]
+    public void Regression_attribute_empty_value()
+    {
+        var result = BlockParser.Parse("= Doc\n:flag:\n\nBefore{flag}After.");
+        var para = (ParagraphNode)result.Document.Children[0];
+        Assert.That(JoinTextInlines(para.Inlines), Is.EqualTo("BeforeAfter."));
+    }
+
+    [Test]
+    public void Regression_attribute_value_with_ref_expanded()
+    {
+        var result = BlockParser.Parse("= Doc\n:name: World\n:desc: Hello {name}\n\n{desc}.");
+        var para = (ParagraphNode)result.Document.Children[0];
+        Assert.That(JoinTextInlines(para.Inlines), Is.EqualTo("Hello World."));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Part 10: Attribute value line continuation (beta.20)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test]
+    public void Continuation_single_line()
+    {
+        var result = BlockParser.Parse("= Doc\n:desc: Hello \\\nWorld\n\n{desc}.");
+        var para = (ParagraphNode)result.Document.Children[0];
+        Assert.That(JoinTextInlines(para.Inlines), Is.EqualTo("Hello World."));
+    }
+
+    [Test]
+    public void Continuation_chained_three_lines()
+    {
+        var result = BlockParser.Parse("= Doc\n:desc: Line 1 \\\nLine 2 \\\nLine 3\n\n{desc}.");
+        var para = (ParagraphNode)result.Document.Children[0];
+        Assert.That(JoinTextInlines(para.Inlines), Is.EqualTo("Line 1 Line 2 Line 3."));
+    }
+
+    [Test]
+    public void Continuation_no_backslash_unchanged()
+    {
+        var result = BlockParser.Parse("= Doc\n:desc: No continuation\n\n{desc}.");
+        var para = (ParagraphNode)result.Document.Children[0];
+        Assert.That(JoinTextInlines(para.Inlines), Is.EqualTo("No continuation."));
+    }
+
+    [Test]
+    public void Continuation_blank_line_stops()
+    {
+        var result = BlockParser.Parse("= Doc\n:desc: Trailing \\\n\nSome text.");
+        Assert.That(result.Document.Attributes["desc"], Is.EqualTo("Trailing"));
+    }
+
+    [Test]
+    public void Continuation_next_attribute_stops()
+    {
+        var result = BlockParser.Parse("= Doc\n:desc: Value \\\n:other: attr\n\n{desc}.");
+        Assert.That(result.Document.Attributes["desc"], Is.EqualTo("Value"));
+        Assert.That(result.Document.Attributes["other"], Is.EqualTo("attr"));
+    }
+
+    [Test]
+    public void Continuation_in_body_attribute()
+    {
+        var result = BlockParser.Parse("= Doc\n\n:desc: Body \\\nvalue\n\n{desc}.");
+        var para = (ParagraphNode)result.Document.Children[0];
+        Assert.That(JoinTextInlines(para.Inlines), Is.EqualTo("Body value."));
+    }
+
+    [Test]
+    public void Continuation_preserves_existing_no_backslash_behavior()
+    {
+        var result = BlockParser.Parse("= Doc\n:name: value\n\n{name}.");
+        var para = (ParagraphNode)result.Document.Children[0];
+        Assert.That(JoinTextInlines(para.Inlines), Is.EqualTo("value."));
+    }
+
+    [Test]
+    public void Continuation_at_end_of_file()
+    {
+        var result = BlockParser.Parse("= Doc\n:desc: EOF \\");
+        Assert.That(result.Document.Attributes["desc"], Is.EqualTo("EOF"));
+    }
+
     /// <summary>
     /// A test-only <see cref="IIncludeReader"/> backed by a dictionary.
     /// </summary>
