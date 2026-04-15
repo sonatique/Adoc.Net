@@ -313,8 +313,8 @@ internal static class InlineParser
                 }
             }
 
-            // ── Inline macros: link:target[label], image:target[alt] ──────────
-            if (doMacros && (c == 'l' || c == 'i'))
+            // ── Inline macros: link:target[label], image:target[alt], anchor:id[reftext] ──
+            if (doMacros && (c == 'l' || c == 'i' || c == 'a'))
             {
                 if (TryParseInlineMacro(text, i, endIndex, linkAttributes, out var macroNode, out var macroEnd))
                 {
@@ -1115,11 +1115,11 @@ internal static class InlineParser
         node = null!;
         endPos = pos;
 
-        // Try "link:" (5 chars) or "image:" (6 chars).
+        // Try "link:" (5), "image:" (6), or "anchor:" (7).
 #if NET10_0_OR_GREATER
-        ReadOnlySpan<char> span = text.AsSpan(pos, Math.Min(7, endIndex - pos));
+        ReadOnlySpan<char> span = text.AsSpan(pos, Math.Min(8, endIndex - pos));
 #else
-        string span = text.AsSpan(pos, Math.Min(7, endIndex - pos));
+        string span = text.AsSpan(pos, Math.Min(8, endIndex - pos));
 #endif
 
         string? macroName = null;
@@ -1134,6 +1134,11 @@ internal static class InlineParser
         {
             macroName = "image";
             colonOffset = 6; // position after "image:"
+        }
+        else if (span.StartsWith("anchor:") && (span.Length < 8 || span[7] != ':'))
+        {
+            macroName = "anchor";
+            colonOffset = 7; // position after "anchor:"
         }
 
         if (macroName is null) return false;
@@ -1180,6 +1185,12 @@ internal static class InlineParser
                 }
                 node = new InlineLinkMacroNode { Url = target, Label = label, Window = window };
             }
+        }
+        else if (macroName == "anchor")
+        {
+            if (target.Length == 0) return false; // anchor: requires an id
+            var reftext = bracketContent.Length > 0 ? bracketContent : null;
+            node = new InlineAnchorNode { Id = target, Reftext = reftext };
         }
         else // image
         {

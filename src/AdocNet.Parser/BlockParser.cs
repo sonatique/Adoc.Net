@@ -4169,6 +4169,7 @@ internal static class BlockParser
             // We don't use BlockAttributes.Parse here because it has shorthand parsing
             // (e.g., treating '.' in values like 'poster=thumb.png' as role markers).
             var namedAttrs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var positionalArgs = new List<string>();
             var inlineOptions = new List<string>();
             if (bracketContent.Length > 0)
             {
@@ -4201,18 +4202,27 @@ internal static class BlockParser
                             else oi++;
                         }
                     }
+                    else if (trimmed.Length > 0)
+                    {
+                        positionalArgs.Add(trimmed);
+                    }
                 }
             }
 
             bool HasOption(string name) =>
                 (pendingOptions is not null && pendingOptions.Contains(name)) ||
-                inlineOptions.Contains(name);
+                inlineOptions.Contains(name) ||
+                positionalArgs.Exists(a => string.Equals(a, name, StringComparison.OrdinalIgnoreCase));
 
             if (macroName == "video")
             {
+                // Detect youtube/vimeo as positional arg: video::id[youtube]
+                string? provider = HasOption("youtube") ? "youtube"
+                    : HasOption("vimeo") ? "vimeo" : null;
                 node = new VideoNode
                 {
                     Target = target,
+                    Provider = provider,
                     Width = namedAttrs.GetValueOrDefault("width"),
                     Height = namedAttrs.GetValueOrDefault("height"),
                     Poster = namedAttrs.GetValueOrDefault("poster"),
