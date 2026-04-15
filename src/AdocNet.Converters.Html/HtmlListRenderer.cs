@@ -179,9 +179,22 @@ public sealed partial class HtmlRenderer
         {
             if (child is DescriptionItemNode item)
             {
-                sb.Append("<dt class=\"hdlist1\">");
-                RenderInlines(sb, item.TermInlines, item.Term, footnotes, state);
-                sb.Append("</dt>\n");
+                // Render all terms as separate <dt> elements
+                if (item.AllTermInlines is { Count: > 0 })
+                {
+                    for (int t = 0; t < item.AllTermInlines.Count; t++)
+                    {
+                        sb.Append("<dt class=\"hdlist1\">");
+                        RenderInlines(sb, item.AllTermInlines[t], item.Terms[t], footnotes, state);
+                        sb.Append("</dt>\n");
+                    }
+                }
+                else
+                {
+                    sb.Append("<dt class=\"hdlist1\">");
+                    RenderInlines(sb, item.TermInlines, item.Terms[0], footnotes, state);
+                    sb.Append("</dt>\n");
+                }
                 sb.Append("<dd>\n");
                 bool hasDescText = !string.IsNullOrEmpty(item.Description);
                 if (hasDescText)
@@ -234,7 +247,7 @@ public sealed partial class HtmlRenderer
             if (child is DescriptionItemNode item)
             {
                 sb.Append("<li>\n<p><em>");
-                RenderInlines(sb, item.TermInlines, item.Term, footnotes, state);
+                RenderInlines(sb, item.TermInlines, item.Terms[0], footnotes, state);
                 sb.Append("</em></p>\n");
                 if (!string.IsNullOrEmpty(item.Description))
                 {
@@ -256,7 +269,7 @@ public sealed partial class HtmlRenderer
             if (child is DescriptionItemNode item)
             {
                 sb.Append("<tr>\n<td class=\"hdlist1\">\n");
-                RenderInlines(sb, item.TermInlines, item.Term, footnotes, state);
+                RenderInlines(sb, item.TermInlines, item.Terms[0], footnotes, state);
                 sb.Append("\n</td>\n<td class=\"hdlist2\">\n");
                 if (!string.IsNullOrEmpty(item.Description))
                 {

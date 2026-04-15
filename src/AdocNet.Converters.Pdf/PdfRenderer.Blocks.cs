@@ -356,7 +356,7 @@ public sealed partial class PdfRenderer
                 w.EnsurePage();
 
                 // Term in bold
-                var termSegments = BuildInlineSegments(item.TermInlines, item.Term, _fontBold, _bodyFontSize, footnotes);
+                var termSegments = BuildInlineSegments(item.TermInlines, item.Terms.Count > 0 ? item.Terms[0] : "", _fontBold, _bodyFontSize, footnotes);
                 w.WriteWrappedSegments(termSegments, _bodyLeading);
 
                 // Description indented

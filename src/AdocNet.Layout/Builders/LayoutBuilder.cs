@@ -190,8 +190,8 @@ public class LayoutBuilder
             if (child is DescriptionItemNode item)
             {
                 var term = BuildInlines(item.TermInlines);
-                if (term.Count == 0 && !string.IsNullOrEmpty(item.Term))
-                    term = new InlineLayout[] { new TextRun(item.Term) };
+                if (term.Count == 0 && item.Terms.Count > 0 && !string.IsNullOrEmpty(item.Terms[0]))
+                    term = new InlineLayout[] { new TextRun(item.Terms[0]) };
 
                 var desc = BuildInlines(item.DescriptionInlines);
                 if (desc.Count == 0 && !string.IsNullOrEmpty(item.Description))

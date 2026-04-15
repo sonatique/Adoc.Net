@@ -94,14 +94,30 @@ public sealed partial class HtmlRenderer
                         if (r > 0) sb.Append(' ');
                         EscapeTo(sb, highlight.Roles[r]);
                     }
-                    sb.Append("\">");
+                    sb.Append('"');
+                    if (highlight.Id is not null)
+                    {
+                        sb.Append(" id=\"");
+                        EscapeTo(sb, highlight.Id);
+                        sb.Append('"');
+                    }
+                    sb.Append('>');
                     foreach (var child in highlight.Children)
                         RenderInline(sb, child, footnotes, state);
                     sb.Append("</span>");
                 }
                 else
                 {
-                    sb.Append("<mark>");
+                    if (highlight.Id is not null)
+                    {
+                        sb.Append("<mark id=\"");
+                        EscapeTo(sb, highlight.Id);
+                        sb.Append("\">");
+                    }
+                    else
+                    {
+                        sb.Append("<mark>");
+                    }
                     foreach (var child in highlight.Children)
                         RenderInline(sb, child, footnotes, state);
                     sb.Append("</mark>");
@@ -168,7 +184,20 @@ public sealed partial class HtmlRenderer
                 AppendImageSrc(sb, inlineImage.Target, state);
                 sb.Append("\" alt=\"");
                 EscapeTo(sb, inlineImage.Alt);
-                sb.Append("\"></span>");
+                sb.Append('"');
+                if (inlineImage.Width is not null)
+                {
+                    sb.Append(" width=\"");
+                    EscapeTo(sb, inlineImage.Width);
+                    sb.Append('"');
+                }
+                if (inlineImage.Height is not null)
+                {
+                    sb.Append(" height=\"");
+                    EscapeTo(sb, inlineImage.Height);
+                    sb.Append('"');
+                }
+                sb.Append("></span>");
                 break;
 
             case SuperscriptInlineNode superscript:
@@ -206,15 +235,41 @@ public sealed partial class HtmlRenderer
                     var xrefLabelInlines = InlineParser.Parse(xref.Label, SubstitutionKind.Quotes, state.DocumentAttributes);
                     RenderInlines(sb, xrefLabelInlines, xref.Label, footnotes, state);
                 }
-                else if (resolvedTitle is not null)
-                    EscapeTo(sb, resolvedTitle);
-                else if (state.IdTitles.TryGetValue(resolvedId, out var refTitle))
-                    EscapeTo(sb, refTitle);
                 else
                 {
-                    sb.Append('[');
-                    EscapeTo(sb, xref.Target);
-                    sb.Append(']');
+                    var xrefTitle = resolvedTitle ?? (state.IdTitles.TryGetValue(resolvedId, out var rt) ? rt : null);
+                    var xrefStyle = state.DocumentAttributes.TryGetValue("xrefstyle", out var xs) ? xs : null;
+                    if (xrefTitle is not null && xrefStyle is not null
+                        && state.IdNumbers.TryGetValue(resolvedId, out var secNum))
+                    {
+                        if (xrefStyle == "short")
+                        {
+                            sb.Append("Section ");
+                            EscapeTo(sb, secNum);
+                        }
+                        else if (xrefStyle == "full")
+                        {
+                            sb.Append("Section ");
+                            EscapeTo(sb, secNum);
+                            sb.Append(", &#8220;");
+                            EscapeTo(sb, xrefTitle);
+                            sb.Append("&#8221;");
+                        }
+                        else
+                        {
+                            EscapeTo(sb, xrefTitle);
+                        }
+                    }
+                    else if (xrefTitle is not null)
+                    {
+                        EscapeTo(sb, xrefTitle);
+                    }
+                    else
+                    {
+                        sb.Append('[');
+                        EscapeTo(sb, xref.Target);
+                        sb.Append(']');
+                    }
                 }
                 sb.Append("</a>");
                 break;

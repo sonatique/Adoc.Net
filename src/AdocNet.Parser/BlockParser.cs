@@ -72,6 +72,7 @@ internal static class BlockParser
         // Pending block metadata: consumed when the next delimited block opens.
         string? pendingBlockTitle = null;
         string? pendingSourceLang = null;
+        string? pendingHighlight = null;
         bool hasPendingSource = false;
         bool hasPendingOptionsHeader = false;
         bool hasPendingAutoWidth = false;
@@ -283,6 +284,7 @@ internal static class BlockParser
                 dlFrames.Clear();
                 pendingBlockTitle = null;
                 pendingSourceLang = null;
+                pendingHighlight = null;
                 hasPendingSource = false;
                 hasPendingVerse = false;
                 hasPendingQuote = false;
@@ -375,6 +377,7 @@ internal static class BlockParser
                 dlFrames.Clear();
                 pendingBlockTitle = null;
                 pendingSourceLang = null;
+                pendingHighlight = null;
                 hasPendingSource = false;
                 hasPendingVerse = false;
                 hasPendingQuote = false;
@@ -406,7 +409,7 @@ internal static class BlockParser
                 if (pendingDiscrete)
                 {
                     // Discrete heading: auto-generate ID from title if none explicitly provided.
-                    string? discreteId = pendingBlockId ?? GenerateSectionId(titleText);
+                    string? discreteId = pendingBlockId ?? GenerateSectionId(titleText, document.Attributes);
                     if (discreteId is not null && !seenIds.Add(discreteId))
                     {
                         diagnostics.Add(new Diagnostic(
@@ -447,7 +450,7 @@ internal static class BlockParser
                 // Expand attribute references before generating the section ID,
                 // so {tool} → "Git" produces _getting_started_with_git, not _getting_started_with_tool.
                 var expandedTitle = ExpandAttributeValue(titleText, document.Attributes);
-                var sectionId = pendingBlockId ?? GenerateSectionId(expandedTitle);
+                var sectionId = pendingBlockId ?? GenerateSectionId(expandedTitle, document.Attributes);
                 if (pendingBlockId is not null && !seenIds.Add(pendingBlockId))
                 {
                     diagnostics.Add(new Diagnostic(
@@ -800,12 +803,13 @@ internal static class BlockParser
             }
 
             // [source] or [source,lang] or [source#id] attribute line.
-            if (TryParseSourceAttribute(line, out var sourceLangValue, out var sourceBlockId, out var sourceRoles))
+            if (TryParseSourceAttribute(line, out var sourceLangValue, out var sourceBlockId, out var sourceRoles, out var sourceHighlight))
             {
                 FlushParagraph(currentContainer, paragraphLines, ref paragraphStartLine, lineNumber - 1, document.Attributes);
                 listFrames.Clear();
                 dlFrames.Clear();
                 pendingSourceLang = sourceLangValue;
+                pendingHighlight = sourceHighlight;
                 hasPendingSource = true;
                 if (sourceBlockId is not null)
                     pendingBlockId = sourceBlockId;
@@ -1044,12 +1048,19 @@ internal static class BlockParser
                             Target = blockImage.Target,
                             Alt    = blockImage.Alt,
                             Title  = pendingBlockTitle,
+                            Width  = blockImage.Width,
+                            Height = blockImage.Height,
+                            Link   = blockImage.Link,
                         };
                     }
 
                     blockMacroNode!.Source = new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length));
                     if (blockMacroNode is BlockNode blockMacroBlock)
+                    {
                         ApplyPendingId(blockMacroBlock, lineNumber, line.Length);
+                        if (pendingBlockRoles is not null)
+                            blockMacroBlock.Roles = pendingBlockRoles;
+                    }
                     // toc::[] placeholder always goes to document level for post-parse replacement.
                     if (blockMacroNode is TocNode)
                         document.AddChild(blockMacroNode);
@@ -1057,6 +1068,7 @@ internal static class BlockParser
                         currentContainer.AddChild(blockMacroNode);
                     pendingBlockTitle = null;
                     pendingSourceLang = null;
+                    pendingHighlight = null;
                     hasPendingSource = false;
                     hasPendingVerse = false;
                     hasPendingQuote = false;
@@ -1158,6 +1170,7 @@ internal static class BlockParser
                         new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length))));
                     pendingBlockTitle = null;
                     pendingSourceLang = null;
+                    pendingHighlight = null;
                     hasPendingSource = false;
                     hasPendingVerse = false;
                     hasPendingQuote = false;
@@ -1214,6 +1227,7 @@ internal static class BlockParser
                 currentContainer.AddChild(table);
                 pendingBlockTitle = null;
                 pendingSourceLang = null;
+                pendingHighlight = null;
                 hasPendingSource = false;
                 hasPendingVerse = false;
                 hasPendingQuote = false;
@@ -1313,6 +1327,7 @@ internal static class BlockParser
                 // Discard all content (no AST node created).
                 pendingBlockTitle = null;
                 pendingSourceLang = null;
+                pendingHighlight = null;
                 hasPendingSource = false;
                 hasPendingVerse = false;
                 hasPendingQuote = false;
@@ -1340,6 +1355,7 @@ internal static class BlockParser
                 dlFrames.Clear();
                 pendingBlockTitle = null;
                 pendingSourceLang = null;
+                pendingHighlight = null;
                 hasPendingSource = false;
                 hasPendingVerse = false;
                 hasPendingQuote = false;
@@ -1462,6 +1478,7 @@ internal static class BlockParser
                         Title = pendingBlockTitle,
                         Style = (openKind == DelimitedBlockKind.Open && pendingAbstract) ? "abstract" : null,
                         Language = openKind == DelimitedBlockKind.Source ? pendingSourceLang : null,
+                        Highlight = openKind == DelimitedBlockKind.Source ? pendingHighlight : null,
                         Attribution = (openKind is DelimitedBlockKind.Quote or DelimitedBlockKind.Verse) ? pendingQuoteAttribution : null,
                         CitationSource = (openKind is DelimitedBlockKind.Quote or DelimitedBlockKind.Verse) ? pendingQuoteCitation : null,
                         IsCollapsible = pendingCollapsible,
@@ -1486,6 +1503,7 @@ internal static class BlockParser
 
                 pendingBlockTitle = null;
                 pendingSourceLang = null;
+                pendingHighlight = null;
                 hasPendingSource = false;
                 hasPendingVerse = false;
                 hasPendingQuote = false;
@@ -1659,6 +1677,7 @@ internal static class BlockParser
                     Content = fenceContent,
                     Title = pendingBlockTitle,
                     Language = effectiveLang,
+                    Highlight = pendingHighlight,
                     Callouts = fenceCalloutEntries,
                     Substitutions = ResolvePendingSubs(SubstitutionKind.Verbatim),
                     Source = fenceClosingIdx < lines.Length
@@ -1673,6 +1692,7 @@ internal static class BlockParser
 
                 pendingBlockTitle = null;
                 pendingSourceLang = null;
+                pendingHighlight = null;
                 hasPendingSource = false;
                 hasPendingVerse = false;
                 hasPendingQuote = false;
@@ -1959,6 +1979,7 @@ internal static class BlockParser
                         Content = isStructural ? null : rawContent,
                         Title = pendingBlockTitle,
                         Language = delimKind == DelimitedBlockKind.Source ? pendingSourceLang : null,
+                        Highlight = delimKind == DelimitedBlockKind.Source ? pendingHighlight : null,
                         Attribution = delimKind is DelimitedBlockKind.Quote or DelimitedBlockKind.Verse ? pendingQuoteAttribution : null,
                         CitationSource = delimKind is DelimitedBlockKind.Quote or DelimitedBlockKind.Verse ? pendingQuoteCitation : null,
                         IsCollapsible = pendingCollapsible,
@@ -1985,6 +2006,7 @@ internal static class BlockParser
 
                 pendingBlockTitle = null;
                 pendingSourceLang = null;
+                pendingHighlight = null;
                 hasPendingSource = false;
                 hasPendingVerse = false;
                 hasPendingQuote = false;
@@ -2059,6 +2081,7 @@ internal static class BlockParser
                 currentContainer.AddChild(admonNode);
                 pendingBlockTitle = null;
                 pendingSourceLang = null;
+                pendingHighlight = null;
                 hasPendingSource = false;
                 hasPendingVerse = false;
                 hasPendingQuote = false;
@@ -2141,6 +2164,38 @@ internal static class BlockParser
                         ApplyPendingId(dl, lineNumber, line.Length);
                         currentContainer.AddChild(dl);
                         dlFrames.Add((dl, dlDepth, null));
+                    }
+                }
+
+                // If description is empty, check if next lines are additional terms
+                var allTerms = new List<string> { dlTerm };
+                if (string.IsNullOrEmpty(dlDesc))
+                {
+                    int nextIdx = i + 1;
+                    while (nextIdx < lines.Length
+                        && TryParseDescriptionItem(lines[nextIdx], out var extraTerm, out var extraDesc, out int extraDepth)
+                        && extraDepth == dlDepth
+                        && string.IsNullOrEmpty(extraDesc))
+                    {
+                        allTerms.Add(extraTerm);
+                        nextIdx++;
+                    }
+                    if (allTerms.Count > 1)
+                    {
+                        // Check if the line after the last term-only line has a description
+                        if (nextIdx < lines.Length
+                            && TryParseDescriptionItem(lines[nextIdx], out var finalTerm, out var finalDesc, out int finalDepth)
+                            && finalDepth == dlDepth
+                            && !string.IsNullOrEmpty(finalDesc))
+                        {
+                            allTerms.Add(finalTerm);
+                            dlDesc = finalDesc;
+                            i = nextIdx;
+                        }
+                        else
+                        {
+                            i = nextIdx - 1;
+                        }
                     }
                 }
 
@@ -2233,9 +2288,12 @@ internal static class BlockParser
 
                 var item = new DescriptionItemNode
                 {
-                    Term = dlTerm,
+                    Terms = allTerms,
                     Description = dlDesc,
-                    TermInlines = InlineParser.Parse(dlTerm, EffectiveNormal(), document.Attributes),
+                    TermInlines = InlineParser.Parse(allTerms[0], EffectiveNormal(), document.Attributes),
+                    AllTermInlines = allTerms.Count > 1
+                        ? allTerms.Select(t => (IReadOnlyList<InlineNode>)InlineParser.Parse(t, EffectiveNormal(), document.Attributes)).ToList()
+                        : null,
                     DescriptionInlines = InlineParser.Parse(dlDesc, EffectiveNormal(), document.Attributes),
                     Source = new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length)),
                 };
@@ -2252,6 +2310,7 @@ internal static class BlockParser
 
                 pendingBlockTitle = null;
                 pendingSourceLang = null;
+                pendingHighlight = null;
                 hasPendingSource = false;
                 hasPendingVerse = false;
                 hasPendingQuote = false;
@@ -2301,6 +2360,7 @@ internal static class BlockParser
                 currentContainer.AddChild(bibEntry);
                 pendingBlockTitle = null;
                 pendingSourceLang = null;
+                pendingHighlight = null;
                 hasPendingSource = false;
                 hasPendingVerse = false;
                 hasPendingQuote = false;
@@ -2349,10 +2409,12 @@ internal static class BlockParser
 
                     // Check for [source,lang] attribute before delimiter
                     string? contLang = pendingSourceLang;
+                    string? contHighlight = pendingHighlight;
                     bool contIsSource = hasPendingSource;
-                    if (TryParseSourceAttribute(nextLine, out var contSourceLang, out _, out _))
+                    if (TryParseSourceAttribute(nextLine, out var contSourceLang, out _, out _, out var contSourceHighlight))
                     {
                         contLang = contSourceLang;
+                        contHighlight = contSourceHighlight;
                         contIsSource = true;
                         j++;
                         // Skip blank lines after [source]
@@ -2399,11 +2461,13 @@ internal static class BlockParser
                                 BlockKind = contDelimKind,
                                 Content = contRawContent,
                                 Language = contLang,
+                                Highlight = contDelimKind == DelimitedBlockKind.Source ? contHighlight : null,
                                 Source = new SourceRange(new(j + 1, 1), new(contClosingIdx + 1, lines[contClosingIdx].Length)),
                             };
                             lastItem.AddChild(contBlock);
                             i = contClosingIdx;
                             pendingSourceLang = null;
+                            pendingHighlight = null;
                             hasPendingSource = false;
                             hasPendingVerse = false;
                             hasPendingQuote = false;
@@ -2469,10 +2533,12 @@ internal static class BlockParser
 
                     // Check for [source,lang] attribute before delimiter
                     string? contLang = pendingSourceLang;
+                    string? contHighlight = pendingHighlight;
                     bool contIsSource = hasPendingSource;
-                    if (TryParseSourceAttribute(nextLine, out var contSourceLang, out _, out _))
+                    if (TryParseSourceAttribute(nextLine, out var contSourceLang, out _, out _, out var contSourceHighlight))
                     {
                         contLang = contSourceLang;
+                        contHighlight = contSourceHighlight;
                         contIsSource = true;
                         j++;
                         // Skip blank lines after [source]
@@ -2518,11 +2584,13 @@ internal static class BlockParser
                                 BlockKind = contDelimKind,
                                 Content = contRawContent,
                                 Language = contLang,
+                                Highlight = contDelimKind == DelimitedBlockKind.Source ? contHighlight : null,
                                 Source = new SourceRange(new(j + 1, 1), new(contClosingIdx + 1, lines[contClosingIdx].Length)),
                             };
                             continuationTarget.AddChild(contBlock);
                             i = contClosingIdx;
                             pendingSourceLang = null;
+                            pendingHighlight = null;
                             hasPendingSource = false;
                             hasPendingVerse = false;
                             hasPendingQuote = false;
@@ -2602,6 +2670,7 @@ internal static class BlockParser
                 pendingListStyle = null;
                 pendingBlockTitle = null;
                 pendingSourceLang = null;
+                pendingHighlight = null;
                 hasPendingSource = false;
                 hasPendingVerse = false;
                 hasPendingQuote = false;
@@ -2729,6 +2798,7 @@ internal static class BlockParser
 
                 pendingBlockTitle = null;
                 pendingSourceLang = null;
+                pendingHighlight = null;
                 hasPendingSource = false;
                 hasPendingVerse = false;
                 hasPendingQuote = false;
@@ -2764,6 +2834,7 @@ internal static class BlockParser
             listFrames.Clear();
             pendingBlockTitle = null;
             pendingSourceLang = null;
+            pendingHighlight = null;
             hasPendingSource = false;
             hasPendingVerse = false;
             hasPendingListing = false;
@@ -2879,7 +2950,7 @@ internal static class BlockParser
                 .Where(s => !s.IsDiscrete && s.Level <= tocLevels)
                 .ToList();
 
-            var entries = BuildTocEntries(sections, tocLevels);
+            var entries = BuildTocEntries(sections, tocLevels, document.Attributes);
 
             var tocNode = new TocNode
             {
@@ -3007,7 +3078,7 @@ internal static class BlockParser
     /// Builds a nested list of <see cref="TocEntry"/> from a flat list of non-discrete
     /// sections, respecting level hierarchy.
     /// </summary>
-    private static List<TocEntry> BuildTocEntries(List<SectionNode> sections, int maxLevel)
+    private static List<TocEntry> BuildTocEntries(List<SectionNode> sections, int maxLevel, IReadOnlyDictionary<string, string>? attributes = null)
     {
         var root = new List<TocEntry>();
         // Stack tracks (level, children-list-of-that-level's-entry) so we can nest.
@@ -3020,7 +3091,7 @@ internal static class BlockParser
             var entry = new TocEntry
             {
                 Level = section.Level,
-                Id = section.Id ?? GenerateSectionId(section.Title),
+                Id = section.Id ?? GenerateSectionId(section.Title, attributes),
                 Title = section.Title,
                 Children = children,
             };
@@ -3140,10 +3211,11 @@ internal static class BlockParser
         return false;
     }
 
-    private static bool TryParseSourceAttribute(string line, out string? language, out string? blockId, out List<string>? roles)
+    private static bool TryParseSourceAttribute(string line, out string? language, out string? blockId, out List<string>? roles, out string? highlight)
     {
         blockId = null;
         roles = null;
+        highlight = null;
         if (!line.EndsWith("]"))
         {
             language = null;
@@ -3188,6 +3260,19 @@ internal static class BlockParser
                     roles.Add(r);
                 // Remove the role portion and any preceding comma from content
                 content = content[..roleIdx].TrimEnd(',').TrimEnd();
+            }
+        }
+
+        // Extract highlight="..." named attribute if present
+        int hlIdx = content.IndexOf("highlight=\"", StringComparison.Ordinal);
+        if (hlIdx >= 0)
+        {
+            int valueStart = hlIdx + 11; // after highlight="
+            int valueEnd = content.IndexOf('"', valueStart);
+            if (valueEnd > valueStart)
+            {
+                highlight = content[valueStart..valueEnd];
+                content = content[..hlIdx].TrimEnd(',').TrimEnd();
             }
         }
 
@@ -4066,7 +4151,15 @@ internal static class BlockParser
 
         if (macroName == "image")
         {
-            node = new BlockImageNode { Target = target, Alt = ParseImageAlt(bracketContent) };
+            var imgAttrs = ParseImageAttributes(bracketContent);
+            node = new BlockImageNode
+            {
+                Target = target,
+                Alt = imgAttrs.Alt,
+                Width = imgAttrs.Width,
+                Height = imgAttrs.Height,
+                Link = imgAttrs.Link,
+            };
             return true;
         }
 
@@ -4133,6 +4226,7 @@ internal static class BlockParser
                 node = new AudioNode
                 {
                     Target = target,
+                    Width = namedAttrs.GetValueOrDefault("width"),
                     Autoplay = HasOption("autoplay"),
                     Loop = HasOption("loop"),
                     Controls = HasOption("controls"),
@@ -4159,29 +4253,59 @@ internal static class BlockParser
     }
 
     /// <summary>
-    /// Extracts the alt text from an image macro's bracket content.
-    /// Supports both positional (<c>image::target[Alt text]</c>) and named
-    /// (<c>image::target[alt=Alt text, align=center]</c>) forms.
+    /// Parses image macro bracket content into structured attributes.
+    /// Supports positional (<c>image::target[alt,width,height]</c>) and named
+    /// (<c>image::target[alt=text,width=200,link=url]</c>) forms.
     /// </summary>
-    internal static string ParseImageAlt(string bracketContent)
+    internal static ImageAttributes ParseImageAttributes(string bracketContent)
     {
-        if (bracketContent.Length == 0) return bracketContent;
+        if (bracketContent.Length == 0)
+            return new ImageAttributes { Alt = "" };
 
-        // If there's a comma, we have multiple positional/named params.
-        // Check for named "alt=" parameter first.
         int commaIdx = bracketContent.IndexOf(',');
-        if (commaIdx < 0) return bracketContent; // single value = positional alt
+        if (commaIdx < 0)
+            return new ImageAttributes { Alt = bracketContent };
 
-        // Split on commas and look for alt=value
+        string? alt = null, width = null, height = null, link = null;
+        var positional = new List<string>();
+
         foreach (var part in bracketContent.Split(','))
         {
             var trimmed = part.Trim();
-            if (trimmed.StartsWith("alt=", StringComparison.OrdinalIgnoreCase))
-                return trimmed[4..].Trim();
+            var eqIdx = trimmed.IndexOf('=');
+            if (eqIdx > 0)
+            {
+                var key = trimmed[..eqIdx].Trim().ToLowerInvariant();
+                var value = trimmed[(eqIdx + 1)..].Trim().Trim('"');
+                switch (key)
+                {
+                    case "alt": alt = value; break;
+                    case "width": width = value; break;
+                    case "height": height = value; break;
+                    case "link": link = value; break;
+                }
+            }
+            else
+            {
+                positional.Add(trimmed);
+            }
         }
 
-        // No named alt= found; first positional param is the alt text.
-        return bracketContent[..commaIdx].Trim();
+        // Positional order: alt (1st), width (2nd), height (3rd)
+        alt ??= positional.Count > 0 ? positional[0] : "";
+        width ??= positional.Count > 1 ? positional[1] : null;
+        height ??= positional.Count > 2 ? positional[2] : null;
+
+        return new ImageAttributes { Alt = alt, Width = width, Height = height, Link = link };
+    }
+
+    /// <summary>Parsed image macro attributes.</summary>
+    internal readonly struct ImageAttributes
+    {
+        public string Alt { get; init; }
+        public string? Width { get; init; }
+        public string? Height { get; init; }
+        public string? Link { get; init; }
     }
 
     /// <summary>
@@ -4755,37 +4879,48 @@ internal static class BlockParser
     }
 
     /// <summary>
-    /// Generates a section ID from its title text, following the Asciidoctor convention:
-    /// <c>_</c> prefix, lowercase, non-alphanumeric → <c>_</c>, collapsed underscores, no trailing <c>_</c>.
+    /// Generates a section ID from its title text, following the Asciidoctor convention.
+    /// Respects <c>:idprefix:</c> (default <c>_</c>) and <c>:idseparator:</c> (default <c>_</c>)
+    /// document attributes for customizing auto-generated IDs.
     /// </summary>
-    internal static string GenerateSectionId(string title)
+    internal static string GenerateSectionId(string title, IReadOnlyDictionary<string, string>? attributes = null)
     {
-        var sb = new System.Text.StringBuilder(title.Length + 1);
-        sb.Append('_');
-        bool lastWasUnderscore = true; // treat the prefix '_' as an underscore to collapse leading _
+        var prefix = "_";
+        var separator = "_";
+        if (attributes is not null)
+        {
+            if (attributes.TryGetValue("idprefix", out var pfx))
+                prefix = pfx;
+            if (attributes.TryGetValue("idseparator", out var sep))
+                separator = sep;
+        }
+
+        var sb = new System.Text.StringBuilder(title.Length + prefix.Length);
+        sb.Append(prefix);
+        bool lastWasSeparator = prefix.Length > 0; // collapse leading separator
         foreach (var ch in title.ToLowerInvariant())
         {
             if (char.IsLetterOrDigit(ch))
             {
                 sb.Append(ch);
-                lastWasUnderscore = false;
+                lastWasSeparator = false;
             }
             else if (ch is '\'' or '\u2019') // Asciidoctor strips apostrophes (and smart apostrophes)
             {
-                // Apostrophe is simply dropped, not replaced with underscore.
+                // Apostrophe is simply dropped, not replaced with separator.
             }
             else
             {
-                if (!lastWasUnderscore)
+                if (!lastWasSeparator && separator.Length > 0)
                 {
-                    sb.Append('_');
-                    lastWasUnderscore = true;
+                    sb.Append(separator);
+                    lastWasSeparator = true;
                 }
             }
         }
-        // Strip trailing underscore.
-        if (sb.Length > 1 && sb[^1] == '_')
-            sb.Length--;
+        // Strip trailing separator.
+        if (separator.Length > 0 && sb.Length > prefix.Length && sb.ToString().EndsWith(separator))
+            sb.Length -= separator.Length;
         return sb.ToString();
     }
 

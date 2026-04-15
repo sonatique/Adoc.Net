@@ -10,11 +10,15 @@ public sealed class AudioNode : BlockNode
     public bool Loop { get; init; }
     public bool Controls { get; init; }
 
+    /// <summary>Optional width for the audio element.</summary>
+    public string? Width { get; init; }
+
     public override AstNodeKind Kind => AstNodeKind.Audio;
 
     public override IEnumerable<KeyValuePair<string, string>> GetProperties()
     {
         yield return new("Target", Target);
+        if (Width is not null) yield return new("Width", Width);
         if (Autoplay) yield return new("Autoplay", "true");
         if (Loop) yield return new("Loop", "true");
         if (Controls) yield return new("Controls", "true");

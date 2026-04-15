@@ -17,6 +17,15 @@ public sealed class BlockImageNode : BlockNode
     /// </summary>
     public string? Title { get; init; }
 
+    /// <summary>Optional image width from positional or <c>width=</c> attribute.</summary>
+    public string? Width { get; init; }
+
+    /// <summary>Optional image height from positional or <c>height=</c> attribute.</summary>
+    public string? Height { get; init; }
+
+    /// <summary>Optional link URL from <c>link=</c> attribute. Wraps image in a hyperlink.</summary>
+    public string? Link { get; init; }
+
     public override AstNodeKind Kind => AstNodeKind.BlockImage;
 
     public override IEnumerable<KeyValuePair<string, string>> GetProperties()
@@ -25,5 +34,11 @@ public sealed class BlockImageNode : BlockNode
         yield return new("Alt", Alt);
         if (Title is not null)
             yield return new("Title", Title);
+        if (Width is not null)
+            yield return new("Width", Width);
+        if (Height is not null)
+            yield return new("Height", Height);
+        if (Link is not null)
+            yield return new("Link", Link);
     }
 }

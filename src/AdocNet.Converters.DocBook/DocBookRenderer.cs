@@ -441,7 +441,7 @@ public sealed class DocBookRenderer : DocumentRendererBase
         if (node.TermInlines.Count > 0)
             RenderInlines(writer, node.TermInlines, context);
         else
-            writer.WriteString(node.Term);
+            writer.WriteString(node.Terms[0]);
         writer.WriteEndElement(); // term
 
         writer.WriteStartElement("listitem", DocBookNs);

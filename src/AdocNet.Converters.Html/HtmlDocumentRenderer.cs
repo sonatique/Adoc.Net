@@ -81,10 +81,14 @@ public sealed partial class HtmlRenderer
         {
             sb.Append("<div id=\"footer\">\n");
             sb.Append("<div id=\"footer-text\">\n");
-            var lastUpdateLabel = document.Attributes.TryGetValue("last-update-label", out var lul)
-                ? lul : "Last updated";
-            sb.Append(lastUpdateLabel);
-            sb.Append('\n');
+            // When :reproducible: is set, suppress timestamps and update labels
+            if (!document.Attributes.ContainsKey("reproducible"))
+            {
+                var lastUpdateLabel = document.Attributes.TryGetValue("last-update-label", out var lul)
+                    ? lul : "Last updated";
+                sb.Append(lastUpdateLabel);
+                sb.Append('\n');
+            }
             sb.Append("</div>\n");
             sb.Append("</div>\n");
         }

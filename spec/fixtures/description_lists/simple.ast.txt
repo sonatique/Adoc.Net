@@ -1,8 +1,8 @@
 Document
   DescriptionList
-    DescriptionItem Term="CPU" Description="The brain of the computer."
+    DescriptionItem Terms="CPU" Description="The brain of the computer."
       InlineText Value="CPU"
       InlineText Value="The brain of the computer."
-    DescriptionItem Term="RAM" Description="Temporary memory for running programs."
+    DescriptionItem Terms="RAM" Description="Temporary memory for running programs."
       InlineText Value="RAM"
       InlineText Value="Temporary memory for running programs."

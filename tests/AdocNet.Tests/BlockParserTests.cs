@@ -269,12 +269,13 @@ public class BlockParserTests
     }
 
     [Test]
-    public void Discrete_heading_has_no_auto_id()
+    public void Discrete_heading_gets_auto_id()
     {
+        // Asciidoctor auto-generates IDs for discrete headings from the title text.
         var result = BlockParser.Parse("[discrete]\n== My Heading");
         var section = result.Document.Children.OfType<SectionNode>().First();
         Assert.That(section.IsDiscrete, Is.True);
-        Assert.That(section.Id, Is.Null);
+        Assert.That(section.Id, Is.EqualTo("_my_heading"));
     }
 
     [Test]

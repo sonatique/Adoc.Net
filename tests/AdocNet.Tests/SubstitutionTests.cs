@@ -197,12 +197,14 @@ public class SubstitutionTests
     [Test]
     public void Adjacent_strong_and_emphasis_parse_correctly()
     {
+        // Asciidoctor: closing `*` followed by word char `_` is not a valid
+        // constrained close → `*bold*` is literal; only `_italic_` parses.
         var inlines = InlineParser.Parse("*bold*_italic_");
 
         Assert.That(inlines, Has.Count.EqualTo(2));
-        Assert.That(inlines[0], Is.InstanceOf<StrongInlineNode>());
+        Assert.That(inlines[0], Is.InstanceOf<TextInlineNode>());
+        Assert.That(((TextInlineNode)inlines[0]).Value, Is.EqualTo("*bold*"));
         Assert.That(inlines[1], Is.InstanceOf<EmphasisInlineNode>());
-        Assert.That(((StrongInlineNode)inlines[0]).Content, Is.EqualTo("bold"));
         Assert.That(((EmphasisInlineNode)inlines[1]).Content, Is.EqualTo("italic"));
     }
 
@@ -259,14 +261,15 @@ public class SubstitutionTests
     }
 
     [Test]
-    public void Whitespace_only_strong_content_is_preserved()
+    public void Whitespace_only_strong_content_stays_literal()
     {
-        // `* *` has content=" " between stars — this is valid (matches Asciidoctor behavior).
+        // Asciidoctor: opening `*` followed by whitespace is not a valid
+        // constrained opening, so `* *` is literal text.
         var inlines = InlineParser.Parse("* *");
 
         Assert.That(inlines, Has.Count.EqualTo(1));
-        Assert.That(inlines[0], Is.InstanceOf<StrongInlineNode>());
-        Assert.That(((StrongInlineNode)inlines[0]).Content, Is.EqualTo(" "));
+        Assert.That(inlines[0], Is.InstanceOf<TextInlineNode>());
+        Assert.That(((TextInlineNode)inlines[0]).Value, Is.EqualTo("* *"));
     }
 
     [Test]

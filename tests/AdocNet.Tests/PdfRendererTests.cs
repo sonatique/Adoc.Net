@@ -230,7 +230,7 @@ public class PdfRendererTests
         var dl = new DescriptionListNode();
         dl.AddChild(new DescriptionItemNode
         {
-            Term = "CPU",
+            Terms = ["CPU"],
             Description = "Central Processing Unit",
             TermInlines = [],
             DescriptionInlines = [],
