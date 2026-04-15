@@ -144,9 +144,21 @@ public sealed partial class HtmlRenderer
                     sb.Append(" target=\"");
                     EscapeTo(sb, linkMacro.Window);
                     sb.Append('"');
+                    if (linkMacro.Window == "_blank")
+                        sb.Append(" rel=\"noopener\"");
                 }
                 sb.Append('>');
-                EscapeTo(sb, isBare ? linkMacro.Url : linkMacro.Label);
+                if (isBare)
+                {
+                    EscapeTo(sb, linkMacro.Url);
+                }
+                else
+                {
+                    // Parse only formatting (Quotes) to avoid recursion — macros inside labels
+                    // would re-enter link parsing and cause infinite recursion.
+                    var labelInlines = InlineParser.Parse(linkMacro.Label!, SubstitutionKind.Quotes, state.DocumentAttributes);
+                    RenderInlines(sb, labelInlines, linkMacro.Label!, footnotes, state);
+                }
                 sb.Append("</a>");
                 break;
             }
@@ -190,7 +202,10 @@ public sealed partial class HtmlRenderer
                 EscapeTo(sb, resolvedId);
                 sb.Append("\">");
                 if (xref.Label is not null)
-                    EscapeTo(sb, xref.Label);
+                {
+                    var xrefLabelInlines = InlineParser.Parse(xref.Label, SubstitutionKind.Quotes, state.DocumentAttributes);
+                    RenderInlines(sb, xrefLabelInlines, xref.Label, footnotes, state);
+                }
                 else if (resolvedTitle is not null)
                     EscapeTo(sb, resolvedTitle);
                 else if (state.IdTitles.TryGetValue(resolvedId, out var refTitle))
@@ -215,7 +230,10 @@ public sealed partial class HtmlRenderer
                     EscapeTo(sb, href);
                     sb.Append("\">");
                     if (interXref.Label is not null)
-                        EscapeTo(sb, interXref.Label);
+                    {
+                        var ixLabelInlines = InlineParser.Parse(interXref.Label, SubstitutionKind.Quotes, state.DocumentAttributes);
+                        RenderInlines(sb, ixLabelInlines, interXref.Label, footnotes, state);
+                    }
                     else
                     {
                         // Use the converted href (path with .html) as display text

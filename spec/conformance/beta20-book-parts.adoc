@@ -1,0 +1,11 @@
+:doctype: book
+
+= A Book with Chapters
+
+== First Chapter
+
+Chapter one content.
+
+== Second Chapter
+
+Chapter two content.

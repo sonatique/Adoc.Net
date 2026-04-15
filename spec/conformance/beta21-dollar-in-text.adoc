@@ -1,0 +1,7 @@
+= Dollar Signs in Text
+
+The cost is $5 per unit.
+
+Total: $100 for the order.
+
+Price range: $50 to $200.

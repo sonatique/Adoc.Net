@@ -22,17 +22,8 @@ public sealed partial class HtmlRenderer
         EscapeTo(sb, title);
         sb.Append("</title>\n");
 
-        // Theme CSS
-        var themeCss = HtmlThemeCss.GetCss(options.Theme);
-        if (themeCss is not null || options.CustomCss is not null)
-        {
-            sb.Append("<style>\n");
-            if (themeCss is not null)
-                sb.Append(themeCss).Append('\n');
-            if (options.CustomCss is not null)
-                sb.Append(options.CustomCss).Append('\n');
-            sb.Append("</style>\n");
-        }
+        // CSS: determine source and delivery mechanism
+        AppendCssBlock(sb, document, options);
 
         // Font Awesome CSS when icons=font
         if (document.Attributes.TryGetValue("icons", out var iconsVal)
@@ -151,6 +142,74 @@ public sealed partial class HtmlRenderer
                 map.TryAdd(anchor.Id, anchor.Reftext);
             CollectTitles(child, map);
         }
+    }
+
+    /// <summary>
+    /// Emits CSS as either an inline <c>&lt;style&gt;</c> block or a <c>&lt;link&gt;</c> tag,
+    /// depending on document attributes <c>:linkcss:</c>, <c>:stylesheet:</c>, and <c>:stylesdir:</c>.
+    /// API-level <see cref="HtmlRenderOptions.CustomCss"/> always takes precedence.
+    /// </summary>
+    private static void AppendCssBlock(StringBuilder sb, DocumentNode document, HtmlRenderOptions options)
+    {
+        var attrs = document.Attributes;
+        var themeCss = HtmlThemeCss.GetCss(options.Theme);
+        bool hasStylesheetAttr = attrs.TryGetValue("stylesheet", out var stylesheetVal);
+        bool useLink = attrs.ContainsKey("linkcss");
+
+        // Precedence: API CustomCss > :stylesheet: attribute > theme CSS
+        if (options.CustomCss is not null)
+        {
+            // API wins — always embed inline
+            sb.Append("<style>\n");
+            if (themeCss is not null)
+                sb.Append(themeCss).Append('\n');
+            sb.Append(options.CustomCss).Append('\n');
+            sb.Append("</style>\n");
+            return;
+        }
+
+        if (hasStylesheetAttr && stylesheetVal!.Length == 0)
+            return; // :stylesheet: (empty) = suppress all CSS
+
+        if (useLink)
+        {
+            // Link mode: emit <link rel="stylesheet" href="...">
+            var href = ResolveStylesheetHref(
+                hasStylesheetAttr ? stylesheetVal : null, attrs);
+            if (href is not null)
+            {
+                sb.Append("<link rel=\"stylesheet\" href=\"");
+                EscapeTo(sb, href);
+                sb.Append("\">\n");
+            }
+            return;
+        }
+
+        // Embed mode: inline <style> block
+        if (themeCss is not null)
+        {
+            sb.Append("<style>\n");
+            sb.Append(themeCss).Append('\n');
+            sb.Append("</style>\n");
+        }
+    }
+
+    /// <summary>
+    /// Resolves the stylesheet href for <c>&lt;link&gt;</c> mode.
+    /// </summary>
+    private static string? ResolveStylesheetHref(
+        string? filename,
+        IReadOnlyDictionary<string, string> attributes)
+    {
+        var name = filename ?? "asciidoctor.css";
+
+        // Absolute URL: use as-is
+        if (name.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            name.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            return name;
+
+        var dir = attributes.TryGetValue("stylesdir", out var sd) ? sd : ".";
+        return dir.Length > 0 ? $"{dir}/{name}" : name;
     }
 
     private static void RenderIndex(StringBuilder sb, IndexNode index)

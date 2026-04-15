@@ -1,0 +1,8 @@
+= Include Indent Test
+
+Some initial text.
+
+----
+  indented code block
+  with multiple lines
+----

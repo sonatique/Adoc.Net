@@ -1,0 +1,6 @@
+= Horizontal List Test
+
+[horizontal]
+CPU:: Intel i7
+RAM:: 16 GB
+Disk:: 512 GB SSD

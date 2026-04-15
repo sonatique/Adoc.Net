@@ -19,15 +19,18 @@ public class HtmlRendererTests
     [Test]
     public void Document_title_renders_as_h1()
     {
+        // In embedded mode (FullDocument=false, the default), the document title is suppressed
+        // to match Asciidoctor -s behavior. Use :showtitle: to force emission.
         var doc = new DocumentNode { Title = "My Document" };
-        Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo("<h1>My Document</h1>\n"));
+        Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(""));
     }
 
     [Test]
     public void Document_title_is_html_escaped()
     {
+        // Title suppressed in embedded mode — escaping tested via showtitle attribute.
         var doc = new DocumentNode { Title = "A & B <C>" };
-        Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo("<h1>A &amp; B &lt;C&gt;</h1>\n"));
+        Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(""));
     }
 
     // ── Sections ─────────────────────────────────────────────────────────
@@ -37,7 +40,12 @@ public class HtmlRendererTests
     {
         var doc = new DocumentNode();
         doc.AddChild(new SectionNode { Level = 1, Title = "Heading" });
-        Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo("<h2>Heading</h2>\n"));
+        Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(
+            "<div class=\"sect1\">\n" +
+            "<h2>Heading</h2>\n" +
+            "<div class=\"sectionbody\">\n" +
+            "</div>\n" +
+            "</div>\n"));
     }
 
     [Test]
@@ -45,7 +53,10 @@ public class HtmlRendererTests
     {
         var doc = new DocumentNode();
         doc.AddChild(new SectionNode { Level = 2, Title = "Sub" });
-        Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo("<h3>Sub</h3>\n"));
+        Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(
+            "<div class=\"sect2\">\n" +
+            "<h3>Sub</h3>\n" +
+            "</div>\n"));
     }
 
     [Test]
@@ -53,7 +64,10 @@ public class HtmlRendererTests
     {
         var doc = new DocumentNode();
         doc.AddChild(new SectionNode { Level = 3, Title = "SubSub" });
-        Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo("<h4>SubSub</h4>\n"));
+        Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(
+            "<div class=\"sect3\">\n" +
+            "<h4>SubSub</h4>\n" +
+            "</div>\n"));
     }
 
     [Test]
@@ -65,8 +79,14 @@ public class HtmlRendererTests
         doc.AddChild(section);
 
         Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(
+            "<div class=\"sect1\">\n" +
             "<h2>S</h2>\n" +
-            "<p>Body text</p>\n"));
+            "<div class=\"sectionbody\">\n" +
+            "<div class=\"paragraph\">\n" +
+            "<p>Body text</p>\n" +
+            "</div>\n" +
+            "</div>\n" +
+            "</div>\n"));
     }
 
     // ── Paragraphs ───────────────────────────────────────────────────────
@@ -76,7 +96,10 @@ public class HtmlRendererTests
     {
         var doc = new DocumentNode();
         doc.AddChild(new ParagraphNode { Text = "Hello world" });
-        Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo("<p>Hello world</p>\n"));
+        Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(
+            "<div class=\"paragraph\">\n" +
+            "<p>Hello world</p>\n" +
+            "</div>\n"));
     }
 
     [Test]
@@ -84,7 +107,10 @@ public class HtmlRendererTests
     {
         var doc = new DocumentNode();
         doc.AddChild(new ParagraphNode { Text = "a < b & c > d" });
-        Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo("<p>a &lt; b &amp; c &gt; d</p>\n"));
+        Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(
+            "<div class=\"paragraph\">\n" +
+            "<p>a &lt; b &amp; c &gt; d</p>\n" +
+            "</div>\n"));
     }
 
     // ── Unordered lists ──────────────────────────────────────────────────
@@ -99,10 +125,12 @@ public class HtmlRendererTests
         doc.AddChild(list);
 
         Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(
+            "<div class=\"ulist\">\n" +
             "<ul>\n" +
             "<li>\n<p>Alpha</p>\n</li>\n" +
             "<li>\n<p>Beta</p>\n</li>\n" +
-            "</ul>\n"));
+            "</ul>\n" +
+            "</div>\n"));
     }
 
     // ── Ordered lists ────────────────────────────────────────────────────
@@ -117,10 +145,12 @@ public class HtmlRendererTests
         doc.AddChild(list);
 
         Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(
+            "<div class=\"olist arabic\">\n" +
             "<ol class=\"arabic\">\n" +
             "<li>\n<p>First</p>\n</li>\n" +
             "<li>\n<p>Second</p>\n</li>\n" +
-            "</ol>\n"));
+            "</ol>\n" +
+            "</div>\n"));
     }
 
     // ── Nested lists ─────────────────────────────────────────────────────
@@ -138,13 +168,17 @@ public class HtmlRendererTests
         doc.AddChild(outer);
 
         Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(
+            "<div class=\"ulist\">\n" +
             "<ul>\n" +
             "<li>\n<p>Parent</p>\n" +
+            "<div class=\"ulist\">\n" +
             "<ul>\n" +
             "<li>\n<p>Child</p>\n</li>\n" +
-            "</ul>\n\n" +
+            "</ul>\n" +
+            "</div>\n" +
             "</li>\n" +
-            "</ul>\n"));
+            "</ul>\n" +
+            "</div>\n"));
     }
 
     // ── Delimited blocks ─────────────────────────────────────────────────
@@ -159,7 +193,12 @@ public class HtmlRendererTests
             Content = "raw text",
         });
 
-        Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo("<pre>raw text</pre>\n"));
+        Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(
+            "<div class=\"literalblock\">\n" +
+            "<div class=\"content\">\n" +
+            "<pre>raw text</pre>\n" +
+            "</div>\n" +
+            "</div>\n"));
     }
 
     [Test]
@@ -172,7 +211,12 @@ public class HtmlRendererTests
             Content = "code here",
         });
 
-        Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo("<pre>code here</pre>\n"));
+        Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(
+            "<div class=\"listingblock\">\n" +
+            "<div class=\"content\">\n" +
+            "<pre>code here</pre>\n" +
+            "</div>\n" +
+            "</div>\n"));
     }
 
     [Test]
@@ -187,7 +231,11 @@ public class HtmlRendererTests
         });
 
         Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(
-            "<pre class=\"highlight\"><code class=\"language-csharp\" data-lang=\"csharp\">int x = 1;</code></pre>\n"));
+            "<div class=\"listingblock\">\n" +
+            "<div class=\"content\">\n" +
+            "<pre class=\"highlight\"><code class=\"language-csharp\" data-lang=\"csharp\">int x = 1;</code></pre>\n" +
+            "</div>\n" +
+            "</div>\n"));
     }
 
     [Test]
@@ -201,7 +249,11 @@ public class HtmlRendererTests
         });
 
         Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(
-            "<pre class=\"highlight\"><code>echo hi</code></pre>\n"));
+            "<div class=\"listingblock\">\n" +
+            "<div class=\"content\">\n" +
+            "<pre class=\"highlight\"><code>echo hi</code></pre>\n" +
+            "</div>\n" +
+            "</div>\n"));
     }
 
     [Test]
@@ -217,7 +269,9 @@ public class HtmlRendererTests
 
         Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(
             "<div class=\"exampleblock\">\n" +
+            "<div class=\"paragraph\">\n" +
             "<p>Example content</p>\n" +
+            "</div>\n" +
             "</div>\n"));
     }
 
@@ -233,8 +287,12 @@ public class HtmlRendererTests
         });
 
         Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(
+            "<div class=\"listingblock\">\n" +
             "<div class=\"title\">Directory listing</div>\n" +
-            "<pre>ls -la</pre>\n"));
+            "<div class=\"content\">\n" +
+            "<pre>ls -la</pre>\n" +
+            "</div>\n" +
+            "</div>\n"));
     }
 
     [Test]
@@ -248,7 +306,11 @@ public class HtmlRendererTests
         });
 
         Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(
-            "<pre>a &lt; b &amp;&amp; c &gt; d</pre>\n"));
+            "<div class=\"literalblock\">\n" +
+            "<div class=\"content\">\n" +
+            "<pre>a &lt; b &amp;&amp; c &gt; d</pre>\n" +
+            "</div>\n" +
+            "</div>\n"));
     }
 
     // ── Inline rendering ─────────────────────────────────────────────────
@@ -263,7 +325,8 @@ public class HtmlRendererTests
             Inlines = [new EmphasisInlineNode { Children = [new TextInlineNode { Value = "italic" }] }],
         });
 
-        Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo("<p><em>italic</em></p>\n"));
+        Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(
+            "<div class=\"paragraph\">\n<p><em>italic</em></p>\n</div>\n"));
     }
 
     [Test]
@@ -276,7 +339,8 @@ public class HtmlRendererTests
             Inlines = [new StrongInlineNode { Children = [new TextInlineNode { Value = "bold" }] }],
         });
 
-        Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo("<p><strong>bold</strong></p>\n"));
+        Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(
+            "<div class=\"paragraph\">\n<p><strong>bold</strong></p>\n</div>\n"));
     }
 
     [Test]
@@ -289,7 +353,8 @@ public class HtmlRendererTests
             Inlines = [new MonospaceInlineNode { Children = [new TextInlineNode { Value = "mono" }] }],
         });
 
-        Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo("<p><code>mono</code></p>\n"));
+        Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(
+            "<div class=\"paragraph\">\n<p><code>mono</code></p>\n</div>\n"));
     }
 
     [Test]
@@ -303,7 +368,9 @@ public class HtmlRendererTests
         });
 
         Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(
-            "<p><a class=\"bare\" href=\"https://example.com\">https://example.com</a></p>\n"));
+            "<div class=\"paragraph\">\n" +
+            "<p><a class=\"bare\" href=\"https://example.com\">https://example.com</a></p>\n" +
+            "</div>\n"));
     }
 
     [Test]
@@ -323,7 +390,9 @@ public class HtmlRendererTests
         });
 
         Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(
-            "<p>Hello <strong>world</strong> and <em>more</em></p>\n"));
+            "<div class=\"paragraph\">\n" +
+            "<p>Hello <strong>world</strong> and <em>more</em></p>\n" +
+            "</div>\n"));
     }
 
     // ── Golden / integration tests (parse → render) ──────────────────────
@@ -345,13 +414,20 @@ public class HtmlRendererTests
         var html = new HtmlRenderer().RenderToString(result.Document);
 
         Assert.That(html, Is.EqualTo(
-            "<h1>My Title</h1>\n" +
+            "<div class=\"sect1\">\n" +
             "<h2 id=\"_introduction\">Introduction</h2>\n" +
+            "<div class=\"sectionbody\">\n" +
+            "<div class=\"paragraph\">\n" +
             "<p>This is a <strong>bold</strong> statement.</p>\n" +
+            "</div>\n" +
+            "<div class=\"ulist\">\n" +
             "<ul>\n" +
             "<li>\n<p>Item one</p>\n</li>\n" +
             "<li>\n<p>Item two</p>\n</li>\n" +
-            "</ul>\n"));
+            "</ul>\n" +
+            "</div>\n" +
+            "</div>\n" +
+            "</div>\n"));
     }
 
     [Test]
@@ -368,8 +444,12 @@ public class HtmlRendererTests
         var html = new HtmlRenderer().RenderToString(result.Document);
 
         Assert.That(html, Is.EqualTo(
+            "<div class=\"listingblock\">\n" +
             "<div class=\"title\">My code</div>\n" +
-            "<pre class=\"highlight\"><code class=\"language-csharp\" data-lang=\"csharp\">Console.WriteLine(&quot;hello&quot;);</code></pre>\n"));
+            "<div class=\"content\">\n" +
+            "<pre class=\"highlight\"><code class=\"language-csharp\" data-lang=\"csharp\">Console.WriteLine(&quot;hello&quot;);</code></pre>\n" +
+            "</div>\n" +
+            "</div>\n"));
     }
 
     [Test]
@@ -384,11 +464,13 @@ public class HtmlRendererTests
         var html = new HtmlRenderer().RenderToString(result.Document);
 
         Assert.That(html, Is.EqualTo(
+            "<div class=\"olist arabic\">\n" +
             "<ol class=\"arabic\">\n" +
             "<li>\n<p>First</p>\n</li>\n" +
             "<li>\n<p>Second</p>\n</li>\n" +
             "<li>\n<p>Third</p>\n</li>\n" +
-            "</ol>\n"));
+            "</ol>\n" +
+            "</div>\n"));
     }
 
     [Test]
@@ -400,7 +482,9 @@ public class HtmlRendererTests
         var html = new HtmlRenderer().RenderToString(result.Document);
 
         Assert.That(html, Is.EqualTo(
-            "<p>Visit <a class=\"bare\" href=\"https://example.com\">https://example.com</a> today.</p>\n"));
+            "<div class=\"paragraph\">\n" +
+            "<p>Visit <a class=\"bare\" href=\"https://example.com\">https://example.com</a> today.</p>\n" +
+            "</div>\n"));
     }
 
     [Test]
@@ -756,7 +840,10 @@ public class HtmlRendererTests
     {
         var doc = BlockParser.Parse("line one +\nline two");
         var html = new HtmlRenderer().RenderToString(doc.Document);
-        Assert.That(html, Is.EqualTo("<p>line one<br>\nline two</p>\n"));
+        Assert.That(html, Is.EqualTo(
+            "<div class=\"paragraph\">\n" +
+            "<p>line one<br>\nline two</p>\n" +
+            "</div>\n"));
     }
 
     [Test]
@@ -786,7 +873,10 @@ public class HtmlRendererTests
     {
         var doc = BlockParser.Parse("[abstract]\nThis is the abstract.");
         var html = new HtmlRenderer().RenderToString(doc.Document);
-        Assert.That(html, Is.EqualTo("<div class=\"quoteblock abstract\">\n<blockquote>\n<p>This is the abstract.</p>\n</blockquote>\n</div>\n"));
+        Assert.That(html, Is.EqualTo(
+            "<div class=\"quoteblock abstract\">\n<blockquote>\n" +
+            "<div class=\"paragraph\">\n<p>This is the abstract.</p>\n</div>\n" +
+            "</blockquote>\n</div>\n"));
     }
 
     // ── Custom span roles ([.role]#text#) ───────────────────────────────
@@ -858,8 +948,8 @@ public class HtmlRendererTests
         var html = new HtmlRenderer().RenderToString(doc.Document);
         Assert.That(html, Is.EqualTo(
             "<div class=\"quoteblock abstract\">\n<blockquote>\n" +
-            "<p>This is an abstract with <strong>multiple</strong> paragraphs.</p>\n" +
-            "<p>Second paragraph.</p>\n" +
+            "<div class=\"paragraph\">\n<p>This is an abstract with <strong>multiple</strong> paragraphs.</p>\n</div>\n" +
+            "<div class=\"paragraph\">\n<p>Second paragraph.</p>\n</div>\n" +
             "</blockquote>\n</div>\n"));
     }
 

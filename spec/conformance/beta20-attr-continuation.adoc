@@ -1,0 +1,7 @@
+:description: This is a \
+long description that \
+spans three lines
+
+= Attribute Line Continuation Test
+
+The description is: {description}.

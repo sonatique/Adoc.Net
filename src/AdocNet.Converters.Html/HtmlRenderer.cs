@@ -199,12 +199,13 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
         var secCtx = new SectionNumberingContext(document);
 
         // In full-document mode, always show title.
-        // In embedded mode, only show title when :showtitle: attribute is set.
-        // Render document title as <h1> unless suppressed.
-        // :showtitle: forces title display even in embedded mode (Asciidoctor compat).
+        // In embedded mode (FullDocument=false), suppress title unless :showtitle: is set.
+        // This matches Asciidoctor's -s behavior: title is rendered only in standalone mode
+        // or when :showtitle: is explicitly set in the document.
         // :notitle: suppresses the title entirely.
         if (document.Title is { } docTitle
-            && !document.Attributes.ContainsKey("notitle"))
+            && !document.Attributes.ContainsKey("notitle")
+            && (fullDoc || document.Attributes.ContainsKey("showtitle")))
         {
             sb.Append("<h1>");
             EscapeTo(sb, docTitle);

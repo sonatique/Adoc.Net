@@ -55,7 +55,12 @@ public class HtmlRendererRegressionTests
         doc.AddChild(new SectionNode { Level = 1, Title = "Introduction" });
         var html = Render(doc);
 
-        Assert.That(html, Is.EqualTo("<h2>Introduction</h2>\n"));
+        Assert.That(html, Is.EqualTo(
+            "<div class=\"sect1\">\n" +
+            "<h2>Introduction</h2>\n" +
+            "<div class=\"sectionbody\">\n" +
+            "</div>\n" +
+            "</div>\n"));
     }
 
     [Test]
@@ -181,7 +186,10 @@ public class HtmlRendererRegressionTests
         doc.AddChild(new ParagraphNode { Text = "Hello world" });
         var html = Render(doc);
 
-        Assert.That(html, Is.EqualTo("<p>Hello world</p>\n"));
+        Assert.That(html, Is.EqualTo(
+            "<div class=\"paragraph\">\n" +
+            "<p>Hello world</p>\n" +
+            "</div>\n"));
     }
 
     [Test]
@@ -197,7 +205,11 @@ public class HtmlRendererRegressionTests
         var html = Render(doc);
 
         Assert.That(html, Is.EqualTo(
-            "<pre class=\"highlight\"><code class=\"language-csharp\" data-lang=\"csharp\">var x = 1;</code></pre>\n"));
+            "<div class=\"listingblock\">\n" +
+            "<div class=\"content\">\n" +
+            "<pre class=\"highlight\"><code class=\"language-csharp\" data-lang=\"csharp\">var x = 1;</code></pre>\n" +
+            "</div>\n" +
+            "</div>\n"));
     }
 
     // ── HtmlListRenderer ────────────────────────────────────────────────
@@ -213,10 +225,12 @@ public class HtmlRendererRegressionTests
         var html = Render(doc);
 
         Assert.That(html, Is.EqualTo(
+            "<div class=\"ulist\">\n" +
             "<ul>\n" +
             "<li>\n<p>Item A</p>\n</li>\n" +
             "<li>\n<p>Item B</p>\n</li>\n" +
-            "</ul>\n"));
+            "</ul>\n" +
+            "</div>\n"));
     }
 
     [Test]
@@ -297,7 +311,8 @@ public class HtmlRendererRegressionTests
         });
         var html = Render(doc);
 
-        Assert.That(html, Is.EqualTo("<p><strong>bold</strong></p>\n"));
+        Assert.That(html, Is.EqualTo(
+            "<div class=\"paragraph\">\n<p><strong>bold</strong></p>\n</div>\n"));
     }
 
     [Test]
@@ -315,7 +330,9 @@ public class HtmlRendererRegressionTests
         var html = Render(doc);
 
         Assert.That(html, Is.EqualTo(
-            "<p><a class=\"bare\" href=\"https://example.com\">https://example.com</a></p>\n"));
+            "<div class=\"paragraph\">\n" +
+            "<p><a class=\"bare\" href=\"https://example.com\">https://example.com</a></p>\n" +
+            "</div>\n"));
     }
 
     // ── HtmlImageRenderer ───────────────────────────────────────────────

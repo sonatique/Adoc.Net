@@ -1,0 +1,5 @@
+= Front Matter Test
+
+This document does NOT have front matter.
+
+It should render normally.

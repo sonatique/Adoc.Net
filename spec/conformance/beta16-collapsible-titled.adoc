@@ -1,0 +1,7 @@
+= Collapsible Block with Title
+
+.Click to expand
+[%collapsible]
+====
+This content is inside a titled collapsible block.
+====

@@ -6,13 +6,11 @@ namespace AdocNet.Tests;
 
 /// <summary>
 /// Compares AdocNet HTML output against Asciidoctor reference output.
-/// These tests require Asciidoctor to be installed and are marked [Explicit]
-/// so they only run when explicitly requested:
-///   dotnet test --filter Category=Compatibility
+/// These tests require Asciidoctor to be installed. When Asciidoctor is not
+/// available, tests are skipped via Assert.Ignore in OneTimeSetUp.
 /// </summary>
 [TestFixture]
 [Category("Compatibility")]
-[Explicit("Requires Asciidoctor CLI installed")]
 public class CompatibilityTests
 {
     private static readonly string RepoRoot = FindRepoRoot();
@@ -26,7 +24,7 @@ public class CompatibilityTests
     {
         _asciidoctorAvailable = AsciidoctorRunner.IsAvailable();
         if (!_asciidoctorAvailable)
-            Assert.Inconclusive("Asciidoctor is not installed. Install with: gem install asciidoctor");
+            Assert.Ignore("Asciidoctor is not installed. Install with: gem install asciidoctor");
     }
 
     /// <summary>

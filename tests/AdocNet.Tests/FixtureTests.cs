@@ -40,6 +40,10 @@ public class FixtureTests
 
         foreach (var adocPath in adocFiles)
         {
+            // Skip include fragments (e.g., _indent-target.adoc)
+            if (Path.GetFileName(adocPath).StartsWith('_'))
+                continue;
+
             var relativePath = Path.GetRelativePath(fixturesDir, adocPath)
                 .Replace('\\', '/');
             var testName = Path.ChangeExtension(relativePath, null);

@@ -1,0 +1,15 @@
+:doctype: book
+
+= My Book Title
+
+== Chapter One
+
+First chapter content.
+
+=== Section in Chapter One
+
+Subsection content.
+
+== Chapter Two
+
+Second chapter content.

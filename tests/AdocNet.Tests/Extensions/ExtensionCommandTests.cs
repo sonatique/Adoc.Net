@@ -123,7 +123,7 @@ public class ExtensionCommandTests
 
         // Verify engine still works
         using var ms = new MemoryStream();
-        engine.Convert("= Test", ms);
+        engine.Convert("= Test\n\nContent.", ms);
         Assert.That(ms.Length, Is.GreaterThan(0));
     }
 
@@ -137,7 +137,7 @@ public class ExtensionCommandTests
         engine.LoadInstalledExtensions(nonexistent);
 
         using var ms = new MemoryStream();
-        engine.Convert("= Test", ms);
+        engine.Convert("= Test\n\nContent.", ms);
         Assert.That(ms.Length, Is.GreaterThan(0));
     }
 

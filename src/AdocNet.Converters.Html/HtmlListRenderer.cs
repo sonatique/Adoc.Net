@@ -17,29 +17,59 @@ public sealed partial class HtmlRenderer
         bool isChecklist = list.ListKind == ListKind.Unordered
             && list.Children.OfType<ListItemNode>().Any(i => i.Checked is not null);
 
-        sb.Append('<');
-        sb.Append(tag);
-        // Asciidoctor renders list IDs on a wrapper <div class="ulist/olist" id="...">
-        // rather than on the <ul>/<ol> tag itself. Since we don't emit wrapper divs,
-        // omit the ID here to match Asciidoctor's normalized output.
-
-        if (isChecklist)
-        {
-            sb.Append(" class=\"checklist\"");
-        }
-
+        // Compute effective style before emitting any HTML — needed for both the outer
+        // wrapper div class and the inner <ol> class.
         // Asciidoctor emits a list style class (e.g. "arabic" for default ordered lists).
         // When no explicit style is set, auto-assign by nesting depth:
         //   depth 0 → arabic, 1 → loweralpha, 2 → lowerroman, 3+ → cycle
+        string? effectiveStyle = null;
         if (list.ListKind == ListKind.Ordered)
         {
-            var effectiveStyle = list.ListStyle ?? orderedListDepth switch
+            effectiveStyle = list.ListStyle ?? orderedListDepth switch
             {
                 0 => "arabic",
                 1 => "loweralpha",
                 2 => "lowerroman",
                 _ => "arabic",
             };
+            nextDepth = orderedListDepth + 1;
+        }
+
+        // Outer wrapper div: Asciidoctor always emits <div class="ulist"> or <div class="olist arabic">.
+        // IDs and roles go on this outer div, not on the inner <ul>/<ol>.
+        sb.Append("<div class=\"");
+        if (list.ListKind == ListKind.Unordered)
+        {
+            sb.Append(isChecklist ? "ulist checklist" : "ulist");
+        }
+        else
+        {
+            sb.Append("olist ");
+            sb.Append(effectiveStyle);
+        }
+        for (int i = 0; i < list.Roles.Count; i++)
+        {
+            sb.Append(' ');
+            EscapeTo(sb, list.Roles[i]);
+        }
+        sb.Append('"');
+        if (list.Id is not null)
+        {
+            sb.Append(" id=\"");
+            EscapeTo(sb, list.Id);
+            sb.Append('"');
+        }
+        sb.Append(">\n");
+
+        // Inner <ul> or <ol>
+        sb.Append('<');
+        sb.Append(tag);
+
+        if (isChecklist)
+            sb.Append(" class=\"checklist\"");
+
+        if (list.ListKind == ListKind.Ordered)
+        {
             sb.Append(" class=\"");
             sb.Append(effectiveStyle);
             sb.Append('"');
@@ -65,8 +95,6 @@ public sealed partial class HtmlRenderer
                 sb.Append(typeValue);
                 sb.Append('"');
             }
-
-            nextDepth = orderedListDepth + 1;
         }
 
         sb.Append(">\n");
@@ -80,6 +108,7 @@ public sealed partial class HtmlRenderer
         sb.Append("</");
         sb.Append(tag);
         sb.Append(">\n");
+        sb.Append("</div>\n");
     }
 
     private void RenderListItem(StringBuilder sb, ListItemNode item, FootnoteState footnotes, HtmlRenderState state, int orderedListDepth)
@@ -118,7 +147,9 @@ public sealed partial class HtmlRenderer
             }
         }
 
-        sb.Append("\n</li>\n");
+        if (item.Children.Count == 0)
+            sb.Append('\n');
+        sb.Append("</li>\n");
     }
 
     private void RenderDescriptionList(StringBuilder sb, DescriptionListNode list, bool useIconFont, FootnoteState footnotes, SectionNumberingContext secCtx, HtmlRenderState state)
@@ -134,7 +165,8 @@ public sealed partial class HtmlRenderer
             return;
         }
 
-        sb.Append("<dl");
+        // Outer wrapper div: Asciidoctor always wraps <dl> in <div class="dlist">.
+        sb.Append("<div class=\"dlist\"");
         if (list.Id is not null)
         {
             sb.Append(" id=\"");
@@ -142,6 +174,7 @@ public sealed partial class HtmlRenderer
             sb.Append('"');
         }
         sb.Append(">\n");
+        sb.Append("<dl>\n");
         foreach (var child in list.Children)
         {
             if (child is DescriptionItemNode item)
@@ -190,6 +223,7 @@ public sealed partial class HtmlRenderer
             }
         }
         sb.Append("</dl>\n");
+        sb.Append("</div>\n");
     }
 
     private void RenderQandaList(StringBuilder sb, DescriptionListNode list, FootnoteState footnotes, HtmlRenderState state)

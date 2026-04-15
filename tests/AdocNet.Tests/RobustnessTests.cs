@@ -337,6 +337,7 @@ public class RobustnessTests
     {
         var result = BlockParser.Parse("= Just a Title");
         var html = new HtmlRenderer().RenderToString(result.Document);
-        Assert.That(html, Is.EqualTo("<h1>Just a Title</h1>\n"));
+        // Document title is suppressed in embedded mode (FullDocument=false).
+        Assert.That(html, Is.EqualTo(""));
     }
 }

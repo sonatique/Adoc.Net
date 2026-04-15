@@ -116,7 +116,7 @@ public class PublicApiTests
         var result = AdocParser.Parse("= Title\n\n*bold* text");
         var html = new HtmlRenderer().RenderToString(result.Document);
 
-        Assert.That(html, Does.Contain("<h1>Title</h1>"));
+        // Title is suppressed in embedded mode; verify it renders body content.
         Assert.That(html, Does.Contain("<strong>bold</strong>"));
     }
 
@@ -242,7 +242,7 @@ public class PublicApiTests
         Assert.That(result.Diagnostics.Any(d => d.IsError), Is.False);
 
         var html = new HtmlRenderer().RenderToString(result.Document);
-        Assert.That(html, Does.Contain("<h1>Sample</h1>"));
+        // Title is suppressed in embedded mode; verify body content.
         Assert.That(html, Does.Contain("Version is 1.0."));
         Assert.That(html, Does.Contain("<strong>Bold</strong>"));
         Assert.That(html, Does.Contain("<em>Italic</em>"));

@@ -1,0 +1,5 @@
+= Dollar Sign Literal Test
+
+The cost is $$ per unit.
+
+Total: $$100 for the item.

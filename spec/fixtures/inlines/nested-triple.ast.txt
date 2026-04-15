@@ -3,6 +3,5 @@ Document
     InlineText Value="This has "
     InlineStrong
       InlineEmphasis
-        InlineMonospace
-          InlineText Value="all three"
+        InlineText Value="`all three`"
     InlineText Value=" text."

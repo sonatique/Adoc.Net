@@ -1,0 +1,13 @@
+:icons: font
+
+= Icon Font Test
+
+NOTE: This is a note admonition.
+
+TIP: This is a tip.
+
+WARNING: This is a warning.
+
+IMPORTANT: This is important.
+
+CAUTION: Use caution here.

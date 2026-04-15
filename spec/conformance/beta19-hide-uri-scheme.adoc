@@ -1,0 +1,7 @@
+:hide-uri-scheme:
+
+= Hide URI Scheme Test
+
+Visit https://example.com for more information.
+
+Also see http://example.org for details.

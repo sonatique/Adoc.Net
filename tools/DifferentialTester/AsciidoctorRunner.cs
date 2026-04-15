@@ -9,20 +9,79 @@ public static class AsciidoctorRunner
 {
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
     private static readonly bool IsWindows = OperatingSystem.IsWindows();
+    private static string? _resolvedPath;
 
     /// <summary>
     /// Creates a ProcessStartInfo that works on both Windows (via cmd.exe for .bat resolution)
     /// and Unix (direct execution).
     /// </summary>
-    private static ProcessStartInfo CreateStartInfo(string arguments) => new()
+    private static ProcessStartInfo CreateStartInfo(string arguments)
     {
-        FileName = IsWindows ? "cmd.exe" : "asciidoctor",
-        Arguments = IsWindows ? $"/c asciidoctor {arguments}" : arguments,
-        RedirectStandardOutput = true,
-        RedirectStandardError = true,
-        UseShellExecute = false,
-        CreateNoWindow = true,
-    };
+        if (!IsWindows)
+            return new ProcessStartInfo
+            {
+                FileName = "asciidoctor",
+                Arguments = arguments,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                StandardOutputEncoding = System.Text.Encoding.UTF8,
+                StandardErrorEncoding = System.Text.Encoding.UTF8,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+
+        var resolved = ResolveWindowsPath();
+        return new ProcessStartInfo
+        {
+            FileName = "cmd.exe",
+            Arguments = $"/c {resolved} {arguments}",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardOutputEncoding = System.Text.Encoding.UTF8,
+            StandardErrorEncoding = System.Text.Encoding.UTF8,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+    }
+
+    /// <summary>
+    /// Resolves the path to asciidoctor.bat on Windows, checking the system PATH
+    /// and well-known Ruby installation directories.
+    /// </summary>
+    private static string ResolveWindowsPath()
+    {
+        if (_resolvedPath is not null)
+            return _resolvedPath;
+
+        // Check PATH entries first
+        var pathVar = Environment.GetEnvironmentVariable("PATH") ?? "";
+        foreach (var dir in pathVar.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var batPath = Path.Combine(dir.Trim(), "asciidoctor.bat");
+            if (File.Exists(batPath))
+                return _resolvedPath = batPath;
+        }
+
+        // Check well-known Ruby installation directories
+        string[] roots = [@"C:\tools", @"C:\"];
+        foreach (var root in roots)
+        {
+            if (!Directory.Exists(root)) continue;
+            try
+            {
+                foreach (var dir in Directory.GetDirectories(root, "ruby*"))
+                {
+                    var batPath = Path.Combine(dir, "bin", "asciidoctor.bat");
+                    if (File.Exists(batPath))
+                        return _resolvedPath = batPath;
+                }
+            }
+            catch { /* permission denied — skip */ }
+        }
+
+        // Fallback — let cmd.exe try to resolve it
+        return _resolvedPath = "asciidoctor";
+    }
 
     /// <summary>
     /// Checks whether the <c>asciidoctor</c> CLI is available on the system PATH.
@@ -81,8 +140,7 @@ public static class AsciidoctorRunner
             using var process = new Process();
             // -s = standalone (no header/footer wrapper)
             // -o - = output to stdout
-            // -a showtitle = show document title
-            process.StartInfo = CreateStartInfo($"-s -o - -a showtitle \"{fullPath}\"");
+            process.StartInfo = CreateStartInfo($"-s -o - \"{fullPath}\"");
             process.StartInfo.WorkingDirectory = Path.GetDirectoryName(fullPath) ?? ".";
 
             process.Start();
