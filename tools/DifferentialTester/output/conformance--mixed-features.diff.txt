@@ -1,14 +1,8 @@
 # Diff: mixed-features.adoc
-# Similarity: 99.4%
+# Similarity: 99.8%
 # --- Asciidoctor (expected)
 # +++ AdocNet (actual)
 
-  </ul>
-  <h2 id="section-inline">1. Inline Formatting</h2>
-  <p>Plain text followed by <strong>bold text</strong>, <em>italic text</em>, <code>monospace text</code>,
-- <strong><em>bold italic</em></strong>, <code><strong>mono bold</strong></code>, and <em>`italic mono`</em>.
-+ <strong><em>bold italic</em></strong>, <code><strong>mono bold</strong></code>, and <em><code>italic mono</code></em>.
-  A word with <b>raw HTML</b> embedded via passthrough.</p>
   <p>Superscript: E = mc<sup>2</sup>.
   Subscript: H<sub>2</sub>O is water.</p>
   <p>A line with a footnote.<sup class="footnote">[<a class="footnote" href="#_footnotedef_1" id="_footnoteref_1" title="View footnote.">1</a>]</sup></p>
@@ -17,13 +11,4 @@
   <p>Constrained vs unconstrained: <strong>un</strong>constrained bold, <em>un</em>constrained italic.</p>
   <h2 id="section-links">2. Links and Cross-References</h2>
   <p>Visit the <a href="https://asciidoc.org">AsciiDoc home page</a> for more information.
-  ...
-  </ul>
-  <h3 id="_block_quote">5.5. Block Quote</h3>
-  <blockquote>
-- The most dangerous phrase in the language is, "We've always done it this way."
-+ <p>The most dangerous phrase in the language is, "We've always done it this way."</p>
-  </blockquote>
-  -- Grace Hopper
-  <h3 id="_passthrough_block">5.6. Passthrough Block</h3>
   ...

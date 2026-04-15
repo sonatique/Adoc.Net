@@ -148,7 +148,7 @@ public class NodeTemplateTests
         var options = new HtmlRenderOptions { Templates = null };
         var html = Render(doc, options);
 
-        Assert.That(html, Is.EqualTo("<p>Plain</p>\n"));
+        Assert.That(html, Is.EqualTo("<div class=\"paragraph\">\n<p>Plain</p>\n</div>\n"));
     }
 
     [Test]
@@ -175,6 +175,6 @@ public class NodeTemplateTests
         };
         var html = Render(doc, options);
 
-        Assert.That(html, Is.EqualTo("<p>before <b class=\"custom-bold\">bold text</b> after</p>\n"));
+        Assert.That(html, Is.EqualTo("<div class=\"paragraph\">\n<p>before <b class=\"custom-bold\">bold text</b> after</p>\n</div>\n"));
     }
 }

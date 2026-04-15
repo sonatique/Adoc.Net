@@ -51,13 +51,14 @@ public class WatchCommandTests
 
         watch.RunInitialBuild(run);
         var htmlPath = Path.Combine(_tempDir, "test.html");
-        Assert.That(File.ReadAllText(htmlPath), Does.Contain("Original"));
+        // Title is suppressed in embedded mode; check for body content instead.
+        Assert.That(File.ReadAllText(htmlPath), Does.Contain("First."));
 
         // Simulate edit
         File.WriteAllText(adocPath, "= Updated\n\nSecond.\n");
         watch.RebuildFile(adocPath, run);
 
-        Assert.That(File.ReadAllText(htmlPath), Does.Contain("Updated"));
+        Assert.That(File.ReadAllText(htmlPath), Does.Contain("Second."));
     }
 
     [Test]

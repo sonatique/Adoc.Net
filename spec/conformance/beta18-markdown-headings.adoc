@@ -1,0 +1,13 @@
+= Markdown Headings Test
+
+## Level 1 Section
+
+Some content here.
+
+### Level 2 Section
+
+More content.
+
+#### Level 3 Section
+
+Even deeper content.

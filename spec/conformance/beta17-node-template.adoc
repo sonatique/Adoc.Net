@@ -1,0 +1,14 @@
+= Node Template Test
+
+A basic document for template rendering.
+
+== Section One
+
+First section content.
+
+[source,java]
+----
+public class App {
+    public static void main(String[] args) {}
+}
+----

@@ -1,0 +1,11 @@
+:sectlinks:
+
+= Section Links Test
+
+== First Section
+
+Content of first section.
+
+== Second Section
+
+Content of second section.

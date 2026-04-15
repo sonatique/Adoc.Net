@@ -1,0 +1,15 @@
+= Appendix Test
+
+== Regular Section
+
+Regular content.
+
+[appendix]
+== First Appendix
+
+First appendix content.
+
+[appendix]
+== Second Appendix
+
+Second appendix content.

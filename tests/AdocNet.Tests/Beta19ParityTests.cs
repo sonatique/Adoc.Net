@@ -356,10 +356,12 @@ public class Beta19ParityTests
     }
 
     [Test]
-    public void Default_embedded_mode_shows_title()
+    public void Default_embedded_mode_suppresses_title()
     {
+        // Asciidoctor -s (embedded mode) suppresses the document title.
+        // Use :showtitle: to emit it.
         var html = RenderHtml("= My Title\n\nContent");
-        Assert.That(html, Does.Contain("<h1>My Title</h1>"));
+        Assert.That(html, Does.Not.Contain("<h1>My Title</h1>"));
     }
 
     [Test]

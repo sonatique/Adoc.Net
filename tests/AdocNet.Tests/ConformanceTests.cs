@@ -102,9 +102,14 @@ public class ConformanceTests
         // Step 1: Extract content from <div id="content">...</div>
         html = ExtractContentDiv(html);
 
-        // Step 2-7: Apply shared normalization
-        html = StripWrapperDivs(html);
+        // Step 2-7: Apply shared normalization.
+        // Note: StripAttributes removes class/id from structural divs, and
+        // StripEmptyElements then removes the bare <div> tags — this is equivalent
+        // to StripWrapperDivs and handles both expected and actual the same way.
         html = html.Replace("&quot;", "\"");
+        // Strip block titles before attribute normalization so their text content
+        // is removed entirely (not left as bare text after the class attribute is gone).
+        html = StripBlockTitles(html);
         html = StripAttributes(html);
         html = StripEmptyElements(html);
         html = NormalizeListItems(html);
@@ -125,19 +130,13 @@ public class ConformanceTests
     /// </summary>
     private static string NormalizeOurHtml(string html)
     {
-        // Strip the document title <h1>...</h1> — Asciidoctor renders it outside
-        // <div id="content">, so it's already absent from the expected side.
-        html = Regex.Replace(html, @"^<h1>[^<]*</h1>\n?", "");
-
-        // Strip block titles (<div class="title">...</div>) — already stripped from
-        // Asciidoctor side; our renderer emits them as bare text lines.
-        html = Regex.Replace(html, @"<div class=""title"">[^<]*</div>\n?", "");
-
         // Strip the TOC block — Asciidoctor renders it outside <div id="content">,
         // so it's already absent from the expected side.
         html = StripTocBlock(html);
 
         html = html.Replace("&quot;", "\"");
+        // Strip block titles before attribute normalization — matches Asciidoctor side.
+        html = StripBlockTitles(html);
         html = StripAttributes(html);
         html = StripEmptyElements(html);
         html = NormalizeListItems(html);
@@ -337,6 +336,15 @@ public class ConformanceTests
 
         return html;
     }
+
+    /// <summary>
+    /// Strips block title divs (<c>&lt;div class="title"&gt;...&lt;/div&gt;</c>) including
+    /// their text content. Block titles are presentational metadata; comparisons focus on
+    /// body content. Applied before StripAttributes so the class attribute is still present.
+    /// </summary>
+    private static string StripBlockTitles(string html) =>
+        Regex.Replace(html, @"<div\s+class=""title""[^>]*>.*?</div>", "",
+            RegexOptions.Singleline);
 
     /// <summary>
     /// Strips class, style (except text-align), id, role, and other presentational

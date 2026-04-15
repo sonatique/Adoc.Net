@@ -258,7 +258,28 @@ internal static class BlockParser
             if (string.IsNullOrWhiteSpace(line))
             {
                 FlushParagraph(currentContainer, paragraphLines, ref paragraphStartLine, lineNumber - 1, document.Attributes, pendingBlockId, pendingBlockRoles, seenIds, diagnostics, pendingHardbreaks, pendingAbstract ? "abstract" : null, subsOverride: ResolvePendingSubs(EffectiveNormal()));
-                listFrames.Clear();
+
+                // Asciidoctor nests a different-kind list inside the last item when
+                // separated by a single blank line.  Preserve listFrames when the next
+                // non-blank line is a list item of a different kind so AddListItem can
+                // perform the nesting.
+                bool preserveListContext = false;
+                if (listFrames.Count > 0)
+                {
+                    for (int peek = i + 1; peek < lines.Length; peek++)
+                    {
+                        if (string.IsNullOrWhiteSpace(lines[peek]))
+                            continue; // skip additional blank lines
+                        if (TryParseListItem(lines[peek], out var peekKind, out _, out _)
+                            && listFrames[^1].List.ListKind != peekKind)
+                        {
+                            preserveListContext = true;
+                        }
+                        break; // only check the first non-blank line
+                    }
+                }
+                if (!preserveListContext)
+                    listFrames.Clear();
                 dlFrames.Clear();
                 pendingBlockTitle = null;
                 pendingSourceLang = null;
@@ -384,8 +405,8 @@ internal static class BlockParser
 
                 if (pendingDiscrete)
                 {
-                    // Discrete heading: no auto-ID, no section nesting, just a visual heading block.
-                    string? discreteId = pendingBlockId;
+                    // Discrete heading: auto-generate ID from title if none explicitly provided.
+                    string? discreteId = pendingBlockId ?? GenerateSectionId(titleText);
                     if (discreteId is not null && !seenIds.Add(discreteId))
                     {
                         diagnostics.Add(new Diagnostic(
@@ -1685,6 +1706,58 @@ internal static class BlockParser
                 continue;
             }
 
+            // $$ stem block delimiter (only when :stem: is set)
+            if (IsStemDelimiterLine(line) && document.Attributes.ContainsKey("stem"))
+            {
+                FlushParagraph(currentContainer, paragraphLines, ref paragraphStartLine, lineNumber - 1, document.Attributes);
+                listFrames.Clear();
+                dlFrames.Clear();
+
+                // Scan for closing $$
+                int stemClosingIdx = -1;
+                for (int j = i + 1; j < lines.Length; j++)
+                {
+                    if (IsStemDelimiterLine(lines[j]))
+                    {
+                        stemClosingIdx = j;
+                        break;
+                    }
+                }
+
+                if (stemClosingIdx < 0)
+                {
+                    diagnostics.Add(new Diagnostic(
+                        DiagnosticSeverity.Warning,
+                        $"Unclosed $$ stem block starting at line {lineNumber}",
+                        new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length))));
+                    stemClosingIdx = lines.Length;
+                }
+
+                var stemContent = string.Join("\n", lines[(i + 1)..stemClosingIdx]);
+                var stemBlock = new StemBlockNode
+                {
+                    Content = stemContent,
+                    StemType = "latexmath",
+                    Title = pendingBlockTitle,
+                    Substitutions = SubstitutionKind.Verbatim,
+                    Source = stemClosingIdx < lines.Length
+                        ? new SourceRange(new(lineNumber, 1), new(stemClosingIdx + 1, lines[stemClosingIdx].Length))
+                        : new SourceRange(new(lineNumber, 1), new(lines.Length, lines[^1].Length)),
+                };
+                ApplyPendingId(stemBlock, lineNumber, line.Length);
+                if (pendingBlockRoles is not null)
+                    stemBlock.Roles = pendingBlockRoles;
+                currentContainer.AddChild(stemBlock);
+
+                pendingBlockTitle = null;
+                pendingStem = null;
+                pendingBlockId = null;
+                pendingBlockReftext = null;
+                pendingBlockRoles = null;
+                i = stemClosingIdx;
+                continue;
+            }
+
             // Delimited block: ...., ----, or ====
             if (TryGetDelimiterKind(line, out var delimChar, out var delimKind))
             {
@@ -1864,6 +1937,7 @@ internal static class BlockParser
                     var admonNode = new AdmonitionNode
                     {
                         AdmonitionType = pendingAdmonitionType,
+                        Title = pendingBlockTitle,
                         Source = closingIdx < lines.Length
                             ? new SourceRange(new(lineNumber, 1), new(closingIdx + 1, lines[closingIdx].Length))
                             : new SourceRange(new(lineNumber, 1), new(lines.Length, lines[^1].Length)),
@@ -1974,6 +2048,7 @@ internal static class BlockParser
                 var admonNode = new AdmonitionNode
                 {
                     AdmonitionType = admonType,
+                    Title = pendingBlockTitle,
                     Text = fullText,
                     Inlines = InlineParser.Parse(fullText, EffectiveNormal(), document.Attributes),
                     Source = new SourceRange(new(admonStartLine, 1), new(i + 1, lines[i].Length)),
@@ -2637,11 +2712,10 @@ internal static class BlockParser
                 }
 
                 var quoteContent = string.Join("\n", quoteLines);
-                var innerResult = BlockParser.Parse(quoteContent, document.Attributes);
                 var quoteBlock = new DelimitedBlockNode
                 {
                     BlockKind = DelimitedBlockKind.Quote,
-                    Content = null,
+                    Content = quoteContent,
                     Title = pendingBlockTitle,
                     Attribution = pendingQuoteAttribution,
                     CitationSource = pendingQuoteCitation,
@@ -2651,8 +2725,6 @@ internal static class BlockParser
                 ApplyPendingId(quoteBlock, quoteStart, line.Length);
                 if (pendingBlockRoles is not null)
                     quoteBlock.Roles = pendingBlockRoles;
-                foreach (var child in innerResult.Document.Children)
-                    quoteBlock.AddChild(child);
                 currentContainer.AddChild(quoteBlock);
 
                 pendingBlockTitle = null;
@@ -3038,6 +3110,15 @@ internal static class BlockParser
     {
         int len = TextUtility.TrimmedEndLength(line);
         return len == 2 && line[0] == '-' && line[1] == '-';
+    }
+
+    /// <summary>
+    /// Detects a <c>$$</c> stem block delimiter line (exactly two dollar signs).
+    /// </summary>
+    private static bool IsStemDelimiterLine(string line)
+    {
+        int len = TextUtility.TrimmedEndLength(line);
+        return len == 2 && line[0] == '$' && line[1] == '$';
     }
 
     private static readonly string[] SectionStyleNames =
@@ -3718,21 +3799,41 @@ internal static class BlockParser
                 {
                     table.AddChild(currentRow);
                     currentRow = new TableRowNode();
-                    // Decrement active rowspans and pre-count occupied columns for next row.
+                    // Decrement active rowspans for the next row.
+                    // Do NOT pre-count occupied columns — the while loop at
+                    // cell placement time handles skipping occupied slots.
                     colsUsed = 0;
                     for (int c = 0; c < colCount; c++)
                     {
                         if (activeRowSpans[c] > 0)
-                        {
                             activeRowSpans[c]--;
-                            if (activeRowSpans[c] > 0)
-                                colsUsed++;
-                        }
                     }
+                    // Pre-skip any leading columns occupied by rowspans.
+                    while (colsUsed < colCount && activeRowSpans[colsUsed] > 0)
+                        colsUsed++;
                 }
             }
             if (currentRow.Children.Count > 0)
-                table.AddChild(currentRow);
+            {
+                // Count columns not occupied by active rowspans — these must be
+                // filled by cells in this row.  If the row has fewer cells than
+                // available slots, it is incomplete and is dropped (matching
+                // Asciidoctor's "dropping cells from incomplete row" behavior).
+                int availableSlots = 0;
+                for (int c = 0; c < colCount; c++)
+                {
+                    if (activeRowSpans[c] <= 0)
+                        availableSlots++;
+                }
+                int actualCells = 0;
+                foreach (var c in currentRow.Children)
+                {
+                    if (c is TableCellNode tc)
+                        actualCells += tc.ColSpan;
+                }
+                if (actualCells >= availableSlots)
+                    table.AddChild(currentRow);
+            }
         }
         else
         {

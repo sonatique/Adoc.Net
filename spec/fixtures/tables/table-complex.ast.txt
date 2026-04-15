@@ -19,6 +19,3 @@ Document
         InlineText Value="Tall"
       TableCell Text="F"
         InlineText Value="F"
-    TableRow
-      TableCell Text="G"
-        InlineText Value="G"

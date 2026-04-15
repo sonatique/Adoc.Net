@@ -1,0 +1,8 @@
+= Markdown Blockquotes Test
+
+> This is a quoted paragraph.
+> It spans multiple lines.
+
+Regular paragraph after the quote.
+
+> Another quote block.

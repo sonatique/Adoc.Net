@@ -9,6 +9,11 @@ public sealed class AdmonitionNode : BlockNode
     public required string AdmonitionType { get; init; }
 
     /// <summary>
+    /// Optional block title (set by <c>.Title</c> line above the admonition).
+    /// </summary>
+    public string? Title { get; init; }
+
+    /// <summary>
     /// Raw text for inline admonitions (e.g. "NOTE: text"). Null for block admonitions.
     /// </summary>
     public string? Text { get; init; }

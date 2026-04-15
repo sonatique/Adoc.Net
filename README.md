@@ -249,6 +249,10 @@ See [docs/CLI.md](docs/CLI.md) for the full reference.
 | Rendering attributes: `:sectanchors:`, `:sectlinks:`, `:hide-uri-scheme:` | Supported |
 | Rendering attributes: `:source-language:`, `:linkattrs:`, `:webfonts:` | Supported |
 | Rendering attributes: `:nofooter:`, `:nofootnotes:`, `:notitle:`, `:last-update-label:` | Supported |
+| YAML front matter stripping (`:skip-front-matter:`, stored as `:front-matter:` attribute) | Supported |
+| CSS delivery attributes: `:stylesheet:`, `:linkcss:`, `:stylesdir:` | Supported |
+| `$$...$$` stem delimiters (block and inline, scoped to `:stem:`) | Supported |
+| `:max-include-depth:` document attribute (document-level cap, capped at API maximum) | Supported |
 
 ## Architecture
 

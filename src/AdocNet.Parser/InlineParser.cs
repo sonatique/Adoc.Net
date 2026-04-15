@@ -111,6 +111,14 @@ internal static class InlineParser
                     i += 2;
                     continue;
                 }
+                // \$$ — escape stem delimiter
+                if (next == '$' && i + 2 < endIndex && text[i + 2] == '$'
+                    && linkAttributes?.ContainsKey("stem") == true)
+                {
+                    plain.Append("$$");
+                    i += 3;
+                    continue;
+                }
                 // \http:// or \https:// — suppress URL autolink
                 if (doMacros)
                 {
@@ -128,6 +136,24 @@ internal static class InlineParser
                         continue;
                     }
                 }
+            }
+
+            // ── $$ inline stem delimiter (only when :stem: is set) ────────
+            if (c == '$' && i + 1 < endIndex && text[i + 1] == '$'
+                && linkAttributes?.ContainsKey("stem") == true)
+            {
+                // Look for closing $$
+                int stemStart = i + 2;
+                int stemClose = text.IndexOf("$$", stemStart, endIndex - stemStart, StringComparison.Ordinal);
+                if (stemClose > stemStart || (stemClose == stemStart)) // allow empty $$$$
+                {
+                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                    var content = text[stemStart..stemClose];
+                    nodes.Add(new StemInlineNode { Content = content, StemType = "latexmath" });
+                    i = stemClose + 2;
+                    continue;
+                }
+                // No closing $$ found — fall through to plain text
             }
 
             // ── Cross-reference: <<id>> or <<id,label>> ────────────────────
@@ -356,10 +382,14 @@ internal static class InlineParser
                         if (closeBracket > i + 1)
                         {
                             var label = text[(i + 1)..closeBracket];
+                            string? window = null;
                             // Strip trailing ^ (opens in new window indicator)
                             if (label.EndsWith('^'))
+                            {
                                 label = label[..^1];
-                            nodes.Add(new InlineLinkMacroNode { Url = url, Label = label });
+                                window = "_blank";
+                            }
+                            nodes.Add(new InlineLinkMacroNode { Url = url, Label = label, Window = window });
                             i = closeBracket + 1;
                         }
                         else if (closeBracket == i + 1)
@@ -475,9 +505,10 @@ internal static class InlineParser
             }
 
             // ── Constrained strong: *content* ───────────────────────────────
-            if (doFormatting && c == '*' && !activeMarkers.HasFlag(ActiveMarkers.Strong))
+            if (doFormatting && c == '*' && !activeMarkers.HasFlag(ActiveMarkers.Strong)
+                && IsConstrainedOpenValid(text, i, endIndex))
             {
-                int close = IndexOf(text, '*', i + 1, endIndex);
+                int close = FindConstrainedClose(text, '*', i + 1, endIndex);
                 if (close > i + 1)
                 {
                     FlushPlain(nodes, plain, doReplacements, doPostReplacements);
@@ -508,9 +539,10 @@ internal static class InlineParser
 
             // ── Constrained emphasis: _content_ ─────────────────────────────
             if (doFormatting && c == '_' && !activeMarkers.HasFlag(ActiveMarkers.Emphasis)
-                && !activeMarkers.HasFlag(ActiveMarkers.Monospace))
+                && !activeMarkers.HasFlag(ActiveMarkers.Monospace)
+                && IsConstrainedOpenValid(text, i, endIndex))
             {
-                int close = IndexOf(text, '_', i + 1, endIndex);
+                int close = FindConstrainedClose(text, '_', i + 1, endIndex);
                 if (close > i + 1)
                 {
                     FlushPlain(nodes, plain, doReplacements, doPostReplacements);
@@ -580,9 +612,10 @@ internal static class InlineParser
             }
 
             // ── Monospace: `content` ──────────────────────────────────────────
-            if (doFormatting && c == '`' && !activeMarkers.HasFlag(ActiveMarkers.Monospace))
+            if (doFormatting && c == '`' && !activeMarkers.HasFlag(ActiveMarkers.Monospace)
+                && IsConstrainedOpenValid(text, i, endIndex))
             {
-                int close = IndexOf(text, '`', i + 1, endIndex);
+                int close = FindConstrainedClose(text, '`', i + 1, endIndex);
                 if (close > i + 1)
                 {
                     FlushPlain(nodes, plain, doReplacements, doPostReplacements);
@@ -839,6 +872,57 @@ internal static class InlineParser
     }
 
     /// <summary>
+    /// Returns true if <paramref name="c"/> is a word character (letter, digit, or underscore).
+    /// Constrained formatting markers cannot open when preceded by a word char,
+    /// and cannot close when followed by a word char.
+    /// </summary>
+    private static bool IsWordChar(char c) => char.IsLetterOrDigit(c) || c == '_';
+
+    /// <summary>
+    /// Checks whether position <paramref name="pos"/> is a valid location for a
+    /// constrained opening marker. The marker must not be preceded by a word character,
+    /// and the character immediately after must not be whitespace.
+    /// </summary>
+    private static bool IsConstrainedOpenValid(string text, int pos, int endIndex)
+    {
+        if (pos > 0 && IsWordChar(text[pos - 1]))
+            return false;
+        if (pos + 1 >= endIndex || char.IsWhiteSpace(text[pos + 1]))
+            return false;
+        return true;
+    }
+
+    /// <summary>
+    /// Checks whether position <paramref name="pos"/> is a valid location for a
+    /// constrained closing marker. The character before the marker must not be whitespace,
+    /// and the marker must not be followed by a word character.
+    /// </summary>
+    private static bool IsConstrainedCloseValid(string text, int pos, int endIndex)
+    {
+        if (pos > 0 && char.IsWhiteSpace(text[pos - 1]))
+            return false;
+        if (pos + 1 < endIndex && IsWordChar(text[pos + 1]))
+            return false;
+        return true;
+    }
+
+    /// <summary>
+    /// Finds the first valid constrained closing marker for <paramref name="ch"/>
+    /// in the range [<paramref name="startIndex"/>, <paramref name="endIndex"/>).
+    /// A valid closing position must satisfy <see cref="IsConstrainedCloseValid"/>.
+    /// Returns -1 if no valid closing marker is found.
+    /// </summary>
+    private static int FindConstrainedClose(string text, char ch, int startIndex, int endIndex)
+    {
+        for (int i = startIndex; i < endIndex; i++)
+        {
+            if (text[i] == ch && IsConstrainedCloseValid(text, i, endIndex))
+                return i;
+        }
+        return -1;
+    }
+
+    /// <summary>
     /// Expands <c>{name}</c> attribute references in <paramref name="text"/>
     /// using the provided <paramref name="attributes"/> dictionary.
     /// Unknown references are left as-is.
@@ -1051,7 +1135,13 @@ internal static class InlineParser
             else
             {
                 var label = bracketContent.Length > 0 ? bracketContent : target;
-                node = new InlineLinkMacroNode { Url = target, Label = label };
+                string? window = null;
+                if (label.EndsWith('^'))
+                {
+                    label = label[..^1];
+                    window = "_blank";
+                }
+                node = new InlineLinkMacroNode { Url = target, Label = label, Window = window };
             }
         }
         else // image
@@ -1180,7 +1270,7 @@ internal static class InlineParser
         {
             if (text[j] == '[') { openBracket = j; break; }
             char ch = text[j];
-            if (!(char.IsLetterOrDigit(ch) || ch == '/' || ch == '.' || ch == '-' || ch == '_' || ch == '#'))
+            if (!(char.IsLetterOrDigit(ch) || ch == '/' || ch == '.' || ch == '-' || ch == '_' || ch == '#' || ch == ':'))
                 return false;
         }
         if (openBracket < 0 || openBracket == afterColon) return false;

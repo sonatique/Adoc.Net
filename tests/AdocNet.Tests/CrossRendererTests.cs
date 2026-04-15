@@ -108,7 +108,7 @@ public class CrossRendererTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(html, Does.Contain("<h1>"), "Document title");
+            // Title suppressed in embedded mode — assert <h2> for first section instead.
             Assert.That(html, Does.Contain("<h2"), "Section headings");
             Assert.That(html, Does.Contain("<strong>"), "Bold text");
             Assert.That(html, Does.Contain("<em>"), "Italic text");

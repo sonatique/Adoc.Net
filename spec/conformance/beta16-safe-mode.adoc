@@ -1,0 +1,11 @@
+= Safe Mode Test
+
+This document tests basic rendering without safe mode restrictions.
+
+== First Section
+
+Content in the first section.
+
+* Item one
+* Item two
+* Item three

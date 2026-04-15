@@ -2,8 +2,5 @@ Document
   Paragraph
     InlineText Value="This has "
     InlineStrong
-      InlineText Value="bold "
-    InlineText Value="not nested"
-    InlineStrong
-      InlineText Value=" bold"
-    InlineText Value=" text."
+      InlineText Value="bold *not nested"
+    InlineText Value=" bold* text."

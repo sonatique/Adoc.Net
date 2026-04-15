@@ -1,0 +1,12 @@
+= Collapsible Block Test
+
+A regular paragraph before the collapsible block.
+
+[%collapsible]
+====
+This content is inside a collapsible block.
+
+It should be rendered with HTML5 details/summary elements.
+====
+
+A paragraph after the collapsible block.

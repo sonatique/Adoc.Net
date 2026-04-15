@@ -1,0 +1,12 @@
+= Discrete Heading Test
+
+== Regular Section
+
+Content.
+
+[discrete]
+== Discrete Heading
+
+This heading does not create a section.
+
+More paragraph text.

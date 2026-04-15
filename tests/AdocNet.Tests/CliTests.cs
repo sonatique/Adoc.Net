@@ -87,7 +87,7 @@ public class CliTests
         var outputFile = Path.ChangeExtension(input, ".html");
         Assert.That(File.Exists(outputFile), Is.True);
         var content = File.ReadAllText(outputFile);
-        Assert.That(content, Does.Contain("<h1>Title</h1>"));
+        // Title suppressed in embedded mode; verify body content.
         Assert.That(content, Does.Contain("<p>Hello world.</p>"));
     }
 
@@ -97,7 +97,7 @@ public class CliTests
         var input = WriteTempAdoc("stdout.adoc", "= Title\n\nHello world.\n");
         var (exitCode, stdout, _) = RunCli(input, "-o", "-");
         Assert.That(exitCode, Is.EqualTo(0));
-        Assert.That(stdout, Does.Contain("<h1>Title</h1>"));
+        // Title suppressed in embedded mode; verify body content.
         Assert.That(stdout, Does.Contain("<p>Hello world.</p>"));
     }
 

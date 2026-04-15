@@ -1,0 +1,7 @@
+= Data URI Fallback Test
+
+A paragraph with an inline image reference.
+
+image::missing.png[Missing Image]
+
+Regular text follows.

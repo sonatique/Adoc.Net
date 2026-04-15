@@ -24,6 +24,40 @@ public sealed partial class HtmlRenderer
         var sectionNumberingEnabled = section.SectnumsEnabled ?? secCtx.Enabled;
         var prefix = section.IsDiscrete || !sectionNumberingEnabled ? null : secCtx.Advance(section.Level);
 
+        // Discrete headings: bare heading element, no wrapper div.
+        // class="discrete" marks the heading as a floating title.
+        if (section.IsDiscrete)
+        {
+            sb.Append('<');
+            sb.Append(tag);
+            if (section.Id is not null)
+            {
+                sb.Append(" id=\"");
+                EscapeTo(sb, section.Id);
+                sb.Append('"');
+            }
+            sb.Append(" class=\"discrete\"");
+            sb.Append('>');
+            RenderInlines(sb, section.TitleInlines, section.Title, footnotes, state);
+            sb.Append("</");
+            sb.Append(tag);
+            sb.Append(">\n");
+            RenderChildBlocks(sb, section.Children, useIconFont, footnotes, secCtx, state);
+            return;
+        }
+
+        // Non-discrete sections: <div class="sectN [roles]"> wrapper.
+        // Roles go on the wrapper div (matching Asciidoctor behavior).
+        sb.Append("<div class=\"sect");
+        sb.Append(section.Level);
+        for (int i = 0; i < section.Roles.Count; i++)
+        {
+            sb.Append(' ');
+            EscapeTo(sb, section.Roles[i]);
+        }
+        sb.Append("\">\n");
+
+        // Heading tag with id
         sb.Append('<');
         sb.Append(tag);
         if (section.Id is not null)
@@ -32,9 +66,8 @@ public sealed partial class HtmlRenderer
             EscapeTo(sb, section.Id);
             sb.Append('"');
         }
-        // Asciidoctor renders section roles on the wrapper <div class="sect1 role">,
-        // not on the heading tag itself. Since we don't emit wrapper divs, omit role classes.
         sb.Append('>');
+
         // :sectanchors: — anchor icon before heading content
         if (section.Id is not null && state.DocumentAttributes.ContainsKey("sectanchors"))
         {
@@ -80,7 +113,20 @@ public sealed partial class HtmlRenderer
         sb.Append(tag);
         sb.Append(">\n");
 
-        RenderChildBlocks(sb, section.Children, useIconFont, footnotes, secCtx, state);
+        // Level-1 sections (sect1) wrap children in <div class="sectionbody">.
+        // Level 2+ sections render children directly inside the sectN div.
+        if (section.Level == 1)
+        {
+            sb.Append("<div class=\"sectionbody\">\n");
+            RenderChildBlocks(sb, section.Children, useIconFont, footnotes, secCtx, state);
+            sb.Append("</div>\n");
+        }
+        else
+        {
+            RenderChildBlocks(sb, section.Children, useIconFont, footnotes, secCtx, state);
+        }
+
+        sb.Append("</div>\n");
     }
 
     private void RenderToc(StringBuilder sb, TocNode toc, SectionNumberingContext secCtx, HtmlRenderState state)

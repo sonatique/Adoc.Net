@@ -10,26 +10,21 @@ public sealed partial class HtmlRenderer
 {
     private void RenderParagraph(StringBuilder sb, ParagraphNode paragraph, FootnoteState footnotes, HtmlRenderState state)
     {
-        // Asciidoctor emits roles and id on a wrapper <div class="paragraph ROLE" id="ID">
-        // and keeps the inner <p> bare. We mirror that structure.
-        bool hasWrapper = paragraph.Roles.Count > 0 || paragraph.Id is not null;
-        if (hasWrapper)
+        // Asciidoctor always emits a <div class="paragraph"> wrapper around every paragraph.
+        sb.Append("<div class=\"paragraph");
+        for (int i = 0; i < paragraph.Roles.Count; i++)
         {
-            sb.Append("<div class=\"paragraph");
-            for (int i = 0; i < paragraph.Roles.Count; i++)
-            {
-                sb.Append(' ');
-                EscapeTo(sb, paragraph.Roles[i]);
-            }
-            sb.Append('"');
-            if (paragraph.Id is not null)
-            {
-                sb.Append(" id=\"");
-                EscapeTo(sb, paragraph.Id);
-                sb.Append('"');
-            }
-            sb.Append(">\n");
+            sb.Append(' ');
+            EscapeTo(sb, paragraph.Roles[i]);
         }
+        sb.Append('"');
+        if (paragraph.Id is not null)
+        {
+            sb.Append(" id=\"");
+            EscapeTo(sb, paragraph.Id);
+            sb.Append('"');
+        }
+        sb.Append(">\n");
         sb.Append("<p>");
 
         if (paragraph.HasHardbreaks)
@@ -51,8 +46,7 @@ public sealed partial class HtmlRenderer
             RenderInlines(sb, paragraph.Inlines, paragraph.Text, footnotes, state);
         }
         sb.Append("</p>\n");
-        if (hasWrapper)
-            sb.Append("</div>\n");
+        sb.Append("</div>\n");
     }
 
     private void RenderDelimitedBlock(StringBuilder sb, DelimitedBlockNode block, FootnoteState footnotes, SectionNumberingContext secCtx, HtmlRenderState state)
@@ -62,7 +56,10 @@ public sealed partial class HtmlRenderer
         {
             sb.Append("<details>\n<summary class=\"title\">");
             if (block.Title is not null)
-                EscapeTo(sb, block.Title);
+            {
+                var sumTitleInlines = InlineParser.Parse(block.Title, SubstitutionKind.Normal, state.DocumentAttributes);
+                RenderInlines(sb, sumTitleInlines, block.Title, footnotes, state);
+            }
             else
                 sb.Append("Details");
             sb.Append("</summary>\n<div class=\"content\">\n");
@@ -72,7 +69,28 @@ public sealed partial class HtmlRenderer
             return;
         }
 
-        // Passthrough blocks emit raw content — no title rendering.
+        // Verbatim blocks (Listing, Source, Literal) use an outer wrapper div that must
+        // enclose both the title and the inner <div class="content"> wrapper.
+        // Asciidoctor: <div class="listingblock"><div class="title">...</div><div class="content"><pre>...</pre></div></div>
+        bool isVerbatim = block.BlockKind is DelimitedBlockKind.Listing
+            or DelimitedBlockKind.Source
+            or DelimitedBlockKind.Literal;
+
+        if (isVerbatim)
+        {
+            var outerClass = block.BlockKind == DelimitedBlockKind.Literal ? "literalblock" : "listingblock";
+            sb.Append("<div");
+            AppendRoleClasses(sb, block, outerClass);
+            if (block.Id is not null)
+            {
+                sb.Append(" id=\"");
+                EscapeTo(sb, block.Id);
+                sb.Append('"');
+            }
+            sb.Append(">\n");
+        }
+
+        // Title (inside the outer div, but before the content wrapper).
         if (block.Title is not null && block.BlockKind != DelimitedBlockKind.Passthrough)
         {
             // Example blocks use a numbered caption ("Example N. Title")
@@ -81,18 +99,27 @@ public sealed partial class HtmlRenderer
                 sb.Append("<div class=\"title\">Example ");
                 sb.Append(state.ExampleCounter++);
                 sb.Append(". ");
-                EscapeTo(sb, block.Title);
+                var exTitleInlines = InlineParser.Parse(block.Title, SubstitutionKind.Normal, state.DocumentAttributes);
+                RenderInlines(sb, exTitleInlines, block.Title, footnotes, state);
                 sb.Append("</div>\n");
             }
             else
             {
                 sb.Append("<div class=\"title\">");
-                EscapeTo(sb, block.Title);
+                var blkTitleInlines = InlineParser.Parse(block.Title, SubstitutionKind.Normal, state.DocumentAttributes);
+                RenderInlines(sb, blkTitleInlines, block.Title, footnotes, state);
                 sb.Append("</div>\n");
             }
         }
 
         RenderDelimitedBlockContent(sb, block, footnotes, secCtx, state);
+
+        if (isVerbatim)
+        {
+            sb.Append("</div>\n");
+            // Callout list is a sibling of the outer block div (Asciidoctor behavior).
+            RenderCalloutList(sb, block, footnotes, state);
+        }
     }
 
     private void RenderDelimitedBlockContent(StringBuilder sb, DelimitedBlockNode block, FootnoteState footnotes, SectionNumberingContext secCtx, HtmlRenderState state)
@@ -101,36 +128,24 @@ public sealed partial class HtmlRenderer
         {
             case DelimitedBlockKind.Literal:
             {
-                bool hasLiteralWrapper = block.Roles.Count > 0;
-                if (hasLiteralWrapper)
-                {
-                    sb.Append("<div");
-                    AppendRoleClasses(sb, block, "literalblock");
-                    sb.Append(">\n");
-                }
+                // Outer div emitted by RenderDelimitedBlock(); emit only the inner content wrapper.
+                sb.Append("<div class=\"content\">\n");
                 sb.Append("<pre>");
                 RenderVerbatimContent(sb, block, state);
                 sb.Append("</pre>\n");
-                if (hasLiteralWrapper)
-                    sb.Append("</div>\n");
+                sb.Append("</div>\n");
                 break;
             }
 
             case DelimitedBlockKind.Listing:
             {
-                bool hasListingWrapper = block.Roles.Count > 0;
-                if (hasListingWrapper)
-                {
-                    sb.Append("<div");
-                    AppendRoleClasses(sb, block, "listingblock");
-                    sb.Append(">\n");
-                }
+                // Outer div emitted by RenderDelimitedBlock(); emit only the inner content wrapper.
+                sb.Append("<div class=\"content\">\n");
                 sb.Append("<pre>");
                 RenderVerbatimContent(sb, block, state);
                 sb.Append("</pre>\n");
-                RenderCalloutList(sb, block, footnotes, state);
-                if (hasListingWrapper)
-                    sb.Append("</div>\n");
+                sb.Append("</div>\n");
+                // Note: callout list is rendered by RenderDelimitedBlock() after the outer </div>.
                 break;
             }
 
@@ -144,6 +159,9 @@ public sealed partial class HtmlRenderer
                 // Asciidoctor adds highlightjs/hljs classes when source-highlighter is set.
                 bool useHighlightJs = state.DocumentAttributes.TryGetValue("source-highlighter", out var highlighter)
                     && highlighter is "highlight.js" or "highlightjs";
+
+                // Outer div emitted by RenderDelimitedBlock(); emit only the inner content wrapper.
+                sb.Append("<div class=\"content\">\n");
                 sb.Append(useHighlightJs ? "<pre class=\"highlight highlightjs\"><code" : "<pre class=\"highlight\"><code");
                 if (effectiveLang is not null)
                 {
@@ -168,7 +186,8 @@ public sealed partial class HtmlRenderer
                 }
 
                 sb.Append("</code></pre>\n");
-                RenderCalloutList(sb, block, footnotes, state);
+                sb.Append("</div>\n");
+                // Note: callout list is rendered by RenderDelimitedBlock() after the outer </div>.
                 break;
             }
 
@@ -185,8 +204,18 @@ public sealed partial class HtmlRenderer
                 sb.Append("<blockquote");
                 AppendRoleClasses(sb, block);
                 sb.Append(">\n");
-                foreach (var child in block.Children)
-                    RenderBlock(sb, child, false, footnotes, secCtx, state);
+                if (block.Content is not null && block.Children.Count == 0)
+                {
+                    // Paragraph-style quote: render content as inline text (no <p> wrapper).
+                    var quoteInlines = InlineParser.Parse(block.Content, block.Substitutions ?? SubstitutionKind.Normal, state.DocumentAttributes);
+                    RenderInlines(sb, quoteInlines, block.Content, footnotes, state);
+                    sb.Append('\n');
+                }
+                else
+                {
+                    foreach (var child in block.Children)
+                        RenderBlock(sb, child, false, footnotes, secCtx, state);
+                }
                 sb.Append("</blockquote>\n");
                 if (block.Attribution is not null)
                 {
@@ -346,6 +375,13 @@ public sealed partial class HtmlRenderer
 
         // Content cell
         sb.Append("<td class=\"content\">\n");
+        if (admonition.Title is not null)
+        {
+            sb.Append("<div class=\"title\">");
+            var titleInlines = InlineParser.Parse(admonition.Title, SubstitutionKind.Normal, state.DocumentAttributes);
+            RenderInlines(sb, titleInlines, admonition.Title, footnotes, state);
+            sb.Append("</div>\n");
+        }
         if (admonition.Children.Count > 0)
         {
             // Block admonition -- render children.

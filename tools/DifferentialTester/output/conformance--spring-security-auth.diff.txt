@@ -1,10 +1,8 @@
 # Diff: spring-security-auth.adoc
-# Similarity: 95.0%
+# Similarity: 96.5%
 # --- Asciidoctor (expected)
 # +++ AdocNet (actual)
 
-- <h1 id="servlet-authentication-unpwd">Username/Password Authentication</h1>
-+ <h1>Username/Password Authentication</h1>
   <p>One of the most common ways to authenticate a user is by validating a username and password.
   Spring Security provides comprehensive support for authenticating with a username and password.</p>
   <p>You can configure username and password authentication using the following:</p>
@@ -27,34 +25,11 @@
 - </td>
 - </tr>
 - </table>
-- <p>The preceding configuration automatically registers an <a href="servlet/authentication/passwords/in-memory.html">in-memory <code>UserDetailsService</code></a> with the <code>SecurityFilterChain</code>, registers the <a href="servlet/authentication/passwords/dao-authentication-provider.html"><code>DaoAuthenticationProvider</code></a> with the default <a href="servlet/authentication/architecture.html#servlet-authentication-authenticationmanager"><code>AuthenticationManager</code></a>, and enables <a href="servlet/authentication/passwords/form.html">Form Login</a> and <a href="servlet/authentication/passwords/basic.html">HTTP Basic</a> authentication.</p>
 + <p><code>User#withDefaultPasswordEncoder</code> is considered unsafe for production and is only intended for sample applications. See javadoc:org.springframework.security.core.userdetails.User<mark>withDefaultPasswordEncoder()[User</mark>withDefaultPasswordEncoder] for more details.</p>
-+ <p>The preceding configuration automatically registers an <a href="servlet/authentication/passwords/in-memory.html">in-memory `UserDetailsService`</a> with the <code>SecurityFilterChain</code>, registers the <a href="servlet/authentication/passwords/dao-authentication-provider.html">`DaoAuthenticationProvider`</a> with the default <a href="servlet/authentication/architecture.html#servlet-authentication-authenticationmanager">`AuthenticationManager`</a>, and enables <a href="servlet/authentication/passwords/form.html">Form Login</a> and <a href="servlet/authentication/passwords/basic.html">HTTP Basic</a> authentication.</p>
+  <p>The preceding configuration automatically registers an <a href="servlet/authentication/passwords/in-memory.html">in-memory <code>UserDetailsService</code></a> with the <code>SecurityFilterChain</code>, registers the <a href="servlet/authentication/passwords/dao-authentication-provider.html"><code>DaoAuthenticationProvider</code></a> with the default <a href="servlet/authentication/architecture.html#servlet-authentication-authenticationmanager"><code>AuthenticationManager</code></a>, and enables <a href="servlet/authentication/passwords/form.html">Form Login</a> and <a href="servlet/authentication/passwords/basic.html">HTTP Basic</a> authentication.</p>
   <p>To learn more about username/password authentication, consider the following use cases:</p>
   <ul>
-  <li>
   ...
-  <p>I want to <a href="servlet/authentication/passwords/basic.html">learn how HTTP Basic authentication works</a></p>
-  </li>
-  <li>
-- <p>I want to <a href="servlet/authentication/passwords/dao-authentication-provider.html">learn how <code>DaoAuthenticationProvider</code> works</a></p>
-+ <p>I want to <a href="servlet/authentication/passwords/dao-authentication-provider.html">learn how `DaoAuthenticationProvider` works</a></p>
-  </li>
-  <li>
-  <p>I want to <a href="servlet/authentication/passwords/in-memory.html">manage users in memory</a></p>
-  ...
-  <p>I want to <a href="servlet/authentication/passwords/ldap.html#servlet-authentication-ldap-authentication">manage users in LDAP</a></p>
-  </li>
-  <li>
-- <p>I want to <a href="#publish-authentication-manager-bean">publish an <code>AuthenticationManager</code> bean</a> for custom authentication</p>
-+ <p>I want to <a href="#publish-authentication-manager-bean">publish an `AuthenticationManager` bean</a> for custom authentication</p>
-  </li>
-  <li>
-- <p>I want to <a href="#customize-global-authentication-manager">customize the global <code>AuthenticationManager</code></a></p>
-+ <p>I want to <a href="#customize-global-authentication-manager">customize the global `AuthenticationManager`</a></p>
-  </li>
-  </ul>
-  <h2 id="publish-authentication-manager-bean">Publish an <code>AuthenticationManager</code> bean</h2>
   <p>A fairly common requirement is publishing an <code>AuthenticationManager</code> bean to allow for custom authentication, such as in a <code>@Service</code> or Spring MVC <code>@Controller</code>.
   For example, you may want to authenticate users via a REST API instead of using <a href="servlet/authentication/passwords/form.html">Form Login</a>.</p>
   <p>You can publish such an <code>AuthenticationManager</code> for custom authentication scenarios using the following configuration:</p>
@@ -72,15 +47,6 @@
   <dl>
   <dt class="hdlist1">Java</dt>
   <dd>
-  ...
-  </td>
-  <td class="content">
-  <p>In this example, it is your responsibility to save the authenticated user in the <code>SecurityContextRepository</code> if needed.
-- For example, if using the <code>HttpSession</code> to persist the <code>SecurityContext</code> between requests, you can use <a href="servlet/authentication/persistence.html#httpsecuritycontextrepository"><code>HttpSessionSecurityContextRepository</code></a>.</p>
-+ For example, if using the <code>HttpSession</code> to persist the <code>SecurityContext</code> between requests, you can use <a href="servlet/authentication/persistence.html#httpsecuritycontextrepository">`HttpSessionSecurityContextRepository`</a>.</p>
-  </td>
-  </tr>
-  </table>
   ...
   For example, you may need to simply disable <a href="servlet/authentication/architecture.html#servlet-authentication-providermanager-erasing-credentials">credential erasure</a> for cached users.</p>
   <p>To do this, you can take advantage of the fact that the <code>AuthenticationManagerBuilder</code> used to build Spring Security's global <code>AuthenticationManager</code> is published as a bean.
