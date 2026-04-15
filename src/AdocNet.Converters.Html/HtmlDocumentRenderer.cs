@@ -146,6 +146,17 @@ public sealed partial class HtmlRenderer
                 map.TryAdd(anchor.Id, anchor.Reftext);
             CollectTitles(child, map);
         }
+
+        // Also walk inline content (e.g., ParagraphNode.Inlines, SectionNode.TitleInlines)
+        // where [[id,reftext]] and anchor:id[reftext] nodes live.
+        if (node is ParagraphNode para)
+        {
+            foreach (var inline in para.Inlines)
+            {
+                if (inline is InlineAnchorNode inlineAnchor && inlineAnchor.Reftext is not null)
+                    map.TryAdd(inlineAnchor.Id, inlineAnchor.Reftext);
+            }
+        }
     }
 
     /// <summary>

@@ -70,31 +70,69 @@ public sealed partial class HtmlRenderer
 
     private static void RenderVideo(StringBuilder sb, VideoNode video)
     {
-        sb.Append("<div class=\"videoblock\">\n<div class=\"content\">\n<video src=\"");
-        EscapeTo(sb, video.Target);
-        sb.Append('"');
-        if (video.Width is not null)
+        sb.Append("<div class=\"videoblock\">\n<div class=\"content\">\n");
+
+        if (video.Provider is "youtube" or "vimeo")
         {
-            sb.Append(" width=\"");
-            EscapeTo(sb, video.Width);
-            sb.Append('"');
+            // Embed via iframe (matching Asciidoctor output)
+            sb.Append("<iframe");
+            if (video.Width is not null)
+            {
+                sb.Append(" width=\"");
+                EscapeTo(sb, video.Width);
+                sb.Append('"');
+            }
+            if (video.Height is not null)
+            {
+                sb.Append(" height=\"");
+                EscapeTo(sb, video.Height);
+                sb.Append('"');
+            }
+            sb.Append(" src=\"");
+            if (video.Provider == "youtube")
+            {
+                sb.Append("https://www.youtube.com/embed/");
+                EscapeTo(sb, video.Target);
+                sb.Append("?rel=0");
+            }
+            else
+            {
+                sb.Append("https://player.vimeo.com/video/");
+                EscapeTo(sb, video.Target);
+            }
+            sb.Append("\" frameborder=\"0\" allowfullscreen></iframe>\n");
         }
-        if (video.Height is not null)
+        else
         {
-            sb.Append(" height=\"");
-            EscapeTo(sb, video.Height);
+            // Local file: <video> element
+            sb.Append("<video src=\"");
+            EscapeTo(sb, video.Target);
             sb.Append('"');
+            if (video.Width is not null)
+            {
+                sb.Append(" width=\"");
+                EscapeTo(sb, video.Width);
+                sb.Append('"');
+            }
+            if (video.Height is not null)
+            {
+                sb.Append(" height=\"");
+                EscapeTo(sb, video.Height);
+                sb.Append('"');
+            }
+            if (video.Poster is not null)
+            {
+                sb.Append(" poster=\"");
+                EscapeTo(sb, video.Poster);
+                sb.Append('"');
+            }
+            if (video.Autoplay) sb.Append(" autoplay");
+            if (video.Loop) sb.Append(" loop");
+            if (video.Controls) sb.Append(" controls");
+            sb.Append(">\nYour browser does not support the video tag.\n</video>\n");
         }
-        if (video.Poster is not null)
-        {
-            sb.Append(" poster=\"");
-            EscapeTo(sb, video.Poster);
-            sb.Append('"');
-        }
-        if (video.Autoplay) sb.Append(" autoplay");
-        if (video.Loop) sb.Append(" loop");
-        if (video.Controls) sb.Append(" controls");
-        sb.Append(">\nYour browser does not support the video tag.\n</video>\n</div>\n</div>\n");
+
+        sb.Append("</div>\n</div>\n");
     }
 
     private static void RenderAudio(StringBuilder sb, AudioNode audio)
