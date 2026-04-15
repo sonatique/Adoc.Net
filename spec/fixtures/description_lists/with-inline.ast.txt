@@ -1,6 +1,6 @@
 Document
   DescriptionList
-    DescriptionItem Term="*bold term*" Description="A _description_ with emphasis."
+    DescriptionItem Terms="*bold term*" Description="A _description_ with emphasis."
       InlineStrong
         InlineText Value="bold term"
       InlineText Value="A "

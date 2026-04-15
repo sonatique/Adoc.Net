@@ -22,9 +22,9 @@ public class DescriptionListTests
         var item2 = (DescriptionItemNode)dl.Children[1];
         Assert.Multiple(() =>
         {
-            Assert.That(item1.Term, Is.EqualTo("CPU"));
+            Assert.That(item1.Terms[0], Is.EqualTo("CPU"));
             Assert.That(item1.Description, Is.EqualTo("The brain."));
-            Assert.That(item2.Term, Is.EqualTo("RAM"));
+            Assert.That(item2.Terms[0], Is.EqualTo("RAM"));
             Assert.That(item2.Description, Is.EqualTo("Temporary memory."));
         });
     }

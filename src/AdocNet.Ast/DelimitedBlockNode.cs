@@ -42,6 +42,12 @@ public sealed class DelimitedBlockNode : BlockNode
     /// <summary>Callout explanations associated with source/listing blocks. Null when no callouts present.</summary>
     public IReadOnlyList<CalloutEntry>? Callouts { get; init; }
 
+    /// <summary>
+    /// Line highlight specification from <c>[highlight="1,3,5-7"]</c> on source blocks.
+    /// Raw string — parsed into line numbers by the renderer.
+    /// </summary>
+    public string? Highlight { get; init; }
+
     public override IEnumerable<KeyValuePair<string, string>> GetProperties()
     {
         yield return new("BlockKind", BlockKind.ToString());
@@ -52,6 +58,7 @@ public sealed class DelimitedBlockNode : BlockNode
         if (Attribution is not null)    yield return new("Attribution", Attribution);
         if (CitationSource is not null) yield return new("CitationSource", CitationSource);
         if (Content is not null)        yield return new("Content", Content);
+        if (Highlight is not null)      yield return new("Highlight", Highlight);
         if (Callouts is not null)
         {
             foreach (var c in Callouts)

@@ -653,8 +653,8 @@ internal static class InlineParser
                 }
             }
 
-            // ── Custom span roles: [.role]#text#, [.role]*text*, [.role]_text_, [.role]`text` ───────
-            if (doFormatting && c == '[' && i + 2 < endIndex && text[i + 1] == '.')
+            // ── Custom span roles/id: [.role]#text#, [#id]#text#, [#id.role]#text#, [.role]*text*, etc. ───
+            if (doFormatting && c == '[' && i + 2 < endIndex && (text[i + 1] == '.' || text[i + 1] == '#'))
             {
                 int closeBracket = text.IndexOf(']', i + 2);
                 if (closeBracket > i + 2 && closeBracket + 1 < endIndex)
@@ -662,17 +662,37 @@ internal static class InlineParser
                     char marker = text[closeBracket + 1];
                     if (marker == '#' && !activeMarkers.HasFlag(ActiveMarkers.Highlight))
                     {
-                        // Parse roles from [.role1.role2]
-                        var rolesStr = text[(i + 1)..closeBracket];
-                        var roles = rolesStr.Split('.', StringSplitOptions.RemoveEmptyEntries).ToList();
-                        if (roles.Count > 0)
+                        // Parse id and roles from [#id.role1.role2] or [.role1.role2]
+                        var attrStr = text[(i + 1)..closeBracket];
+                        string? spanId = null;
+                        List<string> roles;
+                        if (attrStr.StartsWith("#"))
+                        {
+                            // Extract id: everything from # to the first . or end
+                            int dotPos = attrStr.IndexOf('.', 1);
+                            if (dotPos > 0)
+                            {
+                                spanId = attrStr[1..dotPos];
+                                roles = attrStr[dotPos..].Split('.', StringSplitOptions.RemoveEmptyEntries).ToList();
+                            }
+                            else
+                            {
+                                spanId = attrStr[1..];
+                                roles = new List<string>();
+                            }
+                        }
+                        else
+                        {
+                            roles = attrStr.Split('.', StringSplitOptions.RemoveEmptyEntries).ToList();
+                        }
+                        if (roles.Count > 0 || spanId is not null)
                         {
                             int contentStart;
                             int close;
                             bool isUnconstrained = closeBracket + 2 < endIndex && text[closeBracket + 2] == '#';
                             if (isUnconstrained)
                             {
-                                // [.role]##content##
+                                // [#id.role]##content##
                                 contentStart = closeBracket + 3;
                                 close = text.IndexOf("##", contentStart, StringComparison.Ordinal);
                                 if (close > contentStart && close + 2 <= endIndex)
@@ -680,14 +700,14 @@ internal static class InlineParser
                                     FlushPlain(nodes, plain, doReplacements, doPostReplacements);
                                     var children = ParseInlines(text, contentStart, close,
                                         activeMarkers | ActiveMarkers.Highlight, doFormatting, doMacros, doReplacements, doPostReplacements);
-                                    nodes.Add(new HighlightInlineNode { Children = children, Roles = roles });
+                                    nodes.Add(new HighlightInlineNode { Children = children, Roles = roles, Id = spanId });
                                     i = close + 2;
                                     continue;
                                 }
                             }
                             else
                             {
-                                // [.role]#content#
+                                // [#id.role]#content#
                                 contentStart = closeBracket + 2;
                                 close = IndexOf(text, '#', contentStart, endIndex);
                                 if (close > contentStart)
@@ -695,7 +715,7 @@ internal static class InlineParser
                                     FlushPlain(nodes, plain, doReplacements, doPostReplacements);
                                     var children = ParseInlines(text, contentStart, close,
                                         activeMarkers | ActiveMarkers.Highlight, doFormatting, doMacros, doReplacements, doPostReplacements);
-                                    nodes.Add(new HighlightInlineNode { Children = children, Roles = roles });
+                                    nodes.Add(new HighlightInlineNode { Children = children, Roles = roles, Id = spanId });
                                     i = close + 1;
                                     continue;
                                 }
@@ -1146,7 +1166,14 @@ internal static class InlineParser
         }
         else // image
         {
-            node = new InlineImageNode { Target = target, Alt = BlockParser.ParseImageAlt(bracketContent) };
+            var imgAttrs = BlockParser.ParseImageAttributes(bracketContent);
+            node = new InlineImageNode
+            {
+                Target = target,
+                Alt = imgAttrs.Alt,
+                Width = imgAttrs.Width,
+                Height = imgAttrs.Height,
+            };
         }
 
         endPos = closeBracket + 1;

@@ -173,12 +173,20 @@ public sealed partial class HtmlRenderer
                 }
                 sb.Append('>');
 
+                // Parse highlight line numbers if specified
+                var highlightLines = block.Highlight is not null
+                    ? ParseHighlightLines(block.Highlight) : null;
+
                 // Use server-side syntax highlighting when available and enabled
                 if (!useHighlightJs && state.EnableSyntaxHighlighting
                     && effectiveLang is not null
                     && Highlighting.SyntaxTokenizer.IsLanguageSupported(effectiveLang))
                 {
                     RenderHighlightedContent(sb, block);
+                }
+                else if (highlightLines is { Count: > 0 })
+                {
+                    RenderVerbatimContentWithHighlight(sb, block, state, highlightLines);
                 }
                 else
                 {
@@ -516,5 +524,63 @@ public sealed partial class HtmlRenderer
             var name = match.Groups[1].Value;
             return attributes.TryGetValue(name, out var value) ? value : match.Value;
         });
+    }
+
+    /// <summary>
+    /// Parses a highlight range string like "1,3,5-7" into a set of 1-based line numbers.
+    /// </summary>
+    private static HashSet<int> ParseHighlightLines(string spec)
+    {
+        var result = new HashSet<int>();
+        foreach (var part in spec.Split(','))
+        {
+            var trimmed = part.Trim();
+            var dashIdx = trimmed.IndexOf('-');
+            if (dashIdx > 0 && int.TryParse(trimmed[..dashIdx], out var start)
+                && int.TryParse(trimmed[(dashIdx + 1)..], out var end))
+            {
+                for (int n = start; n <= end; n++)
+                    result.Add(n);
+            }
+            else if (int.TryParse(trimmed, out var single))
+            {
+                result.Add(single);
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Renders verbatim content with line-level highlighting for source blocks.
+    /// </summary>
+    private void RenderVerbatimContentWithHighlight(StringBuilder sb, DelimitedBlockNode block,
+        HtmlRenderState state, HashSet<int> highlightLines)
+    {
+        var content = block.Content ?? string.Empty;
+        var subs = block.Substitutions;
+
+        if (subs.HasValue && subs.Value.HasFlag(SubstitutionKind.Attributes) && state.DocumentAttributes is { Count: > 0 })
+            content = ExpandAttributes(content, state.DocumentAttributes);
+
+        bool escape = !subs.HasValue || subs.Value.HasFlag(SubstitutionKind.SpecialCharacters);
+        var lines = content.Split('\n');
+        for (int i = 0; i < lines.Length; i++)
+        {
+            int lineNum = i + 1; // 1-based
+            bool isHighlighted = highlightLines.Contains(lineNum);
+            if (isHighlighted)
+                sb.Append("<span class=\"highlight\">");
+
+            if (escape)
+                EscapeTo(sb, lines[i]);
+            else
+                sb.Append(lines[i]);
+
+            if (isHighlighted)
+                sb.Append("</span>");
+
+            if (i < lines.Length - 1)
+                sb.Append('\n');
+        }
     }
 }

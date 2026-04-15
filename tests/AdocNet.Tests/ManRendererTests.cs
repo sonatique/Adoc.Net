@@ -247,7 +247,7 @@ public class ManRendererTests
         var dlist = new DescriptionListNode();
         dlist.AddChild(new DescriptionItemNode
         {
-            Term = "flag",
+            Terms = ["flag"],
             Description = "enables feature",
             TermInlines = [],
             DescriptionInlines = []

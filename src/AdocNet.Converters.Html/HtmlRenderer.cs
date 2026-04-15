@@ -33,6 +33,8 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
         public string? ImagesDir { get; set; }
         public int AppendixCounter { get; set; }
         public int PartCounter { get; set; }
+        /// <summary>Maps section IDs to their numbering strings (e.g. "1.2") for xrefstyle.</summary>
+        public Dictionary<string, string> IdNumbers { get; set; } = new(StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -205,6 +207,7 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
         // :notitle: suppresses the title entirely.
         if (document.Title is { } docTitle
             && !document.Attributes.ContainsKey("notitle")
+            && !document.Attributes.ContainsKey("noheader")
             && (fullDoc || document.Attributes.ContainsKey("showtitle")))
         {
             sb.Append("<h1>");

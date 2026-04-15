@@ -105,6 +105,9 @@ public sealed partial class HtmlRenderer
         else if (prefix is not null)
         {
             sb.Append(prefix);
+            // Record the section number for xrefstyle resolution
+            if (section.Id is not null)
+                state.IdNumbers[section.Id] = prefix.TrimEnd(' ', '.');
         }
         RenderInlines(sb, section.TitleInlines, section.Title, footnotes, state);
         if (sectlinkId is not null)

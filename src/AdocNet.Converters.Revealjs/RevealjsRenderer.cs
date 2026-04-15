@@ -406,7 +406,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
             if (child is DescriptionItemNode item)
             {
                 sb.Append("<dt>");
-                EscapeTo(sb, item.Term);
+                EscapeTo(sb, item.Terms[0]);
                 sb.Append("</dt>\n<dd>");
                 EscapeTo(sb, item.Description);
                 sb.Append("</dd>\n");

@@ -209,7 +209,7 @@ public sealed partial class ManRenderer : IDocumentRenderer
                 if (item.TermInlines.Count > 0)
                     RenderInlines(sb, item.TermInlines);
                 else
-                    sb.Append(EscapeBodyText(item.Term));
+                    sb.Append(EscapeBodyText(item.Terms[0]));
                 sb.Append("\\fR\n");
 
                 if (item.DescriptionInlines.Count > 0)

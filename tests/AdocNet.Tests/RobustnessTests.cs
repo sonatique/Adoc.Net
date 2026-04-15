@@ -78,10 +78,12 @@ public class RobustnessTests
     [Test]
     public void Back_to_back_inline_markers_render_correctly()
     {
+        // Asciidoctor behavior: closing `*` followed by word char `_` is not a valid
+        // constrained close, so `*bold*` stays literal; only `_italic_` parses.
         var inlines = InlineParser.Parse("*bold*_italic_");
-        // Should produce: StrongInlineNode("bold") + EmphasisInlineNode("italic")
         Assert.That(inlines, Has.Count.EqualTo(2));
-        Assert.That(inlines[0], Is.InstanceOf<StrongInlineNode>());
+        Assert.That(inlines[0], Is.InstanceOf<TextInlineNode>());
+        Assert.That(((TextInlineNode)inlines[0]).Value, Is.EqualTo("*bold*"));
         Assert.That(inlines[1], Is.InstanceOf<EmphasisInlineNode>());
     }
 

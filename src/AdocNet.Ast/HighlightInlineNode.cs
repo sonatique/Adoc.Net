@@ -12,6 +12,11 @@ public sealed class HighlightInlineNode : InlineNode
     public IReadOnlyList<string>? Roles { get; init; }
 
     /// <summary>
+    /// Optional anchor ID from <c>[#id]#text#</c> shorthand syntax.
+    /// </summary>
+    public string? Id { get; init; }
+
+    /// <summary>
     /// Plain-text content extracted from children for backward compatibility.
     /// </summary>
     public string Content => GetPlainText(Children);
@@ -26,6 +31,8 @@ public sealed class HighlightInlineNode : InlineNode
     /// <inheritdoc />
     protected override int MixAdditionalState(int hash)
     {
+        if (Id is not null)
+            hash = FnvMixString(hash, Id);
         if (Roles is not null)
             for (int i = 0; i < Roles.Count; i++)
                 hash = FnvMixString(hash, Roles[i]);
