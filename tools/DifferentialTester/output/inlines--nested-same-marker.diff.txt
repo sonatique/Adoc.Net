@@ -1,7 +1,0 @@
-# Diff: nested-same-marker.adoc
-# Similarity: 0.0%
-# --- Asciidoctor (expected)
-# +++ AdocNet (actual)
-
-- <p>This has <strong>bold *not nested</strong> bold* text.</p>
-+ <p>This has <strong>bold </strong>not nested<strong> bold</strong> text.</p>
