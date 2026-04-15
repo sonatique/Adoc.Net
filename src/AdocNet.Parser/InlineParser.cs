@@ -105,7 +105,24 @@ internal static class InlineParser
             if (c == '\\' && i + 1 < endIndex)
             {
                 char next = text[i + 1];
-                if (doFormatting && (next == '*' || next == '_' || next == '`' || next == '<' || next == '+' || next == '^' || next == '~' || next == '#'))
+                if (doFormatting && (next == '*' || next == '_' || next == '`' || next == '^' || next == '~' || next == '#'))
+                {
+                    // Asciidoctor only consumes the backslash when the escaped
+                    // character would actually OPEN a formatting span at this
+                    // position. Check both: (a) the open boundary is valid, and
+                    // (b) a matching closer exists. Without (b), a lone \* at
+                    // closing position would incorrectly strip the backslash.
+                    bool wouldOpen = (i + 2 < endIndex && text[i + 2] == next)
+                        || (IsConstrainedOpenValid(text, i + 1, endIndex)
+                            && FindConstrainedClose(text, next, i + 2, endIndex) >= 0);
+                    if (wouldOpen)
+                    {
+                        plain.Append(next);
+                        i += 2;
+                        continue;
+                    }
+                }
+                if (doFormatting && (next == '<' || next == '+'))
                 {
                     plain.Append(next);
                     i += 2;

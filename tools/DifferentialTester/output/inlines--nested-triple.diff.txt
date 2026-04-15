@@ -1,7 +1,0 @@
-# Diff: nested-triple.adoc
-# Similarity: 0.0%
-# --- Asciidoctor (expected)
-# +++ AdocNet (actual)
-
-- <p>This has <strong><em>`all three`</em></strong> text.</p>
-+ <p>This has <strong><em><code>all three</code></em></strong> text.</p>
