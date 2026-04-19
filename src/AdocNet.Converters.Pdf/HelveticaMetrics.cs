@@ -63,8 +63,9 @@ internal static class HelveticaMetrics
     internal static float MeasureChar(char ch, string fontKey, float fontSize)
     {
         float charWidth;
-        if (fontKey == "F4") // Courier — monospace
+        if (fontKey == "F4" || fontKey == "F5" || fontKey == "F6" || fontKey == "F7")
         {
+            // Courier and its variants (Bold/Oblique/BoldOblique) — all monospace
             charWidth = CourierWidth;
         }
         else if (fontKey == "F2") // Helvetica-Bold

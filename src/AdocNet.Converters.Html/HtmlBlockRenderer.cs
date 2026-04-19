@@ -69,16 +69,24 @@ public sealed partial class HtmlRenderer
             return;
         }
 
-        // Verbatim blocks (Listing, Source, Literal) use an outer wrapper div that must
+        // Verbatim and example blocks use an outer wrapper div that must
         // enclose both the title and the inner <div class="content"> wrapper.
         // Asciidoctor: <div class="listingblock"><div class="title">...</div><div class="content"><pre>...</pre></div></div>
+        // Example: <div class="exampleblock"><div class="title">Example 1. Title</div><div class="content">...</div></div>
         bool isVerbatim = block.BlockKind is DelimitedBlockKind.Listing
             or DelimitedBlockKind.Source
             or DelimitedBlockKind.Literal;
 
-        if (isVerbatim)
+        bool isWrappedBlock = isVerbatim || block.BlockKind == DelimitedBlockKind.Example;
+
+        if (isWrappedBlock)
         {
-            var outerClass = block.BlockKind == DelimitedBlockKind.Literal ? "literalblock" : "listingblock";
+            var outerClass = block.BlockKind switch
+            {
+                DelimitedBlockKind.Literal => "literalblock",
+                DelimitedBlockKind.Example => "exampleblock",
+                _ => "listingblock",
+            };
             sb.Append("<div");
             AppendRoleClasses(sb, block, outerClass);
             if (block.Id is not null)
@@ -91,7 +99,8 @@ public sealed partial class HtmlRenderer
         }
 
         // Title (inside the outer div, but before the content wrapper).
-        if (block.Title is not null && block.BlockKind != DelimitedBlockKind.Passthrough)
+        if (block.Title is not null && block.BlockKind != DelimitedBlockKind.Passthrough
+            && block.BlockKind != DelimitedBlockKind.Sidebar)
         {
             // Example blocks use a numbered caption ("Example N. Title")
             if (block.BlockKind == DelimitedBlockKind.Example)
@@ -114,11 +123,14 @@ public sealed partial class HtmlRenderer
 
         RenderDelimitedBlockContent(sb, block, footnotes, secCtx, state);
 
-        if (isVerbatim)
+        if (isWrappedBlock)
         {
             sb.Append("</div>\n");
-            // Callout list is a sibling of the outer block div (Asciidoctor behavior).
-            RenderCalloutList(sb, block, footnotes, state);
+            if (isVerbatim)
+            {
+                // Callout list is a sibling of the outer block div (Asciidoctor behavior).
+                RenderCalloutList(sb, block, footnotes, state);
+            }
         }
     }
 
@@ -200,9 +212,7 @@ public sealed partial class HtmlRenderer
             }
 
             case DelimitedBlockKind.Example:
-                sb.Append("<div");
-                AppendRoleClasses(sb, block, "exampleblock");
-                sb.Append(">\n");
+                sb.Append("<div class=\"content\">\n");
                 foreach (var child in block.Children)
                     RenderBlock(sb, child, false, footnotes, secCtx, state);
                 sb.Append("</div>\n");
@@ -242,8 +252,20 @@ public sealed partial class HtmlRenderer
                 sb.Append("<div");
                 AppendRoleClasses(sb, block, "sidebarblock");
                 sb.Append(">\n");
+                sb.Append("<div class=\"content\">\n");
+                // Asciidoctor places the title INSIDE <div class="content"> for sidebars.
+                // The generic title rendering in RenderDelimitedBlock skips sidebars
+                // because we handle the title here.
+                if (block.Title is not null)
+                {
+                    sb.Append("<div class=\"title\">");
+                    var sbTitleInlines = InlineParser.Parse(block.Title, SubstitutionKind.Normal, state.DocumentAttributes);
+                    RenderInlines(sb, sbTitleInlines, block.Title, footnotes, state);
+                    sb.Append("</div>\n");
+                }
                 foreach (var child in block.Children)
                     RenderBlock(sb, child, false, footnotes, secCtx, state);
+                sb.Append("</div>\n");
                 sb.Append("</div>\n");
                 break;
 
@@ -319,7 +341,7 @@ public sealed partial class HtmlRenderer
         if (block.Callouts is not { Count: > 0 }) return;
         // Skip the callout list if all entries are synthetic (no explanation text).
         if (block.Callouts.All(e => e.Text.Length == 0)) return;
-        sb.Append("<div class=\"colist\">\n<ol>\n");
+        sb.Append("<div class=\"colist arabic\">\n<ol>\n");
         foreach (var entry in block.Callouts)
         {
             sb.Append("<li>\n<p>");

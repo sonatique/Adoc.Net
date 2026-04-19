@@ -1,0 +1,5 @@
+:linkattrs:
+
+Visit link:https://example.com[Example, window=_blank].
+
+See link:https://docs.example.com[Documentation, role=external].

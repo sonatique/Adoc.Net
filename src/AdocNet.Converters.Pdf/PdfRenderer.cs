@@ -9,6 +9,11 @@ namespace AdocNet.Converters.Pdf;
 /// </summary>
 public sealed partial class PdfRenderer : DocumentRendererBase
 {
+    // Serializes concurrent renders on the same instance. Instance fields store
+    // per-render state (fonts, sizes, counters) that would be clobbered if two
+    // threads entered RenderDocument simultaneously.
+    private readonly object _renderLock = new();
+
     // ── Font configuration ──────────────────────────────────────────────
     // These default to the standard PDF font keys, but may be replaced
     // with embedded TrueType font keys when FontPath options are set.
@@ -16,6 +21,10 @@ public sealed partial class PdfRenderer : DocumentRendererBase
     private string _fontBold = "F2";            // Helvetica-Bold
     private string _fontItalic = "F3";          // Helvetica-Oblique
     private string _fontMono = "F4";            // Courier
+    private string _fontMonoBold = "F5";        // Courier-Bold
+    private string _fontMonoItalic = "F6";      // Courier-Oblique
+    private string _fontMonoBoldItalic = "F7";  // Courier-BoldOblique
+    private string _fontHeading = "F2";         // Heading font (defaults to bold)
 
     // ── Size configuration (initialized from PdfRenderOptions) ─────────
     private float _titleFontSize = 24f;
@@ -33,20 +42,41 @@ public sealed partial class PdfRenderer : DocumentRendererBase
     private float _codeLeading = 12f;
 
     private float _paragraphSpacingBefore;
-    private float _paragraphSpacingAfter = 8f;
+    private float _paragraphSpacingAfter = 12f;
     private float _sectionSpacing = 16f;
+    private float _titleMarginTop;
+    private float _titleMarginBottom = 16f;
+    private float _h2MarginBottom = 4f;
+    private float _h3MarginBottom = 4f;
+    private float _h4MarginBottom = 4f;
+    private float _h5MarginBottom = 4f;
     private const float ListIndent = 18f;
     private float _blockIndent = 24f;
 
     // ── Visual styling (initialized from PdfRenderOptions) ──────────────
     private PdfColor? _linkColor;
     private PdfColor? _codeBackground;
+    private PdfColor? _codespanBackground;
     private float _admonitionBorderWidth = 2f;
     private SyntaxColorScheme? _syntaxColors;
-    private PdfColor? _headingColor;
+    private PdfColor? _headingColor;  // used for document title and as fallback
+    private PdfColor? _h2Color;
+    private PdfColor? _h3Color;
+    private PdfColor? _h4Color;
+    private PdfColor? _h5Color;
     private PdfColor? _bodyColor;
     private PdfColor? _tableHeaderBackground;
+    private PdfColor? _tableBorderColor;
+    private PdfColor? _tableHeaderFontColor;
+    private PdfColor? _codeBorderColor;
     private bool _repeatTableHeader = true;
+    private bool _hasTrueTypeBodyFont;
+    private string? _runningContentStartAt;
+
+    // ── Section numbering ──────────────────────────────────────────────
+    private bool _sectnumsEnabled;
+    private int _sectnumMaxLevel = 3;
+    private readonly int[] _sectionCounters = new int[6];
 
     /// <summary>
     /// Tracks footnotes collected during PDF rendering.
@@ -89,6 +119,8 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
     protected override void RenderDocument(RenderContext context, Stream output)
     {
+        lock (_renderLock)
+        {
         var pdfOptions = context.Options as PdfRenderOptions ?? PdfRenderOptions.Default;
         var writer = new PdfWriter(pdfOptions.PageWidth, pdfOptions.PageHeight,
             pdfOptions.MarginLeft, pdfOptions.MarginRight, pdfOptions.MarginTop, pdfOptions.MarginBottom);
@@ -96,52 +128,105 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         writer.ShowPageNumbers = pdfOptions.ShowPageNumbers;
         writer.HeaderTemplate = pdfOptions.HeaderText;
         writer.FooterTemplate = pdfOptions.FooterText ?? (pdfOptions.ShowPageNumbers ? "Page {page}" : null);
+        writer.HeaderFontSize = pdfOptions.HeaderFontSize;
+        writer.FooterFontSize = pdfOptions.FooterFontSize;
+        writer.HeaderFontColor = pdfOptions.HeaderFontColor;
+        writer.FooterFontColor = pdfOptions.FooterFontColor;
+        writer.HeaderAlignment = pdfOptions.HeaderAlignment;
+        // Load footer SVG image if specified
+        if (pdfOptions.FooterImagePath is not null && File.Exists(pdfOptions.FooterImagePath))
+        {
+            try
+            {
+                var svgData = File.ReadAllBytes(pdfOptions.FooterImagePath);
+                writer.FooterImage = SvgParser.Parse(svgData);
+                writer.FooterImageWidth = pdfOptions.FooterImageWidth;
+            }
+            catch { /* Ignore SVG load errors */ }
+        }
+        writer.FooterAlignment = pdfOptions.FooterAlignment;
+        writer.HeaderHeight = pdfOptions.HeaderHeight;
+        writer.FooterHeight = pdfOptions.FooterHeight;
+        writer.DocumentTitle = context.Document.Title;
+        if (context.Document.Attributes.TryGetValue("header-title", out var ht))
+            writer.HeaderTitle = ht;
 
         _baseDirectory = pdfOptions.BaseDirectory;
+        _hasTrueTypeBodyFont = false;
+        _runningContentStartAt = pdfOptions.RunningContentStartAt;
 
         // Initialize typography from options
         _titleFontSize = pdfOptions.TitleFontSize;
         _bodyFontSize = pdfOptions.FontSize;
         _codeFontSize = pdfOptions.CodeFontSize;
         _smallFontSize = pdfOptions.CodeFontSize;
-        _h2FontSize = _titleFontSize * pdfOptions.HeadingScale;
-        _h3FontSize = _h2FontSize * pdfOptions.HeadingScale;
-        _h4FontSize = _h3FontSize * pdfOptions.HeadingScale;
-        _h5FontSize = _h4FontSize * pdfOptions.HeadingScale;
-        _titleLeading = _titleFontSize * pdfOptions.LineSpacing;
+
+        // Per-heading sizes: explicit overrides take priority over HeadingScale calculation
+        float scaledH2 = _titleFontSize * pdfOptions.HeadingScale;
+        float scaledH3 = scaledH2 * pdfOptions.HeadingScale;
+        float scaledH4 = scaledH3 * pdfOptions.HeadingScale;
+        float scaledH5 = scaledH4 * pdfOptions.HeadingScale;
+        _h2FontSize = pdfOptions.Heading2FontSize ?? scaledH2;
+        _h3FontSize = pdfOptions.Heading3FontSize ?? scaledH3;
+        _h4FontSize = pdfOptions.Heading4FontSize ?? scaledH4;
+        _h5FontSize = pdfOptions.Heading5FontSize ?? scaledH5;
+
+        _titleLeading = _titleFontSize * (pdfOptions.TitleLineHeight ?? pdfOptions.LineSpacing);
         _headingLeading = _h2FontSize * pdfOptions.LineSpacing;
         _bodyLeading = _bodyFontSize * pdfOptions.LineSpacing;
         _codeLeading = _codeFontSize * pdfOptions.LineSpacing;
+        // Set BodyLeading on writer AFTER it's computed for this render (writer uses it
+        // in StartPage to position the first text baseline below the top margin).
+        writer.BodyLeading = _bodyLeading;
 
         // Visual styling from options
         _linkColor = pdfOptions.LinkColor;
         _codeBackground = pdfOptions.CodeBackground;
+        _codespanBackground = pdfOptions.CodespanBackground;
+        _codeBorderColor = pdfOptions.CodeBorderColor;
         _admonitionBorderWidth = pdfOptions.AdmonitionBorderWidth;
         _repeatTableHeader = pdfOptions.RepeatTableHeader;
 
         // Syntax highlighting and styling
         _syntaxColors = pdfOptions.SyntaxColors;
         _headingColor = pdfOptions.HeadingColor;
+        _h2Color = pdfOptions.Heading2Color ?? pdfOptions.HeadingColor;
+        _h3Color = pdfOptions.Heading3Color ?? pdfOptions.HeadingColor;
+        _h4Color = pdfOptions.Heading4Color ?? pdfOptions.HeadingColor;
+        _h5Color = pdfOptions.Heading5Color ?? pdfOptions.HeadingColor;
         _bodyColor = pdfOptions.BodyColor;
         _tableHeaderBackground = pdfOptions.TableHeaderBackground;
+        _tableBorderColor = pdfOptions.TableBorderColor;
+        _tableHeaderFontColor = pdfOptions.TableHeaderFontColor;
         _sectionSpacing = pdfOptions.SectionSpacing;
+        _titleMarginTop = pdfOptions.TitleMarginTop;
+        _titleMarginBottom = pdfOptions.TitleMarginBottom;
         _blockIndent = pdfOptions.BlockIndent;
 
         // Typography options
         writer.HyphenationEnabled = pdfOptions.EnableHyphenation;
         _paragraphSpacingBefore = pdfOptions.ParagraphSpacingBefore;
         _paragraphSpacingAfter = pdfOptions.ParagraphSpacingAfter;
+        float defaultHeadingMarginBottom = _paragraphSpacingAfter / 2;
+        _h2MarginBottom = pdfOptions.Heading2MarginBottom ?? defaultHeadingMarginBottom;
+        _h3MarginBottom = pdfOptions.Heading3MarginBottom ?? defaultHeadingMarginBottom;
+        _h4MarginBottom = pdfOptions.Heading4MarginBottom ?? defaultHeadingMarginBottom;
+        _h5MarginBottom = pdfOptions.Heading5MarginBottom ?? defaultHeadingMarginBottom;
 
         // Register embedded TrueType fonts if configured
         _fontRegular = "F1";
         _fontBold = "F2";
         _fontItalic = "F3";
         _fontMono = "F4";
+        _fontMonoBold = "F5";
+        _fontMonoItalic = "F6";
+        _fontMonoBoldItalic = "F7";
 
         if (pdfOptions.FontPath is not null && File.Exists(pdfOptions.FontPath))
         {
             var font = TrueTypeFont.Parse(File.ReadAllBytes(pdfOptions.FontPath));
             _fontRegular = writer.RegisterEmbeddedFont("F1", font);
+            _hasTrueTypeBodyFont = true;
         }
 
         if (pdfOptions.BoldFontPath is not null && File.Exists(pdfOptions.BoldFontPath))
@@ -162,6 +247,40 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             _fontMono = writer.RegisterEmbeddedFont("F4", font);
         }
 
+        if (pdfOptions.MonoBoldFontPath is not null && File.Exists(pdfOptions.MonoBoldFontPath))
+        {
+            var font = TrueTypeFont.Parse(File.ReadAllBytes(pdfOptions.MonoBoldFontPath));
+            _fontMonoBold = writer.RegisterEmbeddedFont("F5", font);
+        }
+
+        if (pdfOptions.MonoItalicFontPath is not null && File.Exists(pdfOptions.MonoItalicFontPath))
+        {
+            var font = TrueTypeFont.Parse(File.ReadAllBytes(pdfOptions.MonoItalicFontPath));
+            _fontMonoItalic = writer.RegisterEmbeddedFont("F6", font);
+        }
+
+        if (pdfOptions.MonoBoldItalicFontPath is not null && File.Exists(pdfOptions.MonoBoldItalicFontPath))
+        {
+            var font = TrueTypeFont.Parse(File.ReadAllBytes(pdfOptions.MonoBoldItalicFontPath));
+            _fontMonoBoldItalic = writer.RegisterEmbeddedFont("F7", font);
+        }
+
+        // Heading font — separate from body bold, used for section titles
+        _fontHeading = _fontBold; // default: same as bold
+        if (pdfOptions.HeadingFontPath is not null && File.Exists(pdfOptions.HeadingFontPath))
+        {
+            var font = TrueTypeFont.Parse(File.ReadAllBytes(pdfOptions.HeadingFontPath));
+            _fontHeading = writer.RegisterEmbeddedFont("FH", font);
+        }
+
+        // Section numbering
+        _sectnumsEnabled = context.Document.Attributes.ContainsKey("sectnums");
+        _sectnumMaxLevel = 3;
+        if (context.Document.Attributes.TryGetValue("sectnumlevels", out var snl)
+            && int.TryParse(snl, out var snlv) && snlv >= 0)
+            _sectnumMaxLevel = snlv;
+        Array.Clear(_sectionCounters, 0, _sectionCounters.Length);
+
         var footnotes = context.GetOrCreate(() => new FootnoteState());
 
         writer.StartPage();
@@ -170,6 +289,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
         byte[] bytes = writer.ToBytes();
         output.Write(bytes, 0, bytes.Length);
+        } // lock
     }
 
     // ── Document rendering ──────────────────────────────────────────────
@@ -179,14 +299,40 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         if (document.Title is not null)
         {
             w.EnsurePage();
+            if (_titleMarginTop > 0)
+                w.MoveCursor(_titleMarginTop);
+            // Register document title as outline entry. Use level 1 so it appears
+            // as a sibling of top-level sections (matches Asciidoctor's flat outline).
+            w.AddOutlineEntry(document.Title, 1, "_document_title");
             if (_headingColor is { } hc) w.SetFillColor(hc.R, hc.G, hc.B);
-            w.WriteWrappedText(document.Title, _fontBold, _titleFontSize, _titleLeading);
+            w.WriteWrappedText(document.Title, _fontHeading, _titleFontSize, _titleLeading);
             if (_headingColor is not null) w.SetFillColor(0, 0, 0);
-            w.MoveCursor(_sectionSpacing);
+            w.MoveCursor(_titleMarginBottom);
         }
 
+        // Find TocNode if present — render it after content to get page numbers
+        TocNode? tocNode = null;
         foreach (var child in document.Children)
+        {
+            if (child is TocNode toc)
+                tocNode = toc;
+        }
+
+        // Render TOC placeholder or actual TOC
+        if (tocNode is not null && tocNode.Entries.Count > 0)
+        {
+            RenderToc(w, tocNode, footnotes);
+        }
+
+        // If running-content starts after-toc, suppress headers/footers until now
+        if (_runningContentStartAt == "after-toc")
+            w.RunningContentStartPage = w.CurrentPageNumber;
+
+        foreach (var child in document.Children)
+        {
+            if (child is TocNode) continue; // already rendered above
             RenderBlock(w, child, indentLevel: 0, footnotes);
+        }
     }
 
     private void RenderFootnotesSection(PdfWriter w, FootnoteState footnotes)
@@ -207,6 +353,48 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             w.EnsurePage();
             var text = GetPlainText(node.Inlines, node.Text ?? string.Empty);
             w.WriteWrappedText($"{number}. {text}", _fontRegular, _smallFontSize, _codeLeading);
+        }
+    }
+
+    // ── TOC rendering ──────────────────────────────────────────────────
+
+    private void RenderToc(PdfWriter w, TocNode toc, FootnoteState footnotes)
+    {
+        // TOC title
+        w.EnsurePage();
+        if (_headingColor is { } hc) w.SetFillColor(hc.R, hc.G, hc.B);
+        w.WriteWrappedText("Table of Contents", _fontHeading, _h2FontSize, _headingLeading);
+        if (_headingColor is not null) w.SetFillColor(0, 0, 0);
+        w.MoveCursor(_paragraphSpacingAfter);
+
+        // Render each TOC entry with indentation and internal link
+        RenderTocEntries(w, toc.Entries, 0);
+        w.MoveCursor(_sectionSpacing);
+    }
+
+    private void RenderTocEntries(PdfWriter w, IReadOnlyList<TocEntry> entries, int depth)
+    {
+        foreach (var entry in entries)
+        {
+            w.EnsurePage();
+
+            float indent = depth * ListIndent;
+            float savedIndent = w.PushIndent(indent);
+
+            // Build dot leader: title followed by dots
+            float fontSize = depth == 0 ? _bodyFontSize : _smallFontSize;
+            string font = depth == 0 ? _fontBold : _fontRegular;
+
+            var segments = new List<TextSegment>
+            {
+                new(entry.Title, font, fontSize, $"#internal#{entry.Id}")
+            };
+            w.WriteWrappedSegments(segments, _bodyLeading, justify: false);
+            w.PopIndent(savedIndent);
+
+            // Recurse into children
+            if (entry.Children.Count > 0)
+                RenderTocEntries(w, entry.Children, depth + 1);
         }
     }
 
@@ -243,6 +431,9 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             case BibliographyEntryNode bibEntry:
                 RenderBibliographyEntry(w, bibEntry, footnotes);
                 break;
+            case TocNode:
+                // TOC is rendered in RenderDocumentContent, skip here
+                break;
             case PageBreakNode:
                 w.StartPage();
                 break;
@@ -261,20 +452,55 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         w.MoveCursor(_sectionSpacing);
         w.EnsurePage();
 
-        var (fontSize, leading) = section.Level switch
+        var (fontSize, leading, marginBottom, color) = section.Level switch
         {
-            1 => (_h2FontSize, _headingLeading),
-            2 => (_h3FontSize, _headingLeading),
-            3 => (_h4FontSize, _headingLeading),
-            _ => (_h5FontSize, _bodyLeading),
+            1 => (_h2FontSize, _headingLeading, _h2MarginBottom, _h2Color),
+            2 => (_h3FontSize, _headingLeading, _h3MarginBottom, _h3Color),
+            3 => (_h4FontSize, _headingLeading, _h4MarginBottom, _h4Color),
+            _ => (_h5FontSize, _bodyLeading, _h5MarginBottom, _h5Color),
         };
 
-        // Render section title with inline formatting, optionally colored
-        if (_headingColor is { } hc) w.SetFillColor(hc.R, hc.G, hc.B);
-        var segments = BuildInlineSegments(section.TitleInlines, section.Title, _fontBold, fontSize, footnotes);
+        // Build section number prefix (e.g. "1. ", "1.2. ")
+        string? secNumPrefix = null;
+        var numbering = section.SectnumsEnabled ?? _sectnumsEnabled;
+        if (numbering && !section.IsDiscrete && section.Level >= 1 && section.Level <= _sectnumMaxLevel)
+        {
+            int idx = section.Level - 1;
+            _sectionCounters[idx]++;
+            for (int i = idx + 1; i < _sectionCounters.Length; i++)
+                _sectionCounters[i] = 0;
+
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i <= idx; i++)
+            {
+                sb.Append(_sectionCounters[i]);
+                sb.Append('.');
+            }
+            sb.Append(' ');
+            secNumPrefix = sb.ToString();
+        }
+
+        // Register as outline entry and named destination for bookmarks/cross-refs.
+        // Include section number prefix in outline title when sectnums is enabled.
+        string outlineTitle = secNumPrefix is not null ? $"{secNumPrefix}{section.Title}" : section.Title;
+        w.AddOutlineEntry(outlineTitle, section.Level, section.Id);
+
+        // Track section title for header/footer {section-title} placeholder.
+        // Only level-1 sections (== headings) are tracked, matching Asciidoctor behavior.
+        // Include the section number prefix when sectnums is enabled.
+        // SetSectionTitleForPage only takes effect on the FIRST level-1 section per page;
+        // subsequent sections on the same page don't override (matches Asciidoctor).
+        if (section.Level == 1)
+            w.SetSectionTitleForPage(secNumPrefix is not null ? $"{secNumPrefix}{section.Title}" : section.Title);
+
+        // Render section title with heading font, per-level color
+        if (color is { } hc) w.SetFillColor(hc.R, hc.G, hc.B);
+        var segments = BuildInlineSegments(section.TitleInlines, section.Title, _fontHeading, fontSize, footnotes);
+        if (secNumPrefix is not null)
+            segments.Insert(0, new TextSegment(secNumPrefix, _fontHeading, fontSize));
         w.WriteWrappedSegments(segments, leading);
-        if (_headingColor is not null) w.SetFillColor(0, 0, 0);
-        w.MoveCursor(_paragraphSpacingAfter / 2);
+        if (color is not null) w.SetFillColor(0, 0, 0);
+        w.MoveCursor(marginBottom);
 
         foreach (var child in section.Children)
             RenderBlock(w, child, indentLevel, footnotes);
@@ -295,6 +521,11 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
     private void RenderList(PdfWriter w, ListNode list, int indentLevel, FootnoteState footnotes)
     {
+        // Indent nested lists from their parent (additive to current indent)
+        float savedIndent = indentLevel > 0
+            ? w.PushIndent(w.MarginLeftValue - w.MarginLeftBase + ListIndent)
+            : -1;
+
         int itemNumber = 1;
         foreach (var child in list.Children)
         {
@@ -303,13 +534,30 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 w.EnsurePage();
 
                 // Bullet or number prefix
-                string prefix = list.ListKind == ListKind.Unordered
-                    ? "\u2022 "  // bullet character — will be rendered as '?' in standard fonts, use dash instead
-                    : $"{itemNumber}. ";
-
-                // Standard fonts don't have bullet char, use a dash
+                // Standard PDF fonts lack the bullet glyph; use it only when a TrueType body font is embedded.
+                // Asciidoctor-pdf uses different bullets per nesting level:
+                // level 0: filled disc (•), level 1: hollow circle (◦), level 2+: filled square (▪)
+                string prefix;
                 if (list.ListKind == ListKind.Unordered)
-                    prefix = "- ";
+                {
+                    if (_hasTrueTypeBodyFont)
+                    {
+                        prefix = indentLevel switch
+                        {
+                            0 => "\u2022 ",  // • filled disc
+                            1 => "\u25E6 ",  // ◦ hollow circle (white bullet)
+                            _ => "\u25AA ",  // ▪ filled small square
+                        };
+                    }
+                    else
+                    {
+                        prefix = "- ";
+                    }
+                }
+                else
+                {
+                    prefix = $"{itemNumber}. ";
+                }
 
                 var segments = BuildInlineSegments(item.Inlines, item.Text, _fontRegular, _bodyFontSize, footnotes);
                 if (segments.Count > 0)
@@ -319,16 +567,29 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
                 w.WriteWrappedSegments(segments, _bodyLeading);
 
-                // Nested lists
+                // Render child blocks (list continuation: code blocks, paragraphs, etc.)
+                // and nested lists with additional indentation
                 foreach (var nested in item.Children)
                 {
                     if (nested is ListNode nestedList)
+                    {
                         RenderList(w, nestedList, indentLevel + 1, footnotes);
+                    }
+                    else
+                    {
+                        // Push indent so continuation blocks (code, paragraphs) render
+                        // at the same indentation as their parent list item's text
+                        float contSaved = w.PushIndent(w.MarginLeftValue - w.MarginLeftBase + ListIndent);
+                        RenderBlock(w, nested, indentLevel + 1, footnotes);
+                        w.PopIndent(contSaved);
+                    }
                 }
 
                 itemNumber++;
             }
         }
+        if (savedIndent >= 0)
+            w.PopIndent(savedIndent);
         w.MoveCursor(_paragraphSpacingAfter);
     }
 
@@ -365,7 +626,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
         // Enable per-line background drawing (handles page breaks correctly)
         if (_codeBackground is { } bg)
-            w.BeginCodeBlockBackground(bg, _codeFontSize, _codeLeading);
+            w.BeginCodeBlockBackground(bg, _codeFontSize, _codeLeading, _codeBorderColor);
 
         // Language label
         if (block.Language is not null)

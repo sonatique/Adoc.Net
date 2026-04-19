@@ -1,0 +1,6 @@
+.Sidebar Title
+****
+This is a sidebar block.
+
+It can contain multiple paragraphs.
+****

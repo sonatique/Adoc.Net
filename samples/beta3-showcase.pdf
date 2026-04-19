@@ -1,0 +1,851 @@
+%PDF-1.4
+%âãÏÓ
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Length 2753 >>
+stream
+BT
+/F2 24 Tf
+72 770 Td
+(AdocNet v1.0.0-beta.3 \227 PDF Showcase) Tj
+ET
+BT
+72 705.6 Td
+/F2 20.4 Tf
+(Typography and Unicode) Tj
+ET
+BT
+72 674.06 Td
+1.76 Tw
+/F1 11 Tf
+(This document demonstrates the new PDF rendering features in beta.3.
+The text you\222re) Tj
+0 Tw
+ET
+BT
+72 659.21 Td
+5.28 Tw
+/F1 11 Tf
+(reading is fully justified with improved line-breaking rules.
+Punctuation like periods,) Tj
+0 Tw
+ET
+BT
+72 644.36 Td
+/F1 11 Tf
+(commas, and closing parentheses \(like this\) will never appear at the start of a wrapped line.) Tj
+ET
+BT
+72 621.51 Td
+1.21 Tw
+/F1 11 Tf
+(Unicode text works with TrueType fonts: cafe resume naive.
+Special characters: copyright) Tj
+0 Tw
+ET
+BT
+72 606.66 Td
+5.82 Tw
+/F1 11 Tf
+(\251, registered \256, trademark \231.
+Typographic quotes, em dashes?\227?and ellipsis\205 are) Tj
+0 Tw
+ET
+BT
+72 591.81 Td
+/F1 11 Tf
+(supported.) Tj
+ET
+BT
+72 552.96 Td
+/F2 20.4 Tf
+(Text Formatting) Tj
+ET
+BT
+72 521.42 Td
+0.35 Tw
+/F1 11 Tf
+(This paragraph has ) Tj
+/F2 11 Tf
+( bold text) Tj
+/F1 11 Tf
+( , ) Tj
+/F3 11 Tf
+( italic text) Tj
+/F1 11 Tf
+( , ) Tj
+/F4 11 Tf
+( monospace text) Tj
+/F1 11 Tf
+( , and combinations of ) Tj
+/F3 11 Tf
+( bold) Tj
+0 Tw
+ET
+BT
+72 506.57 Td
+/F3 11 Tf
+(italic) Tj
+/F1 11 Tf
+(  formatting.
+You can also use ) Tj
+/F1 11 Tf
+( superscript) Tj
+/F1 11 Tf
+(  and ) Tj
+/F1 11 Tf
+( subscript) Tj
+/F1 11 Tf
+(  notation.) Tj
+ET
+BT
+72 467.72 Td
+/F2 20.4 Tf
+(Hyperlinks) Tj
+ET
+BT
+72 436.18 Td
+0.23 Tw
+/F1 11 Tf
+(Visit ) Tj
+/F1 11 Tf
+( https://github.com) Tj
+/F1 11 Tf
+(  for source code hosting.
+See ) Tj
+/F1 11 Tf
+( the AsciiDoc website) Tj
+/F1 11 Tf
+(  for the markup) Tj
+0 Tw
+ET
+BT
+72 421.33 Td
+/F1 11 Tf
+(specification.
+The ) Tj
+/F1 11 Tf
+( Microsoft Docs) Tj
+/F1 11 Tf
+(  are a great .NET reference.) Tj
+ET
+BT
+72 382.48 Td
+/F2 20.4 Tf
+(Lists) Tj
+ET
+BT
+72 334.94 Td
+/F2 17.34 Tf
+(Unordered List) Tj
+ET
+BT
+72 303.4 Td
+2.39 Tw
+/F1 11 Tf
+(- First item with some text
+- Second item that is longer and contains enough words to) Tj
+0 Tw
+ET
+BT
+72 288.55 Td
+3.55 Tw
+/F1 11 Tf
+(demonstrate how list items wrap across multiple lines when the content exceeds the) Tj
+0 Tw
+ET
+BT
+72 273.7 Td
+/F1 11 Tf
+(available width
+- Third item
+  ) Tj
+/F2 11 Tf
+(  Nested sub-item A
+  ) Tj
+/F1 11 Tf
+(  Nested sub-item B) Tj
+ET
+BT
+72 234.85 Td
+/F2 17.34 Tf
+(Ordered List) Tj
+ET
+BT
+72 203.31 Td
+/F1 11 Tf
+(1. ) Tj
+/F1 11 Tf
+( Step one: prepare the environment) Tj
+ET
+BT
+72 188.46 Td
+/F1 11 Tf
+(2. ) Tj
+/F1 11 Tf
+( Step two: configure the options) Tj
+ET
+BT
+72 173.61 Td
+/F1 11 Tf
+(3. ) Tj
+/F1 11 Tf
+( Step three: render the document) Tj
+ET
+BT
+72 158.76 Td
+/F1 11 Tf
+(4. ) Tj
+/F1 11 Tf
+( Step four: verify the output) Tj
+ET
+BT
+72 119.91 Td
+/F2 20.4 Tf
+(Code Blocks) Tj
+ET
+BT
+72 88.37 Td
+/F1 11 Tf
+(Here is a C# code example with syntax highlighting label:) Tj
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Annot /Subtype /Link /Rect [96.07 434.18 186.18 449.18] /Border [0 0 0] /A << /Type /Action /S /URI /URI (https://github.com) >> >>
+endobj
+7 0 obj
+<< /Type /Annot /Subtype /Link /Rect [339.82 434.18 445.04 449.18] /Border [0 0 0] /A << /Type /Action /S /URI /URI (https://asciidoc.org) >> >>
+endobj
+8 0 obj
+<< /Type /Annot /Subtype /Link /Rect [163.71 419.33 239.5 434.33] /Border [0 0 0] /A << /Type /Action /S /URI /URI (https://docs.microsoft.com) >> >>
+endobj
+9 0 obj
+<< /Type /Page /MediaBox [0 0 595 842] /Contents 5 0 R /Annots [6 0 R 7 0 R 8 0 R] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R >> >> /Parent 14 0 R >>
+endobj
+10 0 obj
+<< /Length 4135 >>
+stream
+0.95 0.95 0.95 rg
+68 608.05 459 165.95 re f
+0 0 0 rg
+BT
+/F3 8 Tf
+72 770 Td
+(csharp) Tj
+ET
+BT
+/F4 9 Tf
+72 757.85 Td
+(var options = new PdfRenderOptions) Tj
+ET
+BT
+/F4 9 Tf
+72 745.7 Td
+({) Tj
+ET
+BT
+/F4 9 Tf
+72 733.55 Td
+(    FontSize = 11f,) Tj
+ET
+BT
+/F4 9 Tf
+72 721.4 Td
+(    TitleFontSize = 24f,) Tj
+ET
+BT
+/F4 9 Tf
+72 709.25 Td
+(    HeadingScale = 0.85f,) Tj
+ET
+BT
+/F4 9 Tf
+72 697.1 Td
+(    LineSpacing = 1.35f,) Tj
+ET
+BT
+/F4 9 Tf
+72 684.95 Td
+(    ShowPageNumbers = true,) Tj
+ET
+BT
+/F4 9 Tf
+72 672.8 Td
+(    FooterText = "Page {page} of {pages}",) Tj
+ET
+BT
+/F4 9 Tf
+72 660.65 Td
+(    LinkColor = new PdfColor\(0f, 0f, 0.8f\),) Tj
+ET
+BT
+/F4 9 Tf
+72 648.5 Td
+(};) Tj
+ET
+BT
+/F4 9 Tf
+72 636.35 Td
+(byte[] pdf = new PdfRenderer\(\)) Tj
+ET
+BT
+/F4 9 Tf
+72 624.2 Td
+(    .RenderToBytes\(document, options\);) Tj
+ET
+BT
+72 604.05 Td
+/F1 11 Tf
+(And a simple literal block:) Tj
+ET
+0.95 0.95 0.95 rg
+68 540.75 459 44.45 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 581.2 Td
+(This is a literal block.) Tj
+ET
+BT
+/F4 9 Tf
+72 569.05 Td
+(It preserves     spacing and) Tj
+ET
+BT
+/F4 9 Tf
+72 556.9 Td
+(line breaks exactly as written.) Tj
+ET
+BT
+72 520.75 Td
+/F2 20.4 Tf
+(Tables) Tj
+ET
+BT
+72 473.21 Td
+/F2 17.34 Tf
+(Simple Table) Tj
+ET
+BT
+/F2 11 Tf
+76 441.67 Td
+(Feature) Tj
+ET
+BT
+/F2 11 Tf
+222.76 441.67 Td
+(Status) Tj
+ET
+BT
+/F2 11 Tf
+313.9 441.67 Td
+(Notes) Tj
+ET
+0 0 0 RG
+1 w
+72 439.67 m 523 439.67 l S
+BT
+/F1 11 Tf
+76 426.82 Td
+(TrueType fonts) Tj
+ET
+BT
+/F1 11 Tf
+222.76 426.82 Td
+(Complete) Tj
+ET
+BT
+/F1 11 Tf
+313.9 426.82 Td
+(Embedding with subsetting) Tj
+ET
+0.85 0.85 0.85 RG
+0.25 w
+72 424.82 m 523 424.82 l S
+0 0 0 RG
+BT
+/F1 11 Tf
+76 411.97 Td
+(Image embedding) Tj
+ET
+BT
+/F1 11 Tf
+222.76 411.97 Td
+(Complete) Tj
+ET
+BT
+/F1 11 Tf
+313.9 411.97 Td
+(JPEG and PNG with alpha) Tj
+ET
+0.85 0.85 0.85 RG
+0.25 w
+72 409.97 m 523 409.97 l S
+0 0 0 RG
+BT
+/F1 11 Tf
+76 397.12 Td
+(Hyperlinks) Tj
+ET
+BT
+/F1 11 Tf
+222.76 397.12 Td
+(Complete) Tj
+ET
+BT
+/F1 11 Tf
+313.9 397.12 Td
+(URI annotations) Tj
+ET
+0.85 0.85 0.85 RG
+0.25 w
+72 395.12 m 523 395.12 l S
+0 0 0 RG
+BT
+/F1 11 Tf
+76 382.27 Td
+(Text quality) Tj
+ET
+BT
+/F1 11 Tf
+222.76 382.27 Td
+(Complete) Tj
+ET
+BT
+/F1 11 Tf
+313.9 382.27 Td
+(Punctuation rules, justification cap) Tj
+ET
+0.85 0.85 0.85 RG
+0.25 w
+72 380.27 m 523 380.27 l S
+0 0 0 RG
+BT
+/F1 11 Tf
+76 367.42 Td
+(Table improvements) Tj
+ET
+BT
+/F1 11 Tf
+222.76 367.42 Td
+(Complete) Tj
+ET
+BT
+/F1 11 Tf
+313.9 367.42 Td
+(Header repeat, cell wrapping) Tj
+ET
+0.85 0.85 0.85 RG
+0.25 w
+72 365.42 m 523 365.42 l S
+0 0 0 RG
+BT
+/F1 11 Tf
+76 352.57 Td
+(Headers/footers) Tj
+ET
+BT
+/F1 11 Tf
+222.76 352.57 Td
+(Complete) Tj
+ET
+BT
+/F1 11 Tf
+313.9 352.57 Td
+(Page numbers with {pages} total) Tj
+ET
+0.85 0.85 0.85 RG
+0.25 w
+72 350.57 m 523 350.57 l S
+0 0 0 RG
+BT
+/F1 11 Tf
+76 337.72 Td
+(Configuration) Tj
+ET
+BT
+/F1 11 Tf
+222.76 337.72 Td
+(Complete) Tj
+ET
+BT
+/F1 11 Tf
+313.9 337.72 Td
+(10 new PdfRenderOptions properties) Tj
+ET
+BT
+72 298.87 Td
+/F2 17.34 Tf
+(Column-Weighted Table) Tj
+ET
+BT
+/F2 11 Tf
+76 267.33 Td
+(Key) Tj
+ET
+BT
+/F2 11 Tf
+188.75 267.33 Td
+(Description) Tj
+ET
+0 0 0 RG
+1 w
+72 265.33 m 523 265.33 l S
+BT
+/F1 11 Tf
+76 252.48 Td
+(FontSize) Tj
+ET
+BT
+/F1 11 Tf
+188.75 252.48 Td
+0.15 Tw
+(Base body text font size in points. Default is 11. Controls the size of) Tj
+0 Tw
+ET
+BT
+/F1 11 Tf
+188.75 237.63 Td
+(paragraph text throughout the document.) Tj
+ET
+0.85 0.85 0.85 RG
+0.25 w
+72 235.63 m 523 235.63 l S
+0 0 0 RG
+BT
+/F1 11 Tf
+76 222.78 Td
+(HeadingScale) Tj
+ET
+BT
+/F1 11 Tf
+188.75 222.78 Td
+2.12 Tw
+(Scale factor applied to each heading level. H2 = TitleFontSize x) Tj
+0 Tw
+ET
+BT
+/F1 11 Tf
+188.75 207.93 Td
+(scale, H3 = H2 x scale, and so on. Default 0.85.) Tj
+ET
+0.85 0.85 0.85 RG
+0.25 w
+72 205.93 m 523 205.93 l S
+0 0 0 RG
+BT
+/F1 11 Tf
+76 193.08 Td
+(LineSpacing) Tj
+ET
+BT
+/F1 11 Tf
+188.75 193.08 Td
+0.17 Tw
+(Line spacing multiplier. The leading \(distance between baselines\) is) Tj
+0 Tw
+ET
+BT
+/F1 11 Tf
+188.75 178.23 Td
+(calculated as fontSize x lineSpacing. Default 1.35.) Tj
+ET
+BT
+72 139.38 Td
+/F2 20.4 Tf
+(Admonitions) Tj
+ET
+BT
+/F2 11 Tf
+72 107.84 Td
+(NOTE:) Tj
+ET
+BT
+72 92.99 Td
+/F1 11 Tf
+(This document showcases all the new features added in beta.3 of AdocNet\222s PDF renderer.) Tj
+ET
+endstream
+endobj
+11 0 obj
+<< /Type /Page /MediaBox [0 0 595 842] /Contents 10 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R >> >> /Parent 14 0 R >>
+endobj
+12 0 obj
+<< /Length 3179 >>
+stream
+BT
+/F2 11 Tf
+72 770 Td
+(TIP:) Tj
+ET
+BT
+72 755.15 Td
+0.21 Tw
+/F1 11 Tf
+(Use ) Tj
+/F4 11 Tf
+( PdfRenderOptions) Tj
+/F1 11 Tf
+(  to customize every aspect of the PDF output, from page size to) Tj
+0 Tw
+ET
+BT
+72 740.3 Td
+/F1 11 Tf
+(font sizes to visual styling.) Tj
+ET
+BT
+/F2 11 Tf
+72 717.45 Td
+(WARNING:) Tj
+ET
+BT
+72 702.6 Td
+1.6 Tw
+/F1 11 Tf
+(Interlaced PNGs are not supported. The renderer will fall back to a placeholder for these) Tj
+0 Tw
+ET
+BT
+72 687.75 Td
+/F1 11 Tf
+(images.) Tj
+ET
+BT
+/F2 11 Tf
+72 664.9 Td
+(IMPORTANT:) Tj
+ET
+BT
+72 650.05 Td
+2.49 Tw
+/F1 11 Tf
+(PDF output is fully deterministic. Rendering the same document twice always produces) Tj
+0 Tw
+ET
+BT
+72 635.2 Td
+/F1 11 Tf
+(byte-identical output.) Tj
+ET
+BT
+72 596.35 Td
+/F2 20.4 Tf
+(Block Quotes) Tj
+ET
+0.7 0.7 0.7 RG
+BT
+72 564.81 Td
+2.15 Tw
+/F1 11 Tf
+(The PDF renderer is a pure managed PDF 1.4 writer with no external dependencies.
+It) Tj
+0 Tw
+ET
+BT
+72 549.96 Td
+2.13 Tw
+/F1 11 Tf
+(writes PDF primitives directly: streams, objects, and cross-reference tables.
+All output is) Tj
+0 Tw
+ET
+BT
+72 535.11 Td
+/F1 11 Tf
+(deterministic.) Tj
+ET
+2 w
+70 564.81 m 70 512.26 l S
+0 0 0 RG
+BT
+72 488.26 Td
+/F2 20.4 Tf
+(Description Lists) Tj
+ET
+BT
+72 456.72 Td
+/F2 11 Tf
+(Font embedding) Tj
+ET
+BT
+72 441.87 Td
+3.19 Tw
+/F1 11 Tf
+(TrueType fonts are parsed, subsetted to include only used glyphs, and embedded as) Tj
+0 Tw
+ET
+BT
+72 427.02 Td
+/F1 11 Tf
+(CIDFontType2 objects with ToUnicode CMaps for proper text extraction.) Tj
+ET
+BT
+72 408.17 Td
+/F2 11 Tf
+(Image support) Tj
+ET
+BT
+72 393.32 Td
+4.67 Tw
+/F1 11 Tf
+(JPEG images use DCTDecode \(raw passthrough\). PNG images are decompressed,) Tj
+0 Tw
+ET
+BT
+72 378.47 Td
+1.6 Tw
+/F1 11 Tf
+(de-filtered, and re-compressed with FlateDecode. RGBA PNGs get a separate SMask for) Tj
+0 Tw
+ET
+BT
+72 363.62 Td
+/F1 11 Tf
+(transparency.) Tj
+ET
+BT
+72 344.77 Td
+/F2 11 Tf
+(Page layout) Tj
+ET
+BT
+72 329.92 Td
+1.4 Tw
+/F1 11 Tf
+(The renderer uses a simple vertical flow model with configurable page size, margins, and) Tj
+0 Tw
+ET
+BT
+72 315.07 Td
+/F1 11 Tf
+(content width. No floats or multi-column support.) Tj
+ET
+BT
+72 272.22 Td
+/F2 20.4 Tf
+(Conclusion) Tj
+ET
+BT
+72 240.68 Td
+/F1 11 Tf
+(This document has demonstrated:) Tj
+ET
+BT
+72 217.83 Td
+/F1 11 Tf
+(1. ) Tj
+/F1 11 Tf
+( TrueType font support with Unicode text) Tj
+ET
+BT
+72 202.98 Td
+/F1 11 Tf
+(2. ) Tj
+/F1 11 Tf
+( JPEG and PNG image embedding) Tj
+ET
+BT
+72 188.13 Td
+/F1 11 Tf
+(3. ) Tj
+/F1 11 Tf
+( Clickable hyperlinks with URI annotations) Tj
+ET
+BT
+72 173.28 Td
+/F1 11 Tf
+(4. ) Tj
+/F1 11 Tf
+( Improved text justification with punctuation rules) Tj
+ET
+BT
+72 158.43 Td
+/F1 11 Tf
+(5. ) Tj
+/F1 11 Tf
+( Table rendering with cell wrapping and header repetition) Tj
+ET
+BT
+72 143.58 Td
+/F1 11 Tf
+(6. ) Tj
+/F1 11 Tf
+( Headers and footers with page numbers) Tj
+ET
+BT
+72 128.73 Td
+/F1 11 Tf
+(7. ) Tj
+/F1 11 Tf
+( Configurable typography and visual styling) Tj
+ET
+BT
+72 113.88 Td
+/F1 11 Tf
+(8. ) Tj
+/F1 11 Tf
+( Code blocks with language labels) Tj
+ET
+BT
+72 99.03 Td
+/F1 11 Tf
+(9. ) Tj
+/F1 11 Tf
+( Admonitions, block quotes, and description lists) Tj
+ET
+BT
+72 76.18 Td
+/F1 11 Tf
+(All rendered by a pure managed C# PDF writer with zero external dependencies.) Tj
+ET
+endstream
+endobj
+13 0 obj
+<< /Type /Page /MediaBox [0 0 595 842] /Contents 12 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R >> >> /Parent 14 0 R >>
+endobj
+14 0 obj
+<< /Type /Pages /Kids [9 0 R 11 0 R 13 0 R] /Count 3 >>
+endobj
+15 0 obj
+<< /Type /Catalog /Pages 14 0 R >>
+endobj
+16 0 obj
+<< /Producer (AdocNet PDF Renderer) /CreationDate (D:20260101000000+00'00') >>
+endobj
+xref
+0 17
+0000000000 65535 f 
+0000000019 00000 n 
+0000000116 00000 n 
+0000000218 00000 n 
+0000000323 00000 n 
+0000000418 00000 n 
+0000003222 00000 n 
+0000003379 00000 n 
+0000003539 00000 n 
+0000003704 00000 n 
+0000003889 00000 n 
+0000008076 00000 n 
+0000008235 00000 n 
+0000011466 00000 n 
+0000011625 00000 n 
+0000011697 00000 n 
+0000011748 00000 n 
+trailer
+<< /Size 17 /Root 15 0 R /Info 16 0 R >>
+startxref
+11843
+%%EOF

@@ -8,4 +8,5 @@ public enum TableCellStyle
     Header,
     Literal,
     Monospace,
+    Strong,
 }

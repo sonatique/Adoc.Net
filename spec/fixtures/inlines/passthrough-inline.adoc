@@ -1,0 +1,3 @@
+Inline plus passthrough: +*not bold*+ stays literal.
+
+Inline macro passthrough: pass:[<b>raw HTML</b>] is preserved.

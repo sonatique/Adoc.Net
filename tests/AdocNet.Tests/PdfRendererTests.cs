@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using AdocNet.Ast;
 using AdocNet.Converters.Pdf;
 using AdocNet.Parser;
@@ -534,6 +535,80 @@ public class PdfRendererTests
         Assert.That(bytes1, Is.EqualTo(bytes2), "Header/footer renders must be byte-identical");
     }
 
+    [Test]
+    public void Footer_height_affects_text_position()
+    {
+        var doc = AdocParser.Parse("= Test\n\nParagraph content.").Document;
+        var optsWith = new PdfRenderOptions { FooterText = "Footer", FooterHeight = 48f };
+        var optsWithout = new PdfRenderOptions { FooterText = "Footer" };
+
+        var pdfWith = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc, optsWith));
+        var pdfWithout = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc, optsWithout));
+
+        // Extract footer Y positions
+        var yWith = ExtractFooterY(pdfWith);
+        var yWithout = ExtractFooterY(pdfWithout);
+        Assert.That(yWith, Is.LessThan(yWithout), "Footer with height should be positioned lower");
+    }
+
+    [Test]
+    public void Footer_section_title_includes_number_when_sectnums()
+    {
+        var doc = AdocParser.Parse("= Doc Title\n:sectnums:\n\n== First Section\n\nContent.\n\n== Second Section\n\nMore content.").Document;
+        var options = new PdfRenderOptions { FooterText = "{section-title}" };
+        var pdf = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc, options));
+
+        // Footer should contain numbered section title
+        Assert.That(pdf, Does.Contain("1. First Section").Or.Contain("2. Second Section"));
+    }
+
+    [Test]
+    public void Footer_section_title_without_sectnums_has_no_number()
+    {
+        var doc = AdocParser.Parse("= Doc Title\n\n== My Section\n\nContent.").Document;
+        var options = new PdfRenderOptions { FooterText = "{section-title}" };
+        var pdf = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc, options));
+
+        // Footer should contain plain section title (no number prefix)
+        Assert.That(pdf, Does.Contain("My Section"));
+        Assert.That(pdf, Does.Not.Contain("1. My Section"));
+    }
+
+    [Test]
+    public void Footer_Y_matches_Asciidoctor_for_height48_font11()
+    {
+        // Asciidoctor PDF places footer text baseline at Y=33.75 when footer.height=48 and font-size=11.
+        // Our formula: footerHeight - fontSize * 1.30 = 48 - 14.3 = 33.7 (matches within 0.05pt).
+        var doc = AdocParser.Parse("= Test\n\nContent.").Document;
+        var options = new PdfRenderOptions { FooterText = "Footer", FooterHeight = 48f, FooterFontSize = 11f };
+        var pdf = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc, options));
+        var y = ExtractFooterY(pdf);
+        Assert.That(y, Is.EqualTo(33.7f).Within(0.1f),
+            $"Footer Y should match Asciidoctor (33.75) for footer.height=48, font=11. Got {y}.");
+    }
+
+    [Test]
+    public void Header_Y_matches_Asciidoctor_for_height64_font11()
+    {
+        // Asciidoctor PDF places header text baseline at Y=808.35 when header.height=64, font=11, page=842.
+        // Our formula: pageHeight - headerHeight/2 - fontSize * 0.15 = 842 - 32 - 1.65 = 808.35.
+        var doc = AdocParser.Parse("= Test\n\nContent.").Document;
+        var options = new PdfRenderOptions { HeaderText = "Header", HeaderHeight = 64f, HeaderFontSize = 11f };
+        var pdf = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc, options));
+        var match = Regex.Match(pdf, @"BT\n/F1 \d+ Tf\n([\d.]+) ([\d.]+) Td\n\(Header\)");
+        Assert.That(match.Success, Is.True, "Header text not found in PDF");
+        var y = float.Parse(match.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
+        Assert.That(y, Is.EqualTo(808.35f).Within(0.1f),
+            $"Header Y should match Asciidoctor (808.35) for header.height=64, font=11. Got {y}.");
+    }
+
+    private static float ExtractFooterY(string pdfContent)
+    {
+        // Find footer BT...ET block with low Y position
+        var match = Regex.Match(pdfContent, @"BT\n/F1 \d+ Tf\n([\d.]+) ([\d.]+) Td\n\(Footer\)");
+        return match.Success ? float.Parse(match.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture) : -1f;
+    }
+
     // ── Hyperlink annotations ──────────────────────────────────────────
 
     [Test]
@@ -821,29 +896,58 @@ public class PdfRendererTests
     private static List<(float Y, float H)> ParseFilledRects(string pdf)
     {
         var rects = new List<(float Y, float H)>();
-        int idx = 0;
-        // Look for "X Y W H re f" (filled rect) — the 'f' after 're' means fill
-        while ((idx = pdf.IndexOf(" re ", idx, StringComparison.Ordinal)) >= 0)
-        {
-            // Check if followed by 'f\n' (fill operator)
-            int afterRe = idx + 4;
-            bool isFilled = afterRe < pdf.Length && pdf[afterRe] == 'f';
 
-            if (isFilled)
+        // Find code block background regions: q\n0.95 0.95 0.95 rg\n...h\nf\nQ
+        // or the fallback: q\n0.95 0.95 0.95 rg\nX Y W H re f\nQ
+        int idx = 0;
+        while (idx < pdf.Length)
+        {
+            int qStart = pdf.IndexOf("q\n0.95 0.95 0.95 rg\n", idx, StringComparison.Ordinal);
+            if (qStart < 0) break;
+            int blockStart = qStart + "q\n0.95 0.95 0.95 rg\n".Length;
+            int qEnd = pdf.IndexOf("Q\n", blockStart, StringComparison.Ordinal);
+            if (qEnd < 0) break;
+            string block = pdf.Substring(blockStart, qEnd - blockStart);
+
+            // Try "X Y W H re f" pattern first
+            var reMatch = Regex.Match(block, @"([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+re\s+f");
+            if (reMatch.Success)
             {
-                int lineStart = pdf.LastIndexOf('\n', idx - 1) + 1;
-                string line = pdf.Substring(lineStart, idx - lineStart).Trim();
-                var parts = line.Split(' ');
-                if (parts.Length >= 4 &&
-                    float.TryParse(parts[1], System.Globalization.NumberStyles.Float,
-                        System.Globalization.CultureInfo.InvariantCulture, out float ry) &&
-                    float.TryParse(parts[3], System.Globalization.NumberStyles.Float,
-                        System.Globalization.CultureInfo.InvariantCulture, out float rh))
+                float.TryParse(reMatch.Groups[2].Value, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out float ry);
+                float.TryParse(reMatch.Groups[4].Value, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out float rh);
+                rects.Add((ry, rh));
+            }
+            else
+            {
+                // Rounded rect: extract all Y coords from m/c/l ops to find bounding box
+                var yValues = new List<float>();
+                foreach (Match m in Regex.Matches(block, @"([\d.]+)\s+([\d.]+)\s+[mlc]"))
                 {
-                    rects.Add((ry, rh));
+                    if (float.TryParse(m.Groups[2].Value, System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out float yv))
+                        yValues.Add(yv);
+                }
+                // Also parse Bezier control points (6 coords before c)
+                foreach (Match m in Regex.Matches(block,
+                    @"[\d.]+\s+([\d.]+)\s+[\d.]+\s+([\d.]+)\s+[\d.]+\s+([\d.]+)\s+c"))
+                {
+                    foreach (int gi in new[] { 1, 2, 3 })
+                    {
+                        if (float.TryParse(m.Groups[gi].Value, System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out float yv))
+                            yValues.Add(yv);
+                    }
+                }
+                if (yValues.Count > 0)
+                {
+                    float minY = yValues.Min();
+                    float maxY = yValues.Max();
+                    rects.Add((minY, maxY - minY));
                 }
             }
-            idx++;
+            idx = qEnd + 1;
         }
         return rects;
     }
@@ -1675,6 +1779,218 @@ public class PdfRendererTests
             "/Library/Fonts/Arial.ttf",
         ];
         return candidates.FirstOrDefault(File.Exists);
+    }
+
+    // ── Outline / bookmark tree ─────────────────────────────────────────
+
+    [Test]
+    public void Render_document_with_sections_produces_outline()
+    {
+        var doc = new DocumentNode { Title = "My Doc" };
+        var section = new SectionNode { Level = 1, Title = "First Section", Id = "_first_section" };
+        section.AddChild(new ParagraphNode { Text = "Content." });
+        doc.AddChild(section);
+
+        byte[] pdf = new PdfRenderer().RenderToBytes(doc);
+        string pdfText = Encoding.ASCII.GetString(pdf);
+
+        Assert.That(pdfText, Does.Contain("/Type /Outlines"),
+            "PDF should contain an outline root object");
+        Assert.That(pdfText, Does.Contain("/Title (First Section)"),
+            "PDF outline should contain the section title");
+    }
+
+    [Test]
+    public void Render_outline_includes_document_title()
+    {
+        var doc = new DocumentNode { Title = "My Document Title" };
+        var section = new SectionNode { Level = 1, Title = "Section", Id = "_section" };
+        section.AddChild(new ParagraphNode { Text = "Text." });
+        doc.AddChild(section);
+
+        byte[] pdf = new PdfRenderer().RenderToBytes(doc);
+        string pdfText = Encoding.ASCII.GetString(pdf);
+
+        Assert.That(pdfText, Does.Contain("/Title (My Document Title)"),
+            "Outline should include document title");
+    }
+
+    [Test]
+    public void Render_outline_nests_child_sections()
+    {
+        var doc = new DocumentNode { Title = "Doc" };
+        var sect1 = new SectionNode { Level = 1, Title = "Chapter One", Id = "_chapter_one" };
+        var sect2 = new SectionNode { Level = 2, Title = "Sub Section", Id = "_sub_section" };
+        sect2.AddChild(new ParagraphNode { Text = "Deep content." });
+        sect1.AddChild(sect2);
+        doc.AddChild(sect1);
+
+        byte[] pdf = new PdfRenderer().RenderToBytes(doc);
+        string pdfText = Encoding.ASCII.GetString(pdf);
+
+        Assert.That(pdfText, Does.Contain("/Title (Chapter One)"));
+        Assert.That(pdfText, Does.Contain("/Title (Sub Section)"));
+        // The sub-section's parent should reference the chapter's object
+        Assert.That(pdfText, Does.Contain("/First ").And.Contain("/Last "),
+            "Chapter outline entry should have First/Last for nested children");
+    }
+
+    [Test]
+    public void Render_catalog_references_outlines()
+    {
+        var doc = new DocumentNode { Title = "Doc" };
+        var section = new SectionNode { Level = 1, Title = "Sec", Id = "_sec" };
+        section.AddChild(new ParagraphNode { Text = "Text." });
+        doc.AddChild(section);
+
+        byte[] pdf = new PdfRenderer().RenderToBytes(doc);
+        string pdfText = Encoding.ASCII.GetString(pdf);
+
+        Assert.That(pdfText, Does.Contain("/Outlines ").And.Contain("/PageMode /UseOutlines"),
+            "Catalog should reference outlines and set PageMode");
+    }
+
+    [Test]
+    public void Render_outline_deterministic()
+    {
+        var doc = new DocumentNode { Title = "Doc" };
+        for (int i = 1; i <= 3; i++)
+        {
+            var s = new SectionNode { Level = 1, Title = $"Section {i}", Id = $"_section_{i}" };
+            s.AddChild(new ParagraphNode { Text = $"Content {i}." });
+            doc.AddChild(s);
+        }
+
+        byte[] pdf1 = new PdfRenderer().RenderToBytes(doc);
+        byte[] pdf2 = new PdfRenderer().RenderToBytes(doc);
+
+        Assert.That(pdf1, Is.EqualTo(pdf2), "Outline rendering must be deterministic");
+    }
+
+    // ── Cross-reference links ───────────────────────────────────────────
+
+    [Test]
+    public void Render_cross_reference_creates_internal_link()
+    {
+        var doc = new DocumentNode { Title = "Doc" };
+        var section = new SectionNode { Level = 1, Title = "Target Section", Id = "_target_section" };
+        section.AddChild(new ParagraphNode { Text = "Target content." });
+        doc.AddChild(section);
+
+        // Paragraph with cross-reference to the section
+        doc.AddChild(new ParagraphNode
+        {
+            Text = "See Target Section",
+            Inlines = [
+                new TextInlineNode { Value = "See " },
+                new CrossReferenceInlineNode
+                {
+                    Target = "_target_section",
+                    Label = "Target Section"
+                }
+            ]
+        });
+
+        byte[] pdf = new PdfRenderer().RenderToBytes(doc);
+        string pdfText = Encoding.ASCII.GetString(pdf);
+
+        // Should have a GoTo destination annotation (not URI)
+        Assert.That(pdfText, Does.Contain("/Dest ["),
+            "Cross-reference should create a GoTo destination link");
+    }
+
+    [Test]
+    public void Render_cross_reference_to_unknown_target_does_not_crash()
+    {
+        var doc = new DocumentNode();
+        doc.AddChild(new ParagraphNode
+        {
+            Text = "Missing",
+            Inlines = [
+                new CrossReferenceInlineNode
+                {
+                    Target = "_nonexistent",
+                    Label = "Missing"
+                }
+            ]
+        });
+
+        byte[] pdf = new PdfRenderer().RenderToBytes(doc);
+
+        Assert.That(pdf.Length, Is.GreaterThan(0),
+            "PDF should be generated even with unknown xref target");
+    }
+
+    // ── TOC rendering ───────────────────────────────────────────────────
+
+    [Test]
+    public void Render_toc_node_produces_table_of_contents()
+    {
+        var doc = new DocumentNode { Title = "Doc" };
+
+        var entries = new List<TocEntry>
+        {
+            new() { Level = 1, Id = "_intro", Title = "Introduction" },
+            new() { Level = 1, Id = "_main", Title = "Main Content" },
+        };
+        doc.AddChild(new TocNode { Entries = entries });
+
+        var s1 = new SectionNode { Level = 1, Title = "Introduction", Id = "_intro" };
+        s1.AddChild(new ParagraphNode { Text = "Intro text." });
+        doc.AddChild(s1);
+
+        var s2 = new SectionNode { Level = 1, Title = "Main Content", Id = "_main" };
+        s2.AddChild(new ParagraphNode { Text = "Main text." });
+        doc.AddChild(s2);
+
+        byte[] pdf = new PdfRenderer().RenderToBytes(doc);
+        string pdfText = Encoding.ASCII.GetString(pdf);
+
+        // TOC title should be in the PDF
+        AssertPdfContains(pdf, "Table of Contents");
+        // TOC entries should be in the PDF
+        AssertPdfContains(pdf, "Introduction");
+        AssertPdfContains(pdf, "Main Content");
+    }
+
+    [Test]
+    public void Render_toc_with_nested_entries()
+    {
+        var doc = new DocumentNode { Title = "Doc" };
+
+        var entries = new List<TocEntry>
+        {
+            new()
+            {
+                Level = 1, Id = "_chapter", Title = "Chapter",
+                Children = [new TocEntry { Level = 2, Id = "_sub", Title = "Subsection" }]
+            },
+        };
+        doc.AddChild(new TocNode { Entries = entries });
+
+        var s1 = new SectionNode { Level = 1, Title = "Chapter", Id = "_chapter" };
+        var s2 = new SectionNode { Level = 2, Title = "Subsection", Id = "_sub" };
+        s2.AddChild(new ParagraphNode { Text = "Detail." });
+        s1.AddChild(s2);
+        doc.AddChild(s1);
+
+        byte[] pdf = new PdfRenderer().RenderToBytes(doc);
+
+        AssertPdfContains(pdf, "Chapter");
+        AssertPdfContains(pdf, "Subsection");
+    }
+
+    [Test]
+    public void Render_document_without_toc_produces_no_toc()
+    {
+        var doc = new DocumentNode { Title = "Simple" };
+        doc.AddChild(new ParagraphNode { Text = "No table of contents." });
+
+        byte[] pdf = new PdfRenderer().RenderToBytes(doc);
+        string pdfText = Encoding.ASCII.GetString(pdf);
+
+        Assert.That(pdfText, Does.Not.Contain("Table of Contents"),
+            "PDF without TocNode should not contain TOC");
     }
 
     // ── Helper ──────────────────────────────────────────────────────────

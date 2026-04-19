@@ -1,0 +1,16 @@
+[cols="1,1,1,1,1"]
+|===
+|Normal e|Emphasis h|Header m|Monospace s|Strong
+
+|plain
+e|italic text
+h|header cell
+m|code text
+s|bold text
+
+|again
+e|more emphasis
+h|another header
+m|more code
+s|more bold
+|===

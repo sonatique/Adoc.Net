@@ -14,6 +14,8 @@ public sealed class DocBookRenderer : DocumentRendererBase
     private const string XLinkNs = "http://www.w3.org/1999/xlink";
     private const string XmlNs = "http://www.w3.org/XML/1998/namespace";
 
+    private int _calloutGroupCounter;
+
     /// <inheritdoc />
     public override string Format => "docbook";
 
@@ -29,6 +31,8 @@ public sealed class DocBookRenderer : DocumentRendererBase
             NewLineChars = "\n",
         };
 
+        _calloutGroupCounter = 0;
+
         using var writer = XmlWriter.Create(output, settings);
 
         writer.WriteStartDocument();
@@ -41,11 +45,10 @@ public sealed class DocBookRenderer : DocumentRendererBase
             writer.WriteElementString("title", DocBookNs, context.Document.Title);
         }
 
-        foreach (var child in context.Document.Children)
-        {
-            if (child is BlockNode block)
-                RenderBlock(writer, block, context);
-        }
+        // Render children with section nesting:
+        // DocBook requires sections to be nested (level-2 inside level-1, etc.)
+        // while the AST stores them as flat siblings. Build the nesting here.
+        RenderChildrenWithSectionNesting(writer, context.Document.Children, context);
 
         writer.WriteEndElement(); // article
         writer.WriteEndDocument();
@@ -79,22 +82,118 @@ public sealed class DocBookRenderer : DocumentRendererBase
         }
     }
 
+    /// <summary>
+    /// Renders a flat list of AST nodes with proper DocBook section nesting.
+    /// Subsections (higher level number) are nested inside their parent sections.
+    /// </summary>
+    private void RenderChildrenWithSectionNesting(
+        XmlWriter writer, IReadOnlyList<AstNode> children, RenderContext context)
+    {
+        int i = 0;
+        while (i < children.Count)
+        {
+            if (children[i] is SectionNode section)
+            {
+                RenderSectionWithNesting(writer, section, children, ref i, context);
+            }
+            else if (children[i] is BlockNode block)
+            {
+                RenderBlock(writer, block, context);
+                i++;
+            }
+            else
+            {
+                i++;
+            }
+        }
+    }
+
+    private void RenderSectionWithNesting(
+        XmlWriter writer, SectionNode node, IReadOnlyList<AstNode> siblings,
+        ref int index, RenderContext context)
+    {
+        // Detect bibliography sections (sections containing BibliographyEntryNode children)
+        bool isBibliography = node.Children.Any(c => c is BibliographyEntryNode);
+
+        writer.WriteStartElement(isBibliography ? "bibliography" : "section", DocBookNs);
+
+        if (node.Id is not null)
+            writer.WriteAttributeString("xml", "id", XmlNs, node.Id);
+
+        WriteRoles(writer, node);
+
+        writer.WriteStartElement("title", DocBookNs);
+        if (node.TitleInlines.Count > 0)
+            RenderInlines(writer, node.TitleInlines, context);
+        else
+            writer.WriteString(node.Title);
+        writer.WriteEndElement(); // title
+
+        if (isBibliography)
+        {
+            // Wrap bibliography entries in <bibliodiv>
+            writer.WriteStartElement("bibliodiv", DocBookNs);
+            foreach (var child in node.Children)
+            {
+                if (child is BibliographyEntryNode entry)
+                    RenderBibliographyEntry(writer, entry, context);
+                else if (child is BlockNode block)
+                    RenderBlock(writer, block, context);
+            }
+            writer.WriteEndElement(); // bibliodiv
+        }
+        else
+        {
+            foreach (var child in node.Children)
+            {
+                if (child is BlockNode block)
+                    RenderBlock(writer, block, context);
+            }
+        }
+
+        // Consume subsequent sibling sections that are subsections (deeper level)
+        int currentLevel = node.Level;
+        index++;
+
+        while (index < siblings.Count)
+        {
+            if (siblings[index] is SectionNode nextSection && nextSection.Level > currentLevel)
+            {
+                RenderSectionWithNesting(writer, nextSection, siblings, ref index, context);
+            }
+            else if (siblings[index] is SectionNode)
+            {
+                break;
+            }
+            else if (siblings[index] is BlockNode block)
+            {
+                RenderBlock(writer, block, context);
+                index++;
+            }
+            else
+            {
+                index++;
+            }
+        }
+
+        writer.WriteEndElement(); // section or bibliography
+    }
+
     private void RenderSection(XmlWriter writer, SectionNode node, RenderContext context)
     {
+        // Fallback for sections rendered outside the nesting context (e.g., inside blocks)
         writer.WriteStartElement("section", DocBookNs);
 
         if (node.Id is not null)
             writer.WriteAttributeString("xml", "id", XmlNs, node.Id);
 
+        WriteRoles(writer, node);
+
         writer.WriteStartElement("title", DocBookNs);
         if (node.TitleInlines.Count > 0)
-        {
             RenderInlines(writer, node.TitleInlines, context);
-        }
         else
-        {
             writer.WriteString(node.Title);
-        }
         writer.WriteEndElement(); // title
 
         foreach (var child in node.Children)
@@ -110,6 +209,11 @@ public sealed class DocBookRenderer : DocumentRendererBase
     {
         writer.WriteStartElement("para", DocBookNs);
 
+        if (node.Id is not null)
+            writer.WriteAttributeString("xml", "id", XmlNs, node.Id);
+
+        WriteRoles(writer, node);
+
         if (node.Inlines.Count > 0)
         {
             RenderInlines(writer, node.Inlines, context);
@@ -122,21 +226,42 @@ public sealed class DocBookRenderer : DocumentRendererBase
         writer.WriteEndElement(); // para
     }
 
-    private void RenderList(XmlWriter writer, ListNode node, RenderContext context)
+    private void RenderList(XmlWriter writer, ListNode node, RenderContext context, int orderedDepth = 0)
     {
         var elementName = node.ListKind == ListKind.Ordered ? "orderedlist" : "itemizedlist";
         writer.WriteStartElement(elementName, DocBookNs);
 
+        if (node.Id is not null)
+            writer.WriteAttributeString("xml", "id", XmlNs, node.Id);
+
+        if (node.ListKind == ListKind.Ordered)
+        {
+            // Cycle numeration: arabic → loweralpha → lowerroman → upperalpha → upperroman
+            // Only counts ordered list ancestors, not unordered ones
+            var numeration = (orderedDepth % 5) switch
+            {
+                0 => "arabic",
+                1 => "loweralpha",
+                2 => "lowerroman",
+                3 => "upperalpha",
+                _ => "upperroman",
+            };
+            writer.WriteAttributeString("numeration", numeration);
+        }
+
+        // Pass the next ordered depth for children: increment only if THIS list is ordered
+        var childOrderedDepth = node.ListKind == ListKind.Ordered ? orderedDepth + 1 : orderedDepth;
+
         foreach (var child in node.Children)
         {
             if (child is ListItemNode item)
-                RenderListItem(writer, item, context);
+                RenderListItem(writer, item, context, childOrderedDepth);
         }
 
         writer.WriteEndElement();
     }
 
-    private void RenderListItem(XmlWriter writer, ListItemNode node, RenderContext context)
+    private void RenderListItem(XmlWriter writer, ListItemNode node, RenderContext context, int orderedDepth = 0)
     {
         writer.WriteStartElement("listitem", DocBookNs);
 
@@ -159,7 +284,9 @@ public sealed class DocBookRenderer : DocumentRendererBase
 
             foreach (var child in node.Children)
             {
-                if (child is BlockNode block)
+                if (child is ListNode nestedList)
+                    RenderList(writer, nestedList, context, orderedDepth);
+                else if (child is BlockNode block)
                     RenderBlock(writer, block, context);
             }
         }
@@ -181,34 +308,49 @@ public sealed class DocBookRenderer : DocumentRendererBase
         var hasTitle = node.Title is not null;
         writer.WriteStartElement(hasTitle ? "table" : "informaltable", DocBookNs);
 
+        if (node.Id is not null)
+            writer.WriteAttributeString("xml", "id", XmlNs, node.Id);
+
         if (hasTitle)
             writer.WriteElementString("title", DocBookNs, node.Title);
 
-        // Determine column count from first row
+        // Determine actual column count from column specs or first row
         var rows = node.Children.OfType<TableRowNode>().ToList();
-        var colCount = rows.Count > 0
-            ? rows[0].Children.OfType<TableCellNode>().Count()
-            : 0;
+        int colCount;
+        if (node.Columns is not null)
+        {
+            colCount = node.Columns.Count;
+        }
+        else
+        {
+            // Count actual columns considering colspan
+            colCount = rows.Count > 0
+                ? rows[0].Children.OfType<TableCellNode>().Sum(c => c.ColSpan)
+                : 0;
+        }
 
         writer.WriteStartElement("tgroup", DocBookNs);
         writer.WriteAttributeString("cols", colCount.ToString());
 
-        // Write colspec elements
+        // Write colspec elements with proportional widths
         if (node.Columns is not null)
         {
-            foreach (var col in node.Columns)
+            for (int i = 0; i < node.Columns.Count; i++)
             {
                 writer.WriteStartElement("colspec", DocBookNs);
-                writer.WriteAttributeString("colwidth", $"{col.Width}*");
+                writer.WriteAttributeString("colname", $"col_{i + 1}");
+                writer.WriteAttributeString("colwidth", $"{node.Columns[i].Width}*");
                 writer.WriteEndElement(); // colspec
             }
         }
         else
         {
+            var defaultWidth = colCount > 0 ? 100 / colCount : 1;
             for (var i = 0; i < colCount; i++)
             {
                 writer.WriteStartElement("colspec", DocBookNs);
-                writer.WriteAttributeString("colwidth", "1*");
+                writer.WriteAttributeString("colname", $"col_{i + 1}");
+                writer.WriteAttributeString("colwidth", $"{defaultWidth}*");
                 writer.WriteEndElement(); // colspec
             }
         }
@@ -217,7 +359,7 @@ public sealed class DocBookRenderer : DocumentRendererBase
         if (node.HasHeader && rows.Count > 0)
         {
             writer.WriteStartElement("thead", DocBookNs);
-            RenderTableRow(writer, rows[0], context);
+            RenderTableRow(writer, rows[0], node, context, isHeader: true);
             writer.WriteEndElement(); // thead
             rows = rows.Skip(1).ToList();
         }
@@ -234,7 +376,7 @@ public sealed class DocBookRenderer : DocumentRendererBase
         writer.WriteStartElement("tbody", DocBookNs);
         foreach (var row in rows)
         {
-            RenderTableRow(writer, row, context);
+            RenderTableRow(writer, row, node, context);
         }
         writer.WriteEndElement(); // tbody
 
@@ -242,7 +384,7 @@ public sealed class DocBookRenderer : DocumentRendererBase
         if (footerRow is not null)
         {
             writer.WriteStartElement("tfoot", DocBookNs);
-            RenderTableRow(writer, footerRow, context);
+            RenderTableRow(writer, footerRow, node, context);
             writer.WriteEndElement(); // tfoot
         }
 
@@ -250,27 +392,126 @@ public sealed class DocBookRenderer : DocumentRendererBase
         writer.WriteEndElement(); // table or informaltable
     }
 
-    private void RenderTableRow(XmlWriter writer, TableRowNode row, RenderContext context)
+    private void RenderTableRow(XmlWriter writer, TableRowNode row, TableNode table, RenderContext context, bool isHeader = false)
     {
         writer.WriteStartElement("row", DocBookNs);
+
+        int colIndex = 0;
         foreach (var child in row.Children)
         {
             if (child is TableCellNode cell)
             {
                 writer.WriteStartElement("entry", DocBookNs);
 
-                if (cell.ColSpan > 1)
-                    writer.WriteAttributeString("namest", $"col{1}");
+                // Resolve alignment from cell or column spec
+                var hAlign = cell.Alignment;
+                var vAlign = cell.VerticalAlignment;
+                if (hAlign is null && table.Columns is not null && colIndex < table.Columns.Count)
+                    hAlign = table.Columns[colIndex].Alignment;
+                if (vAlign is null && table.Columns is not null && colIndex < table.Columns.Count)
+                    vAlign = table.Columns[colIndex].VerticalAlignment;
 
-                if (cell.Inlines.Count > 0)
+                writer.WriteAttributeString("align", AlignToString(hAlign ?? TableAlignment.Left));
+                writer.WriteAttributeString("valign", VAlignToString(vAlign ?? TableVerticalAlignment.Top));
+
+                if (cell.ColSpan > 1)
+                {
+                    writer.WriteAttributeString("namest", $"col_{colIndex + 1}");
+                    writer.WriteAttributeString("nameend", $"col_{colIndex + cell.ColSpan}");
+                }
+
+                if (cell.RowSpan > 1)
+                    writer.WriteAttributeString("morerows", (cell.RowSpan - 1).ToString());
+
+                bool isEmpty = cell.Inlines.Count == 0 && string.IsNullOrEmpty(cell.Text);
+                bool hasBlockChildren = cell.Children.Any(c => c is BlockNode);
+
+                if (isEmpty && !isHeader)
+                {
+                    // Empty cells: write empty string to force explicit close tag
+                    writer.WriteString("");
+                }
+                else if (isHeader)
+                {
+                    if (cell.Inlines.Count > 0)
+                        RenderInlines(writer, cell.Inlines, context);
+                    else
+                        writer.WriteString(cell.Text);
+                }
+                else if (hasBlockChildren)
+                {
+                    foreach (var cellChild in cell.Children)
+                    {
+                        if (cellChild is BlockNode block)
+                            RenderBlock(writer, block, context);
+                    }
+                }
+                else if (cell.Inlines.Count > 0)
+                {
+                    writer.WriteStartElement("para", DocBookNs);
+                    WriteCellStyleOpen(writer, cell.ContentStyle);
                     RenderInlines(writer, cell.Inlines, context);
+                    WriteCellStyleClose(writer, cell.ContentStyle);
+                    writer.WriteEndElement(); // para
+                }
                 else
+                {
+                    writer.WriteStartElement("para", DocBookNs);
+                    WriteCellStyleOpen(writer, cell.ContentStyle);
                     writer.WriteString(cell.Text);
+                    WriteCellStyleClose(writer, cell.ContentStyle);
+                    writer.WriteEndElement(); // para
+                }
 
                 writer.WriteEndElement(); // entry
+                colIndex += cell.ColSpan;
             }
         }
         writer.WriteEndElement(); // row
+    }
+
+    private static string AlignToString(TableAlignment align) => align switch
+    {
+        TableAlignment.Center => "center",
+        TableAlignment.Right => "right",
+        _ => "left",
+    };
+
+    private static string VAlignToString(TableVerticalAlignment align) => align switch
+    {
+        TableVerticalAlignment.Middle => "middle",
+        TableVerticalAlignment.Bottom => "bottom",
+        _ => "top",
+    };
+
+    private static void WriteCellStyleOpen(XmlWriter writer, TableCellStyle style)
+    {
+        switch (style)
+        {
+            case TableCellStyle.Emphasis:
+                writer.WriteStartElement("emphasis", DocBookNs);
+                break;
+            case TableCellStyle.Header:
+                writer.WriteStartElement("emphasis", DocBookNs);
+                writer.WriteAttributeString("role", "strong");
+                break;
+            case TableCellStyle.Monospace:
+                writer.WriteStartElement("literal", DocBookNs);
+                break;
+            case TableCellStyle.Literal:
+                writer.WriteStartElement("literal", DocBookNs);
+                break;
+            case TableCellStyle.Strong:
+                writer.WriteStartElement("emphasis", DocBookNs);
+                writer.WriteAttributeString("role", "strong");
+                break;
+        }
+    }
+
+    private static void WriteCellStyleClose(XmlWriter writer, TableCellStyle style)
+    {
+        if (style is TableCellStyle.Emphasis or TableCellStyle.Header or TableCellStyle.Monospace or TableCellStyle.Literal or TableCellStyle.Strong)
+            writer.WriteEndElement();
     }
 
     private void RenderDelimitedBlock(XmlWriter writer, DelimitedBlockNode node, RenderContext context)
@@ -278,22 +519,39 @@ public sealed class DocBookRenderer : DocumentRendererBase
         switch (node.BlockKind)
         {
             case DelimitedBlockKind.Source:
+                if (node.Callouts is { Count: > 0 })
+                {
+                    RenderSourceBlockWithCallouts(writer, node, context);
+                }
+                else if (node.Language is not null)
+                {
+                    WriteTitledVerbatimBlock(writer, node, "programlisting",
+                        w => w.WriteAttributeString("language", node.Language));
+                }
+                else
+                {
+                    WriteTitledVerbatimBlock(writer, node, "screen");
+                }
+                break;
+
             case DelimitedBlockKind.Listing:
-                writer.WriteStartElement("programlisting", DocBookNs);
-                if (node.Language is not null)
-                    writer.WriteAttributeString("language", node.Language);
-                writer.WriteString(node.Content ?? "");
-                writer.WriteEndElement();
+                if (node.Callouts is { Count: > 0 })
+                    RenderSourceBlockWithCallouts(writer, node, context);
+                else
+                    WriteTitledVerbatimBlock(writer, node, "screen");
                 break;
 
             case DelimitedBlockKind.Literal:
                 writer.WriteStartElement("literallayout", DocBookNs);
+                writer.WriteAttributeString("class", "monospaced");
                 writer.WriteString(node.Content ?? "");
                 writer.WriteEndElement();
                 break;
 
             case DelimitedBlockKind.Example:
-                writer.WriteStartElement("example", DocBookNs);
+                var exampleElement = node.Title is not null ? "example" : "informalexample";
+                writer.WriteStartElement(exampleElement, DocBookNs);
+                WriteRoles(writer, node);
                 if (node.Title is not null)
                     writer.WriteElementString("title", DocBookNs, node.Title);
                 foreach (var child in node.Children)
@@ -348,16 +606,22 @@ public sealed class DocBookRenderer : DocumentRendererBase
                 break;
 
             case DelimitedBlockKind.Passthrough:
-                // Passthrough content is written as raw XML
+                // Passthrough content is written as raw XML with surrounding newlines
                 if (node.Content is not null)
+                {
+                    writer.WriteRaw("\n");
                     writer.WriteRaw(node.Content);
+                    writer.WriteRaw("\n");
+                }
                 break;
         }
     }
 
     private void RenderBlockImage(XmlWriter writer, BlockImageNode node, RenderContext context)
     {
-        writer.WriteStartElement("figure", DocBookNs);
+        // Asciidoctor uses <informalfigure> for images without titles, <figure> for titled images
+        var elementName = node.Title is not null ? "figure" : "informalfigure";
+        writer.WriteStartElement(elementName, DocBookNs);
 
         if (node.Id is not null)
             writer.WriteAttributeString("xml", "id", XmlNs, node.Id);
@@ -492,9 +756,19 @@ public sealed class DocBookRenderer : DocumentRendererBase
     private void RenderBibliographyEntry(XmlWriter writer, BibliographyEntryNode node, RenderContext context)
     {
         writer.WriteStartElement("bibliomixed", DocBookNs);
-        writer.WriteAttributeString("xml", "id", XmlNs, node.RefId);
 
         writer.WriteStartElement("bibliomisc", DocBookNs);
+
+        // Write anchor with xreflabel (matches Asciidoctor DocBook output)
+        var displayLabel = node.Label ?? node.RefId;
+        writer.WriteStartElement("anchor", DocBookNs);
+        writer.WriteAttributeString("xml", "id", XmlNs, node.RefId);
+        writer.WriteAttributeString("xreflabel", $"[{displayLabel}]");
+        writer.WriteEndElement(); // anchor
+
+        // Write [label] prefix
+        writer.WriteString($"[{displayLabel}] ");
+
         if (node.Inlines.Count > 0)
             RenderInlines(writer, node.Inlines, context);
         else
@@ -570,14 +844,26 @@ public sealed class DocBookRenderer : DocumentRendererBase
                 break;
 
             case FootnoteInlineNode n:
-                writer.WriteStartElement("footnote", DocBookNs);
-                writer.WriteStartElement("para", DocBookNs);
-                if (n.Inlines.Count > 0)
-                    RenderInlines(writer, n.Inlines, context);
-                else if (n.Text is not null)
-                    writer.WriteString(n.Text);
-                writer.WriteEndElement(); // para
-                writer.WriteEndElement(); // footnote
+                // Named footnote back-reference: use <footnoteref> (no content)
+                if (n.Id is not null && n.Text is null && n.Inlines.Count == 0)
+                {
+                    writer.WriteStartElement("footnoteref", DocBookNs);
+                    writer.WriteAttributeString("linkend", n.Id);
+                    writer.WriteEndElement();
+                }
+                else
+                {
+                    writer.WriteStartElement("footnote", DocBookNs);
+                    if (n.Id is not null)
+                        writer.WriteAttributeString("xml", "id", XmlNs, n.Id);
+                    writer.WriteStartElement("para", DocBookNs);
+                    if (n.Inlines.Count > 0)
+                        RenderInlines(writer, n.Inlines, context);
+                    else if (n.Text is not null)
+                        writer.WriteString(n.Text);
+                    writer.WriteEndElement(); // para
+                    writer.WriteEndElement(); // footnote
+                }
                 break;
 
             case CrossReferenceInlineNode n:
@@ -652,6 +938,152 @@ public sealed class DocBookRenderer : DocumentRendererBase
 
             default:
                 break;
+        }
+    }
+
+    /// <summary>
+    /// Writes a role attribute if the block node has any roles assigned.
+    /// </summary>
+    private static void WriteRoles(XmlWriter writer, BlockNode node)
+    {
+        if (node.Roles is { Count: > 0 })
+            writer.WriteAttributeString("role", string.Join(" ", node.Roles));
+    }
+
+    /// <summary>
+    /// Renders a source/listing block that has callout markers, emitting &lt;co&gt; elements
+    /// in the programlisting and a &lt;calloutlist&gt; after it.
+    /// </summary>
+    private void RenderSourceBlockWithCallouts(XmlWriter writer, DelimitedBlockNode node, RenderContext context)
+    {
+        _calloutGroupCounter++;
+        var groupId = _calloutGroupCounter;
+        var callouts = node.Callouts!;
+
+        // Build a map: lineNumber → list of callout entries for that line
+        var lineCallouts = new Dictionary<int, List<CalloutEntry>>();
+        foreach (var c in callouts)
+        {
+            if (c.LineNumber >= 0)
+            {
+                if (!lineCallouts.TryGetValue(c.LineNumber, out var list))
+                {
+                    list = [];
+                    lineCallouts[c.LineNumber] = list;
+                }
+                list.Add(c);
+            }
+        }
+
+        var elementName = node.Language is not null ? "programlisting" : "screen";
+
+        if (node.Title is not null)
+        {
+            writer.WriteStartElement("formalpara", DocBookNs);
+            writer.WriteElementString("title", DocBookNs, node.Title);
+            writer.WriteStartElement("para", DocBookNs);
+        }
+
+        writer.WriteStartElement(elementName, DocBookNs);
+        if (node.Language is not null)
+            writer.WriteAttributeString("language", node.Language);
+        WriteRoles(writer, node);
+
+        // Write content line by line, inserting <co> elements where callout markers were
+        var content = node.Content ?? "";
+        var lines = content.Split('\n');
+        for (int i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i];
+            if (lineCallouts.TryGetValue(i, out var entries))
+            {
+                // Strip trailing comment-only text (e.g. "//") before inserting <co>
+                var trimmedLine = StripTrailingCommentMarker(line);
+                writer.WriteString(trimmedLine);
+                foreach (var entry in entries)
+                {
+                    writer.WriteStartElement("co", DocBookNs);
+                    writer.WriteAttributeString("xml", "id", XmlNs, $"CO{groupId}-{entry.Number}");
+                    writer.WriteEndElement();
+                }
+            }
+            else
+            {
+                writer.WriteString(line);
+            }
+
+            if (i < lines.Length - 1)
+                writer.WriteString("\n");
+        }
+
+        writer.WriteEndElement(); // programlisting/screen
+
+        if (node.Title is not null)
+        {
+            writer.WriteEndElement(); // para
+            writer.WriteEndElement(); // formalpara
+        }
+
+        // Write calloutlist only if there are entries with actual explanation text
+        var entriesWithText = callouts.Where(e => e.Text.Length > 0 || e.Inlines.Count > 0).ToList();
+        if (entriesWithText.Count > 0)
+        {
+            writer.WriteStartElement("calloutlist", DocBookNs);
+            foreach (var entry in entriesWithText)
+            {
+                writer.WriteStartElement("callout", DocBookNs);
+                writer.WriteAttributeString("arearefs", $"CO{groupId}-{entry.Number}");
+                writer.WriteStartElement("para", DocBookNs);
+                if (entry.Inlines.Count > 0)
+                    RenderInlines(writer, entry.Inlines, context);
+                else
+                    writer.WriteString(entry.Text);
+                writer.WriteEndElement(); // para
+                writer.WriteEndElement(); // callout
+            }
+            writer.WriteEndElement(); // calloutlist
+        }
+    }
+
+    /// <summary>
+    /// Strips trailing comment-only markers (e.g. "//" or "#") from a source line
+    /// where callout markers were previously attached.
+    /// </summary>
+    private static string StripTrailingCommentMarker(string line)
+    {
+        var trimmed = line.TrimEnd();
+        if (trimmed.EndsWith("//"))
+            return trimmed[..^2];
+        if (trimmed.EndsWith('#'))
+            return trimmed[..^1];
+        return line;
+    }
+
+    /// <summary>
+    /// Writes a verbatim block (screen, programlisting, literallayout) optionally
+    /// wrapped in formalpara when a title is present (matches Asciidoctor DocBook output).
+    /// </summary>
+    private static void WriteTitledVerbatimBlock(
+        XmlWriter writer, DelimitedBlockNode node, string elementName,
+        Action<XmlWriter>? writeExtraAttrs = null)
+    {
+        if (node.Title is not null)
+        {
+            writer.WriteStartElement("formalpara", DocBookNs);
+            writer.WriteElementString("title", DocBookNs, node.Title);
+            writer.WriteStartElement("para", DocBookNs);
+        }
+
+        writer.WriteStartElement(elementName, DocBookNs);
+        writeExtraAttrs?.Invoke(writer);
+        WriteRoles(writer, node);
+        writer.WriteString(node.Content ?? "");
+        writer.WriteEndElement();
+
+        if (node.Title is not null)
+        {
+            writer.WriteEndElement(); // para
+            writer.WriteEndElement(); // formalpara
         }
     }
 

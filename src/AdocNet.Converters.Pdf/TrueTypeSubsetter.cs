@@ -145,7 +145,7 @@ internal static class TrueTypeSubsetter
     {
         int newNumGlyphs = usedGlyphIds.Count;
 
-        // Build new glyf table
+        // Build new glyf table, remapping component glyph IDs in compound glyphs
         using var glyfStream = new MemoryStream();
         var newLocaOffsets = new List<int>();
 
@@ -160,7 +160,13 @@ internal static class TrueTypeSubsetter
                     int end = glyfEntry.Offset + glyphOffsets[gid + 1];
                     int length = end - start;
                     if (length > 0 && start + length <= data.Length)
-                        glyfStream.Write(data, start, length);
+                    {
+                        // Copy glyph data, then remap compound glyph component references
+                        var glyphData = new byte[length];
+                        Array.Copy(data, start, glyphData, 0, length);
+                        RemapCompositeGlyphIds(glyphData, oldToNew);
+                        glyfStream.Write(glyphData, 0, glyphData.Length);
+                    }
                 }
                 // Pad to 4-byte boundary
                 while (glyfStream.Position % 4 != 0)
@@ -175,18 +181,44 @@ internal static class TrueTypeSubsetter
         for (int i = 0; i < newLocaOffsets.Count; i++)
             WriteUInt32(newLoca, i * 4, (uint)newLocaOffsets[i]);
 
-        // Build new hmtx table (4 bytes per glyph: advanceWidth + lsb)
+        // Build new hmtx table (4 bytes per glyph: advanceWidth + lsb).
+        // The original hmtx is a packed structure: the first numberOfHMetrics entries are 4 bytes
+        // (advance + lsb), and remaining entries are 2 bytes (lsb only) reusing the LAST advance.
+        // Reading gid*4 unconditionally would interpret lsb-only bytes as advance+lsb, embedding
+        // garbage advance widths. For monospace fonts this manifests as char spacing artifacts.
         byte[] newHmtx = new byte[newNumGlyphs * 4];
         if (tables.TryGetValue("hmtx", out var hmtxEntry))
         {
+            int origNumberOfHMetrics = 0;
+            if (tables.TryGetValue("hhea", out var hheaEntry) && hheaEntry.Offset + 36 <= data.Length)
+                origNumberOfHMetrics = ReadUInt16(data, hheaEntry.Offset + 34);
+
+            // Determine the last full advance width (used for glyphs at index >= numberOfHMetrics)
+            ushort lastAdvance = 0;
+            if (origNumberOfHMetrics > 0)
+                lastAdvance = (ushort)ReadUInt16(data, hmtxEntry.Offset + (origNumberOfHMetrics - 1) * 4);
+
             int idx = 0;
             foreach (var gid in usedGlyphIds)
             {
-                int srcOffset = hmtxEntry.Offset + gid * 4;
-                if (srcOffset + 4 <= data.Length)
+                int destOffset = idx * 4;
+                ushort advance;
+                short lsb;
+                if (gid < origNumberOfHMetrics)
                 {
-                    Array.Copy(data, srcOffset, newHmtx, idx * 4, 4);
+                    int srcOffset = hmtxEntry.Offset + gid * 4;
+                    advance = (ushort)ReadUInt16(data, srcOffset);
+                    lsb = (short)ReadInt16(data, srcOffset + 2);
                 }
+                else
+                {
+                    // Past the long-metrics region: only lsb is stored, advance reuses the last full entry.
+                    int srcOffset = hmtxEntry.Offset + origNumberOfHMetrics * 4 + (gid - origNumberOfHMetrics) * 2;
+                    advance = lastAdvance;
+                    lsb = srcOffset + 2 <= data.Length ? (short)ReadInt16(data, srcOffset) : (short)0;
+                }
+                WriteUInt16(newHmtx, destOffset, advance);
+                WriteUInt16(newHmtx, destOffset + 2, (ushort)lsb);
                 idx++;
             }
         }
@@ -233,6 +265,42 @@ internal static class TrueTypeSubsetter
         if (newPrep.Length > 0) outputTables.Add(("prep", newPrep));
 
         return AssembleTtf(outputTables);
+    }
+
+    /// <summary>
+    /// Remaps component glyph IDs in compound glyphs from old to new indices.
+    /// Compound glyphs (numberOfContours == -1) reference other glyphs by index;
+    /// after subsetting, those indices must be updated to the new contiguous IDs.
+    /// </summary>
+    private static void RemapCompositeGlyphIds(byte[] glyphData, Dictionary<ushort, ushort> oldToNew)
+    {
+        if (glyphData.Length < 10) return;
+
+        short numberOfContours = ReadInt16(glyphData, 0);
+        if (numberOfContours >= 0) return; // simple glyph, nothing to remap
+
+        int pos = 10; // skip header
+        while (pos + 4 <= glyphData.Length)
+        {
+            ushort flags = ReadUInt16(glyphData, pos);
+            ushort componentGlyphId = ReadUInt16(glyphData, pos + 2);
+
+            // Remap the component glyph ID to its new index in the subset
+            if (oldToNew.TryGetValue(componentGlyphId, out ushort newGlyphId))
+                WriteUInt16(glyphData, pos + 2, newGlyphId);
+
+            pos += 4;
+
+            // Skip arguments based on flags
+            if ((flags & 0x0001) != 0) pos += 4; // ARG_1_AND_2_ARE_WORDS
+            else pos += 2;
+
+            if ((flags & 0x0008) != 0) pos += 2;       // WE_HAVE_A_SCALE
+            else if ((flags & 0x0040) != 0) pos += 4;  // WE_HAVE_AN_X_AND_Y_SCALE
+            else if ((flags & 0x0080) != 0) pos += 8;  // WE_HAVE_A_TWO_BY_TWO
+
+            if ((flags & 0x0020) == 0) break; // MORE_COMPONENTS flag not set
+        }
     }
 
     private static byte[] CopyTable(byte[] data, Dictionary<string, (int Offset, int Length)> tables, string tag)

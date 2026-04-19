@@ -1,0 +1,45 @@
+= adocnet(1)
+Sylvain Fasel
+:doctype: manpage
+:manmanual: ADOCNET MANUAL
+:mansource: AdocNet 1.0
+
+== NAME
+
+adocnet - converts AsciiDoc files to various formats
+
+== SYNOPSIS
+
+*adocnet* convert [_OPTION_]... _FILE_
+
+*adocnet* ext list|install|remove
+
+== DESCRIPTION
+
+The *adocnet* command converts AsciiDoc markup files into HTML, PDF,
+DocBook, EPUB, and man page formats.
+
+== EXAMPLES
+
+Convert a single file to HTML:
+
+  adocnet convert -b html document.adoc
+
+Convert to PDF with a custom theme:
+
+  adocnet convert -b pdf --pdf-theme mytheme.yml document.adoc
+
+== EXIT STATUS
+
+*0*::
+  Success.
+
+*1*::
+  Parse error (warnings or errors during conversion).
+
+*2*::
+  Usage error (invalid arguments or file not found).
+
+== SEE ALSO
+
+*asciidoctor*(1)

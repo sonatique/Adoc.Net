@@ -47,18 +47,16 @@ internal static class SmartPunctuationProcessor
             }
 
             // --- → em dash when NOT between word characters.
-            // word---word: Asciidoctor consumes the first -- as em dash + zero-width space,
-            // leaving the third dash as a literal character.
+            // word---word: Asciidoctor does NOT convert --- between word characters (literal).
             if (hasDash && i + 2 < text.Length && text[i] == '-' && text[i + 1] == '-' && text[i + 2] == '-')
             {
                 bool prevIsWord = i > 0 && char.IsLetterOrDigit(text[i - 1]);
                 bool nextIsWord = i + 3 < text.Length && char.IsLetterOrDigit(text[i + 3]);
                 if (prevIsWord && nextIsWord)
                 {
-                    // word---word: consume first two dashes as em dash + zwsp, third dash stays literal
-                    sb.Append('\u2014'); // em dash —
-                    sb.Append('\u200B'); // zero-width space
-                    i += 2;
+                    // word---word: leave as literal dashes (Asciidoctor behavior)
+                    sb.Append("---");
+                    i += 3;
                     continue;
                 }
                 sb.Append('\u2014'); // —
@@ -67,6 +65,8 @@ internal static class SmartPunctuationProcessor
             }
 
             // word--word → em dash + zero-width space (between word characters)
+            // Only convert when both adjacent chars are word characters.
+            // Otherwise leave as literal dashes (Asciidoctor behavior).
             if (hasDash && i + 1 < text.Length && text[i] == '-' && text[i + 1] == '-')
             {
                 bool prevIsWord = i > 0 && char.IsLetterOrDigit(text[i - 1]);
@@ -78,9 +78,7 @@ internal static class SmartPunctuationProcessor
                     i += 2;
                     continue;
                 }
-                sb.Append('\u2013'); // en dash –
-                i += 2;
-                continue;
+                // Not between word characters — leave as literal dashes
             }
 
             // `' → right single quotation mark (curly apostrophe)
@@ -91,10 +89,11 @@ internal static class SmartPunctuationProcessor
                 continue;
             }
 
-            // ... → ellipsis
+            // ... → ellipsis + zero-width space (Asciidoctor behavior)
             if (hasDots && i + 2 < text.Length && text[i] == '.' && text[i + 1] == '.' && text[i + 2] == '.')
             {
                 sb.Append('\u2026'); // …
+                sb.Append('\u200B'); // zero-width space
                 i += 3;
                 continue;
             }

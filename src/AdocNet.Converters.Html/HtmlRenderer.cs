@@ -461,13 +461,23 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
         int segmentStart = 0;
         for (int i = 0; i < value.Length; i++)
         {
+            // Escape &, <, > and smart-punctuation Unicode characters.
+            // Asciidoctor outputs all typographic characters as HTML numeric entities
+            // rather than raw UTF-8, so we match that behavior.
             string? entity = value[i] switch
             {
-                '&'  => "&amp;",
-                '<'  => "&lt;",
-                '>'  => "&gt;",
-                '"'  => "&quot;",
-                '\'' => "&#39;",
+                '&'    => "&amp;",
+                '<'    => "&lt;",
+                '>'    => "&gt;",
+                '\u2018' => "&#8216;", // left single quotation mark
+                '\u2019' => "&#8217;", // right single quotation mark / apostrophe
+                '\u201C' => "&#8220;", // left double quotation mark
+                '\u201D' => "&#8221;", // right double quotation mark
+                '\u2014' => "&#8212;", // em dash
+                '\u2013' => "&#8211;", // en dash
+                '\u2026' => "&#8230;", // ellipsis
+                '\u2009' => "&#8201;", // thin space
+                '\u200B' => "&#8203;", // zero-width space
                 _    => null,
             };
 

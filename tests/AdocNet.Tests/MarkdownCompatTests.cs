@@ -180,7 +180,8 @@ public class MarkdownCompatTests
         var s1 = (SectionNode)result.Document.Children[0];
         Assert.That(s1.Title, Is.EqualTo("Section One"));
         Assert.That(s1.Level, Is.EqualTo(1));
-        var s2 = (SectionNode)result.Document.Children[1];
+        // With section nesting, the level-2 section is a child of the level-1 section
+        var s2 = (SectionNode)s1.Children[0];
         Assert.That(s2.Title, Is.EqualTo("Sub via Hash"));
         Assert.That(s2.Level, Is.EqualTo(2));
     }

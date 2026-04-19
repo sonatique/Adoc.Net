@@ -127,26 +127,28 @@ public sealed partial class HtmlRenderer
         sb.Append("</p>");
 
         // Nested lists and continuation blocks are children of the list item.
+        bool firstChild = true;
         foreach (var child in item.Children)
         {
+            // First child needs \n to separate from </p>; subsequent children
+            // follow the previous child's trailing \n, so no extra separator needed.
+            if (firstChild)
+            {
+                sb.Append('\n');
+                firstChild = false;
+            }
+
             if (child is ListNode nestedList)
-            {
-                sb.Append('\n');
                 RenderList(sb, nestedList, footnotes, state, orderedListDepth);
-            }
             else if (child is DelimitedBlockNode block)
-            {
-                sb.Append('\n');
                 RenderDelimitedBlock(sb, block, footnotes, new SectionNumberingContext(), state);
-            }
+            else if (child is AdmonitionNode admonition)
+                RenderAdmonition(sb, admonition, false, footnotes, new SectionNumberingContext(), state);
             else if (child is ParagraphNode para)
-            {
-                sb.Append("\n<p>");
-                RenderInlines(sb, para.Inlines, para.Text, footnotes, state);
-                sb.Append("</p>");
-            }
+                RenderParagraph(sb, para, footnotes, state);
         }
 
+        // Nested blocks already emit a trailing \n, so only add one if no children rendered
         if (item.Children.Count == 0)
             sb.Append('\n');
         sb.Append("</li>\n");

@@ -119,6 +119,9 @@ public static class Program
         List<string>? extensionDirs = null;
         bool noAutoExtensions = false;
         SafeMode safeMode = SafeMode.Unsafe;
+        string? pdfThemePath = null;
+        string? pdfFontsDir = null;
+        bool requireKroki = false;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -142,18 +145,27 @@ public static class Program
             if (arg is "--theme")
             {
                 if (i + 1 >= args.Length)
-                    return new CliArgs.Error("Option --theme requires a theme name (default, asciidoctor, clean).");
-                styled = true;
-                var themeStr = args[++i].ToLowerInvariant();
-                theme = themeStr switch
+                    return new CliArgs.Error("Option --theme requires a theme name (default, asciidoctor, clean) or a YAML file path.");
+                var themeStr = args[++i];
+                // If theme value looks like a file path (YAML), treat as PDF theme file
+                if (themeStr.EndsWith(".yml", StringComparison.OrdinalIgnoreCase)
+                    || themeStr.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase))
                 {
-                    "default" => HtmlTheme.Default,
-                    "asciidoctor" => HtmlTheme.Asciidoctor,
-                    "clean" => HtmlTheme.Clean,
-                    _ => HtmlTheme.None,
-                };
-                if (theme == HtmlTheme.None)
-                    return new CliArgs.Error($"Unknown theme: {themeStr}. Available themes: default, asciidoctor, clean.");
+                    pdfThemePath = themeStr;
+                }
+                else
+                {
+                    styled = true;
+                    theme = themeStr.ToLowerInvariant() switch
+                    {
+                        "default" => HtmlTheme.Default,
+                        "asciidoctor" => HtmlTheme.Asciidoctor,
+                        "clean" => HtmlTheme.Clean,
+                        _ => HtmlTheme.None,
+                    };
+                    if (theme == HtmlTheme.None)
+                        return new CliArgs.Error($"Unknown theme: {themeStr}. Available themes: default, asciidoctor, clean.");
+                }
                 continue;
             }
 
@@ -236,9 +248,24 @@ public static class Program
                 continue;
             }
 
-            if (arg is "--recursive" or "-r")
+            if (arg is "--recursive")
             {
                 recursive = true;
+                continue;
+            }
+
+            if (arg is "--require" or "-r")
+            {
+                // Asciidoctor compatibility: --require/-r loads a Ruby library.
+                // AdocNet auto-detects features from document content (e.g., diagram blocks
+                // trigger Kroki automatically). This flag is a supplementary hint — recognized
+                // library names force activation even if the document doesn't contain matching blocks.
+                if (i + 1 < args.Length && !args[i + 1].StartsWith('-'))
+                {
+                    var lib = args[++i];
+                    if (lib.Contains("kroki", StringComparison.OrdinalIgnoreCase))
+                        requireKroki = true;
+                }
                 continue;
             }
 
@@ -292,6 +319,22 @@ public static class Program
                 continue;
             }
 
+            if (arg is "--pdf-theme")
+            {
+                if (i + 1 >= args.Length)
+                    return new CliArgs.Error("Option --pdf-theme requires a YAML theme file path.");
+                pdfThemePath = args[++i];
+                continue;
+            }
+
+            if (arg is "--pdf-fontsdir")
+            {
+                if (i + 1 >= args.Length)
+                    return new CliArgs.Error("Option --pdf-fontsdir requires a directory path.");
+                pdfFontsDir = args[++i];
+                continue;
+            }
+
             if (arg.StartsWith('-'))
                 return new CliArgs.Error($"Unknown option: {arg}");
 
@@ -319,7 +362,7 @@ public static class Program
             attributes is { Count: > 0 } ? attributes : null,
             extensionPaths is { Count: > 0 } ? extensionPaths : null,
             extensionDirs is { Count: > 0 } ? extensionDirs : null,
-            noAutoExtensions, safeMode);
+            noAutoExtensions, safeMode, pdfThemePath, pdfFontsDir, requireKroki);
     }
 
     private static CliArgs ParsePreviewArguments(string[] args)
@@ -408,12 +451,13 @@ public static class Program
         writer.WriteLine("  -a, --attribute <k=v> Set a document attribute");
         writer.WriteLine("  -n, --section-numbers Auto-number section titles");
         writer.WriteLine("  -e, --embedded        Wrap HTML in a full document with CSS theme");
-        writer.WriteLine("  --theme <name>        Select CSS theme: default, asciidoctor, clean");
+        writer.WriteLine("  --theme <name|file>   CSS theme (default, asciidoctor, clean) or PDF theme YAML file");
         writer.WriteLine("  --dump-ast            Print AST instead of rendering");
         writer.WriteLine("  -w, --watch           Watch input file for changes and re-render");
         writer.WriteLine("  -v, --verbose         Enable verbose output");
         writer.WriteLine("  -q, --quiet           Suppress non-error output");
-        writer.WriteLine("  -r, --recursive       Process input directories recursively");
+        writer.WriteLine("  -r, --require <lib>   Ignored (Asciidoctor compatibility)");
+        writer.WriteLine("  --recursive           Process input directories recursively");
         writer.WriteLine("  --config <file>       Load project configuration (default: discover adocnet.json)");
         writer.WriteLine("  --extensions <path>   Load extensions from a DLL file (repeatable)");
         writer.WriteLine("  --extension-dir <dir> Load all extension DLLs from directory (repeatable)");
@@ -425,7 +469,7 @@ public static class Program
         writer.WriteLine($"  {toolName} README.adoc                       Convert to README{ext}");
         writer.WriteLine($"  {toolName} README.adoc -o -                  Convert to stdout");
         writer.WriteLine($"  {toolName} README.adoc -o custom{ext}        Convert to custom{ext}");
-        writer.WriteLine($"  {toolName} docs/ -r -D build/                Convert directory to build/");
+        writer.WriteLine($"  {toolName} docs/ --recursive -D build/        Convert directory to build/");
         writer.WriteLine($"  {toolName} docs/ --watch -v                  Watch and rebuild on changes");
         writer.WriteLine($"  {toolName} README.adoc -a version=2.0        Set document attribute");
 
@@ -475,7 +519,10 @@ internal abstract record CliArgs
         IReadOnlyList<string>? ExtensionPaths = null,
         IReadOnlyList<string>? ExtensionDirs = null,
         bool NoAutoExtensions = false,
-        SafeMode SafeMode = SafeMode.Unsafe) : CliArgs;
+        SafeMode SafeMode = SafeMode.Unsafe,
+        string? PdfThemePath = null,
+        string? PdfFontsDir = null,
+        bool RequireKroki = false) : CliArgs;
     internal sealed record ShowHelp() : CliArgs;
     internal sealed record Preview(
         string InputPath,

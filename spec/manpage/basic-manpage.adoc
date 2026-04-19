@@ -1,0 +1,30 @@
+= mycommand(1)
+Author Name
+:doctype: manpage
+:manmanual: MY MANUAL
+:mansource: MY SOURCE 1.0
+
+== NAME
+
+mycommand - does something useful
+
+== SYNOPSIS
+
+*mycommand* [_OPTION_]... _FILE_...
+
+== DESCRIPTION
+
+This command does something useful with files.
+It supports multiple input formats.
+
+== OPTIONS
+
+*-v*::
+  Verbose output.
+
+*-o* _FILE_::
+  Write output to _FILE_.
+
+*-f* _FORMAT_::
+  Specify the output format.
+  Supported values: `html`, `pdf`, `docbook`.

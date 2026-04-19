@@ -15,6 +15,7 @@ internal sealed partial class PdfWriter
         if (text.Length == 0)
         {
             EnsurePage();
+            ReserveFirstLineLeading(leading);
             DrawCodeLineBackground();
             _cursorY -= leading;
             return leading;
@@ -28,6 +29,7 @@ internal sealed partial class PdfWriter
             string line = text.Substring(pos, lineLen);
 
             EnsurePage();
+            ReserveFirstLineLeading(leading);
             DrawCodeLineBackground();
             WriteText(line, font, fontSize, MarginLeftValue, _cursorY);
             _cursorY -= leading;
@@ -64,6 +66,37 @@ internal sealed partial class PdfWriter
         _currentStream.Append(fill ? "f\n" : "S\n");
     }
 
+    /// <summary>
+    /// Draws a rounded rectangle using cubic Bezier curves for corners.
+    /// </summary>
+    internal void DrawRoundedRect(float x, float y, float w, float h, float r, string mode = "S")
+    {
+        // Clamp radius to half the smaller dimension
+        r = Math.Min(r, Math.Min(w / 2, h / 2));
+        // Bezier control point offset for quarter-circle approximation
+        float k = r * 0.5523f;
+
+        var s = _currentStream!;
+        // Start at bottom-left, just above the corner
+        s.Append($"{Fmt(x)} {Fmt(y + r)} m\n");
+        // Bottom-left corner
+        s.Append($"{Fmt(x)} {Fmt(y + r - k)} {Fmt(x + r - k)} {Fmt(y)} {Fmt(x + r)} {Fmt(y)} c\n");
+        // Bottom edge
+        s.Append($"{Fmt(x + w - r)} {Fmt(y)} l\n");
+        // Bottom-right corner
+        s.Append($"{Fmt(x + w - r + k)} {Fmt(y)} {Fmt(x + w)} {Fmt(y + r - k)} {Fmt(x + w)} {Fmt(y + r)} c\n");
+        // Right edge
+        s.Append($"{Fmt(x + w)} {Fmt(y + h - r)} l\n");
+        // Top-right corner
+        s.Append($"{Fmt(x + w)} {Fmt(y + h - r + k)} {Fmt(x + w - r + k)} {Fmt(y + h)} {Fmt(x + w - r)} {Fmt(y + h)} c\n");
+        // Top edge
+        s.Append($"{Fmt(x + r)} {Fmt(y + h)} l\n");
+        // Top-left corner
+        s.Append($"{Fmt(x + r - k)} {Fmt(y + h)} {Fmt(x)} {Fmt(y + h - r + k)} {Fmt(x)} {Fmt(y + h - r)} c\n");
+        // Close and paint
+        s.Append($"h {mode}\n");
+    }
+
     internal void SetFillColor(float r, float g, float b)
     {
         _currentStream!.Append($"{Fmt(r)} {Fmt(g)} {Fmt(b)} rg\n");
@@ -79,6 +112,40 @@ internal sealed partial class PdfWriter
     internal void AddLinkAnnotation(float x, float y, float width, float height, string uri)
     {
         _currentAnnotations.Add(new PdfAnnotation(x, y, width, height, uri));
+    }
+
+    /// <summary>
+    /// Adds an internal GoTo link annotation for cross-references within the document.
+    /// </summary>
+    internal void AddInternalLinkAnnotation(float x, float y, float width, float height, string destinationId)
+    {
+        _currentInternalLinks.Add(new PdfInternalLink(x, y, width, height, destinationId));
+    }
+
+    // ── Outline / bookmark support ──────────────────────────────────────
+
+    /// <summary>
+    /// Registers a section heading as an outline/bookmark entry.
+    /// Called during rendering when a section heading is encountered.
+    /// </summary>
+    internal void AddOutlineEntry(string title, int level, string? id)
+    {
+        int pageIndex = _currentPageNumber - 1; // 0-based
+        float y = _cursorY;
+        _outlineEntries.Add(new OutlineEntry(title, level, pageIndex, y));
+
+        // Also register as a named destination for cross-references
+        if (id is not null)
+            _namedDestinations[id] = (pageIndex, y);
+    }
+
+    /// <summary>
+    /// Registers a named destination at the current cursor position.
+    /// Used for anchors and cross-reference targets.
+    /// </summary>
+    internal void AddNamedDestination(string id)
+    {
+        _namedDestinations[id] = (_currentPageNumber - 1, _cursorY);
     }
 
     // ── Image embedding ────────────────────────────────────────────────
@@ -137,6 +204,37 @@ internal sealed partial class PdfWriter
         _currentStream.Append("Q\n");
     }
 
+    // ── SVG rendering ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Draws a parsed SVG document as vector graphics at the given position and size.
+    /// SVG shapes are rendered as filled PDF paths.
+    /// </summary>
+    internal void DrawSvg(SvgParser.SvgDocument svg, float x, float y, float width, float height)
+    {
+        float scaleX = width / svg.ViewBoxWidth;
+        float scaleY = height / svg.ViewBoxHeight;
+
+        _currentStream!.Append("q\n"); // Save graphics state
+
+        foreach (var shape in svg.Shapes)
+        {
+
+            // Set fill color
+            if (shape.Fill is { } fill)
+                SetFillColor(fill.R, fill.G, fill.B);
+            else
+                SetFillColor(0, 0, 0); // Default to black
+
+            var pathOps = SvgParser.ToPdfPathOps(shape.PathData, scaleX, scaleY,
+                x, y, svg.ViewBoxHeight);
+            _currentStream.Append(pathOps);
+            _currentStream.Append("f\n"); // Fill the path
+        }
+
+        _currentStream.Append("Q\n"); // Restore graphics state
+    }
+
     // ── Text measurement ────────────────────────────────────────────────
 
     internal float MeasureText(string text, string font, float fontSize)
@@ -151,7 +249,8 @@ internal sealed partial class PdfWriter
 
     internal static float MeasureStandardText(string text, string font, float fontSize)
     {
-        if (font == "F4") // Courier — monospace
+        // Courier and all variants (Bold/Oblique/BoldOblique) — monospace
+        if (font == "F4" || font == "F5" || font == "F6" || font == "F7")
             return text.Length * fontSize * HelveticaMetrics.CourierWidth;
 
         float total = 0;
@@ -172,6 +271,9 @@ internal sealed partial class PdfWriter
         // Embed registered TrueType fonts (fills placeholder objects)
         EmbedRegisteredFonts();
 
+        // Resolve deferred internal links (cross-references)
+        ResolveInternalLinks();
+
         // Build Pages object
         var kidsStr = string.Join(" ", _pageObjectIds.Select(id => $"{id} 0 R"));
         int pagesId = AllocObject(new PdfObject(
@@ -184,13 +286,36 @@ internal sealed partial class PdfWriter
             SetObject(pageId, new PdfObject(obj.Content.Replace("{PAGES}", $"{pagesId} 0 R"), obj.BinaryStream));
         }
 
-        // Catalog
-        int catalogId = AllocObject(new PdfObject(
-            $"<< /Type /Catalog /Pages {pagesId} 0 R >>"));
+        // Build outline/bookmark tree
+        int? outlineId = BuildOutlineTree();
 
-        // Info dictionary (deterministic)
-        int infoId = AllocObject(new PdfObject(
-            "<< /Producer (AdocNet PDF Renderer) /CreationDate (D:20260101000000+00'00') >>"));
+        // Build named destinations dictionary for cross-references
+        int? namesId = BuildNamesDictionary();
+
+        // Build page labels (logical page numbers shown in PDF reader page panel)
+        int? pageLabelsId = BuildPageLabels();
+
+        // Catalog
+        var catalogSb = new StringBuilder();
+        catalogSb.Append($"<< /Type /Catalog /Pages {pagesId} 0 R");
+        if (outlineId.HasValue)
+            catalogSb.Append($" /Outlines {outlineId.Value} 0 R /PageMode /UseOutlines");
+        if (namesId.HasValue)
+            catalogSb.Append($" /Names {namesId.Value} 0 R");
+        if (pageLabelsId.HasValue)
+            catalogSb.Append($" /PageLabels {pageLabelsId.Value} 0 R");
+        if (_pageObjectIds.Count > 0)
+            catalogSb.Append($" /OpenAction [{_pageObjectIds[0]} 0 R /FitH {Fmt(_pageHeight)}]");
+        catalogSb.Append(" /ViewerPreferences << /DisplayDocTitle true >>");
+        catalogSb.Append(" >>");
+        int catalogId = AllocObject(new PdfObject(catalogSb.ToString()));
+
+        // Info dictionary (deterministic) — include document title if set
+        var infoDict = "<< /Producer (AdocNet PDF Renderer) /CreationDate (D:20260101000000+00'00')";
+        if (DocumentTitle is not null)
+            infoDict += $" /Title ({EscapePdfString(DocumentTitle)})";
+        infoDict += " >>";
+        int infoId = AllocObject(new PdfObject(infoDict));
 
         // Serialize
         using var ms = new MemoryStream();
@@ -235,8 +360,168 @@ internal sealed partial class PdfWriter
 
         // Replace total page count placeholders with actual count (same byte length)
         ReplaceTotalPagesPlaceholder(result, _pageObjectIds.Count);
+        // Also replace placeholders encoded as TrueType glyph IDs (when using embedded fonts)
+        foreach (var ttFont in _embeddedFonts.Values)
+            ReplaceTotalPagesPlaceholderTrueType(result, _pageObjectIds.Count, ttFont);
 
         return result;
+    }
+
+    /// <summary>
+    /// Resolves deferred internal link annotations by looking up named destinations.
+    /// Links to unknown destinations become no-ops (empty annotation).
+    /// </summary>
+    private void ResolveInternalLinks()
+    {
+        foreach (var deferred in _deferredInternalLinks)
+        {
+            var link = deferred.Link;
+            if (_namedDestinations.TryGetValue(link.DestinationId, out var dest)
+                && dest.PageIndex < _pageObjectIds.Count)
+            {
+                int targetPageObjId = _pageObjectIds[dest.PageIndex];
+                SetObject(deferred.PlaceholderObjId, new PdfObject(
+                    $"<< /Type /Annot /Subtype /Link " +
+                    $"/Rect [{Fmt(link.X)} {Fmt(link.Y)} {Fmt(link.X + link.Width)} {Fmt(link.Y + link.Height)}] " +
+                    $"/Border [0 0 0] " +
+                    $"/Dest [{targetPageObjId} 0 R /XYZ 0 {Fmt(dest.Y + 10)} null] >>"));
+            }
+            else
+            {
+                // Destination not found — render as invisible annotation (no action)
+                SetObject(deferred.PlaceholderObjId, new PdfObject(
+                    $"<< /Type /Annot /Subtype /Link " +
+                    $"/Rect [0 0 0 0] /Border [0 0 0] >>"));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Builds the PDF outline (bookmark) tree from collected outline entries.
+    /// Returns the outline root object ID, or null if no entries exist.
+    /// </summary>
+    private int? BuildOutlineTree()
+    {
+        if (_outlineEntries.Count == 0 || _pageObjectIds.Count == 0)
+            return null;
+
+        // Build a nested tree from the flat list of entries by level
+        var root = new OutlineEntry("Document", -1, 0, 0);
+        var stack = new List<OutlineEntry> { root };
+
+        foreach (var entry in _outlineEntries)
+        {
+            // Pop stack until we find a parent with lower level
+            while (stack.Count > 1 && stack[^1].Level >= entry.Level)
+                stack.RemoveAt(stack.Count - 1);
+
+            stack[^1].Children.Add(entry);
+            stack.Add(entry);
+        }
+
+        // Emit PDF objects for the tree
+        int outlineRootId = AllocPlaceholder();
+        var entryIds = new Dictionary<OutlineEntry, int>();
+        AllocOutlineIds(root.Children, entryIds);
+
+        // Fill each entry with parent, prev/next sibling, and child references
+        EmitOutlineChildren(root.Children, outlineRootId, entryIds);
+
+        // Fill the root outline object
+        int totalCount = CountOutlineEntries(root.Children);
+        SetObject(outlineRootId, new PdfObject(
+            $"<< /Type /Outlines /First {entryIds[root.Children[0]]} 0 R " +
+            $"/Last {entryIds[root.Children[^1]]} 0 R /Count {totalCount} >>"));
+
+        return outlineRootId;
+    }
+
+    private void AllocOutlineIds(List<OutlineEntry> entries, Dictionary<OutlineEntry, int> ids)
+    {
+        foreach (var entry in entries)
+        {
+            ids[entry] = AllocPlaceholder();
+            AllocOutlineIds(entry.Children, ids);
+        }
+    }
+
+    private void EmitOutlineChildren(List<OutlineEntry> siblings, int parentId,
+        Dictionary<OutlineEntry, int> entryIds)
+    {
+        for (int i = 0; i < siblings.Count; i++)
+        {
+            var entry = siblings[i];
+            int myId = entryIds[entry];
+            int pageObjId = entry.PageIndex < _pageObjectIds.Count
+                ? _pageObjectIds[entry.PageIndex] : _pageObjectIds[^1];
+
+            var sb = new StringBuilder();
+            sb.Append($"<< /Title ({EscapePdfString(entry.Title)}) ");
+            sb.Append($"/Parent {parentId} 0 R ");
+            sb.Append($"/Dest [{pageObjId} 0 R /XYZ 0 {Fmt(entry.Y + 10)} null] ");
+
+            if (i > 0)
+                sb.Append($"/Prev {entryIds[siblings[i - 1]]} 0 R ");
+            if (i < siblings.Count - 1)
+                sb.Append($"/Next {entryIds[siblings[i + 1]]} 0 R ");
+
+            if (entry.Children.Count > 0)
+            {
+                int count = CountOutlineEntries(entry.Children);
+                sb.Append($"/First {entryIds[entry.Children[0]]} 0 R ");
+                sb.Append($"/Last {entryIds[entry.Children[^1]]} 0 R ");
+                sb.Append($"/Count {count} ");
+            }
+
+            sb.Append(">>");
+            SetObject(myId, new PdfObject(sb.ToString()));
+
+            if (entry.Children.Count > 0)
+                EmitOutlineChildren(entry.Children, myId, entryIds);
+        }
+    }
+
+    private static int CountOutlineEntries(List<OutlineEntry> entries)
+    {
+        int count = 0;
+        foreach (var entry in entries)
+        {
+            count++;
+            count += CountOutlineEntries(entry.Children);
+        }
+        return count;
+    }
+
+    /// <summary>
+    /// Builds the /Names dictionary with named destinations for cross-references.
+    /// Returns the object ID of the Names dict, or null if no destinations exist.
+    /// </summary>
+    private int? BuildNamesDictionary()
+    {
+        if (_namedDestinations.Count == 0) return null;
+
+        var sb = new StringBuilder();
+        sb.Append("<< /Names [");
+        foreach (var kvp in _namedDestinations.OrderBy(k => k.Key, StringComparer.Ordinal))
+        {
+            if (kvp.Value.PageIndex >= _pageObjectIds.Count) continue;
+            int pageObjId = _pageObjectIds[kvp.Value.PageIndex];
+            sb.Append($" ({EscapePdfString(kvp.Key)}) [{pageObjId} 0 R /XYZ 0 {Fmt(kvp.Value.Y + 10)} null]");
+        }
+        sb.Append(" ] >>");
+        int destsId = AllocObject(new PdfObject(sb.ToString()));
+
+        return AllocObject(new PdfObject($"<< /Dests {destsId} 0 R >>"));
+    }
+
+    /// <summary>
+    /// Builds the /PageLabels number tree. Each page is labeled with its decimal page number.
+    /// </summary>
+    private int? BuildPageLabels()
+    {
+        if (_pageObjectIds.Count == 0) return null;
+        // Single entry: starting at index 0, use decimal numbering style "/D"
+        return AllocObject(new PdfObject("<< /Nums [ 0 << /S /D >> ] >>"));
     }
 
     /// <summary>
@@ -265,6 +550,45 @@ internal sealed partial class PdfWriter
             {
                 Array.Copy(replacementBytes, 0, data, i, replacementBytes.Length);
                 i += placeholder.Length - 1; // skip past replacement
+            }
+        }
+    }
+
+    /// <summary>
+    /// Replaces TrueType-encoded placeholders. When TrueType fonts are used, text is
+    /// encoded as a hex string of glyph IDs (4 hex chars per character). The placeholder
+    /// "___TOTAL___" becomes a 44-character hex sequence specific to each font's GID mapping.
+    /// </summary>
+    private static void ReplaceTotalPagesPlaceholderTrueType(byte[] data, int totalPages, TrueTypeFont font)
+    {
+        // Build the GID-encoded form of the placeholder for this font
+        string encodedPlaceholder = PdfFontEmbedder.EncodeTextAsGlyphIds(TotalPagesPlaceholder, font);
+        string replacement = totalPages.ToString(CultureInfo.InvariantCulture);
+        // Encode replacement followed by spaces (to match placeholder length)
+        string padded = replacement + new string(' ', TotalPagesPlaceholder.Length - replacement.Length);
+        string encodedReplacement = PdfFontEmbedder.EncodeTextAsGlyphIds(padded, font);
+
+        // Both should be the same length (4 hex chars per character)
+        if (encodedPlaceholder.Length != encodedReplacement.Length) return;
+
+        byte[] placeholderBytes = Encoding.ASCII.GetBytes(encodedPlaceholder);
+        byte[] replacementBytes = Encoding.ASCII.GetBytes(encodedReplacement);
+
+        for (int i = 0; i <= data.Length - placeholderBytes.Length; i++)
+        {
+            bool match = true;
+            for (int j = 0; j < placeholderBytes.Length; j++)
+            {
+                if (data[i + j] != placeholderBytes[j])
+                {
+                    match = false;
+                    break;
+                }
+            }
+            if (match)
+            {
+                Array.Copy(replacementBytes, 0, data, i, replacementBytes.Length);
+                i += placeholderBytes.Length - 1;
             }
         }
     }
@@ -335,7 +659,7 @@ internal sealed partial class PdfWriter
 
     private void EmbedRegisteredFonts() =>
         PdfFontEmbedder.EmbedFonts(_embeddedFonts, _usedCodePoints, _embeddedFontPlaceholders,
-            obj => AllocObject(obj), (id, obj) => SetObject(id, obj));
+            obj => AllocObject(obj), (id, obj) => SetObject(id, obj), _monospaceFonts);
 
     private static byte[] Compress(byte[] data) =>
         PdfFontEmbedder.Compress(data);

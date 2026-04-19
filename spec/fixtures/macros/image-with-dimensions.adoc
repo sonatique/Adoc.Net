@@ -1,0 +1,3 @@
+image::sunset.jpg[Sunset,300,200]
+
+image::logo.png[Company Logo,width=150]

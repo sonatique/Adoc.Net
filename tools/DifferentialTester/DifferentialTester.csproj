@@ -10,5 +10,7 @@
     <ProjectReference Include="..\..\src\AdocNet.Ast\AdocNet.Ast.csproj" />
     <ProjectReference Include="..\..\src\AdocNet.Parser\AdocNet.Parser.csproj" />
     <ProjectReference Include="..\..\src\AdocNet.Converters.Html\AdocNet.Converters.Html.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Converters.DocBook\AdocNet.Converters.DocBook.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Converters.Man\AdocNet.Converters.Man.csproj" />
   </ItemGroup>
 </Project>

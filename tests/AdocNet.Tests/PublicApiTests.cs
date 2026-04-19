@@ -248,7 +248,7 @@ public class PublicApiTests
         Assert.That(html, Does.Contain("<em>Italic</em>"));
         Assert.That(html, Does.Contain("<code>Code</code>"));
         Assert.That(html, Does.Contain("language-csharp"));
-        Assert.That(html, Does.Contain("<table class=\"frame-all grid-all stretch tableblock\">"));
+        Assert.That(html, Does.Contain("<table class=\"tableblock frame-all grid-all stretch\">"));
     }
 
     // ── SubstitutionKind is public ────────────────────────────────────────────
