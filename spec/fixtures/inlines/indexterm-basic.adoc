@@ -1,0 +1,5 @@
+This text has an indexterm((performance)) in it.
+
+And a hidden index entry indexterm:[configuration, advanced].
+
+Also a tertiary term indexterm2:[API, REST, versioning].

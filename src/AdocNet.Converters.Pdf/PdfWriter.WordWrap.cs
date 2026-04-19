@@ -170,7 +170,7 @@ internal sealed partial class PdfWriter
                     // Flush word buffer as a segment on the current line
                     if (wordBuffer.Length > 0)
                     {
-                        currentLine.Add(new TextSegment(wordBuffer.ToString(), seg.Font, seg.FontSize, seg.LinkUri));
+                        currentLine.Add(new TextSegment(wordBuffer.ToString(), seg.Font, seg.FontSize, seg.LinkUri, seg.Background));
                         wordBuffer.Clear();
                     }
 
@@ -184,8 +184,15 @@ internal sealed partial class PdfWriter
                     wordBuffer.Append(' ');
                 else if (currentWidth > 0 && i == 0)
                 {
-                    // Add space between previous segment and this one
-                    wordBuffer.Append(' ');
+                    // Add space between previous segment and this one,
+                    // but only if previous segment didn't already end with whitespace
+                    bool prevEndsWithSpace = currentLine.Count > 0
+                        && currentLine[^1].Text.Length > 0
+                        && currentLine[^1].Text[^1] == ' ';
+                    if (!prevEndsWithSpace)
+                        wordBuffer.Append(' ');
+                    else
+                        neededWidth = wordWidth; // No space needed, recalculate
                 }
 
                 wordBuffer.Append(word);
@@ -195,7 +202,7 @@ internal sealed partial class PdfWriter
             // Flush remaining words in buffer
             if (wordBuffer.Length > 0)
             {
-                currentLine.Add(new TextSegment(wordBuffer.ToString(), seg.Font, seg.FontSize, seg.LinkUri));
+                currentLine.Add(new TextSegment(wordBuffer.ToString(), seg.Font, seg.FontSize, seg.LinkUri, seg.Background));
             }
         }
 
@@ -221,6 +228,7 @@ internal sealed partial class PdfWriter
         foreach (var line in lines)
         {
             EnsurePage();
+            ReserveFirstLineLeading(leading);
             WriteText(line, font, fontSize, MarginLeftValue, _cursorY);
             _cursorY -= leading;
             consumed += leading;
@@ -239,6 +247,7 @@ internal sealed partial class PdfWriter
         for (int i = 0; i < lines.Count; i++)
         {
             EnsurePage();
+            ReserveFirstLineLeading(leading);
             bool isLastLine = i == lines.Count - 1;
             if (justify && !isLastLine)
                 WriteJustifiedSegments(lines[i], MarginLeftValue, _cursorY, ContentWidth);
@@ -276,14 +285,42 @@ internal sealed partial class PdfWriter
         if (extraSpacing < 0) extraSpacing = 0;
         if (extraSpacing > maxSpacing) extraSpacing = 0; // fall back to left-aligned if gap is too large
 
+        // Draw background rectangles before text
+        float bgX = x;
+        foreach (var seg in segments)
+        {
+            float segW = MeasureText(seg.Text, seg.Font, seg.FontSize);
+            int segSp = 0;
+            foreach (var ch in seg.Text) if (ch == ' ') segSp++;
+            float adjW = segW + segSp * extraSpacing;
+            if (seg.Background is { } bg)
+            {
+                const float pad = 1.5f;
+                _currentStream!.Append("q\n");
+                _currentStream.Append($"{Fmt(bg.R)} {Fmt(bg.G)} {Fmt(bg.B)} rg\n");
+                _currentStream.Append($"{Fmt(bgX - pad)} {Fmt(y - 2f)} {Fmt(adjW + pad * 2)} {Fmt(seg.FontSize + 3f)} re f\n");
+                _currentStream.Append("Q\n");
+            }
+            bgX += adjW;
+        }
+
         float currentX = x;
         _currentStream!.Append("BT\n");
         _currentStream.Append($"{Fmt(x)} {Fmt(y)} Td\n");
-        _currentStream.Append($"{Fmt(extraSpacing)} Tw\n");
 
         foreach (var seg in segments)
         {
             _currentStream.Append($"/{seg.Font} {Fmt(seg.FontSize)} Tf\n");
+
+            // Check if this segment uses a monospace font (Courier or embedded monospace)
+            bool isMonospaceFnt = seg.Font == "F4" || // Standard Courier
+                (_embeddedFonts.ContainsKey(seg.Font) && _monospaceFonts.Contains(seg.Font));
+
+            // Set appropriate word spacing for this segment
+            if (isMonospaceFnt)
+                _currentStream.Append("0 Tw\n"); // No justification for monospace
+            else
+                _currentStream.Append($"{Fmt(extraSpacing)} Tw\n"); // Apply justification
 
             if (_embeddedFonts.TryGetValue(seg.Font, out var ttFont))
             {
@@ -300,14 +337,20 @@ internal sealed partial class PdfWriter
             }
 
             float segWidth = MeasureText(seg.Text, seg.Font, seg.FontSize);
-            // Account for extra spacing per space in this segment
+            // Account for extra spacing per space in this segment (only for non-monospace)
             int segSpaces = 0;
             foreach (var ch in seg.Text)
                 if (ch == ' ') segSpaces++;
-            float adjustedWidth = segWidth + segSpaces * extraSpacing;
+            float adjustedWidth = segWidth + (isMonospaceFnt ? 0 : segSpaces * extraSpacing);
 
             if (seg.LinkUri is not null)
-                AddLinkAnnotation(currentX, y - 2, adjustedWidth, seg.FontSize + 4, seg.LinkUri);
+            {
+                if (seg.LinkUri.StartsWith("#internal#"))
+                    AddInternalLinkAnnotation(currentX, y - 2, adjustedWidth, seg.FontSize + 4,
+                        seg.LinkUri.Substring(10));
+                else
+                    AddLinkAnnotation(currentX, y - 2, adjustedWidth, seg.FontSize + 4, seg.LinkUri);
+            }
 
             currentX += adjustedWidth;
         }

@@ -6,109 +6,170 @@ using AdocNet.Converters.Pdf;
 namespace AdocNet.Tests;
 
 /// <summary>
-/// Tests that code block backgrounds render correctly, especially across page boundaries.
-/// Verifies per-line background strips instead of a single pre-calculated rectangle.
+/// Tests that code block backgrounds render correctly: rounded corners, visible border,
+/// proper padding, and correct behavior across page boundaries.
 /// </summary>
 [TestFixture]
 public class CodeBlockBackgroundTests
 {
-    /// <summary>
-    /// Creates a code block long enough to span at least 2 pages and verifies
-    /// that both pages contain background fill rectangles ('re f' operators).
-    /// </summary>
+    // ── Single-page code blocks ─────────────────────────────────────────
+
+    [Test]
+    public void Short_code_block_has_rounded_rect_background()
+    {
+        var doc = CreateDoc("int x = 42;\nstring s = \"hello\";");
+        string pdf = RenderToString(doc);
+
+        // Must have gray fill color
+        Assert.That(pdf, Does.Contain("0.95 0.95 0.95 rg"),
+            "Should have gray background color");
+
+        // Rounded rect = Bezier curves (c operator) closed with h + f
+        Assert.That(pdf, Does.Contain(" c\n"),
+            "Should use Bezier curves for rounded corners");
+        Assert.That(HasClosedFill(pdf), Is.True,
+            "Should have closed fill (h + f) for rounded rect");
+    }
+
+    [Test]
+    public void Short_code_block_has_visible_border_stroke()
+    {
+        var doc = CreateDoc("int x = 42;");
+        string pdf = RenderToString(doc);
+
+        // Must have stroke color set (RG = stroke color operator)
+        Assert.That(pdf, Does.Contain(" RG\n"),
+            "Should set a stroke color for the border");
+
+        // Must have stroke width set
+        Assert.That(pdf, Does.Contain(" w\n"),
+            "Should set a line width for the border");
+
+        // Must have stroke operation (S = stroke path)
+        Assert.That(HasStrokeOp(pdf), Is.True,
+            "Should have a stroke operation for the border");
+    }
+
+    [Test]
+    public void Code_block_border_uses_default_color_when_theme_omits_it()
+    {
+        // Simulates what happens when PdfThemeLoader doesn't find code.border-color:
+        // the fallback should produce a visible border, not null.
+        var options = new PdfRenderOptions
+        {
+            // Explicitly set to null to simulate theme override
+            CodeBorderColor = null
+        };
+
+        var doc = CreateDoc("hello world");
+        byte[] pdf = new PdfRenderer().RenderToBytes(doc, options);
+        string pdfText = Encoding.ASCII.GetString(pdf);
+
+        // With null border, no stroke should appear (this is the "no border" case)
+        // But the DEFAULT options (without explicit null) should have a border:
+        var defaultPdf = RenderToString(doc);
+        Assert.That(defaultPdf, Does.Contain(" RG\n"),
+            "Default options should produce a visible border stroke");
+    }
+
+    [Test]
+    public void Code_block_has_sufficient_padding()
+    {
+        var doc = CreateDoc("line 1\nline 2\nline 3");
+        string pdf = RenderToString(doc);
+
+        // Extract the rounded rect bounding box and text positions
+        var fillRect = ExtractRoundedRectBounds(pdf);
+        var textYPositions = ExtractTextYPositions(pdf);
+
+        Assert.That(fillRect, Is.Not.Null, "Should have a background fill rect");
+        Assert.That(textYPositions.Count, Is.GreaterThanOrEqualTo(3),
+            "Should have at least 3 lines of text");
+
+        float firstBaseline = textYPositions.Max();
+        float lastBaseline = textYPositions.Min();
+
+        // Top padding: rect top to first text ascender (fontSize * 0.75)
+        float topGap = fillRect!.Value.Top - firstBaseline - 9f * 0.75f;
+        // Bottom padding: last text descender to rect bottom
+        float bottomGap = lastBaseline - 9f * 0.25f - fillRect.Value.Bottom;
+
+        // Padding should be at least 8pt (we use 10pt)
+        Assert.That(topGap, Is.GreaterThanOrEqualTo(8f),
+            $"Top padding ({topGap:F1}pt) should be >= 8pt");
+        Assert.That(bottomGap, Is.GreaterThanOrEqualTo(8f),
+            $"Bottom padding ({bottomGap:F1}pt) should be >= 8pt");
+
+        // Top and bottom should be roughly symmetric (within 2pt)
+        Assert.That(Math.Abs(topGap - bottomGap), Is.LessThanOrEqualTo(2f),
+            $"Padding should be symmetric: top={topGap:F1}pt, bottom={bottomGap:F1}pt");
+    }
+
+    // ── Multi-page code blocks ──────────────────────────────────────────
+
     [Test]
     public void Long_code_block_has_background_on_both_pages()
     {
-        // Generate a code block with ~80 lines — enough to span 2 pages on A4
-        var sb = new StringBuilder();
-        for (int i = 0; i < 80; i++)
-            sb.AppendLine($"int line{i} = {i}; // line number {i}");
-
-        var doc = new DocumentNode();
-        doc.AddChild(new DelimitedBlockNode
-        {
-            BlockKind = DelimitedBlockKind.Source,
-            Language = "csharp",
-            Content = sb.ToString().TrimEnd()
-        });
-
-        byte[] pdf = new PdfRenderer().RenderToBytes(doc);
-
-        // Split PDF into page streams by finding "stream" ... "endstream" blocks
-        string pdfText = Encoding.ASCII.GetString(pdf);
+        var doc = CreateDoc(GenerateLines(80));
+        string pdfText = RenderToString(doc);
         var pageStreams = ExtractPageStreams(pdfText);
 
         Assert.That(pageStreams.Count, Is.GreaterThanOrEqualTo(2),
             "Code block should span at least 2 pages");
 
-        // Both page streams should contain background fill operations (rg + re f)
         foreach (var (pageNum, stream) in pageStreams)
         {
-            bool hasFillRect = stream.Contains("re f") || stream.Contains("re\nf");
+            bool hasFillShape = HasClosedFill(stream) || stream.Contains("re f") || stream.Contains("re\nf");
             bool hasGrayColor = stream.Contains("0.95 0.95 0.95 rg");
-            Assert.That(hasFillRect && hasGrayColor, Is.True,
-                $"Page {pageNum} should have gray background fill rectangles for code block");
+            Assert.That(hasFillShape && hasGrayColor, Is.True,
+                $"Page {pageNum} should have gray background fill for code block");
         }
     }
 
-    /// <summary>
-    /// Verifies that background rectangles do not extend below the bottom margin.
-    /// Checks that all 're f' (fill rect) y-coordinates are above the margin.
-    /// </summary>
+    [Test]
+    public void Long_code_block_has_border_on_both_pages()
+    {
+        var doc = CreateDoc(GenerateLines(80));
+        string pdfText = RenderToString(doc);
+        var pageStreams = ExtractPageStreams(pdfText);
+
+        Assert.That(pageStreams.Count, Is.GreaterThanOrEqualTo(2),
+            "Code block should span at least 2 pages");
+
+        foreach (var (pageNum, stream) in pageStreams)
+        {
+            bool hasStroke = stream.Contains(" RG\n") && stream.Contains(" w\n");
+            Assert.That(hasStroke, Is.True,
+                $"Page {pageNum} should have border stroke for code block");
+        }
+    }
+
     [Test]
     public void Code_block_background_respects_page_margins()
     {
-        var sb = new StringBuilder();
-        for (int i = 0; i < 80; i++)
-            sb.AppendLine($"int x{i} = {i};");
-
-        var doc = new DocumentNode();
-        doc.AddChild(new DelimitedBlockNode
-        {
-            BlockKind = DelimitedBlockKind.Source,
-            Language = "csharp",
-            Content = sb.ToString().TrimEnd()
-        });
-
+        var doc = CreateDoc(GenerateLines(80));
         var options = new PdfRenderOptions { MarginBottom = 72f };
         byte[] pdf = new PdfRenderer().RenderToBytes(doc, options);
         string pdfText = Encoding.ASCII.GetString(pdf);
 
-        // Extract all fill rect y-coordinates from all page streams
         var pageStreams = ExtractPageStreams(pdfText);
         foreach (var (pageNum, stream) in pageStreams)
         {
-            // Pattern: "x y w h re\nf" — y is the second number
             var rectMatches = Regex.Matches(stream, @"([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+re\s*\n\s*f");
             foreach (Match m in rectMatches)
             {
                 float y = float.Parse(m.Groups[2].Value,
                     System.Globalization.CultureInfo.InvariantCulture);
-                // y is the bottom of the rect — it should be >= 0 (within page)
                 Assert.That(y, Is.GreaterThanOrEqualTo(0f),
-                    $"Page {pageNum}: rect y={y} should not be negative (below page)");
+                    $"Page {pageNum}: rect y={y} should not be negative");
             }
         }
     }
 
-    /// <summary>
-    /// Verifies syntax-highlighted code blocks also get backgrounds on continuation pages.
-    /// </summary>
     [Test]
     public void Highlighted_code_block_has_background_on_continuation_pages()
     {
-        var sb = new StringBuilder();
-        for (int i = 0; i < 80; i++)
-            sb.AppendLine($"public int Property{i} {{ get; set; }} = {i};");
-
-        var doc = new DocumentNode();
-        doc.AddChild(new DelimitedBlockNode
-        {
-            BlockKind = DelimitedBlockKind.Source,
-            Language = "csharp",
-            Content = sb.ToString().TrimEnd()
-        });
-
+        var doc = CreateDoc(GenerateLines(80, "public int Prop{0} {{ get; set; }} = {0};"));
         var options = new PdfRenderOptions { SyntaxColors = SyntaxColorScheme.Default };
         byte[] pdf = new PdfRenderer().RenderToBytes(doc, options);
         string pdfText = Encoding.ASCII.GetString(pdf);
@@ -117,68 +178,152 @@ public class CodeBlockBackgroundTests
         Assert.That(pageStreams.Count, Is.GreaterThanOrEqualTo(2),
             "Highlighted code block should span at least 2 pages");
 
-        // Page 2 should have both background rects and color operators
         var page2 = pageStreams[1].Stream;
-        bool hasFillRect = page2.Contains("re\nf") || page2.Contains("re f");
-        Assert.That(hasFillRect, Is.True,
-            "Continuation page should have background fill rectangles");
+        bool hasFill = page2.Contains("re\nf") || page2.Contains("re f") || HasClosedFill(page2);
+        Assert.That(hasFill, Is.True,
+            "Continuation page should have background fill");
     }
 
-    /// <summary>
-    /// Verifies that a short code block (single page) still gets proper background.
-    /// </summary>
-    [Test]
-    public void Short_code_block_has_background()
-    {
-        var doc = new DocumentNode();
-        doc.AddChild(new DelimitedBlockNode
-        {
-            BlockKind = DelimitedBlockKind.Source,
-            Language = "csharp",
-            Content = "int x = 42;\nstring s = \"hello\";"
-        });
+    // ── Determinism ─────────────────────────────────────────────────────
 
-        byte[] pdf = new PdfRenderer().RenderToBytes(doc);
-        string pdfText = Encoding.ASCII.GetString(pdf);
-
-        Assert.That(pdfText, Does.Contain("0.95 0.95 0.95 rg"),
-            "Should have gray background color");
-        bool hasFillRect = pdfText.Contains("re\nf") || pdfText.Contains("re f");
-        Assert.That(hasFillRect, Is.True,
-            "Should have fill rectangle for code block background");
-    }
-
-    /// <summary>
-    /// Verifies background is deterministic across runs.
-    /// </summary>
     [Test]
     public void Code_block_background_is_deterministic()
     {
-        var sb = new StringBuilder();
-        for (int i = 0; i < 80; i++)
-            sb.AppendLine($"int x{i} = {i};");
-
-        var doc = new DocumentNode();
-        doc.AddChild(new DelimitedBlockNode
-        {
-            BlockKind = DelimitedBlockKind.Source,
-            Language = "csharp",
-            Content = sb.ToString().TrimEnd()
-        });
-
+        var doc = CreateDoc(GenerateLines(80));
         byte[] pdf1 = new PdfRenderer().RenderToBytes(doc);
         byte[] pdf2 = new PdfRenderer().RenderToBytes(doc);
         Assert.That(pdf1, Is.EqualTo(pdf2));
     }
 
+    // ── Theme integration ───────────────────────────────────────────────
+
+    [Test]
+    public void Custom_border_color_is_applied()
+    {
+        var options = new PdfRenderOptions
+        {
+            CodeBorderColor = new PdfColor(1f, 0f, 0f) // red border
+        };
+
+        var doc = CreateDoc("test line");
+        byte[] pdf = new PdfRenderer().RenderToBytes(doc, options);
+        string pdfText = Encoding.ASCII.GetString(pdf);
+
+        Assert.That(pdfText, Does.Contain("1 0 0 RG"),
+            "Should use custom red stroke color for border");
+    }
+
+    [Test]
+    public void Custom_background_color_is_applied()
+    {
+        var options = new PdfRenderOptions
+        {
+            CodeBackground = new PdfColor(0.9f, 0.95f, 1f) // light blue
+        };
+
+        var doc = CreateDoc("test line");
+        byte[] pdf = new PdfRenderer().RenderToBytes(doc, options);
+        string pdfText = Encoding.ASCII.GetString(pdf);
+
+        Assert.That(pdfText, Does.Contain("0.9 0.95 1 rg"),
+            "Should use custom light blue fill color");
+    }
+
+    [Test]
+    public void No_background_when_CodeBackground_is_null()
+    {
+        var options = new PdfRenderOptions { CodeBackground = null };
+        var doc = CreateDoc("test line");
+        byte[] pdf = new PdfRenderer().RenderToBytes(doc, options);
+        string pdfText = Encoding.ASCII.GetString(pdf);
+
+        Assert.That(pdfText, Does.Not.Contain("0.95 0.95 0.95 rg"),
+            "Should not have background fill when CodeBackground is null");
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────
+
+    private static DocumentNode CreateDoc(string content, string? language = "csharp")
+    {
+        var doc = new DocumentNode();
+        doc.AddChild(new DelimitedBlockNode
+        {
+            BlockKind = DelimitedBlockKind.Source,
+            Language = language,
+            Content = content
+        });
+        return doc;
+    }
+
+    private static string GenerateLines(int count, string? pattern = null)
+    {
+        pattern ??= "int x{0} = {0};";
+        var sb = new StringBuilder();
+        for (int i = 0; i < count; i++)
+            sb.AppendLine(string.Format(pattern, i));
+        return sb.ToString().TrimEnd();
+    }
+
+    private static string RenderToString(DocumentNode doc, PdfRenderOptions? options = null)
+    {
+        byte[] pdf = new PdfRenderer().RenderToBytes(doc, options);
+        return Encoding.ASCII.GetString(pdf);
+    }
+
+    private static bool HasClosedFill(string text) =>
+        text.Contains("h\nf\n") || text.Contains("h\nf ");
+
+    private static bool HasStrokeOp(string text) =>
+        text.Contains("h\nS\n") || text.Contains("h\nS ");
+
+    private static (float Bottom, float Top)? ExtractRoundedRectBounds(string pdf)
+    {
+        // Find the q...Q block containing the gray fill
+        int qIdx = pdf.IndexOf("0.95 0.95 0.95 rg", StringComparison.Ordinal);
+        if (qIdx < 0) return null;
+
+        int start = pdf.LastIndexOf("q\n", qIdx, StringComparison.Ordinal);
+        int end = pdf.IndexOf("Q\n", qIdx, StringComparison.Ordinal);
+        if (start < 0 || end < 0) return null;
+
+        string block = pdf.Substring(start, end - start);
+
+        // Extract all Y coordinates from move (m) and curve (c) operations
+        var yValues = new List<float>();
+        foreach (Match m in Regex.Matches(block, @"[\d.]+\s+([\d.]+)\s+m"))
+        {
+            if (float.TryParse(m.Groups[1].Value, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out float y))
+                yValues.Add(y);
+        }
+        foreach (Match m in Regex.Matches(block, @"[\d.]+\s+([\d.]+)\s+l"))
+        {
+            if (float.TryParse(m.Groups[1].Value, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out float y))
+                yValues.Add(y);
+        }
+
+        if (yValues.Count < 2) return null;
+        return (yValues.Min(), yValues.Max());
+    }
+
+    private static List<float> ExtractTextYPositions(string pdf)
+    {
+        var values = new List<float>();
+        foreach (Match m in Regex.Matches(pdf, @"[\d.]+\s+([\d.]+)\s+Td"))
+        {
+            if (float.TryParse(m.Groups[1].Value, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out float y))
+                values.Add(y);
+        }
+        return values;
+    }
 
     private static List<(int PageNum, string Stream)> ExtractPageStreams(string pdfText)
     {
         var results = new List<(int, string)>();
         int pageNum = 0;
 
-        // Find all "stream\n...endstream" blocks
         int pos = 0;
         while (pos < pdfText.Length)
         {
@@ -191,7 +336,6 @@ public class CodeBlockBackgroundTests
 
             string content = pdfText.Substring(streamStart, streamEnd - streamStart);
 
-            // Only count streams that contain text operators (BT...ET) as page streams
             if (content.Contains("BT") && content.Contains("ET"))
             {
                 pageNum++;

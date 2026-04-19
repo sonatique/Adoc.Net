@@ -158,21 +158,33 @@ internal sealed class ConvertCommand(ConsoleLogger logger)
         {
             OutputFormat.Html when run.Styled => new HtmlRenderOptions { Theme = run.Theme, FullDocument = true },
             OutputFormat.Html => HtmlRenderOptions.Default,
+            OutputFormat.Pdf when run.PdfThemePath is not null => LoadPdfTheme(run),
             OutputFormat.Pdf => PdfRenderOptions.Default,
             _ => RenderOptions.Default,
         };
 
+        // Auto-detect diagram blocks in the AST (plantuml, mermaid, ditaa, graphviz, dot)
+        bool hasDiagramBlocks = run.RequireKroki || ContainsDiagramBlocks(document);
+
         // Determine if any extensions should be loaded
         bool hasAutoExtensions = !run.NoAutoExtensions;
         bool hasExplicitExtensions = run.ExtensionPaths is { Count: > 0 } || run.ExtensionDirs is { Count: > 0 };
+        bool needsEngine = hasAutoExtensions || hasExplicitExtensions || hasDiagramBlocks;
 
-        if (hasAutoExtensions || hasExplicitExtensions)
+        if (needsEngine)
         {
             var engine = new AdocEngine(renderer, _ => document);
             engine.OnWarning = msg => Console.Error.WriteLine($"Warning: {msg}");
 
             if (hasAutoExtensions)
                 engine.LoadInstalledExtensions();
+
+            if (hasDiagramBlocks)
+            {
+                var kroki = new KrokiDiagramToolRunner();
+                var diagramDir = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(run.InputPath)) ?? ".", ".adocnet-diagrams");
+                engine.RegisterBlockProcessor(new DiagramBlockProcessor(kroki, diagramDir));
+            }
 
             LoadExtensions(engine, run);
 
@@ -185,6 +197,111 @@ internal sealed class ConvertCommand(ConsoleLogger logger)
             using var ms = new MemoryStream();
             renderer.Render(document, ms, options);
             WriteOutput(effectiveOutputPath, ms.ToArray(), run.Format);
+        }
+    }
+
+    private static PdfRenderOptions LoadPdfTheme(CliArgs.Run run)
+    {
+        try
+        {
+            // Resolve fontsDir: explicit --pdf-fontsdir flag, or --attribute pdf-fontsdir=... (Asciidoctor compat)
+            var fontsDir = run.PdfFontsDir;
+            if (fontsDir is null && run.Attributes is not null && run.Attributes.TryGetValue("pdf-fontsdir", out var attrFontsDir) && attrFontsDir.Length > 0)
+                fontsDir = attrFontsDir;
+            var options = PdfThemeLoader.Load(run.PdfThemePath!, fontsDir);
+            // Override BaseDirectory relative to the input file for image resolution
+            var inputDir = Path.GetDirectoryName(Path.GetFullPath(run.InputPath));
+            return new PdfRenderOptions
+            {
+                FontPath = options.FontPath,
+                BoldFontPath = options.BoldFontPath,
+                ItalicFontPath = options.ItalicFontPath,
+                MonoFontPath = options.MonoFontPath,
+                MonoBoldFontPath = options.MonoBoldFontPath,
+                MonoItalicFontPath = options.MonoItalicFontPath,
+                MonoBoldItalicFontPath = options.MonoBoldItalicFontPath,
+                HeadingFontPath = options.HeadingFontPath,
+                PageWidth = options.PageWidth,
+                PageHeight = options.PageHeight,
+                MarginTop = options.MarginTop,
+                MarginRight = options.MarginRight,
+                MarginBottom = options.MarginBottom,
+                MarginLeft = options.MarginLeft,
+                FontSize = options.FontSize,
+                CodeFontSize = options.CodeFontSize,
+                TitleFontSize = options.TitleFontSize,
+                LineSpacing = options.LineSpacing,
+                TitleLineHeight = options.TitleLineHeight,
+                Heading2FontSize = options.Heading2FontSize,
+                Heading3FontSize = options.Heading3FontSize,
+                Heading4FontSize = options.Heading4FontSize,
+                Heading5FontSize = options.Heading5FontSize,
+                Heading2MarginBottom = options.Heading2MarginBottom,
+                Heading3MarginBottom = options.Heading3MarginBottom,
+                Heading4MarginBottom = options.Heading4MarginBottom,
+                Heading5MarginBottom = options.Heading5MarginBottom,
+                HeadingColor = options.HeadingColor,
+                Heading2Color = options.Heading2Color,
+                Heading3Color = options.Heading3Color,
+                Heading4Color = options.Heading4Color,
+                Heading5Color = options.Heading5Color,
+                BodyColor = options.BodyColor,
+                ShowPageNumbers = options.ShowPageNumbers,
+                HeaderText = options.HeaderText,
+                FooterText = options.FooterText,
+                HeaderFontSize = options.HeaderFontSize,
+                FooterFontSize = options.FooterFontSize,
+                HeaderFontColor = options.HeaderFontColor,
+                FooterFontColor = options.FooterFontColor,
+                HeaderAlignment = options.HeaderAlignment,
+                FooterAlignment = options.FooterAlignment,
+                RunningContentStartAt = options.RunningContentStartAt,
+                TableBorderColor = options.TableBorderColor,
+                TableHeaderBackground = options.TableHeaderBackground,
+                TableHeaderFontColor = options.TableHeaderFontColor,
+                CodeBorderColor = options.CodeBorderColor,
+                HeaderHeight = options.HeaderHeight,
+                FooterHeight = options.FooterHeight,
+                FooterImagePath = options.FooterImagePath,
+                FooterImageWidth = options.FooterImageWidth,
+                HeadingScale = options.HeadingScale,
+                ParagraphSpacingAfter = options.ParagraphSpacingAfter,
+                ParagraphSpacingBefore = options.ParagraphSpacingBefore,
+                SectionSpacing = options.SectionSpacing,
+                TitleMarginTop = options.TitleMarginTop,
+                TitleMarginBottom = options.TitleMarginBottom,
+                CodeBackground = options.CodeBackground,
+                CodespanBackground = options.CodespanBackground,
+                BaseDirectory = inputDir,
+            };
+        }
+        catch (Exception ex) when (ex is IOException or FormatException)
+        {
+            Console.Error.WriteLine($"Warning: could not load PDF theme: {ex.Message}");
+            return PdfRenderOptions.Default;
+        }
+    }
+
+    private static bool ContainsDiagramBlocks(DocumentNode document)
+    {
+        foreach (var node in document.Children)
+        {
+            if (HasDiagramBlock(node))
+                return true;
+        }
+        return false;
+
+        static bool HasDiagramBlock(AstNode node)
+        {
+            if (node is DelimitedBlockNode { BlockKind: DelimitedBlockKind.Source } block
+                && block.Language is "plantuml" or "mermaid" or "ditaa" or "graphviz" or "dot")
+                return true;
+            foreach (var child in node.Children)
+            {
+                if (HasDiagramBlock(child))
+                    return true;
+            }
+            return false;
         }
     }
 

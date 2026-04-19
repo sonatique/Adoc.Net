@@ -42,8 +42,8 @@ public class HtmlRendererRegressionTests
         var options = new HtmlRenderOptions { FullDocument = true };
         var html = Render(doc, options);
 
-        Assert.That(html, Does.Contain("<title>A &amp; B &lt;C&gt; &quot;D&quot;</title>"));
-        Assert.That(html, Does.Contain("<h1>A &amp; B &lt;C&gt; &quot;D&quot;</h1>"));
+        Assert.That(html, Does.Contain("<title>A &amp; B &lt;C&gt; \"D\"</title>"));
+        Assert.That(html, Does.Contain("<h1>A &amp; B &lt;C&gt; \"D\"</h1>"));
     }
 
     // ── HtmlSectionRenderer ─────────────────────────────────────────────
@@ -265,8 +265,8 @@ public class HtmlRendererRegressionTests
         var html = Render(doc);
 
         Assert.That(html, Does.Contain("<table"));
-        Assert.That(html, Does.Contain("<td class=\"halign-left tableblock valign-top\"><p class=\"tableblock\">A1</p></td>"));
-        Assert.That(html, Does.Contain("<td class=\"halign-left tableblock valign-top\"><p class=\"tableblock\">B2</p></td>"));
+        Assert.That(html, Does.Contain("<td class=\"tableblock halign-left valign-top\"><p class=\"tableblock\">A1</p></td>"));
+        Assert.That(html, Does.Contain("<td class=\"tableblock halign-left valign-top\"><p class=\"tableblock\">B2</p></td>"));
         Assert.That(html, Does.Contain("</table>"));
     }
 
@@ -287,7 +287,7 @@ public class HtmlRendererRegressionTests
         var html = Render(doc);
 
         Assert.That(html, Does.Contain("<thead>"));
-        Assert.That(html, Does.Contain("<th class=\"halign-left tableblock valign-top\">Name</th>"));
+        Assert.That(html, Does.Contain("<th class=\"tableblock halign-left valign-top\">Name</th>"));
         Assert.That(html, Does.Contain("</thead>"));
         Assert.That(html, Does.Contain("<tbody>"));
     }
@@ -331,7 +331,7 @@ public class HtmlRendererRegressionTests
 
         Assert.That(html, Is.EqualTo(
             "<div class=\"paragraph\">\n" +
-            "<p><a class=\"bare\" href=\"https://example.com\">https://example.com</a></p>\n" +
+            "<p><a href=\"https://example.com\" class=\"bare\">https://example.com</a></p>\n" +
             "</div>\n"));
     }
 

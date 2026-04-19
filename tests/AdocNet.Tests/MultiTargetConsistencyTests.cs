@@ -48,7 +48,7 @@ public class MultiTargetConsistencyTests
 
             try
             {
-                var pdfRenderer = new Converters.Pdf.PdfRenderer();
+                var pdfRenderer = new AdocNet.Converters.Pdf.PdfRenderer();
                 var pdfBytes = pdfRenderer.RenderToBytes(result.Document);
                 File.WriteAllText(Path.Combine(_net10OutputDir, name + ".pdf-info.txt"),
                     $"ByteCount={pdfBytes.Length}");

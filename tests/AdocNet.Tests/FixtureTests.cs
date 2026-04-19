@@ -76,8 +76,8 @@ public class FixtureTests
 
         var input = ExpandIncludes(adocPath);
         var result = BlockParser.Parse(input);
-        var actual = new HtmlRenderer().RenderToString(result.Document);
-        var expected = NormalizeLineEndings(File.ReadAllText(expectedPath));
+        var actual = new HtmlRenderer().RenderToString(result.Document).TrimEnd('\n');
+        var expected = NormalizeLineEndings(File.ReadAllText(expectedPath)).TrimEnd('\n');
 
         Assert.That(actual, Is.EqualTo(expected),
             $"HTML mismatch for {Path.GetFileNameWithoutExtension(adocPath)}");

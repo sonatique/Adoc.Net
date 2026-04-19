@@ -1,0 +1,3 @@
+This sentence has a footnote.footnote:[This is the footnote text.]
+
+Another paragraph with a second footnote.footnote:[Second footnote here.]

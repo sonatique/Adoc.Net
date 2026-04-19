@@ -1,0 +1,767 @@
+%PDF-1.4
+%âãÏÓ
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Length 1995 >>
+stream
+BT
+/F2 24 Tf
+72 770 Td
+(Large Integration Test Document) Tj
+ET
+BT
+72 705.6 Td
+/F2 20.4 Tf
+(Chapter One: Introduction) Tj
+ET
+BT
+72 674.06 Td
+/F1 11 Tf
+(This document tests parsing and rendering of a large AsciiDoc file with many features.) Tj
+ET
+BT
+72 635.21 Td
+/F2 17.34 Tf
+(Background) Tj
+ET
+BT
+72 603.67 Td
+3.65 Tw
+/F1 11 Tf
+(The parser must handle documents with hundreds of lines efficiently.
+This paragraph) Tj
+0 Tw
+ET
+BT
+72 588.82 Td
+/F1 11 Tf
+(contains ) Tj
+/F2 11 Tf
+( bold) Tj
+/F1 11 Tf
+( , ) Tj
+/F3 11 Tf
+( italic) Tj
+/F1 11 Tf
+( , ) Tj
+/F4 11 Tf
+( monospace) Tj
+/F1 11 Tf
+( , and ) Tj
+/F3 11 Tf
+( combined) Tj
+/F1 11 Tf
+(  formatting.) Tj
+ET
+BT
+72 549.97 Td
+/F2 17.34 Tf
+(Goals) Tj
+ET
+BT
+72 518.43 Td
+/F1 11 Tf
+(1. ) Tj
+/F1 11 Tf
+( Parse correctly) Tj
+ET
+BT
+72 503.58 Td
+/F1 11 Tf
+(2. ) Tj
+/F1 11 Tf
+( Render identical output across TFMs) Tj
+ET
+BT
+72 488.73 Td
+/F1 11 Tf
+(3. ) Tj
+/F1 11 Tf
+( Handle edge cases gracefully) Tj
+ET
+BT
+72 449.88 Td
+/F2 20.4 Tf
+(Chapter Two: Lists) Tj
+ET
+BT
+72 402.34 Td
+/F2 17.34 Tf
+(Simple Lists) Tj
+ET
+BT
+72 370.8 Td
+/F1 11 Tf
+(- ) Tj
+/F1 11 Tf
+( Item one with ) Tj
+/F2 11 Tf
+( bold) Tj
+ET
+BT
+72 355.95 Td
+/F1 11 Tf
+(- ) Tj
+/F1 11 Tf
+( Item two with ) Tj
+/F3 11 Tf
+( italic) Tj
+ET
+BT
+72 341.1 Td
+/F1 11 Tf
+(- ) Tj
+/F1 11 Tf
+( Item three with ) Tj
+/F4 11 Tf
+( code) Tj
+ET
+BT
+72 302.25 Td
+/F2 17.34 Tf
+(Nested Lists) Tj
+ET
+BT
+72 270.71 Td
+/F1 11 Tf
+(- ) Tj
+/F1 11 Tf
+( Top level A) Tj
+ET
+BT
+72 255.86 Td
+/F1 11 Tf
+(- ) Tj
+/F1 11 Tf
+( Nested A.1) Tj
+ET
+BT
+72 241.01 Td
+/F1 11 Tf
+(- ) Tj
+/F1 11 Tf
+( Nested A.2) Tj
+ET
+BT
+72 226.16 Td
+/F1 11 Tf
+(- ) Tj
+/F1 11 Tf
+( Deep A.2.1) Tj
+ET
+BT
+72 195.31 Td
+/F1 11 Tf
+(- ) Tj
+/F1 11 Tf
+( Top level B) Tj
+ET
+BT
+72 180.46 Td
+/F1 11 Tf
+(- ) Tj
+/F1 11 Tf
+( Nested B.1) Tj
+ET
+BT
+72 133.61 Td
+/F2 17.34 Tf
+(Ordered Lists) Tj
+ET
+BT
+72 102.07 Td
+/F1 11 Tf
+(1. ) Tj
+/F1 11 Tf
+( First item) Tj
+ET
+BT
+72 87.22 Td
+/F1 11 Tf
+(2. ) Tj
+/F1 11 Tf
+( Second item) Tj
+ET
+BT
+72 72.37 Td
+/F1 11 Tf
+(1. ) Tj
+/F1 11 Tf
+( Sub-item 2a) Tj
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /MediaBox [0 0 595 842] /Contents 5 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R >> >> /Parent 15 0 R >>
+endobj
+7 0 obj
+<< /Length 2672 >>
+stream
+BT
+72 770 Td
+/F1 11 Tf
+(2. ) Tj
+/F1 11 Tf
+( Sub-item 2b) Tj
+ET
+BT
+72 747.15 Td
+/F1 11 Tf
+(3. ) Tj
+/F1 11 Tf
+( Third item) Tj
+ET
+BT
+72 708.3 Td
+/F2 17.34 Tf
+(Checklists) Tj
+ET
+BT
+72 676.76 Td
+/F1 11 Tf
+(- ) Tj
+/F1 11 Tf
+( Completed task) Tj
+ET
+BT
+72 661.91 Td
+/F1 11 Tf
+(- ) Tj
+/F1 11 Tf
+( Pending task) Tj
+ET
+BT
+72 647.06 Td
+/F1 11 Tf
+(- ) Tj
+/F1 11 Tf
+( Another done) Tj
+ET
+BT
+72 608.21 Td
+/F2 20.4 Tf
+(Chapter Three: Tables) Tj
+ET
+BT
+72 560.67 Td
+/F2 17.34 Tf
+(Basic Table) Tj
+ET
+BT
+/F2 11 Tf
+76 529.13 Td
+(Column A) Tj
+ET
+BT
+/F2 11 Tf
+226.33 529.13 Td
+(Column B) Tj
+ET
+BT
+/F2 11 Tf
+376.67 529.13 Td
+(Column C) Tj
+ET
+0 0 0 RG
+1 w
+72 527.13 m 523 527.13 l S
+BT
+/F1 11 Tf
+76 514.28 Td
+(Row 1A) Tj
+ET
+BT
+/F1 11 Tf
+226.33 514.28 Td
+(Row 1B) Tj
+ET
+BT
+/F1 11 Tf
+376.67 514.28 Td
+(Row 1C) Tj
+ET
+0.85 0.85 0.85 RG
+0.25 w
+72 512.28 m 523 512.28 l S
+0 0 0 RG
+BT
+/F1 11 Tf
+76 499.43 Td
+(Row 2A) Tj
+ET
+BT
+/F1 11 Tf
+226.33 499.43 Td
+(Row 2B) Tj
+ET
+BT
+/F1 11 Tf
+376.67 499.43 Td
+(Row 2C) Tj
+ET
+0.85 0.85 0.85 RG
+0.25 w
+72 497.43 m 523 497.43 l S
+0 0 0 RG
+BT
+/F1 11 Tf
+76 484.58 Td
+(Row 3A) Tj
+ET
+BT
+/F1 11 Tf
+226.33 484.58 Td
+(Row 3B) Tj
+ET
+BT
+/F1 11 Tf
+376.67 484.58 Td
+(Row 3C) Tj
+ET
+BT
+72 445.73 Td
+/F2 17.34 Tf
+(Table with Header) Tj
+ET
+BT
+/F2 11 Tf
+76 414.19 Td
+(Name) Tj
+ET
+BT
+/F2 11 Tf
+243.85 414.19 Td
+(Type) Tj
+ET
+BT
+/F2 11 Tf
+411.72 414.19 Td
+(Default) Tj
+ET
+0 0 0 RG
+1 w
+72 412.19 m 523 412.19 l S
+BT
+/F1 11 Tf
+76 399.34 Td
+(timeout) Tj
+ET
+BT
+/F1 11 Tf
+243.85 399.34 Td
+(integer) Tj
+ET
+BT
+/F1 11 Tf
+411.72 399.34 Td
+(30) Tj
+ET
+0.85 0.85 0.85 RG
+0.25 w
+72 397.34 m 523 397.34 l S
+0 0 0 RG
+BT
+/F1 11 Tf
+76 384.49 Td
+(retries) Tj
+ET
+BT
+/F1 11 Tf
+243.85 384.49 Td
+(integer) Tj
+ET
+BT
+/F1 11 Tf
+411.72 384.49 Td
+(3) Tj
+ET
+0.85 0.85 0.85 RG
+0.25 w
+72 382.49 m 523 382.49 l S
+0 0 0 RG
+BT
+/F1 11 Tf
+76 369.64 Td
+(verbose) Tj
+ET
+BT
+/F1 11 Tf
+243.85 369.64 Td
+(boolean) Tj
+ET
+BT
+/F1 11 Tf
+411.72 369.64 Td
+(false) Tj
+ET
+BT
+72 330.79 Td
+/F2 20.4 Tf
+(Chapter Four: Code) Tj
+ET
+BT
+72 283.25 Td
+/F2 17.34 Tf
+(Inline Code) Tj
+ET
+BT
+72 251.71 Td
+/F1 11 Tf
+(Use the ) Tj
+/F4 11 Tf
+( AdocParser.Parse\(\)) Tj
+/F1 11 Tf
+(  method to parse AsciiDoc.) Tj
+ET
+BT
+72 212.86 Td
+/F2 17.34 Tf
+(Code Block) Tj
+ET
+0.95 0.95 0.95 rg
+68 80.12 459 105.2 re f
+0 0 0 rg
+BT
+/F3 8 Tf
+72 181.32 Td
+(csharp) Tj
+ET
+BT
+/F4 9 Tf
+72 169.17 Td
+(public class Example) Tj
+ET
+BT
+/F4 9 Tf
+72 157.02 Td
+({) Tj
+ET
+BT
+/F4 9 Tf
+72 144.87 Td
+(    public string Name { get; set; }) Tj
+ET
+BT
+/F4 9 Tf
+72 132.72 Td
+(    public int Value { get; set; }) Tj
+ET
+BT
+/F4 9 Tf
+72 120.57 Td
+(    public override string ToString\(\)) Tj
+ET
+BT
+/F4 9 Tf
+72 108.42 Td
+(        => $"{Name}: {Value}";) Tj
+ET
+BT
+/F4 9 Tf
+72 96.27 Td
+(}) Tj
+ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /MediaBox [0 0 595 842] /Contents 7 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R >> >> /Parent 15 0 R >>
+endobj
+9 0 obj
+<< /Length 1744 >>
+stream
+BT
+72 770 Td
+/F2 17.34 Tf
+(Literal Block) Tj
+ET
+0.95 0.95 0.95 rg
+68 698.01 459 44.45 re f
+0 0 0 rg
+BT
+/F4 9 Tf
+72 738.46 Td
+(  This preserves) Tj
+ET
+BT
+/F4 9 Tf
+72 726.31 Td
+(    all whitespace) Tj
+ET
+BT
+/F4 9 Tf
+72 714.16 Td
+(      including indentation) Tj
+ET
+BT
+72 678.01 Td
+/F2 20.4 Tf
+(Chapter Five: Admonitions) Tj
+ET
+BT
+/F2 11 Tf
+72 646.47 Td
+(NOTE:) Tj
+ET
+BT
+72 631.62 Td
+/F1 11 Tf
+(Remember to check the output.) Tj
+ET
+BT
+/F2 11 Tf
+72 608.77 Td
+(TIP:) Tj
+ET
+BT
+72 593.92 Td
+/F1 11 Tf
+(Use diff tools for comparison.) Tj
+ET
+BT
+/F2 11 Tf
+72 571.07 Td
+(WARNING:) Tj
+ET
+BT
+72 556.22 Td
+/F1 11 Tf
+(Do not modify golden files manually.) Tj
+ET
+BT
+/F2 11 Tf
+72 533.37 Td
+(IMPORTANT:) Tj
+ET
+BT
+72 518.52 Td
+/F1 11 Tf
+(Cross-TFM consistency is critical.) Tj
+ET
+BT
+72 479.67 Td
+/F2 20.4 Tf
+(Chapter Six: Links and Images) Tj
+ET
+BT
+72 448.13 Td
+/F1 11 Tf
+(Visit ) Tj
+/F1 11 Tf
+( https://example.com) Tj
+/F1 11 Tf
+(  for documentation.) Tj
+ET
+BT
+72 425.28 Td
+/F1 11 Tf
+(See ) Tj
+/F1 11 Tf
+( the docs) Tj
+/F1 11 Tf
+(  for more information.) Tj
+ET
+BT
+72 386.43 Td
+/F2 20.4 Tf
+(Chapter Seven: Formatting Edge Cases) Tj
+ET
+BT
+72 338.89 Td
+/F2 17.34 Tf
+(Adjacent Formatting) Tj
+ET
+BT
+72 307.35 Td
+/F2 11 Tf
+(bold) Tj
+/F3 11 Tf
+( italic) Tj
+/F4 11 Tf
+( mono) Tj
+ET
+BT
+72 268.5 Td
+/F2 17.34 Tf
+(Formatting Across Words) Tj
+ET
+BT
+72 236.96 Td
+/F2 11 Tf
+(two words) Tj
+/F1 11 Tf
+(  and ) Tj
+/F3 11 Tf
+( two words) Tj
+/F1 11 Tf
+(  and ) Tj
+/F4 11 Tf
+( two words) Tj
+ET
+BT
+72 198.11 Td
+/F2 17.34 Tf
+(Special Characters) Tj
+ET
+BT
+72 166.57 Td
+/F1 11 Tf
+(Ampersand & less < greater > quote " apostrophe ') Tj
+ET
+BT
+72 143.72 Td
+/F1 11 Tf
+(Copyright \251 and trademark \231 and registered \256) Tj
+ET
+BT
+72 104.87 Td
+/F2 20.4 Tf
+(Chapter Eight: Sections) Tj
+ET
+endstream
+endobj
+10 0 obj
+<< /Type /Annot /Subtype /Link /Rect [95.84 446.13 197.32 461.13] /Border [0 0 0] /A << /Type /Action /S /URI /URI (https://example.com) >> >>
+endobj
+11 0 obj
+<< /Type /Annot /Subtype /Link /Rect [94.63 423.28 139.27 438.28] /Border [0 0 0] /A << /Type /Action /S /URI /URI (https://example.com/docs) >> >>
+endobj
+12 0 obj
+<< /Type /Page /MediaBox [0 0 595 842] /Contents 9 0 R /Annots [10 0 R 11 0 R] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R >> >> /Parent 15 0 R >>
+endobj
+13 0 obj
+<< /Length 1129 >>
+stream
+BT
+72 770 Td
+/F2 17.34 Tf
+(Level 3) Tj
+ET
+BT
+72 722.46 Td
+/F2 14.74 Tf
+(Level 4) Tj
+ET
+BT
+72 674.92 Td
+/F2 12.53 Tf
+(Level 5) Tj
+ET
+BT
+72 656.07 Td
+/F1 11 Tf
+(Back to content after deep sections.) Tj
+ET
+BT
+72 617.22 Td
+/F2 20.4 Tf
+(Chapter Nine: Paragraphs) Tj
+ET
+BT
+72 585.68 Td
+1.66 Tw
+/F1 11 Tf
+(First paragraph with some text that spans multiple concepts and ideas, providing enough) Tj
+0 Tw
+ET
+BT
+72 570.83 Td
+/F1 11 Tf
+(content to test paragraph handling.) Tj
+ET
+BT
+72 547.98 Td
+0.46 Tw
+/F1 11 Tf
+(Second paragraph immediately following the first, separated by a blank line as per AsciiDoc) Tj
+0 Tw
+ET
+BT
+72 533.13 Td
+/F1 11 Tf
+(rules.) Tj
+ET
+BT
+72 510.28 Td
+/F1 11 Tf
+(Third paragraph. This one is shorter.) Tj
+ET
+BT
+72 471.43 Td
+/F2 20.4 Tf
+(Chapter Ten: Conclusion) Tj
+ET
+BT
+72 439.89 Td
+1.97 Tw
+/F1 11 Tf
+(This concludes the large integration test document. All features above should parse and) Tj
+0 Tw
+ET
+BT
+72 425.04 Td
+/F1 11 Tf
+(render consistently across both ) Tj
+/F4 11 Tf
+( netstandard2.0) Tj
+/F1 11 Tf
+(  and ) Tj
+/F4 11 Tf
+( net10.0) Tj
+/F1 11 Tf
+(  targets.) Tj
+ET
+BT
+72 402.19 Td
+/F1 11 Tf
+(The end.) Tj
+ET
+endstream
+endobj
+14 0 obj
+<< /Type /Page /MediaBox [0 0 595 842] /Contents 13 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R >> >> /Parent 15 0 R >>
+endobj
+15 0 obj
+<< /Type /Pages /Kids [6 0 R 8 0 R 12 0 R 14 0 R] /Count 4 >>
+endobj
+16 0 obj
+<< /Type /Catalog /Pages 15 0 R >>
+endobj
+17 0 obj
+<< /Producer (AdocNet PDF Renderer) /CreationDate (D:20260101000000+00'00') >>
+endobj
+xref
+0 18
+0000000000 65535 f 
+0000000019 00000 n 
+0000000116 00000 n 
+0000000218 00000 n 
+0000000323 00000 n 
+0000000418 00000 n 
+0000002464 00000 n 
+0000002621 00000 n 
+0000005344 00000 n 
+0000005501 00000 n 
+0000007296 00000 n 
+0000007455 00000 n 
+0000007619 00000 n 
+0000007801 00000 n 
+0000008982 00000 n 
+0000009141 00000 n 
+0000009219 00000 n 
+0000009270 00000 n 
+trailer
+<< /Size 18 /Root 16 0 R /Info 17 0 R >>
+startxref
+9365
+%%EOF

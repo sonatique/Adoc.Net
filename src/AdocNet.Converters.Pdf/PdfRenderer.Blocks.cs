@@ -141,14 +141,14 @@ public sealed partial class PdfRenderer
 
         float cellPadding = 4f;
 
+        // Border/grid color from theme
+        var gridColor = _tableBorderColor;
+
         int startRow = 0;
         // Header row
         if (table.HasHeader && table.Children[0] is TableRowNode headerRow)
         {
-            RenderTableRow(w, headerRow, colWidths, cellPadding, _fontBold, _bodyFontSize, table.Columns);
-            // Draw a line under header
-            w.SetStrokeColor(0, 0, 0);
-            w.DrawLine(w.MarginLeftValue, w.CursorY + _bodyLeading - 2, w.MarginLeftValue + w.ContentWidth, w.CursorY + _bodyLeading - 2, 1f);
+            RenderTableHeader(w, headerRow, colWidths, cellPadding, table.Columns);
             startRow = 1;
         }
 
@@ -165,18 +165,17 @@ public sealed partial class PdfRenderer
 
                 // If EnsurePage moved to a new page, repeat the header
                 if (repeatHeader is not null && w.CurrentPageNumber != pageBefore)
-                {
-                    RenderTableRow(w, repeatHeader, colWidths, cellPadding, _fontBold, _bodyFontSize, table.Columns);
-                    w.SetStrokeColor(0, 0, 0);
-                    w.DrawLine(w.MarginLeftValue, w.CursorY + _bodyLeading - 2, w.MarginLeftValue + w.ContentWidth, w.CursorY + _bodyLeading - 2, 1f);
-                }
+                    RenderTableHeader(w, repeatHeader, colWidths, cellPadding, table.Columns);
 
                 RenderTableRow(w, row, colWidths, cellPadding, _fontRegular, _bodyFontSize, table.Columns);
 
-                // Draw a light gray separator line between body rows
+                // Draw a separator line between body rows
                 if (i < table.Children.Count - 1)
                 {
-                    w.SetStrokeColor(0.85f, 0.85f, 0.85f);
+                    if (gridColor is { } gc)
+                        w.SetStrokeColor(gc.R, gc.G, gc.B);
+                    else
+                        w.SetStrokeColor(0.85f, 0.85f, 0.85f);
                     w.DrawLine(w.MarginLeftValue, w.CursorY + _bodyLeading - 2, w.MarginLeftValue + w.ContentWidth, w.CursorY + _bodyLeading - 2, 0.25f);
                     w.SetStrokeColor(0, 0, 0);
                 }
@@ -184,6 +183,64 @@ public sealed partial class PdfRenderer
         }
 
         w.MoveCursor(_paragraphSpacingAfter);
+    }
+
+    private void RenderTableHeader(PdfWriter w, TableRowNode headerRow, float[] colWidths,
+        float cellPadding, IReadOnlyList<TableColumnSpec>? columns)
+    {
+        // Measure header row height first (need it for background fill)
+        var headerFont = _fontBold;
+        var headerFontSize = _bodyFontSize;
+        float rowHeight = MeasureRowHeight(w, headerRow, colWidths, cellPadding, headerFont, headerFontSize);
+
+        // Draw header background if configured
+        if (_tableHeaderBackground is { } bg)
+        {
+            w.SetFillColor(bg.R, bg.G, bg.B);
+            w.DrawRect(w.MarginLeftValue, w.CursorY - rowHeight + headerFontSize * 0.75f,
+                w.ContentWidth, rowHeight, fill: true);
+            w.SetFillColor(0, 0, 0);
+        }
+
+        // Set header text color (explicit, or white on dark background, or black)
+        var headerFontColor = _tableHeaderFontColor
+            ?? (_tableHeaderBackground is not null ? new PdfColor(1, 1, 1) : (PdfColor?)null);
+        if (headerFontColor is { } fc) w.SetFillColor(fc.R, fc.G, fc.B);
+
+        RenderTableRow(w, headerRow, colWidths, cellPadding, headerFont, headerFontSize, columns);
+
+        if (headerFontColor is not null) w.SetFillColor(0, 0, 0);
+
+        // Draw line under header using border color or background color
+        if (_tableBorderColor is { } tbc)
+            w.SetStrokeColor(tbc.R, tbc.G, tbc.B);
+        else if (_tableHeaderBackground is { } hbg)
+            w.SetStrokeColor(hbg.R, hbg.G, hbg.B);
+        else
+            w.SetStrokeColor(0, 0, 0);
+        w.DrawLine(w.MarginLeftValue, w.CursorY + _bodyLeading - 2, w.MarginLeftValue + w.ContentWidth, w.CursorY + _bodyLeading - 2, 1f);
+        w.SetStrokeColor(0, 0, 0);
+    }
+
+    private float MeasureRowHeight(PdfWriter w, TableRowNode row, float[] colWidths,
+        float cellPadding, string font, float fontSize)
+    {
+        int colIndex = 0;
+        int maxLines = 1;
+        foreach (var child in row.Children)
+        {
+            if (child is TableCellNode cell)
+            {
+                float cellWidth = 0;
+                for (int s = 0; s < cell.ColSpan && colIndex + s < colWidths.Length; s++)
+                    cellWidth += colWidths[colIndex + s];
+                string text = GetPlainText(cell.Inlines, cell.Text);
+                var lines = w.WrapText(text, font, fontSize, cellWidth - 2 * cellPadding);
+                if (lines.Count > maxLines) maxLines = lines.Count;
+                colIndex += cell.ColSpan;
+            }
+        }
+        return maxLines * _bodyLeading;
     }
 
     private void RenderTableRow(PdfWriter w, TableRowNode row, float[] colWidths,
@@ -283,13 +340,16 @@ public sealed partial class PdfRenderer
             w.WriteWrappedText(image.Title, _fontItalic, _smallFontSize, _codeLeading);
         }
 
-        // Try to load and embed the actual image
-        if (TryLoadImage(image.Target, out var imageInfo))
+        // Try SVG first (vector), then raster images
+        if (TryLoadSvg(image.Target, out var svgDoc))
+        {
+            RenderSvgImage(w, svgDoc, w.ContentWidth);
+        }
+        else if (TryLoadImage(image.Target, out var imageInfo))
         {
             string imageRef = w.EmbedImage(imageInfo);
 
             // Scale to fit content width, maintaining aspect ratio
-            // Use 72 dpi as the base resolution (1 point = 1 pixel at 72 dpi)
             float imgWidth = imageInfo.Width;
             float imgHeight = imageInfo.Height;
             float maxWidth = w.ContentWidth;
@@ -297,7 +357,6 @@ public sealed partial class PdfRenderer
             float displayWidth = imgWidth * scale;
             float displayHeight = imgHeight * scale;
 
-            // Check if it fits on the current page
             if (w.CursorY - displayHeight < w.MarginBottomValue)
                 w.EnsurePage();
 
@@ -317,6 +376,41 @@ public sealed partial class PdfRenderer
         }
 
         w.MoveCursor(_paragraphSpacingAfter);
+    }
+
+    /// <summary>
+    /// Renders an SVG at the current cursor position, scaling to fit the given max width.
+    /// </summary>
+    private void RenderSvgImage(PdfWriter w, SvgParser.SvgDocument svg, float maxWidth)
+    {
+        float aspectRatio = svg.ViewBoxHeight / svg.ViewBoxWidth;
+        float displayWidth = Math.Min(svg.Width, maxWidth);
+        float displayHeight = displayWidth * aspectRatio;
+
+        if (w.CursorY - displayHeight < w.MarginBottomValue)
+            w.EnsurePage();
+
+        w.MoveCursor(displayHeight);
+        w.DrawSvg(svg, w.MarginLeftValue, w.CursorY, displayWidth, displayHeight);
+    }
+
+    /// <summary>
+    /// Tries to load an SVG file from the base directory.
+    /// </summary>
+    private bool TryLoadSvg(string target, out SvgParser.SvgDocument svgDoc)
+    {
+        svgDoc = default;
+        if (_baseDirectory is null) return false;
+        if (!target.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)) return false;
+        string fullPath = Path.Combine(_baseDirectory, target);
+        if (!File.Exists(fullPath)) return false;
+        byte[] data;
+        try { data = File.ReadAllBytes(fullPath); }
+        catch { return false; }
+        var result = SvgParser.Parse(data);
+        if (result is null) return false;
+        svgDoc = result.Value;
+        return true;
     }
 
     /// <summary>
@@ -416,29 +510,35 @@ public sealed partial class PdfRenderer
     }
 
     private void AppendInlineSegments(List<TextSegment> segments, InlineNode node,
-        string defaultFont, float defaultFontSize, FootnoteState footnotes)
+        string defaultFont, float defaultFontSize, FootnoteState footnotes,
+        PdfColor? background = null, bool isBold = false, bool isItalic = false)
     {
         switch (node)
         {
             case TextInlineNode text:
                 // Replace newlines with spaces — PDF text operators can't render \n
                 string value = text.Value.Contains('\n') ? text.Value.Replace('\n', ' ') : text.Value;
-                segments.Add(new TextSegment(value, defaultFont, defaultFontSize));
+                segments.Add(new TextSegment(value, defaultFont, defaultFontSize, Background: background));
                 break;
 
             case StrongInlineNode strong:
                 foreach (var child in strong.Children)
-                    AppendInlineSegments(segments, child, _fontBold, defaultFontSize, footnotes);
+                    AppendInlineSegments(segments, child, _fontBold, defaultFontSize, footnotes,
+                        background: background, isBold: true, isItalic: isItalic);
                 break;
 
             case EmphasisInlineNode emphasis:
                 foreach (var child in emphasis.Children)
-                    AppendInlineSegments(segments, child, _fontItalic, defaultFontSize, footnotes);
+                    AppendInlineSegments(segments, child, _fontItalic, defaultFontSize, footnotes,
+                        background: background, isBold: isBold, isItalic: true);
                 break;
 
             case MonospaceInlineNode monospace:
+                // Choose appropriate monospace variant based on parent formatting context
+                string monoFont = ResolveMonoFont(isBold, isItalic);
                 foreach (var child in monospace.Children)
-                    AppendInlineSegments(segments, child, _fontMono, defaultFontSize, footnotes);
+                    AppendInlineSegments(segments, child, monoFont, _codeFontSize, footnotes,
+                        background: _codespanBackground, isBold: isBold, isItalic: isItalic);
                 break;
 
             case LinkInlineNode link:
@@ -471,7 +571,9 @@ public sealed partial class PdfRenderer
 
             case CrossReferenceInlineNode xref:
                 var xrefLabel = xref.Label ?? xref.Target;
-                segments.Add(new TextSegment($"[{xrefLabel}]", defaultFont, defaultFontSize));
+                // Use internal link for cross-references (resolved in ToBytes)
+                segments.Add(new TextSegment(xrefLabel, defaultFont, defaultFontSize,
+                    $"#internal#{xref.Target}"));
                 break;
 
             case FootnoteInlineNode footnote:
@@ -490,4 +592,15 @@ public sealed partial class PdfRenderer
         }
     }
 
+    /// <summary>
+    /// Resolves the appropriate monospace font variant based on the parent formatting context.
+    /// Matches Asciidoctor behavior where codespans inherit bold/italic from surrounding text.
+    /// </summary>
+    private string ResolveMonoFont(bool isBold, bool isItalic)
+    {
+        if (isBold && isItalic) return _fontMonoBoldItalic;
+        if (isBold) return _fontMonoBold;
+        if (isItalic) return _fontMonoItalic;
+        return _fontMono;
+    }
 }

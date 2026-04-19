@@ -129,6 +129,32 @@ public static class AsciidoctorRunner
     /// </summary>
     public static AsciidoctorResult? Render(string adocFilePath, TimeSpan? timeout = null)
     {
+        return RenderWithBackend(adocFilePath, "html5", standalone: true, timeout);
+    }
+
+    /// <summary>
+    /// Renders an AsciiDoc file to DocBook 5 XML using Asciidoctor.
+    /// </summary>
+    public static AsciidoctorResult? RenderDocBook(string adocFilePath, TimeSpan? timeout = null)
+    {
+        return RenderWithBackend(adocFilePath, "docbook5", standalone: false, timeout);
+    }
+
+    /// <summary>
+    /// Renders an AsciiDoc file to a man page using Asciidoctor.
+    /// The input must have <c>:doctype: manpage</c> set.
+    /// </summary>
+    public static AsciidoctorResult? RenderManPage(string adocFilePath, TimeSpan? timeout = null)
+    {
+        return RenderWithBackend(adocFilePath, "manpage", standalone: false, timeout);
+    }
+
+    /// <summary>
+    /// Renders an AsciiDoc file using the specified Asciidoctor backend.
+    /// </summary>
+    private static AsciidoctorResult? RenderWithBackend(
+        string adocFilePath, string backend, bool standalone, TimeSpan? timeout = null)
+    {
         var effectiveTimeout = timeout ?? DefaultTimeout;
 
         try
@@ -138,9 +164,8 @@ public static class AsciidoctorRunner
                 return null;
 
             using var process = new Process();
-            // -s = standalone (no header/footer wrapper)
-            // -o - = output to stdout
-            process.StartInfo = CreateStartInfo($"-s -o - \"{fullPath}\"");
+            var flags = standalone ? "-s " : "";
+            process.StartInfo = CreateStartInfo($"-b {backend} {flags}-o - \"{fullPath}\"");
             process.StartInfo.WorkingDirectory = Path.GetDirectoryName(fullPath) ?? ".";
 
             process.Start();
@@ -171,7 +196,7 @@ public static class AsciidoctorRunner
 /// <summary>
 /// Result of an Asciidoctor rendering operation.
 /// </summary>
-/// <param name="Html">The rendered HTML, or null if rendering failed.</param>
+/// <param name="Html">The rendered output (HTML, XML, or roff), or null if rendering failed.</param>
 /// <param name="Stderr">Any stderr output (warnings, errors).</param>
 /// <param name="TimedOut">Whether the process exceeded the timeout.</param>
 public sealed record AsciidoctorResult(string? Html, string Stderr, bool TimedOut);

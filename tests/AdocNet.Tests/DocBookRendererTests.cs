@@ -80,7 +80,8 @@ public class DocBookRendererTests
     {
         var result = BlockParser.Parse(". First\n. Second");
         var xml = new DocBookRenderer().RenderToString(result.Document);
-        Assert.That(xml, Does.Contain("<orderedlist>"));
+        Assert.That(xml, Does.Contain("<orderedlist"));
+        Assert.That(xml, Does.Contain("numeration=\"arabic\""));
     }
 
     [Test]
@@ -107,7 +108,9 @@ public class DocBookRendererTests
         var xml = new DocBookRenderer().RenderToString(result.Document);
         Assert.That(xml, Does.Contain("<tgroup"));
         Assert.That(xml, Does.Contain("<row>"));
-        Assert.That(xml, Does.Contain("<entry>"));
+        Assert.That(xml, Does.Contain("<entry"));
+        Assert.That(xml, Does.Contain("align=\"left\""));
+        Assert.That(xml, Does.Contain("valign=\"top\""));
     }
 
     [Test]

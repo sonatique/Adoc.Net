@@ -1,0 +1,10 @@
+[source,python]
+----
+def greet(name):     # <1>
+    print(f"Hello, {name}")  # <2>
+
+greet("World")       # <3>
+----
+<1> Define the function
+<2> Print the greeting
+<3> Call with argument

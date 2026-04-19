@@ -1,0 +1,20 @@
+= Document Title
+:sectnums:
+
+== Introduction
+
+First section content.
+
+== Getting Started
+
+=== Prerequisites
+
+Subsection content.
+
+=== Installation
+
+Another subsection.
+
+== Conclusion
+
+Final section.

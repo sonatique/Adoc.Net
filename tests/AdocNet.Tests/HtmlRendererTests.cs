@@ -269,8 +269,10 @@ public class HtmlRendererTests
 
         Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(
             "<div class=\"exampleblock\">\n" +
+            "<div class=\"content\">\n" +
             "<div class=\"paragraph\">\n" +
             "<p>Example content</p>\n" +
+            "</div>\n" +
             "</div>\n" +
             "</div>\n"));
     }
@@ -369,7 +371,7 @@ public class HtmlRendererTests
 
         Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(
             "<div class=\"paragraph\">\n" +
-            "<p><a class=\"bare\" href=\"https://example.com\">https://example.com</a></p>\n" +
+            "<p><a href=\"https://example.com\" class=\"bare\">https://example.com</a></p>\n" +
             "</div>\n"));
     }
 
@@ -447,7 +449,7 @@ public class HtmlRendererTests
             "<div class=\"listingblock\">\n" +
             "<div class=\"title\">My code</div>\n" +
             "<div class=\"content\">\n" +
-            "<pre class=\"highlight\"><code class=\"language-csharp\" data-lang=\"csharp\">Console.WriteLine(&quot;hello&quot;);</code></pre>\n" +
+            "<pre class=\"highlight\"><code class=\"language-csharp\" data-lang=\"csharp\">Console.WriteLine(\"hello\");</code></pre>\n" +
             "</div>\n" +
             "</div>\n"));
     }
@@ -483,7 +485,7 @@ public class HtmlRendererTests
 
         Assert.That(html, Is.EqualTo(
             "<div class=\"paragraph\">\n" +
-            "<p>Visit <a class=\"bare\" href=\"https://example.com\">https://example.com</a> today.</p>\n" +
+            "<p>Visit <a href=\"https://example.com\" class=\"bare\">https://example.com</a> today.</p>\n" +
             "</div>\n"));
     }
 

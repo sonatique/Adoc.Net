@@ -28,7 +28,10 @@ public sealed partial class HtmlRenderer
             tableClasses.Add("stretch");
         if (table.Stripes is not null)
             tableClasses.Add($"stripes-{table.Stripes}");
-        tableClasses.Add("tableblock");
+        // Asciidoctor always appends "tableblock" at the end but the class appears
+        // in the CSS class attribute as the FIRST class in Asciidoctor output
+        // (because Asciidoctor builds CSS differently). We match by inserting at 0.
+        tableClasses.Insert(0, "tableblock");
         AppendRoleClasses(sb, table, string.Join(" ", tableClasses));
 
         sb.Append(">\n");
@@ -175,6 +178,32 @@ public sealed partial class HtmlRenderer
                 sb.Append('<');
                 sb.Append(effectiveTag);
 
+                // Determine alignment: per-cell override, then column spec, then default (left)
+                var hAlign = cell.Alignment;
+                if (hAlign is null && columns is not null && colIndex < columns.Count)
+                    hAlign = columns[colIndex].Alignment;
+                hAlign ??= TableAlignment.Left;
+
+                var vAlign = cell.VerticalAlignment;
+                if (vAlign is null && columns is not null && colIndex < columns.Count)
+                    vAlign = columns[colIndex].VerticalAlignment;
+                vAlign ??= TableVerticalAlignment.Top;
+
+                // Asciidoctor emits class before colspan/rowspan
+                var hAlignClass = hAlign switch
+                {
+                    TableAlignment.Center => "halign-center",
+                    TableAlignment.Right => "halign-right",
+                    _ => "halign-left",
+                };
+                var vAlignClass = vAlign switch
+                {
+                    TableVerticalAlignment.Middle => "valign-middle",
+                    TableVerticalAlignment.Bottom => "valign-bottom",
+                    _ => "valign-top",
+                };
+                sb.Append($" class=\"tableblock {hAlignClass} {vAlignClass}\"");
+
                 if (cell.ColSpan > 1)
                 {
                     sb.Append(" colspan=\"");
@@ -189,47 +218,26 @@ public sealed partial class HtmlRenderer
                     sb.Append('"');
                 }
 
-                // Determine alignment: per-cell override, then column spec, then default (left)
-                var hAlign = cell.Alignment;
-                if (hAlign is null && columns is not null && colIndex < columns.Count)
-                    hAlign = columns[colIndex].Alignment;
-                hAlign ??= TableAlignment.Left;
-
-                var vAlign = cell.VerticalAlignment;
-                if (vAlign is null && columns is not null && colIndex < columns.Count)
-                    vAlign = columns[colIndex].VerticalAlignment;
-                vAlign ??= TableVerticalAlignment.Top;
-
-                // Asciidoctor emits halign-*/valign-*/tableblock classes on every cell
-                var hAlignClass = hAlign switch
-                {
-                    TableAlignment.Center => "halign-center",
-                    TableAlignment.Right => "halign-right",
-                    _ => "halign-left",
-                };
-                var vAlignClass = vAlign switch
-                {
-                    TableVerticalAlignment.Middle => "valign-middle",
-                    TableVerticalAlignment.Bottom => "valign-bottom",
-                    _ => "valign-top",
-                };
-                sb.Append($" class=\"{hAlignClass} tableblock {vAlignClass}\"");
-
                 sb.Append('>');
 
-                // Wrap content based on cell style
-                var wrapOpen = cell.ContentStyle switch
+                // Wrap content based on cell style.
+                // Asciidoctor ignores cell formatting styles in actual header row cells
+                // (cellTag == "th") — styles only apply in body and footer rows.
+                var effectiveStyle = cellTag == "th" ? TableCellStyle.Default : cell.ContentStyle;
+                var wrapOpen = effectiveStyle switch
                 {
                     TableCellStyle.Emphasis  => "<em>",
                     TableCellStyle.Literal   => "<pre>",
                     TableCellStyle.Monospace  => "<code>",
+                    TableCellStyle.Strong    => "<strong>",
                     _ => null,
                 };
-                var wrapClose = cell.ContentStyle switch
+                var wrapClose = effectiveStyle switch
                 {
                     TableCellStyle.Emphasis  => "</em>",
                     TableCellStyle.Literal   => "</pre>",
                     TableCellStyle.Monospace  => "</code>",
+                    TableCellStyle.Strong    => "</strong>",
                     _ => null,
                 };
 

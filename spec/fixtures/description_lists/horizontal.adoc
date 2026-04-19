@@ -1,0 +1,4 @@
+[horizontal]
+CPU:: The brain of the computer.
+RAM:: Short-term memory.
+HDD:: Long-term storage.

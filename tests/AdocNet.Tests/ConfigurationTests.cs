@@ -133,7 +133,7 @@ public class ConfigurationTests
         var opts = new PdfRenderOptions();
         Assert.That(opts.EnableHyphenation, Is.False, "Hyphenation off by default");
         Assert.That(opts.ParagraphSpacingBefore, Is.EqualTo(0f), "No spacing before");
-        Assert.That(opts.ParagraphSpacingAfter, Is.EqualTo(8f), "8pt spacing after (beta.3)");
+        Assert.That(opts.ParagraphSpacingAfter, Is.EqualTo(12f), "12pt spacing after (matches Asciidoctor)");
         Assert.That(opts.SyntaxColors, Is.Null, "No syntax highlighting by default");
         Assert.That(opts.HeadingColor, Is.Null, "Black headings by default");
         Assert.That(opts.BodyColor, Is.Null, "Black body by default");

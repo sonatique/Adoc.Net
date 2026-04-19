@@ -2,6 +2,17 @@ using AdocNet;
 
 namespace AdocNet.Converters.Pdf;
 
+/// <summary>Text alignment for PDF elements.</summary>
+public enum PdfAlignment
+{
+    /// <summary>Align to the left edge.</summary>
+    Left,
+    /// <summary>Center horizontally.</summary>
+    Center,
+    /// <summary>Align to the right edge.</summary>
+    Right
+}
+
 /// <summary>RGB color for PDF rendering (values 0.0–1.0).</summary>
 public readonly record struct PdfColor(float R, float G, float B);
 
@@ -48,6 +59,15 @@ public sealed class PdfRenderOptions : RenderOptions
     /// <summary>Path to a TrueType font file for monospace text. Null = use standard Courier.</summary>
     public string? MonoFontPath { get; init; }
 
+    /// <summary>Path to a TrueType font file for bold monospace text. Null = use standard Courier-Bold.</summary>
+    public string? MonoBoldFontPath { get; init; }
+
+    /// <summary>Path to a TrueType font file for italic monospace text. Null = use standard Courier-Oblique.</summary>
+    public string? MonoItalicFontPath { get; init; }
+
+    /// <summary>Path to a TrueType font file for bold-italic monospace text. Null = use standard Courier-BoldOblique.</summary>
+    public string? MonoBoldItalicFontPath { get; init; }
+
     // ── Typography ───────────────────────────────────────────────────────
 
     /// <summary>Base body text font size in points. Default: 11.</summary>
@@ -68,25 +88,90 @@ public sealed class PdfRenderOptions : RenderOptions
     /// <summary>Line spacing multiplier. Leading = fontSize × lineSpacing. Default: 1.35.</summary>
     public float LineSpacing { get; init; } = 1.35f;
 
+    /// <summary>Line spacing multiplier for the document title. Null = use LineSpacing.</summary>
+    public float? TitleLineHeight { get; init; }
+
     /// <summary>Enable hyphenation in body text. Default: false.</summary>
     public bool EnableHyphenation { get; init; }
 
     /// <summary>Spacing before paragraphs in points. Default: 0.</summary>
     public float ParagraphSpacingBefore { get; init; } = 0f;
 
-    /// <summary>Spacing after paragraphs in points. Default: 8 (matches beta.3).</summary>
-    public float ParagraphSpacingAfter { get; init; } = 8f;
+    /// <summary>Spacing after paragraphs in points. Default: 12 (matches Asciidoctor-pdf).</summary>
+    public float ParagraphSpacingAfter { get; init; } = 12f;
+
+    // ── Per-heading-level overrides ─────────────────────────────────────
+
+    /// <summary>Path to a TrueType font for heading text. Null = use body font (FontPath).</summary>
+    public string? HeadingFontPath { get; init; }
+
+    /// <summary>Font size for H2 headings (section level 1). Null = calculated from TitleFontSize × HeadingScale.</summary>
+    public float? Heading2FontSize { get; init; }
+
+    /// <summary>Font size for H3 headings (section level 2). Null = calculated from H2 × HeadingScale.</summary>
+    public float? Heading3FontSize { get; init; }
+
+    /// <summary>Font size for H4 headings (section level 3). Null = calculated from H3 × HeadingScale.</summary>
+    public float? Heading4FontSize { get; init; }
+
+    /// <summary>Font size for H5 headings (section level 4). Null = calculated from H4 × HeadingScale.</summary>
+    public float? Heading5FontSize { get; init; }
+
+    /// <summary>Margin below H2 headings in points. Null = half of ParagraphSpacingAfter.</summary>
+    public float? Heading2MarginBottom { get; init; }
+
+    /// <summary>Margin below H3 headings in points. Null = half of ParagraphSpacingAfter.</summary>
+    public float? Heading3MarginBottom { get; init; }
+
+    /// <summary>Margin below H4 headings in points. Null = half of ParagraphSpacingAfter.</summary>
+    public float? Heading4MarginBottom { get; init; }
+
+    /// <summary>Margin below H5 headings in points. Null = half of ParagraphSpacingAfter.</summary>
+    public float? Heading5MarginBottom { get; init; }
 
     // ── Headers and footers ──────────────────────────────────────────────
 
     /// <summary>Show page numbers in footer. Default: false.</summary>
     public bool ShowPageNumbers { get; init; }
 
-    /// <summary>Header text. Null = no header. Supports {page} and {pages} placeholders.</summary>
+    /// <summary>Header text template. Null = no header. Supports {page}, {pages}, {section-title}, {document-title} placeholders.</summary>
     public string? HeaderText { get; init; }
 
-    /// <summary>Footer text. Null = no footer (unless ShowPageNumbers). Supports {page} and {pages}.</summary>
+    /// <summary>Footer text template. Null = no footer (unless ShowPageNumbers). Supports {page}, {pages}, {section-title}, {document-title} placeholders.</summary>
     public string? FooterText { get; init; }
+
+    /// <summary>Header font size in points. Default: 9.</summary>
+    public float HeaderFontSize { get; init; } = 9f;
+
+    /// <summary>Footer font size in points. Default: 9.</summary>
+    public float FooterFontSize { get; init; } = 9f;
+
+    /// <summary>Header text color. Null = black.</summary>
+    public PdfColor? HeaderFontColor { get; init; }
+
+    /// <summary>Footer text color. Null = black.</summary>
+    public PdfColor? FooterFontColor { get; init; }
+
+    /// <summary>Header text alignment. Default: Center.</summary>
+    public PdfAlignment HeaderAlignment { get; init; } = PdfAlignment.Center;
+
+    /// <summary>Footer text alignment. Default: Center.</summary>
+    public PdfAlignment FooterAlignment { get; init; } = PdfAlignment.Center;
+
+    /// <summary>Height of the header area in points. Controls vertical positioning of header text. Default: 0 (auto: half of top margin).</summary>
+    public float HeaderHeight { get; init; }
+
+    /// <summary>Height of the footer area in points. Controls vertical positioning of footer text. Default: 0 (auto: place at marginBottom - 20).</summary>
+    public float FooterHeight { get; init; }
+
+    /// <summary>When to start showing headers/footers. "after-toc" suppresses them on title/TOC pages. Default: null (show on all pages).</summary>
+    public string? RunningContentStartAt { get; init; }
+
+    /// <summary>Path to an SVG image to render in the footer area (e.g., a logo). Null = no footer image.</summary>
+    public string? FooterImagePath { get; init; }
+
+    /// <summary>Width of the footer image in points. Default: 64.</summary>
+    public float FooterImageWidth { get; init; } = 64f;
 
     // ── Images ───────────────────────────────────────────────────────────
 
@@ -110,14 +195,32 @@ public sealed class PdfRenderOptions : RenderOptions
     /// <summary>Background color for code blocks. Null = no background. Default: light gray.</summary>
     public PdfColor? CodeBackground { get; init; } = new PdfColor(0.95f, 0.95f, 0.95f);
 
+    /// <summary>Background color for inline codespans. Null = no background (matches Asciidoctor default). Default: null.</summary>
+    public PdfColor? CodespanBackground { get; init; }
+
+    /// <summary>Border color for code blocks. Default: light gray (#CCCCCC), matching Asciidoctor-pdf.</summary>
+    public PdfColor? CodeBorderColor { get; init; } = new PdfColor(0.8f, 0.8f, 0.8f);
+
     /// <summary>Left border width for admonition blocks in points. Default: 2.</summary>
     public float AdmonitionBorderWidth { get; init; } = 2f;
 
     /// <summary>Repeat header row when a table spans pages. Default: true.</summary>
     public bool RepeatTableHeader { get; init; } = true;
 
-    /// <summary>Color for heading text (h1–h5). Null = black (default).</summary>
+    /// <summary>Color for heading text (h1–h5). Null = black (default). Used as fallback when per-level colors are not set.</summary>
     public PdfColor? HeadingColor { get; init; }
+
+    /// <summary>Color for H2 heading text. Null = use HeadingColor.</summary>
+    public PdfColor? Heading2Color { get; init; }
+
+    /// <summary>Color for H3 heading text. Null = use HeadingColor.</summary>
+    public PdfColor? Heading3Color { get; init; }
+
+    /// <summary>Color for H4 heading text. Null = use HeadingColor.</summary>
+    public PdfColor? Heading4Color { get; init; }
+
+    /// <summary>Color for H5 heading text. Null = use HeadingColor.</summary>
+    public PdfColor? Heading5Color { get; init; }
 
     /// <summary>Color for body text. Null = black (default).</summary>
     public PdfColor? BodyColor { get; init; }
@@ -125,8 +228,20 @@ public sealed class PdfRenderOptions : RenderOptions
     /// <summary>Background color for table header rows. Null = no background (default).</summary>
     public PdfColor? TableHeaderBackground { get; init; }
 
+    /// <summary>Border and grid color for tables. Null = black (default).</summary>
+    public PdfColor? TableBorderColor { get; init; }
+
+    /// <summary>Font color for table header text. Null = black (default).</summary>
+    public PdfColor? TableHeaderFontColor { get; init; }
+
     /// <summary>Vertical spacing before/after sections in points. Default: 16 (matches beta.3).</summary>
     public float SectionSpacing { get; init; } = 16f;
+
+    /// <summary>Vertical spacing above the document title in points. Default: 10.</summary>
+    public float TitleMarginTop { get; init; } = 10f;
+
+    /// <summary>Vertical spacing after the document title in points. Default: 16. Set to 0 to remove the gap between title and first section.</summary>
+    public float TitleMarginBottom { get; init; } = 16f;
 
     /// <summary>Indent for nested blocks (admonitions, quotes) in points. Default: 24.</summary>
     public float BlockIndent { get; init; } = 24f;

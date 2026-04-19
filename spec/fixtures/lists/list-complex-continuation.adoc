@@ -1,0 +1,15 @@
+. Step one
++
+Additional info about step one.
++
+NOTE: Be careful here.
+
+. Step two
++
+--
+This is an open block inside a list item.
+
+It has multiple paragraphs.
+--
+
+. Step three

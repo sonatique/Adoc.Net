@@ -1,0 +1,11 @@
+* First item
++
+This paragraph is part of the first item.
+
+* Second item
++
+----
+code block in list
+----
+
+* Third item

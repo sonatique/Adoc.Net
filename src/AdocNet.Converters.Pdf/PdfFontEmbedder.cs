@@ -18,10 +18,12 @@ internal static class PdfFontEmbedder
         Dictionary<string, HashSet<int>> usedCodePoints,
         Dictionary<string, int> placeholders,
         Func<PdfObject, int> allocObject,
-        Action<int, PdfObject> setObject)
+        Action<int, PdfObject> setObject,
+        HashSet<string>? monospaceFonts = null)
     {
         foreach (var (fontKey, font) in embeddedFonts)
         {
+            bool isMonospace = monospaceFonts?.Contains(fontKey) ?? false;
             var usedCps = usedCodePoints[fontKey];
             int placeholderId = placeholders[fontKey];
 
@@ -50,9 +52,13 @@ internal static class PdfFontEmbedder
                 cidToGidMap));
 
             // 5. Create font descriptor
+            // Flag bits: 1=FixedPitch, 2=Serif, 4=Symbolic, 8=Script, 32=Nonsymbolic, 64=Italic.
+            // Symbolic and Nonsymbolic are mutually exclusive. Set FixedPitch for monospace
+            // fonts so PDF readers apply correct character spacing.
+            int flags = isMonospace ? 33 /* FixedPitch + Nonsymbolic */ : 32 /* Nonsymbolic */;
             int descriptorId = allocObject(new PdfObject(
                 $"<< /Type /FontDescriptor /FontName /{font.FontName} " +
-                $"/Flags 32 /ItalicAngle 0 " +
+                $"/Flags {flags} /ItalicAngle 0 " +
                 $"/Ascent {font.Ascender * 1000 / font.UnitsPerEm} " +
                 $"/Descent {font.Descender * 1000 / font.UnitsPerEm} " +
                 $"/FontBBox [0 {font.Descender * 1000 / font.UnitsPerEm} 1000 {font.Ascender * 1000 / font.UnitsPerEm}] " +

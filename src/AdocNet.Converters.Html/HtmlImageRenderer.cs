@@ -127,8 +127,8 @@ public sealed partial class HtmlRenderer
                 sb.Append('"');
             }
             if (video.Autoplay) sb.Append(" autoplay");
-            if (video.Loop) sb.Append(" loop");
             if (video.Controls) sb.Append(" controls");
+            if (video.Loop) sb.Append(" loop");
             sb.Append(">\nYour browser does not support the video tag.\n</video>\n");
         }
 
@@ -147,8 +147,8 @@ public sealed partial class HtmlRenderer
             sb.Append('"');
         }
         if (audio.Autoplay) sb.Append(" autoplay");
-        if (audio.Loop) sb.Append(" loop");
         if (audio.Controls) sb.Append(" controls");
+        if (audio.Loop) sb.Append(" loop");
         sb.Append(">\nYour browser does not support the audio tag.\n</audio>\n</div>\n</div>\n");
     }
 }

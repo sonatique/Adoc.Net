@@ -3,23 +3,23 @@ Document Title="Document Title"
     InlineText Value="First Section"
     Paragraph
       InlineText Value="Some content."
-  Section Id="_subsection_one" Level="2" Title="Subsection One"
-    InlineText Value="Subsection One"
-    Paragraph
-      InlineText Value="More content."
-  Section Id="_subsection_two" Level="2" Title="Subsection Two"
-    InlineText Value="Subsection Two"
-    Paragraph
-      InlineText Value="Even more content."
-  Section Id="_deep_section" Level="3" Title="Deep Section"
-    InlineText Value="Deep Section"
-    Paragraph
-      InlineText Value="Deep content."
+    Section Id="_subsection_one" Level="2" Title="Subsection One"
+      InlineText Value="Subsection One"
+      Paragraph
+        InlineText Value="More content."
+    Section Id="_subsection_two" Level="2" Title="Subsection Two"
+      InlineText Value="Subsection Two"
+      Paragraph
+        InlineText Value="Even more content."
+      Section Id="_deep_section" Level="3" Title="Deep Section"
+        InlineText Value="Deep Section"
+        Paragraph
+          InlineText Value="Deep content."
   Section Id="_second_section" Level="1" Title="Second Section"
     InlineText Value="Second Section"
     Paragraph
       InlineText Value="Another section."
-  Section Id="_another_subsection" Level="2" Title="Another Subsection"
-    InlineText Value="Another Subsection"
-    Paragraph
-      InlineText Value="Final content."
+    Section Id="_another_subsection" Level="2" Title="Another Subsection"
+      InlineText Value="Another Subsection"
+      Paragraph
+        InlineText Value="Final content."

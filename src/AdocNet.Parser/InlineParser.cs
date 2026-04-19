@@ -621,7 +621,7 @@ internal static class InlineParser
                 {
                     FlushPlain(nodes, plain, doReplacements, doPostReplacements);
                     var children = ParseInlines(text, i + 2, close,
-                        activeMarkers | ActiveMarkers.Monospace, doFormatting, doMacros, doReplacements: false, doPostReplacements: false);
+                        activeMarkers | ActiveMarkers.Monospace, doFormatting, doMacros, doReplacements, doPostReplacements);
                     nodes.Add(new MonospaceInlineNode { Children = children });
                     i = close + 2;
                     continue;
@@ -637,7 +637,7 @@ internal static class InlineParser
                 {
                     FlushPlain(nodes, plain, doReplacements, doPostReplacements);
                     var children = ParseInlines(text, i + 1, close,
-                        activeMarkers | ActiveMarkers.Monospace, doFormatting, doMacros, doReplacements: false, doPostReplacements: false);
+                        activeMarkers | ActiveMarkers.Monospace, doFormatting, doMacros, doReplacements, doPostReplacements);
                     nodes.Add(new MonospaceInlineNode { Children = children });
                     i = close + 1;
                     continue;
@@ -829,7 +829,7 @@ internal static class InlineParser
                                 {
                                     FlushPlain(nodes, plain, doReplacements, doPostReplacements);
                                     var children = ParseInlines(text, contentStart, close,
-                                        activeMarkers | ActiveMarkers.Monospace, doFormatting, doMacros, doReplacements: false, doPostReplacements: false);
+                                        activeMarkers | ActiveMarkers.Monospace, doFormatting, doMacros, doReplacements, doPostReplacements);
                                     nodes.Add(new MonospaceInlineNode { Children = children, Roles = roles });
                                     i = close + 2;
                                     continue;
@@ -843,7 +843,7 @@ internal static class InlineParser
                                 {
                                     FlushPlain(nodes, plain, doReplacements, doPostReplacements);
                                     var children = ParseInlines(text, contentStart, close,
-                                        activeMarkers | ActiveMarkers.Monospace, doFormatting, doMacros, doReplacements: false, doPostReplacements: false);
+                                        activeMarkers | ActiveMarkers.Monospace, doFormatting, doMacros, doReplacements, doPostReplacements);
                                     nodes.Add(new MonospaceInlineNode { Children = children, Roles = roles });
                                     i = close + 1;
                                     continue;
@@ -1367,7 +1367,7 @@ internal static class InlineParser
         return true;
     }
 
-    private static readonly HashSet<string> KnownMacroNames = ["kbd", "btn", "menu", "icon", "stem", "latexmath", "asciimath"];
+    private static readonly HashSet<string> KnownMacroNames = ["kbd", "btn", "menu", "icon", "stem", "latexmath", "asciimath", "indexterm", "indexterm2"];
     private static readonly HashSet<string> StemMacroNames = ["stem", "latexmath", "asciimath"];
 
     /// <summary>
@@ -1385,7 +1385,7 @@ internal static class InlineParser
         for (int j = pos; j < endIndex; j++)
         {
             if (text[j] == ':') { colonIdx = j; break; }
-            if (!char.IsLetter(text[j])) return false;
+            if (!char.IsLetterOrDigit(text[j])) return false;
         }
         if (colonIdx < 0 || colonIdx == pos) return false;
 
@@ -1422,6 +1422,18 @@ internal static class InlineParser
         {
             var stemType = name == "stem" ? "latexmath" : name;
             node = new StemInlineNode { Content = content, StemType = stemType };
+        }
+        else if (name == "indexterm")
+        {
+            // indexterm:[primary, secondary, tertiary] — hidden index term (same as (((term))))
+            var terms = content.Split(',').Select(t => t.Trim()).ToArray();
+            node = new IndexTermHiddenNode { Terms = terms };
+        }
+        else if (name == "indexterm2")
+        {
+            // indexterm2:[primary, secondary, tertiary] — visible index term (same as ((term)))
+            var terms = content.Split(',').Select(t => t.Trim()).ToArray();
+            node = new IndexTermNode { Terms = terms };
         }
         else
         {

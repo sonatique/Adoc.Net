@@ -201,10 +201,10 @@ public class TableParserTests
         var result = BlockParser.Parse("|===\n|A |B\n|C |D\n|===");
         var html = new HtmlRenderer().RenderToString(result.Document);
 
-        Assert.That(html, Does.Contain("<table class=\"frame-all grid-all stretch tableblock\">"));
+        Assert.That(html, Does.Contain("<table class=\"tableblock frame-all grid-all stretch\">"));
         Assert.That(html, Does.Contain("<tbody>"));
-        Assert.That(html, Does.Contain("<td class=\"halign-left tableblock valign-top\"><p class=\"tableblock\">A</p></td>"));
-        Assert.That(html, Does.Contain("<td class=\"halign-left tableblock valign-top\"><p class=\"tableblock\">D</p></td>"));
+        Assert.That(html, Does.Contain("<td class=\"tableblock halign-left valign-top\"><p class=\"tableblock\">A</p></td>"));
+        Assert.That(html, Does.Contain("<td class=\"tableblock halign-left valign-top\"><p class=\"tableblock\">D</p></td>"));
         Assert.That(html, Does.Contain("</table>"));
         Assert.That(html, Does.Not.Contain("<thead>"));
     }
@@ -216,11 +216,11 @@ public class TableParserTests
         var html = new HtmlRenderer().RenderToString(result.Document);
 
         Assert.That(html, Does.Contain("<thead>"));
-        Assert.That(html, Does.Contain("<th class=\"halign-left tableblock valign-top\">Name</th>"));
-        Assert.That(html, Does.Contain("<th class=\"halign-left tableblock valign-top\">Age</th>"));
+        Assert.That(html, Does.Contain("<th class=\"tableblock halign-left valign-top\">Name</th>"));
+        Assert.That(html, Does.Contain("<th class=\"tableblock halign-left valign-top\">Age</th>"));
         Assert.That(html, Does.Contain("</thead>"));
-        Assert.That(html, Does.Contain("<td class=\"halign-left tableblock valign-top\"><p class=\"tableblock\">Alice</p></td>"));
-        Assert.That(html, Does.Not.Contain("<td class=\"halign-left tableblock valign-top\"><p class=\"tableblock\">Name</p></td>"));
+        Assert.That(html, Does.Contain("<td class=\"tableblock halign-left valign-top\"><p class=\"tableblock\">Alice</p></td>"));
+        Assert.That(html, Does.Not.Contain("<td class=\"tableblock halign-left valign-top\"><p class=\"tableblock\">Name</p></td>"));
     }
 
     [Test]

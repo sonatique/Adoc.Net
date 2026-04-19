@@ -1,0 +1,320 @@
+%PDF-1.4
+%âãÏÓ
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Length 2633 >>
+stream
+BT
+/F2 24 Tf
+72 770 Td
+(Complex Tables) Tj
+ET
+BT
+72 705.6 Td
+/F2 20.4 Tf
+(Table with Header and Footer) Tj
+ET
+BT
+/F2 11 Tf
+76 674.06 Td
+(Name) Tj
+ET
+BT
+/F2 11 Tf
+212.43 674.06 Td
+(Value) Tj
+ET
+BT
+/F2 11 Tf
+284.46 674.06 Td
+(Description) Tj
+ET
+0 0 0 RG
+1 w
+72 672.06 m 523 672.06 l S
+BT
+/F1 11 Tf
+76 659.21 Td
+(alpha) Tj
+ET
+BT
+/F1 11 Tf
+212.43 659.21 Td
+(1) Tj
+ET
+BT
+/F1 11 Tf
+284.46 659.21 Td
+(First item) Tj
+ET
+0.85 0.85 0.85 RG
+0.25 w
+72 657.21 m 523 657.21 l S
+0 0 0 RG
+BT
+/F1 11 Tf
+76 644.36 Td
+(beta) Tj
+ET
+BT
+/F1 11 Tf
+212.43 644.36 Td
+(2) Tj
+ET
+BT
+/F1 11 Tf
+284.46 644.36 Td
+(Second item) Tj
+ET
+0.85 0.85 0.85 RG
+0.25 w
+72 642.36 m 523 642.36 l S
+0 0 0 RG
+BT
+/F1 11 Tf
+76 629.51 Td
+(gamma) Tj
+ET
+BT
+/F1 11 Tf
+212.43 629.51 Td
+(3) Tj
+ET
+BT
+/F1 11 Tf
+284.46 629.51 Td
+(Third item) Tj
+ET
+0.85 0.85 0.85 RG
+0.25 w
+72 627.51 m 523 627.51 l S
+0 0 0 RG
+BT
+/F1 11 Tf
+76 614.66 Td
+(Total) Tj
+ET
+BT
+/F1 11 Tf
+212.43 614.66 Td
+(6) Tj
+ET
+BT
+/F1 11 Tf
+284.46 614.66 Td
+(Sum) Tj
+ET
+BT
+72 575.81 Td
+/F2 20.4 Tf
+(Table with Column Widths) Tj
+ET
+BT
+/F2 11 Tf
+76 544.27 Td
+(ID) Tj
+ET
+BT
+/F2 11 Tf
+151.17 544.27 Td
+(Description) Tj
+ET
+BT
+/F2 11 Tf
+376.67 544.27 Td
+(Status) Tj
+ET
+0 0 0 RG
+1 w
+72 542.27 m 523 542.27 l S
+BT
+/F1 11 Tf
+76 529.42 Td
+(001) Tj
+ET
+BT
+/F1 11 Tf
+151.17 529.42 Td
+(A long description that spans multiple words) Tj
+ET
+BT
+/F1 11 Tf
+376.67 529.42 Td
+(Active) Tj
+ET
+0.85 0.85 0.85 RG
+0.25 w
+72 527.42 m 523 527.42 l S
+0 0 0 RG
+BT
+/F1 11 Tf
+76 514.57 Td
+(002) Tj
+ET
+BT
+/F1 11 Tf
+151.17 514.57 Td
+(Another description here) Tj
+ET
+BT
+/F1 11 Tf
+376.67 514.57 Td
+(Inactive) Tj
+ET
+BT
+72 475.72 Td
+/F2 20.4 Tf
+(Table with Cell Alignment) Tj
+ET
+BT
+/F2 11 Tf
+76 444.18 Td
+(Left) Tj
+ET
+BT
+/F2 11 Tf
+204.91 444.18 Td
+(Center) Tj
+ET
+BT
+/F2 11 Tf
+490.9 444.18 Td
+(Right) Tj
+ET
+0 0 0 RG
+1 w
+72 442.18 m 523 442.18 l S
+BT
+/F1 11 Tf
+76 429.33 Td
+(A) Tj
+ET
+BT
+/F1 11 Tf
+218.66 429.33 Td
+(B) Tj
+ET
+BT
+/F1 11 Tf
+511.06 429.33 Td
+(C) Tj
+ET
+0.85 0.85 0.85 RG
+0.25 w
+72 427.33 m 523 427.33 l S
+0 0 0 RG
+BT
+/F1 11 Tf
+76 414.48 Td
+(D) Tj
+ET
+BT
+/F1 11 Tf
+218.66 414.48 Td
+(E) Tj
+ET
+BT
+/F1 11 Tf
+512.28 414.48 Td
+(F) Tj
+ET
+BT
+72 375.63 Td
+/F2 20.4 Tf
+(Simple Table) Tj
+ET
+BT
+/F1 11 Tf
+76 344.09 Td
+(A1) Tj
+ET
+BT
+/F1 11 Tf
+226.13 344.09 Td
+(B1) Tj
+ET
+BT
+/F1 11 Tf
+376.26 344.09 Td
+(C1) Tj
+ET
+0.85 0.85 0.85 RG
+0.25 w
+72 342.09 m 523 342.09 l S
+0 0 0 RG
+BT
+/F1 11 Tf
+76 329.24 Td
+(A2) Tj
+ET
+BT
+/F1 11 Tf
+226.13 329.24 Td
+(B2) Tj
+ET
+BT
+/F1 11 Tf
+376.26 329.24 Td
+(C2) Tj
+ET
+0.85 0.85 0.85 RG
+0.25 w
+72 327.24 m 523 327.24 l S
+0 0 0 RG
+BT
+/F1 11 Tf
+76 314.39 Td
+(A3) Tj
+ET
+BT
+/F1 11 Tf
+226.13 314.39 Td
+(B3) Tj
+ET
+BT
+/F1 11 Tf
+376.26 314.39 Td
+(C3) Tj
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /MediaBox [0 0 595 842] /Contents 5 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R /F4 4 0 R >> >> /Parent 7 0 R >>
+endobj
+7 0 obj
+<< /Type /Pages /Kids [6 0 R] /Count 1 >>
+endobj
+8 0 obj
+<< /Type /Catalog /Pages 7 0 R >>
+endobj
+9 0 obj
+<< /Producer (AdocNet PDF Renderer) /CreationDate (D:20260101000000+00'00') >>
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000019 00000 n 
+0000000116 00000 n 
+0000000218 00000 n 
+0000000323 00000 n 
+0000000418 00000 n 
+0000003102 00000 n 
+0000003258 00000 n 
+0000003315 00000 n 
+0000003364 00000 n 
+trailer
+<< /Size 10 /Root 8 0 R /Info 9 0 R >>
+startxref
+3458
+%%EOF

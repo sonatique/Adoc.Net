@@ -214,12 +214,31 @@ public class CliArgumentTests
     }
 
     [Test]
-    public void Recursive_short_flag_sets_Recursive_true()
+    public void Require_kroki_activates_RequireKroki()
     {
-        var result = Program.ParseArguments(["-r", "input.adoc"]);
+        var result = Program.ParseArguments(["-r", "asciidoctor-kroki", "input.adoc"]);
         Assert.That(result, Is.InstanceOf<CliArgs.Run>());
         var run = (CliArgs.Run)result;
-        Assert.That(run.Recursive, Is.True);
+        Assert.That(run.RequireKroki, Is.True);
+        Assert.That(run.Recursive, Is.False);
+    }
+
+    [Test]
+    public void Require_unknown_lib_is_ignored()
+    {
+        var result = Program.ParseArguments(["-r", "asciidoctor-rouge", "input.adoc"]);
+        Assert.That(result, Is.InstanceOf<CliArgs.Run>());
+        var run = (CliArgs.Run)result;
+        Assert.That(run.RequireKroki, Is.False);
+    }
+
+    [Test]
+    public void Theme_with_yaml_path_sets_PdfThemePath()
+    {
+        var result = Program.ParseArguments(["--theme", "mytheme.yml", "-b", "pdf", "input.adoc"]);
+        Assert.That(result, Is.InstanceOf<CliArgs.Run>());
+        var run = (CliArgs.Run)result;
+        Assert.That(run.PdfThemePath, Is.EqualTo("mytheme.yml"));
     }
 
     // ── Verbose + Quiet conflict ──────────────────────────────────────

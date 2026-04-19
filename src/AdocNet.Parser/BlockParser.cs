@@ -60,6 +60,9 @@ internal static class BlockParser
 
         var state = State.Header;
         AstNode currentContainer = document;
+        // Section nesting: tracks open sections by level so subsections become
+        // children of their parent section (Asciidoctor structure).
+        var sectionStack = new List<SectionNode>();
 
         var paragraphLines = new List<string>();
         int paragraphStartLine = 0;
@@ -264,6 +267,9 @@ internal static class BlockParser
                 // separated by a single blank line.  Preserve listFrames when the next
                 // non-blank line is a list item of a different kind so AddListItem can
                 // perform the nesting.
+                // Also preserve list context when the last item had a + continuation
+                // and the next non-blank line is a list item of the SAME kind — this
+                // means it's a continuation of the list, not a new list.
                 bool preserveListContext = false;
                 if (listFrames.Count > 0)
                 {
@@ -271,10 +277,18 @@ internal static class BlockParser
                     {
                         if (string.IsNullOrWhiteSpace(lines[peek]))
                             continue; // skip additional blank lines
-                        if (TryParseListItem(lines[peek], out var peekKind, out _, out _)
-                            && listFrames[^1].List.ListKind != peekKind)
+                        if (TryParseListItem(lines[peek], out var peekKind, out _, out _))
                         {
-                            preserveListContext = true;
+                            // Preserve for different-kind nesting OR same-kind continuation
+                            // when the preceding item had continuation content (children)
+                            if (listFrames[^1].List.ListKind != peekKind)
+                            {
+                                preserveListContext = true;
+                            }
+                            else if (listFrames[^1].LastItem is { } lastItem && lastItem.Children.Count > 0)
+                            {
+                                preserveListContext = true;
+                            }
                         }
                         break; // only check the first non-blank line
                     }
@@ -475,7 +489,15 @@ internal static class BlockParser
                 };
                 if (pendingBlockRoles is not null)
                     section.Roles = pendingBlockRoles;
-                document.AddChild(section);
+                // Nest sections: pop sections at same or deeper level from the stack,
+                // then add this section as a child of the parent section (or document).
+                while (sectionStack.Count > 0 && sectionStack[^1].Level >= sectionLevel)
+                    sectionStack.RemoveAt(sectionStack.Count - 1);
+                if (sectionStack.Count > 0)
+                    sectionStack[^1].AddChild(section);
+                else
+                    document.AddChild(section);
+                sectionStack.Add(section);
                 currentContainer = section;
                 inBibliographySection = hasPendingBibliography;
                 hasPendingBibliography = false;
@@ -2481,6 +2503,86 @@ internal static class BlockParser
                             continue;
                         }
                     }
+                    else if (TryParseInlineAdmonition(nextLine, out var contAdmonType, out var contAdmonText))
+                    {
+                        // Admonition continuation (NOTE:, TIP:, etc.)
+                        var admonLines = new List<string> { contAdmonText };
+                        int aj = j + 1;
+                        while (aj < lines.Length && !string.IsNullOrWhiteSpace(lines[aj])
+                            && !TryParseInlineAdmonition(lines[aj], out _, out _)
+                            && !TryParseListItem(lines[aj], out _, out _, out _)
+                            && lines[aj].Trim() != "+")
+                        {
+                            admonLines.Add(lines[aj]);
+                            aj++;
+                        }
+                        var fullText = string.Join("\n", admonLines);
+                        var contAdmon = new AdmonitionNode
+                        {
+                            AdmonitionType = contAdmonType,
+                            Text = fullText,
+                            Inlines = InlineParser.Parse(fullText, EffectiveNormal(), document.Attributes),
+                            Source = new SourceRange(new(j + 1, 1), new(aj, lines[aj - 1].Length)),
+                        };
+                        lastItem.AddChild(contAdmon);
+                        i = aj - 1;
+                        continue;
+                    }
+                    else if (IsOpenBlockDelimiter(nextLine))
+                    {
+                        // Open block continuation
+                        int contClosingIdx = -1;
+                        for (int k = j + 1; k < lines.Length; k++)
+                        {
+                            if (IsOpenBlockDelimiter(lines[k]))
+                            {
+                                contClosingIdx = k;
+                                break;
+                            }
+                        }
+                        if (contClosingIdx > j)
+                        {
+                            // Parse open block content as paragraphs inside a DelimitedBlockNode
+                            var openBlock = new DelimitedBlockNode
+                            {
+                                BlockKind = DelimitedBlockKind.Open,
+                            };
+                            var openContent = lines[(j + 1)..contClosingIdx];
+                            var currentPara = new List<string>();
+                            foreach (var openLine in openContent)
+                            {
+                                if (string.IsNullOrWhiteSpace(openLine))
+                                {
+                                    if (currentPara.Count > 0)
+                                    {
+                                        var pText = string.Join("\n", currentPara);
+                                        openBlock.AddChild(new ParagraphNode
+                                        {
+                                            Text = pText,
+                                            Inlines = InlineParser.Parse(pText, EffectiveNormal(), document.Attributes),
+                                        });
+                                        currentPara.Clear();
+                                    }
+                                }
+                                else
+                                {
+                                    currentPara.Add(openLine);
+                                }
+                            }
+                            if (currentPara.Count > 0)
+                            {
+                                var pText = string.Join("\n", currentPara);
+                                openBlock.AddChild(new ParagraphNode
+                                {
+                                    Text = pText,
+                                    Inlines = InlineParser.Parse(pText, EffectiveNormal(), document.Attributes),
+                                });
+                            }
+                            lastItem.AddChild(openBlock);
+                            i = contClosingIdx;
+                            continue;
+                        }
+                    }
                     else
                     {
                         // Non-delimited continuation: collect paragraph lines.
@@ -2945,10 +3047,8 @@ internal static class BlockParser
             int.TryParse(document.Attributes.GetValueOrDefault("toclevels", "2"), out var tocLevels);
             if (tocLevels <= 0) tocLevels = 2;
 
-            var sections = document.Children
-                .OfType<SectionNode>()
-                .Where(s => !s.IsDiscrete && s.Level <= tocLevels)
-                .ToList();
+            var sections = new List<SectionNode>();
+            CollectSections(document.Children, sections, tocLevels);
 
             var entries = BuildTocEntries(sections, tocLevels, document.Attributes);
 
@@ -3073,6 +3173,22 @@ internal static class BlockParser
     }
 
     // ── TOC helpers ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Recursively collects non-discrete sections from a nested tree into a flat
+    /// list in document order, suitable for <see cref="BuildTocEntries"/>.
+    /// </summary>
+    private static void CollectSections(IReadOnlyList<AstNode> children, List<SectionNode> result, int maxLevel)
+    {
+        foreach (var child in children)
+        {
+            if (child is SectionNode section && !section.IsDiscrete && section.Level <= maxLevel)
+            {
+                result.Add(section);
+                CollectSections(section.Children, result, maxLevel);
+            }
+        }
+    }
 
     /// <summary>
     /// Builds a nested list of <see cref="TocEntry"/> from a flat list of non-discrete
@@ -3641,6 +3757,32 @@ internal static class BlockParser
     }
 
     /// <summary>
+    /// Splits a string by comma, respecting double- and single-quoted values.
+    /// E.g., <c>options="autoplay,loop",width=640</c> splits into
+    /// <c>["options=\"autoplay,loop\"", "width=640"]</c>.
+    /// </summary>
+    private static List<string> SplitQuoteAware(string text)
+    {
+        var parts = new List<string>();
+        int start = 0;
+        bool inDouble = false;
+        bool inSingle = false;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '"' && !inSingle) inDouble = !inDouble;
+            else if (c == '\'' && !inDouble) inSingle = !inSingle;
+            else if (c == ',' && !inDouble && !inSingle)
+            {
+                parts.Add(text[start..i]);
+                start = i + 1;
+            }
+        }
+        parts.Add(text[start..]);
+        return parts;
+    }
+
+    /// <summary>
     /// Splits a CSV line into cells, respecting quoted fields.
     /// Commas inside double quotes are not treated as separators.
     /// </summary>
@@ -4173,7 +4315,8 @@ internal static class BlockParser
             var inlineOptions = new List<string>();
             if (bracketContent.Length > 0)
             {
-                foreach (var part in bracketContent.Split(','))
+                // Split by comma but respect quoted values (e.g., options="autoplay,loop")
+                foreach (var part in SplitQuoteAware(bracketContent))
                 {
                     var trimmed = part.Trim();
                     var eqIdx = trimmed.IndexOf('=');
@@ -4209,6 +4352,17 @@ internal static class BlockParser
                 }
             }
 
+            // Handle options="autoplay,loop" named attribute → split into inlineOptions
+            if (namedAttrs.TryGetValue("options", out var optionsVal))
+            {
+                foreach (var opt in optionsVal.Split(','))
+                {
+                    var trimmedOpt = opt.Trim();
+                    if (trimmedOpt.Length > 0)
+                        inlineOptions.Add(trimmedOpt);
+                }
+            }
+
             bool HasOption(string name) =>
                 (pendingOptions is not null && pendingOptions.Contains(name)) ||
                 inlineOptions.Contains(name) ||
@@ -4228,7 +4382,7 @@ internal static class BlockParser
                     Poster = namedAttrs.GetValueOrDefault("poster"),
                     Autoplay = HasOption("autoplay"),
                     Loop = HasOption("loop"),
-                    Controls = HasOption("controls"),
+                    Controls = !HasOption("nocontrols"),
                 };
             }
             else
@@ -4239,7 +4393,7 @@ internal static class BlockParser
                     Width = namedAttrs.GetValueOrDefault("width"),
                     Autoplay = HasOption("autoplay"),
                     Loop = HasOption("loop"),
-                    Controls = HasOption("controls"),
+                    Controls = !HasOption("nocontrols"),
                 };
             }
 
@@ -4330,6 +4484,7 @@ internal static class BlockParser
         ['h'] = TableCellStyle.Header,
         ['l'] = TableCellStyle.Literal,
         ['m'] = TableCellStyle.Monospace,
+        ['s'] = TableCellStyle.Strong,
     };
 
     /// <summary>

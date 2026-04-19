@@ -125,9 +125,9 @@ public sealed partial class HtmlRenderer
                 break;
 
             case LinkInlineNode link:
-                sb.Append("<a class=\"bare\" href=\"");
+                sb.Append("<a href=\"");
                 EscapeTo(sb, link.Url);
-                sb.Append("\">");
+                sb.Append("\" class=\"bare\">");
                 var displayUrl = state.DocumentAttributes.ContainsKey("hide-uri-scheme")
                     ? StripUriScheme(link.Url)
                     : link.Url;
@@ -141,7 +141,9 @@ public sealed partial class HtmlRenderer
                 // label (the URL itself becomes the display text).
                 bool isBare = string.IsNullOrEmpty(linkMacro.Label) ||
                               linkMacro.Label == linkMacro.Url;
-                sb.Append("<a");
+                sb.Append("<a href=\"");
+                EscapeTo(sb, linkMacro.Url);
+                sb.Append('"');
                 if (linkMacro.Role is not null)
                 {
                     sb.Append(" class=\"");
@@ -152,9 +154,6 @@ public sealed partial class HtmlRenderer
                 {
                     sb.Append(" class=\"bare\"");
                 }
-                sb.Append(" href=\"");
-                EscapeTo(sb, linkMacro.Url);
-                sb.Append('"');
                 if (linkMacro.Window is not null)
                 {
                     sb.Append(" target=\"");
@@ -312,16 +311,16 @@ public sealed partial class HtmlRenderer
                     EscapeTo(sb, footnote.Id);
                     sb.Append('"');
                 }
-                sb.Append(">[<a class=\"footnote\" href=\"#_footnotedef_");
-                sb.Append(num);
-                sb.Append('"');
+                sb.Append(">[<a");
                 if (!isBackRef)
                 {
                     sb.Append(" id=\"_footnoteref_");
                     sb.Append(num);
                     sb.Append('"');
                 }
-                sb.Append(" title=\"View footnote.\">");
+                sb.Append(" class=\"footnote\" href=\"#_footnotedef_");
+                sb.Append(num);
+                sb.Append("\" title=\"View footnote.\">");
                 sb.Append(num);
                 sb.Append("</a>]</sup>");
                 break;
@@ -353,9 +352,12 @@ public sealed partial class HtmlRenderer
                 break;
 
             case IndexTermNode indexTerm:
-                // Visible index term: render the first term as text
-                if (indexTerm.Terms.Count > 0)
-                    EscapeTo(sb, indexTerm.Terms[0]);
+                // Visible index term: render all terms as comma-separated text
+                for (int t = 0; t < indexTerm.Terms.Count; t++)
+                {
+                    if (t > 0) sb.Append(", ");
+                    EscapeTo(sb, indexTerm.Terms[t]);
+                }
                 break;
 
             case IndexTermHiddenNode:
