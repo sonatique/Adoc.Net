@@ -1,0 +1,321 @@
+#!/usr/bin/env python3
+"""Run all parity-diff tools across a corpus of .adoc documents.
+
+For each document and each format (HTML, PDF, EPUB, EPUB-visual,
+DocBook, Reveal.js, Man), generates the reference output via
+asciidoctor* and the candidate via adocnet, runs the corresponding
+diff tool, and aggregates the numeric results into a single table.
+
+Use to validate v1.0.0 readiness — surfaces parity gaps that don't
+appear in HOWTO.adoc by stress-testing on richer documents.
+
+Usage:
+    python tools/parity-sweep.py [--glob "spec/conformance/asciidoctor-*.adoc"]
+                                 [--include-pdf] [--include-epub-visual]
+                                 [--out parity-sweep-out]
+
+Outputs:
+    parity-sweep-out/_summary.md    aggregate per-format diff table
+    parity-sweep-out/<doc>/<fmt>.diff   per-doc per-format diff dump
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import re
+import shutil
+import subprocess
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+ADOCNET = ["dotnet", "run", "--project", str(REPO / "src" / "AdocNet.Cli"),
+           "--no-build", "--"]
+ASCIIDOCTOR = "asciidoctor"
+ASCIIDOCTOR_PDF = "asciidoctor-pdf"
+ASCIIDOCTOR_EPUB3 = "asciidoctor-epub3"
+ASCIIDOCTOR_REVEALJS = "asciidoctor-revealjs"
+
+# Tool paths
+PYTHON = sys.executable
+TOOLS = REPO / "tools"
+
+
+@dataclass
+class FormatSpec:
+    name: str
+    ref_cmd: list[str]              # extend with [-o ref_out, src]
+    cand_args: list[str]            # extend onto ADOCNET; final is [-o cand_out, src]
+    out_ext: str                    # extension of generated file
+    diff_tool: str | None           # path to diff tool .py (None = skip diff)
+    diff_metric_re: str             # regex captures the numeric "diff size" from diff tool stdout
+    enabled: bool = True
+
+
+FORMATS = [
+    FormatSpec(
+        name="html",
+        # asciidoctor produces a full document by default. Use AdocNet's -e
+        # (embedded full-doc) flag to match. We don't pass --theme so the
+        # default theme applies to the candidate; the html-diff tool ignores
+        # inline CSS / classes presentationally so the comparison is structural.
+        ref_cmd=[ASCIIDOCTOR, "-o"],
+        cand_args=["-b", "html5", "-e", "-o"],
+        out_ext=".html",
+        diff_tool="html-diff.py",
+        diff_metric_re=r"DOM diff lines:\s*(\d+)",
+    ),
+    FormatSpec(
+        name="docbook",
+        ref_cmd=[ASCIIDOCTOR, "-b", "docbook5", "-o"],
+        cand_args=["-b", "docbook5", "-o"],
+        out_ext=".xml",
+        diff_tool="docbook-diff.py",
+        diff_metric_re=r"Canonical diff lines:\s*(\d+)",
+    ),
+    FormatSpec(
+        name="man",
+        ref_cmd=[ASCIIDOCTOR, "-b", "manpage", "-o"],
+        cand_args=["-b", "man", "-o"],
+        out_ext=".man",
+        diff_tool="man-diff.py",
+        diff_metric_re=r"Normalised diff lines:\s*(\d+)",
+    ),
+    FormatSpec(
+        name="revealjs",
+        ref_cmd=[ASCIIDOCTOR_REVEALJS, "-o"],
+        cand_args=["-b", "revealjs", "-o"],
+        out_ext=".html",
+        diff_tool="revealjs-diff.py",
+        diff_metric_re=r"Slide DOM diff lines:\s*(\d+)",
+    ),
+    FormatSpec(
+        name="epub-struct",
+        ref_cmd=[ASCIIDOCTOR_EPUB3, "-o"],
+        cand_args=["-b", "epub", "-o"],
+        out_ext=".epub",
+        diff_tool="epub-diff.py",
+        # epub-diff outputs "Total diff lines: N" per part; we'll grep
+        diff_metric_re=r"^Total diff lines:\s*(\d+)$",
+    ),
+    FormatSpec(
+        name="epub-visual",
+        ref_cmd=[ASCIIDOCTOR_EPUB3, "-o"],
+        cand_args=["-b", "epub", "-o"],
+        out_ext=".epub",
+        diff_tool="epub-visual-diff.py",
+        diff_metric_re=r"px differ \((\d+\.\d+)%\)",
+        enabled=False,  # heavy: opt-in via --include-epub-visual
+    ),
+    FormatSpec(
+        name="pdf",
+        ref_cmd=[ASCIIDOCTOR_PDF, "-o"],
+        cand_args=["-b", "pdf", "-o"],
+        out_ext=".pdf",
+        diff_tool=None,  # we don't have a numeric pdf-visual-diff metric
+        diff_metric_re="",
+        enabled=False,  # opt-in via --include-pdf
+    ),
+]
+
+
+@dataclass
+class Result:
+    doc: str
+    format_name: str
+    diff_value: float | None  # number of diff lines, or pixel-percentage
+    error: str | None = None
+
+
+def run(cmd: list[str], timeout: int = 120) -> subprocess.CompletedProcess:
+    # shell=True needed for .bat / sh-wrapper executables on Windows
+    # (asciidoctor on Windows is a Ruby gem with a shell-script wrapper).
+    # Quote arguments containing spaces so shell parsing preserves them.
+    if os.name == "nt":
+        quoted = " ".join(f'"{a}"' if " " in a or "/" in a or "\\" in a else a for a in cmd)
+        return subprocess.run(quoted, capture_output=True, text=True, timeout=timeout, shell=True)
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+
+
+def render(format_spec: FormatSpec, src: Path, work: Path, ref: bool) -> Path | None:
+    out = work / (("ref" if ref else "cand") + format_spec.out_ext)
+    if ref:
+        cmd = format_spec.ref_cmd + [str(out), str(src)]
+    else:
+        cmd = ADOCNET + format_spec.cand_args + [str(out), str(src)]
+    r = run(cmd, timeout=180)
+    if not out.exists() or out.stat().st_size == 0:
+        return None
+    return out
+
+
+def diff(format_spec: FormatSpec, ref: Path, cand: Path, out_dir: Path) -> float | None:
+    if not format_spec.diff_tool:
+        return None
+    cmd = [PYTHON, str(TOOLS / format_spec.diff_tool), str(ref), str(cand),
+           "--out", str(out_dir)]
+    r = run(cmd, timeout=180)
+    m = re.search(format_spec.diff_metric_re, r.stdout, re.MULTILINE)
+    if m:
+        try:
+            return float(m.group(1))
+        except ValueError:
+            return None
+    return None
+
+
+def process_doc(src: Path, work_root: Path, out_root: Path,
+                formats: list[FormatSpec]) -> list[Result]:
+    doc_name = src.stem
+    doc_work = work_root / doc_name
+    doc_work.mkdir(parents=True, exist_ok=True)
+    doc_out = out_root / doc_name
+    doc_out.mkdir(parents=True, exist_ok=True)
+
+    results: list[Result] = []
+    for fmt in formats:
+        if not fmt.enabled:
+            continue
+        try:
+            ref = render(fmt, src, doc_work, ref=True)
+            if ref is None:
+                results.append(Result(doc_name, fmt.name, None, "ref render failed"))
+                continue
+            cand = render(fmt, src, doc_work, ref=False)
+            if cand is None:
+                results.append(Result(doc_name, fmt.name, None, "cand render failed"))
+                continue
+            diff_val = diff(fmt, ref, cand, doc_out / fmt.name)
+            results.append(Result(doc_name, fmt.name, diff_val))
+        except subprocess.TimeoutExpired:
+            results.append(Result(doc_name, fmt.name, None, "timeout"))
+        except Exception as e:
+            results.append(Result(doc_name, fmt.name, None, f"error: {e!s:.80}"))
+    return results
+
+
+def write_summary(out_dir: Path, all_results: list[Result], formats: list[FormatSpec]) -> None:
+    enabled_formats = [f for f in formats if f.enabled]
+    by_doc: dict[str, dict[str, Result]] = {}
+    for r in all_results:
+        by_doc.setdefault(r.doc, {})[r.format_name] = r
+
+    # Sort docs by aggregate diff (worst first), errors at the end
+    def doc_score(doc: str) -> tuple[int, float]:
+        rs = by_doc[doc]
+        any_error = any(r.error for r in rs.values())
+        total = sum(r.diff_value or 0 for r in rs.values() if r.diff_value is not None)
+        return (1 if any_error else 0, -total)
+
+    sorted_docs = sorted(by_doc.keys(), key=doc_score)
+
+    lines = ["# Parity Sweep Summary", ""]
+    lines.append(f"- Documents: {len(by_doc)}")
+    lines.append(f"- Formats: {', '.join(f.name for f in enabled_formats)}")
+    lines.append("")
+    lines.append("## Results (worst at top)")
+    lines.append("")
+    header = ["document"] + [f.name for f in enabled_formats]
+    lines.append("| " + " | ".join(header) + " |")
+    lines.append("|" + "|".join(["---"] * len(header)) + "|")
+    for doc in sorted_docs:
+        rs = by_doc[doc]
+        row = [f"`{doc}`"]
+        for f in enabled_formats:
+            r = rs.get(f.name)
+            if r is None:
+                row.append("—")
+            elif r.error:
+                row.append(f"⚠ {r.error[:30]}")
+            elif r.diff_value is None:
+                row.append("?")
+            elif f.name == "epub-visual":
+                row.append(f"{r.diff_value:.1f}%")
+            else:
+                row.append(str(int(r.diff_value)))
+        lines.append("| " + " | ".join(row) + " |")
+
+    # Aggregates per format (median + max, ignoring errors)
+    lines.append("")
+    lines.append("## Per-format aggregates (excluding errors)")
+    lines.append("")
+    lines.append("| format | docs OK | min | median | max | sum |")
+    lines.append("|---|---|---|---|---|---|")
+    for f in enabled_formats:
+        vals = [r.diff_value for r in all_results
+                if r.format_name == f.name and r.diff_value is not None and r.error is None]
+        if not vals:
+            lines.append(f"| `{f.name}` | 0 | — | — | — | — |")
+            continue
+        vals_sorted = sorted(vals)
+        median = vals_sorted[len(vals_sorted) // 2]
+        suffix = "%" if f.name == "epub-visual" else ""
+        lines.append(f"| `{f.name}` | {len(vals)} | {min(vals):.1f}{suffix} | "
+                     f"{median:.1f}{suffix} | {max(vals):.1f}{suffix} | "
+                     f"{sum(vals):.1f}{suffix} |")
+
+    (out_dir / "_summary.md").write_text("\n".join(lines), encoding="utf-8")
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--glob", default="spec/conformance/asciidoctor-*.adoc",
+                        help="glob pattern for corpus files (relative to repo root)")
+    parser.add_argument("--out", type=Path, default=REPO / "parity-sweep-out")
+    parser.add_argument("--limit", type=int, default=None,
+                        help="process only first N docs (for quick iteration)")
+    parser.add_argument("--include-pdf", action="store_true",
+                        help="include PDF format (no diff metric — render only)")
+    parser.add_argument("--include-epub-visual", action="store_true",
+                        help="include EPUB visual pixel diff (heavy: ~30s/doc)")
+    parser.add_argument("--only", default=None,
+                        help="comma-separated list of formats to run (default: all enabled)")
+    args = parser.parse_args(argv)
+
+    formats = list(FORMATS)
+    for f in formats:
+        if f.name == "pdf" and args.include_pdf:
+            f.enabled = True
+        if f.name == "epub-visual" and args.include_epub_visual:
+            f.enabled = True
+    if args.only:
+        only = set(s.strip() for s in args.only.split(","))
+        for f in formats:
+            f.enabled = f.enabled and f.name in only
+
+    corpus = sorted(REPO.glob(args.glob))
+    if args.limit:
+        corpus = corpus[: args.limit]
+    if not corpus:
+        print(f"no corpus files matched: {args.glob}", file=sys.stderr)
+        return 2
+
+    args.out.mkdir(parents=True, exist_ok=True)
+    work_root = args.out / "_work"
+    work_root.mkdir(parents=True, exist_ok=True)
+
+    print(f"Sweeping {len(corpus)} docs × {sum(1 for f in formats if f.enabled)} formats...")
+    all_results: list[Result] = []
+    for i, src in enumerate(corpus, 1):
+        print(f"  [{i}/{len(corpus)}] {src.name}")
+        results = process_doc(src, work_root, args.out, formats)
+        all_results.extend(results)
+        # Per-doc inline status
+        for r in results:
+            if r.error:
+                print(f"      {r.format_name}: {r.error}")
+            elif r.diff_value is not None:
+                print(f"      {r.format_name}: {r.diff_value}")
+
+    write_summary(args.out, all_results, formats)
+    print(f"\nDone. Summary: {args.out / '_summary.md'}")
+
+    # Cleanup work dir to keep output dir small (per-format diffs preserved in subdirs)
+    shutil.rmtree(work_root, ignore_errors=True)
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
