@@ -53,15 +53,40 @@ deltas immediately legible.
    Normalised diff dropped from 163 → **142 lines**. 1 new regression
    test added (`Standard_preamble_emitted_after_TH`).
 
-### Tier 3 (block-separation reformat) — STILL DEFERRED
+### Tier 3 (block-separation reformat) — INTENTIONALLY NOT PURSUED
 
-3. **`.sp` instead of `.PP`/`.IP`/`.TP`** — Asciidoctor uses `.sp`
-   (vertical space) between blocks and `.RS 4`/`.RE` for indentation
-   runs (lists, code blocks). AdocNet still uses the older `.PP`
-   (paragraph), `.IP "\(bu" 2` (bullet list), `.TP` (option list)
-   macros. Both render visibly equivalent output. Asciidoctor's choice
-   is more compatible with non-groff roff implementations (mandoc on
-   BSD). Cost: medium-high — touches every block emission point.
+3. **`.sp` / `.RS` / `.RE` instead of `.PP` / `.IP` / `.TP`** —
+   Asciidoctor uses `.sp` (vertical space) between blocks and
+   `.RS 4` / `.RE` indentation runs with `.ie n \{ ... \}` groff
+   conditionals (~6 lines per bullet item) for lists. AdocNet uses
+   the classical `.PP` (paragraph), `.IP "\(bu" 2` (bullet list),
+   `.TP` (option list) macros (~1 line per bullet item).
+
+   The 142-line diff measures **source-format style**, not output
+   quality. Comparing the actual rendered output (via `pandoc -f man
+   -t plain` as a stand-in for what `man(1)` shows the user):
+
+   | metric | asciidoctor reference | AdocNet candidate |
+   |---|---|---|
+   | rendered text size | 64 lines | 48 lines |
+   | bullet rendering | `·` and item on separate lines + blank between | clean single-line `- item` |
+   | source-file size | 1767 bytes | 1014 bytes |
+
+   AdocNet's classical-roff dialect:
+   - Renders cleanly through groff/man (the actual user-facing case)
+   - Renders **better** through pandoc and other cross-format tools
+     (asciidoctor's `.RS 4` / `.IP \(bu` pattern confuses pandoc's
+     roff parser into producing two-line bullets with blank lines)
+   - Is more portable to mandoc on BSD
+   - Is dramatically more readable as roff source (1014 vs 1767 bytes
+     for the same content)
+
+   **Forcing parity here would require ~150 lines added to ManRenderer
+   to emit asciidoctor's `.ie n \{ ... \}` 6-line groff conditional
+   per bullet, and would make AdocNet's roff source LESS portable and
+   pandoc-converted output WORSE.** No benefit to anyone who reads the
+   man page via `man(1)`. Decision: keep the classical dialect; do not
+   pursue source-format parity for the man backend.
 
 ### Tier 3 (intentionally accepted)
 
