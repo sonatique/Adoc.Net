@@ -246,7 +246,10 @@ internal static class HtmlThemeCss
         }
         /* Listing block <pre>: asciidoctor uses .90625em font-size and
            1em padding inside the .content wrapper. Targeting the wrapper
-           variant matches AdocNet's emitted HTML structure. */
+           variant matches AdocNet's emitted HTML structure.
+           color, font-family, and text-rendering match asciidoctor.css's
+           computed values exactly so inline content (code spans, monospace
+           kerning) renders byte-identical. */
         .listingblock > .content > pre,
         .literalblock pre,
         pre {
@@ -256,6 +259,9 @@ internal static class HtmlThemeCss
             overflow-x: auto;
             line-height: 1.45;
             font-size: 0.90625em;
+            color: rgba(0, 0, 0, 0.9);
+            font-family: "Droid Sans Mono", "DejaVu Sans Mono", monospace;
+            text-rendering: optimizeSpeed;
         }
         pre code { background: none; border: none; padding: 0; }
         .quoteblock {
