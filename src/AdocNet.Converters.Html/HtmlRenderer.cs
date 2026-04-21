@@ -212,11 +212,18 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
             && !document.Attributes.ContainsKey("notitle")
             && !document.Attributes.ContainsKey("noheader")
             && (fullDoc || document.Attributes.ContainsKey("showtitle"));
-        // Determine if TOC should render inside the header (`:toc: left|right`)
-        // vs at the default location (top of #content for plain `:toc:`).
+        // Determine where the TOC renders. Asciidoctor positions:
+        //   - inside #header for default `:toc:` (== :toc: auto), :toc: left,
+        //     :toc: right (default placement is "header" on the html5 backend)
+        //   - inside #preamble for :toc: preamble
+        //   - at toc::[] location for :toc: macro
+        // Only the "in header" case is special-cased here. The TocNode is then
+        // skipped during regular content rendering.
         var tocPosition = document.Attributes.TryGetValue("toc", out var tocAttrVal)
             ? tocAttrVal.Trim().ToLowerInvariant() : null;
-        bool tocInHeader = fullDoc && tocPosition is "left" or "right";
+        bool tocInHeader = fullDoc
+            && tocPosition is not null
+            && tocPosition is "" or "auto" or "left" or "right";
         TocNode? tocNodeForHeader = null;
         if (tocInHeader)
         {
@@ -686,7 +693,12 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
     private void RenderTocInHeader(StringBuilder sb, TocNode toc, SectionNumberingContext secCtx, HtmlRenderState state)
     {
         if (toc.Entries.Count == 0) return;
-        sb.Append("<div id=\"toc\" class=\"toc2\">\n");
+        // Class differs by placement: "toc2" for sidebar layouts (left/right),
+        // "toc" for the default in-header placement.
+        var tocPos = state.DocumentAttributes.TryGetValue("toc", out var t)
+            ? t.Trim().ToLowerInvariant() : null;
+        var tocClass = tocPos is "left" or "right" ? "toc2" : "toc";
+        sb.Append("<div id=\"toc\" class=\"").Append(tocClass).Append("\">\n");
         var tocTitle = state.DocumentAttributes.TryGetValue("toc-title", out var customTocTitle)
             ? customTocTitle : "Table of Contents";
         sb.Append("<div id=\"toctitle\">");
