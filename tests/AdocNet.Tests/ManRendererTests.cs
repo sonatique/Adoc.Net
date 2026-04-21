@@ -72,7 +72,7 @@ public class ManRendererTests
 
         var output = Render(doc);
 
-        Assert.That(output, Does.Contain(".SH DESCRIPTION"));
+        Assert.That(output, Does.Contain(".SH \"DESCRIPTION\""));
     }
 
     [Test]
@@ -83,7 +83,7 @@ public class ManRendererTests
 
         var output = Render(doc);
 
-        Assert.That(output, Does.Contain(".SS Details"));
+        Assert.That(output, Does.Contain(".SS \"Details\""));
     }
 
     [Test]
@@ -94,7 +94,7 @@ public class ManRendererTests
 
         var output = Render(doc);
 
-        Assert.That(output, Does.Contain(".PP\n\\fBSubDetail\\fR"));
+        Assert.That(output, Does.Contain(".PP\n\\fBSubDetail\\fP"));
     }
 
     // ── Paragraph tests ─────────────────────────────────────────────────
@@ -130,7 +130,7 @@ public class ManRendererTests
 
         var output = Render(doc);
 
-        Assert.That(output, Does.Contain("\\fBimportant\\fR"));
+        Assert.That(output, Does.Contain("\\fBimportant\\fP"));
     }
 
     [Test]
@@ -151,7 +151,7 @@ public class ManRendererTests
 
         var output = Render(doc);
 
-        Assert.That(output, Does.Contain("\\fIemphasis\\fR"));
+        Assert.That(output, Does.Contain("\\fIemphasis\\fP"));
     }
 
     [Test]
@@ -172,7 +172,7 @@ public class ManRendererTests
 
         var output = Render(doc);
 
-        Assert.That(output, Does.Contain("\\fBcode\\fR"));
+        Assert.That(output, Does.Contain("\\fBcode\\fP"));
     }
 
     // ── Code block tests ────────────────────────────────────────────────
@@ -256,7 +256,7 @@ public class ManRendererTests
 
         var output = Render(doc);
 
-        Assert.That(output, Does.Contain(".TP\n\\fBflag\\fR\nenables feature"));
+        Assert.That(output, Does.Contain(".TP\n\\fBflag\\fP\nenables feature"));
     }
 
     // ── Admonition test ─────────────────────────────────────────────────
@@ -273,7 +273,7 @@ public class ManRendererTests
 
         var output = Render(doc);
 
-        Assert.That(output, Does.Contain(".PP\n\\fBNOTE:\\fR Be careful here"));
+        Assert.That(output, Does.Contain(".PP\n\\fBNOTE:\\fP Be careful here"));
     }
 
     // ── Escaping tests ──────────────────────────────────────────────────
@@ -340,9 +340,26 @@ public class ManRendererTests
         var output = Render(doc);
 
         Assert.That(output, Does.StartWith(".TH \"MYAPP\" \"1\""));
-        Assert.That(output, Does.Contain(".SH NAME"));
+        Assert.That(output, Does.Contain(".SH \"NAME\""));
         Assert.That(output, Does.Contain("myapp - does things"));
-        Assert.That(output, Does.Contain(".SH DESCRIPTION"));
-        Assert.That(output, Does.Contain("\\fBmyapp\\fR"));
+        Assert.That(output, Does.Contain(".SH \"DESCRIPTION\""));
+        Assert.That(output, Does.Contain("\\fBmyapp\\fP"));
+    }
+
+    [Test]
+    public void Standard_preamble_emitted_after_TH()
+    {
+        // Asciidoctor emits a standard preamble (apostrophe glyph, sentence
+        // spacing, no hyphenation, left-align, URL/MTO macros) after .TH.
+        var doc = new DocumentNode { Title = "myapp(1)" };
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain(".ie \\n(.g .ds Aq \\(aq"));
+        Assert.That(output, Does.Contain(".el       .ds Aq '"));
+        Assert.That(output, Does.Contain(".ss \\n[.ss] 0"));
+        Assert.That(output, Does.Contain(".nh"));
+        Assert.That(output, Does.Contain(".ad l"));
+        Assert.That(output, Does.Contain(".de URL"));
+        Assert.That(output, Does.Contain(".als MTO URL"));
     }
 }

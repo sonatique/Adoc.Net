@@ -25,25 +25,25 @@ public sealed partial class ManRenderer
             case StrongInlineNode n:
                 sb.Append("\\fB");
                 RenderInlines(sb, n.Children);
-                sb.Append("\\fR");
+                sb.Append("\\fP");
                 break;
 
             case EmphasisInlineNode n:
                 sb.Append("\\fI");
                 RenderInlines(sb, n.Children);
-                sb.Append("\\fR");
+                sb.Append("\\fP");
                 break;
 
             case MonospaceInlineNode n:
                 sb.Append("\\fB");
                 RenderInlines(sb, n.Children);
-                sb.Append("\\fR");
+                sb.Append("\\fP");
                 break;
 
             case LinkInlineNode n:
                 sb.Append("\\fI");
                 sb.Append(EscapeBodyText(n.Url));
-                sb.Append("\\fR");
+                sb.Append("\\fP");
                 break;
 
             case InlineLinkMacroNode n:
@@ -52,26 +52,26 @@ public sealed partial class ManRenderer
                     sb.Append(EscapeBodyText(n.Label));
                     sb.Append(" (\\fI");
                     sb.Append(EscapeBodyText(n.Url));
-                    sb.Append("\\fR)");
+                    sb.Append("\\fP)");
                 }
                 else
                 {
                     sb.Append("\\fI");
                     sb.Append(EscapeBodyText(n.Url));
-                    sb.Append("\\fR");
+                    sb.Append("\\fP");
                 }
                 break;
 
             case CrossReferenceInlineNode n:
                 sb.Append("\\fI");
                 sb.Append(EscapeBodyText(n.Label ?? n.Target));
-                sb.Append("\\fR");
+                sb.Append("\\fP");
                 break;
 
             case InterDocumentXrefNode n:
                 sb.Append("\\fI");
                 sb.Append(EscapeBodyText(n.Label ?? n.Path));
-                sb.Append("\\fR");
+                sb.Append("\\fP");
                 break;
 
             case SuperscriptInlineNode n:
@@ -133,12 +133,12 @@ public sealed partial class ManRenderer
             case "kbd":
                 sb.Append("\\fB");
                 sb.Append(EscapeBodyText(macro.Content));
-                sb.Append("\\fR");
+                sb.Append("\\fP");
                 break;
             case "btn":
                 sb.Append("[\\fB");
                 sb.Append(EscapeBodyText(macro.Content));
-                sb.Append("\\fR]");
+                sb.Append("\\fP]");
                 break;
             case "menu":
                 sb.Append(EscapeBodyText(macro.Target));

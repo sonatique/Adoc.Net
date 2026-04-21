@@ -113,7 +113,46 @@ public static class AdocParser
         if (frontMatterContent is not null)
             parseResult.Document.SetAttribute("front-matter", frontMatterContent);
 
+        // ── File mtime → :docdate: / :docyear: (Asciidoctor parity) ───────
+        // When parsing from a file, override the parser's "now" defaults with the
+        // file's last-write timestamp so renderers (DocBook <date>, EPUB dc:date,
+        // HTML footer) emit a stable, file-derived date. Honours :reproducible:
+        // (suppresses the override) and explicit :docdate:/:revdate: from the
+        // document header (which already won via attribute precedence).
+        if (filePath is not null)
+        {
+            var attrs = parseResult.Document.Attributes;
+            bool reproducible = attrs.ContainsKey("reproducible");
+            bool explicitDocdate = attrs.TryGetValue("docdate", out var dd) &&
+                                   !string.IsNullOrWhiteSpace(dd) &&
+                                   !LooksLikeParserDefault(dd);
+            if (!reproducible && !explicitDocdate)
+            {
+                try
+                {
+                    var mtime = System.IO.File.GetLastWriteTime(filePath);
+                    parseResult.Document.SetAttribute("docdate",
+                        mtime.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+                    parseResult.Document.SetAttribute("docyear",
+                        mtime.Year.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                }
+                catch (System.IO.IOException) { /* file moved/deleted between read+stat */ }
+                catch (UnauthorizedAccessException) { /* unreadable */ }
+            }
+        }
+
         return new ParseResult(parseResult.Document, allDiagnostics);
+    }
+
+    /// <summary>
+    /// True if the docdate string looks like a parser-default (today's date in YYYY-MM-DD).
+    /// Used to detect whether the document explicitly set :docdate: or whether it was
+    /// auto-populated by the parser — only the latter should be overridden by file mtime.
+    /// </summary>
+    private static bool LooksLikeParserDefault(string value)
+    {
+        var today = DateTime.Now.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        return value == today;
     }
 
     /// <summary>

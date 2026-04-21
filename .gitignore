@@ -21,6 +21,12 @@ TestResults/
 Thumbs.db
 .DS_Store
 pdf-diff-out/
+epub-diff-out/
+html-diff-out/
+docbook-diff-out/
+man-diff-out/
+revealjs-diff-out/
+epub-visual-diff-out/
 
 # Tooling caches and benchmark outputs
 .claude/

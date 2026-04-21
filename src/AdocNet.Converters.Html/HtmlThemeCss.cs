@@ -126,28 +126,111 @@ internal static class HtmlThemeCss
 
     // ── Asciidoctor Theme ───────────────────────────────────────────────
     private const string AsciidoctorTheme = """
+        /* Pull the exact font family asciidoctor.css uses so body text renders
+           at the same width/x-height as the reference. Without this @import
+           Chrome falls back to a local serif (typically Times New Roman) which
+           is narrower and visually smaller at the same point size. */
+        @import url('https://fonts.googleapis.com/css?family=Open+Sans:300,300italic,400,400italic,600,600italic%7CNoto+Serif:400,400italic,700,700italic%7CDroid+Sans+Mono:400,700');
+
         *, *::before, *::after { box-sizing: border-box; }
         body {
             font-family: "Noto Serif", "DejaVu Serif", serif;
             font-size: 16px;
-            line-height: 1.6;
+            /* Asciidoctor's body line-height is 1; paragraphs override to 1.6.
+               Setting body to 1.6 caused inline elements (e.g. inline code spans,
+               headings without explicit line-height) to inherit the larger value
+               and create extra vertical space. */
+            line-height: 1;
             color: rgba(0, 0, 0, 0.8);
             background: #fff;
-            max-width: 960px;
-            margin: 0 auto;
-            padding: 0 1.5rem 2rem;
+            margin: 0;
+            padding: 0;
         }
-        h1, h2, h3, h4, h5, h6 {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        /* Width and padding live on #header/#content/#footer, matching asciidoctor's
+           layout where the constrained box is the inner container, not <body>. */
+        #header, #content, #footer {
+            width: 100%;
+            margin: 0 auto;
+            max-width: 62.5em;
+            padding: 0 0.9375em;
+        }
+        #content { margin-top: 1.25em; }
+        /* Section headings: terracotta, sans-serif, light weight (asciidoctor.css parity).
+           Asciidoctor declares line-height: 1.0125em in the base rule, but the
+           @media (min-width: 768px) rule overrides it to 1.2 — which is what
+           viewports of any reasonable size actually get. Use 1.2 to match. */
+        h2, h3, h4, h5, h6 {
+            font-family: "Open Sans", "DejaVu Sans", sans-serif;
             color: #ba3925;
             font-weight: 300;
-            margin-top: 1.5em;
+            font-style: normal;
+            line-height: 1.2;
+            word-spacing: -0.05em;
+            margin-top: 1em;
             margin-bottom: 0.5em;
+            text-rendering: optimizeLegibility;
         }
-        h1 { font-size: 2.125em; }
-        h2 { font-size: 1.6875em; }
-        h3 { font-size: 1.375em; }
-        h4 { font-size: 1.125em; }
+        /* Document title: dark colour + horizontal separator below.
+           Asciidoctor uses `#content > h1:first-child:not([class])` for this; we
+           match the equivalent via `#header h1` since AdocNet wraps the document
+           title in `<div id="header">` (matches asciidoctor's full-doc layout). */
+        #header h1 {
+            font-family: "Open Sans", "DejaVu Sans", sans-serif;
+            font-weight: 300;
+            font-style: normal;
+            color: rgba(0, 0, 0, 0.85);
+            line-height: 1.2;
+            letter-spacing: -0.01em;
+            word-spacing: -0.05em;
+            border-bottom: 1px solid #dddddf;
+            padding-bottom: 8px;
+            margin-top: 2.25rem;
+            /* Asciidoctor uses margin-bottom: 0 here; the visual gap comes from
+               border-bottom + padding-bottom + the next element's margin-top. */
+            margin-bottom: 0;
+            font-size: 2.75em;
+            text-rendering: optimizeLegibility;
+        }
+        /* Reset <pre> browser default margins (asciidoctor parity). Without this,
+           Chrome adds 1em top + 1em bottom margin to every <pre>, accumulating
+           ~30px per code block and pushing subsequent sections higher. */
+        pre { margin: 0; }
+        /* Letter-spacing on text-bearing elements (asciidoctor.css applies to
+           h1, h2, p, td.content, span.alt, summary). */
+        h1, h2, p, td.content, summary { letter-spacing: -0.01em; }
+        /* Sizes match asciidoctor.css's @media (min-width: 768px) values */
+        h2 { font-size: 2.3125em; }
+        h3 { font-size: 1.6875em; }
+        h4 { font-size: 1.4375em; }
+        h5 { font-size: 1.125em; }
+        h6 { font-size: 1em; }
+
+        /* Section separator: thin grey rule between consecutive top-level
+           sections. Asciidoctor uses `.sect1 + .sect1 { border-top: ... }`
+           plus `.sect1 { padding-bottom: 1.25em }` for breathing room. */
+        .sect1 { padding-bottom: 1.25em; }
+        .sect1:last-child { padding-bottom: 0; }
+        .sect1 + .sect1 { border-top: 1px solid #e7e7e9; }
+
+        /* Typography reset (asciidoctor.css parity). Browser defaults give
+           paragraphs `margin: 1em 0`; asciidoctor uses margin-bottom only
+           with 1.25em which produces tighter top spacing under headings and
+           consistent rhythm between paragraphs.
+           font-size: 1.0625rem matches asciidoctor's @media (min-width: 768px)
+           rule that bumps body text from 1em (16px) to 17px — without this
+           bump, every paragraph and code block is shorter than the reference
+           and the visible spacing accumulates as tighter section gaps. */
+        p, blockquote, dt, td.content {
+            font-size: 1.0625rem;
+            line-height: 1.6;
+            margin: 0 0 1.25rem;
+            text-rendering: optimizeLegibility;
+        }
+        /* Asciidoctor's `.paragraph:last-child p { margin-bottom: 0 }` only applies
+           INSIDE quoteblocks (full selector: `.quoteblock blockquote > .paragraph:last-child p`).
+           For top-level sections, the last paragraph keeps its 1.25rem margin-bottom —
+           which is part of the visible breathing room before the horizontal separator. */
+        .literalblock, .listingblock, .stemblock, .videoblock { margin-bottom: 1.25em; }
         a { color: #2156a5; text-decoration: none; }
         a:hover { text-decoration: underline; }
         code, .monospace {
@@ -161,12 +244,18 @@ internal static class HtmlThemeCss
             border-radius: 4px;
             padding: 0.1em 0.4em;
         }
+        /* Listing block <pre>: asciidoctor uses .90625em font-size and
+           1em padding inside the .content wrapper. Targeting the wrapper
+           variant matches AdocNet's emitted HTML structure. */
+        .listingblock > .content > pre,
+        .literalblock pre,
         pre {
             background: #f7f7f8;
             border-radius: 4px;
             padding: 1em;
             overflow-x: auto;
             line-height: 1.45;
+            font-size: 0.90625em;
         }
         pre code { background: none; border: none; padding: 0; }
         .quoteblock {
@@ -205,7 +294,10 @@ internal static class HtmlThemeCss
             margin: 1em 0;
         }
         .exampleblock { border: 1px solid #e6e6e6; border-radius: 4px; padding: 1em; margin: 1em 0; }
-        .listingblock { margin: 1em 0; }
+        /* Note: .listingblock margin is set above via the asciidoctor parity rule
+           (.literalblock, .listingblock, .stemblock, .videoblock { margin-bottom: 1.25em }).
+           Don't add an additional `.listingblock { margin: 1em 0 }` here — it would
+           reintroduce the unwanted 1em margin-top that asciidoctor doesn't have. */
         .listingblock .title { font-style: italic; }
         #toc { margin: 1em 0; padding: 1.25em; background: #f8f8f7; border: 1px solid #e0e0dc; }
         #toc .title { color: #7a2518; }

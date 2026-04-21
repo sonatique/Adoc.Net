@@ -76,6 +76,37 @@ public sealed partial class ManRenderer : IDocumentRenderer
         sb.Append("\" \"");
         sb.Append(EscapeRoff(manual));
         sb.Append("\"\n");
+
+        AppendStandardPreamble(sb);
+    }
+
+    /// <summary>
+    /// Emits the standard roff preamble Asciidoctor includes after .TH:
+    /// portable apostrophe glyph, sentence spacing reset, no hyphenation,
+    /// left-aligned (no justification), and the URL/MTO macros for
+    /// hyperlinks. Matches `asciidoctor -b manpage` output line for line.
+    /// </summary>
+    private static void AppendStandardPreamble(StringBuilder sb)
+    {
+        sb.Append(".ie \\n(.g .ds Aq \\(aq\n");
+        sb.Append(".el       .ds Aq '\n");
+        sb.Append(".ss \\n[.ss] 0\n");
+        sb.Append(".nh\n");
+        sb.Append(".ad l\n");
+        sb.Append(".de URL\n");
+        sb.Append("\\fI\\\\$2\\fP <\\\\$1>\\\\$3\n");
+        sb.Append("..\n");
+        sb.Append(".als MTO URL\n");
+        sb.Append(".if \\n[.g] \\{\\\n");
+        sb.Append(".  mso www.tmac\n");
+        sb.Append(".  am URL\n");
+        sb.Append(".    ad l\n");
+        sb.Append(".  .\n");
+        sb.Append(".  am MTO\n");
+        sb.Append(".    ad l\n");
+        sb.Append(".  .\n");
+        sb.Append(".  LINKSTYLE blue R < >\n");
+        sb.Append(".\\}\n");
     }
 
     // ── Block rendering ─────────────────────────────────────────────────
@@ -108,22 +139,22 @@ public sealed partial class ManRenderer : IDocumentRenderer
     {
         if (section.Level == 1)
         {
-            sb.Append(".SH ");
-            sb.Append(GetSectionTitleText(section).ToUpperInvariant());
-            sb.Append('\n');
+            sb.Append(".SH \"");
+            sb.Append(EscapeRoff(GetSectionTitleText(section).ToUpperInvariant()));
+            sb.Append("\"\n");
         }
         else if (section.Level == 2)
         {
-            sb.Append(".SS ");
-            sb.Append(GetSectionTitleText(section));
-            sb.Append('\n');
+            sb.Append(".SS \"");
+            sb.Append(EscapeRoff(GetSectionTitleText(section)));
+            sb.Append("\"\n");
         }
         else
         {
             // Level 3+: bold paragraph (no deeper nesting in roff)
             sb.Append(".PP\n\\fB");
             sb.Append(EscapeBodyText(GetSectionTitleText(section)));
-            sb.Append("\\fR\n");
+            sb.Append("\\fP\n");
         }
 
         foreach (var child in section.Children)
@@ -210,7 +241,7 @@ public sealed partial class ManRenderer : IDocumentRenderer
                     RenderInlines(sb, item.TermInlines);
                 else
                     sb.Append(EscapeBodyText(item.Terms[0]));
-                sb.Append("\\fR\n");
+                sb.Append("\\fP\n");
 
                 if (item.DescriptionInlines.Count > 0)
                 {
@@ -244,7 +275,7 @@ public sealed partial class ManRenderer : IDocumentRenderer
                 {
                     sb.Append(".PP\n\\fB");
                     sb.Append(EscapeBodyText(block.Title));
-                    sb.Append("\\fR\n");
+                    sb.Append("\\fP\n");
                 }
                 sb.Append(".nf\n");
                 sb.Append(EscapeBodyText(block.Content ?? ""));
@@ -281,7 +312,7 @@ public sealed partial class ManRenderer : IDocumentRenderer
                 {
                     sb.Append(".PP\n\\fB");
                     sb.Append(EscapeBodyText(block.Title));
-                    sb.Append("\\fR\n");
+                    sb.Append("\\fP\n");
                 }
                 sb.Append(".RS\n");
                 foreach (var child in block.Children)
@@ -310,7 +341,7 @@ public sealed partial class ManRenderer : IDocumentRenderer
     {
         sb.Append(".PP\n\\fB");
         sb.Append(admonition.AdmonitionType.ToUpperInvariant());
-        sb.Append(":\\fR ");
+        sb.Append(":\\fP ");
         if (admonition.Inlines.Count > 0)
         {
             RenderInlines(sb, admonition.Inlines);
@@ -348,7 +379,7 @@ public sealed partial class ManRenderer : IDocumentRenderer
         {
             sb.Append(".PP\n\\fB");
             sb.Append(EscapeBodyText(table.Title));
-            sb.Append("\\fR\n");
+            sb.Append("\\fP\n");
         }
 
         sb.Append(".nf\n");
@@ -378,7 +409,7 @@ public sealed partial class ManRenderer : IDocumentRenderer
         {
             sb.Append(".PP\n\\fB");
             sb.Append(EscapeBodyText(stem.Title));
-            sb.Append("\\fR\n");
+            sb.Append("\\fP\n");
         }
         sb.Append(".nf\n");
         sb.Append(EscapeBodyText(stem.Content));

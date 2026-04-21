@@ -39,10 +39,35 @@ public sealed class DocBookRenderer : DocumentRendererBase
         writer.WriteStartElement("article", DocBookNs);
         writer.WriteAttributeString("version", "5.0");
         writer.WriteAttributeString("xmlns", "xlink", null, XLinkNs);
+        // Asciidoctor adds xml:lang on the root, defaulting to "en". Honour the document's
+        // :lang: attribute when set.
+        var lang = context.Document.Attributes.TryGetValue("lang", out var l) && !string.IsNullOrWhiteSpace(l)
+            ? l : "en";
+        writer.WriteAttributeString("xml", "lang", XmlNs, lang);
 
+        // Document metadata: <info><title/><date/></info> wrapper, matching Asciidoctor.
+        // Bare <title> without <info> is also valid DocBook but Asciidoctor always wraps.
+        // Date precedence (Asciidoctor parity): :revdate: → :docdate: → omit.
+        // :reproducible: opt-out: when set, the date is suppressed entirely.
         if (context.Document.Title is not null)
         {
+            writer.WriteStartElement("info", DocBookNs);
             writer.WriteElementString("title", DocBookNs, context.Document.Title);
+
+            var attrs = context.Document.Attributes;
+            var reproducible = attrs.ContainsKey("reproducible");
+            if (!reproducible)
+            {
+                string? date = null;
+                if (attrs.TryGetValue("revdate", out var rd) && !string.IsNullOrWhiteSpace(rd))
+                    date = rd;
+                else if (attrs.TryGetValue("docdate", out var dd) && !string.IsNullOrWhiteSpace(dd))
+                    date = dd;
+                if (date is not null)
+                    writer.WriteElementString("date", DocBookNs, date);
+            }
+
+            writer.WriteEndElement(); // info
         }
 
         // Render children with section nesting:
@@ -207,7 +232,11 @@ public sealed class DocBookRenderer : DocumentRendererBase
 
     private void RenderParagraph(XmlWriter writer, ParagraphNode node, RenderContext context)
     {
-        writer.WriteStartElement("para", DocBookNs);
+        // DocBook5 distinguishes <simpara> (inline-only paragraphs) from <para> (can contain
+        // nested blocks). Asciidoctor emits <simpara> for body paragraphs since they always
+        // hold inline-only content. Match that to keep DocBook output portable to the same
+        // downstream toolchains.
+        writer.WriteStartElement("simpara", DocBookNs);
 
         if (node.Id is not null)
             writer.WriteAttributeString("xml", "id", XmlNs, node.Id);
@@ -223,7 +252,7 @@ public sealed class DocBookRenderer : DocumentRendererBase
             writer.WriteString(node.Text);
         }
 
-        writer.WriteEndElement(); // para
+        writer.WriteEndElement(); // simpara
     }
 
     private void RenderList(XmlWriter writer, ListNode node, RenderContext context, int orderedDepth = 0)
@@ -265,39 +294,26 @@ public sealed class DocBookRenderer : DocumentRendererBase
     {
         writer.WriteStartElement("listitem", DocBookNs);
 
-        // If the list item has nested block children (e.g. nested lists), render them.
-        // Otherwise wrap inline content in a <para>.
-        var hasBlockChildren = node.Children.Any(c => c is BlockNode);
-
-        if (hasBlockChildren)
+        // Asciidoctor always emits <simpara> for the item's inline text, even when
+        // continuation blocks (e.g. listings, nested lists) follow as siblings inside
+        // the <listitem>. <para> is reserved for paragraphs that themselves contain
+        // nested block content — which a list item's inline text never does.
+        if (node.Inlines.Count > 0 || node.Text.Length > 0)
         {
-            // Wrap inline content in a para first
-            if (node.Inlines.Count > 0 || node.Text.Length > 0)
-            {
-                writer.WriteStartElement("para", DocBookNs);
-                if (node.Inlines.Count > 0)
-                    RenderInlines(writer, node.Inlines, context);
-                else
-                    writer.WriteString(node.Text);
-                writer.WriteEndElement(); // para
-            }
-
-            foreach (var child in node.Children)
-            {
-                if (child is ListNode nestedList)
-                    RenderList(writer, nestedList, context, orderedDepth);
-                else if (child is BlockNode block)
-                    RenderBlock(writer, block, context);
-            }
-        }
-        else
-        {
-            writer.WriteStartElement("para", DocBookNs);
+            writer.WriteStartElement("simpara", DocBookNs);
             if (node.Inlines.Count > 0)
                 RenderInlines(writer, node.Inlines, context);
             else
                 writer.WriteString(node.Text);
-            writer.WriteEndElement(); // para
+            writer.WriteEndElement(); // simpara
+        }
+
+        foreach (var child in node.Children)
+        {
+            if (child is ListNode nestedList)
+                RenderList(writer, nestedList, context, orderedDepth);
+            else if (child is BlockNode block)
+                RenderBlock(writer, block, context);
         }
 
         writer.WriteEndElement(); // listitem

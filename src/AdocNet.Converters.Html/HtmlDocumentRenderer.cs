@@ -68,7 +68,12 @@ public sealed partial class HtmlRenderer
             sb.Append(docinfoHead).Append('\n');
 
         sb.Append("</head>\n");
-        sb.Append("<body>\n");
+        // Body class reflects the doctype (article, book, manpage, inline) — matches
+        // Asciidoctor's <body class="article"> wrapper. Default is "article".
+        var doctype = document.Attributes.TryGetValue("doctype", out var dt) && !string.IsNullOrWhiteSpace(dt)
+            ? dt
+            : "article";
+        sb.Append($"<body class=\"{doctype}\">\n");
     }
 
     /// <summary>
@@ -81,12 +86,19 @@ public sealed partial class HtmlRenderer
         {
             sb.Append("<div id=\"footer\">\n");
             sb.Append("<div id=\"footer-text\">\n");
-            // When :reproducible: is set, suppress timestamps and update labels
+            // When :reproducible: is set, suppress timestamps and update labels.
+            // Otherwise emit "<label> <date>" — date comes from :revdate: when set,
+            // matching Asciidoctor's footer (e.g. "Last updated 2026-03-09 22:01:22 +0100").
             if (!document.Attributes.ContainsKey("reproducible"))
             {
                 var lastUpdateLabel = document.Attributes.TryGetValue("last-update-label", out var lul)
                     ? lul : "Last updated";
                 sb.Append(lastUpdateLabel);
+                if (document.Attributes.TryGetValue("revdate", out var rd) && !string.IsNullOrWhiteSpace(rd))
+                {
+                    sb.Append(' ');
+                    sb.Append(rd);
+                }
                 sb.Append('\n');
             }
             sb.Append("</div>\n");

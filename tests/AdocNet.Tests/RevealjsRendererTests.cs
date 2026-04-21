@@ -45,7 +45,7 @@ public class RevealjsRendererTests
         var doc = new DocumentNode { Title = "Hello World" };
         var output = Render(doc);
 
-        Assert.That(output, Does.Contain("<section>\n<h1>Hello World</h1>\n</section>"));
+        Assert.That(output, Does.Contain("<section class=\"title\" data-state=\"title\">\n<h1>Hello World</h1>\n</section>"));
     }
 
     [Test]
@@ -70,7 +70,10 @@ public class RevealjsRendererTests
 
         var output = Render(doc);
 
-        Assert.That(output, Does.Contain("<section>\n<h2>Introduction</h2>\n<p>Hello</p>\n</section>"));
+        Assert.That(output, Does.Contain("<h2>Introduction</h2>"));
+        // Slide body content is wrapped in <div class="slide-content"> (asciidoctor parity).
+        Assert.That(output, Does.Contain("<div class=\"slide-content\">"));
+        Assert.That(output, Does.Contain("<div class=\"paragraph\">\n<p>Hello</p>"));
     }
 
     [Test]
@@ -90,9 +93,13 @@ public class RevealjsRendererTests
 
         // Outer section wraps the vertical group
         Assert.That(output, Does.Contain("<section>\n<section>\n<h2>Chapter</h2>"));
-        // Vertical slides
-        Assert.That(output, Does.Contain("<section>\n<h3>Part A</h3>\n<p>Content A</p>\n</section>"));
-        Assert.That(output, Does.Contain("<section>\n<h3>Part B</h3>\n<p>Content B</p>\n</section>"));
+        // Vertical slides — Asciidoctor uses <h2> for vertical slides too
+        // (they live at the same hierarchy as horizontal slides, just nested).
+        // Body wrapped in <div class="slide-content"> + paragraphs in <div class="paragraph">.
+        Assert.That(output, Does.Contain("<h2>Part A</h2>"));
+        Assert.That(output, Does.Contain("<div class=\"paragraph\">\n<p>Content A</p>"));
+        Assert.That(output, Does.Contain("<h2>Part B</h2>"));
+        Assert.That(output, Does.Contain("<div class=\"paragraph\">\n<p>Content B</p>"));
     }
 
     [Test]
@@ -247,7 +254,8 @@ public class RevealjsRendererTests
 
         var output = Render(doc);
 
-        Assert.That(output, Does.Contain("<ul>\n<li>Item one</li>\n<li>Item two</li>\n</ul>"));
+        // List items wrap text in <p> for Asciidoctor parity.
+        Assert.That(output, Does.Contain("<ul>\n<li>\n<p>Item one</p>\n</li>\n<li>\n<p>Item two</p>\n</li>\n</ul>"));
     }
 
     // ── Speaker notes ───────────────────────────────────────────────────
@@ -316,7 +324,115 @@ public class RevealjsRendererTests
         Assert.That(output, Does.Contain("transition: 'none'"));
         Assert.That(output, Does.Contain("<h1>My Talk</h1>"));
         Assert.That(output, Does.Contain("<h2>Introduction</h2>"));
-        Assert.That(output, Does.Contain("<h3>Part 1</h3>"));
+        // Vertical slides use <h2> (Asciidoctor parity).
+        Assert.That(output, Does.Contain("<h2>Part 1</h2>"));
         Assert.That(output, Does.Contain("Detail one"));
+    }
+
+    // ── Asciidoctor structural parity ───────────────────────────────────
+
+    [Test]
+    public void Section_id_emitted_on_horizontal_slide()
+    {
+        var doc = new DocumentNode { Title = "Pres" };
+        doc.AddChild(new SectionNode { Level = 1, Title = "Intro", Id = "_intro" });
+
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain("<section id=\"_intro\">"));
+    }
+
+    [Test]
+    public void Section_id_emitted_on_vertical_slide()
+    {
+        var doc = new DocumentNode { Title = "Pres" };
+        var parent = new SectionNode { Level = 1, Title = "Group", Id = "_group" };
+        parent.AddChild(new SectionNode { Level = 2, Title = "Sub", Id = "_sub" });
+        doc.AddChild(parent);
+
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain("<section id=\"_group\">"));
+        Assert.That(output, Does.Contain("<section id=\"_sub\">"));
+    }
+
+    [Test]
+    public void Title_slide_has_title_class_and_data_state()
+    {
+        var doc = new DocumentNode { Title = "Talk" };
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain("<section class=\"title\" data-state=\"title\">"));
+    }
+
+    [Test]
+    public void Slide_content_wrapper_emitted_around_body_blocks()
+    {
+        var doc = new DocumentNode { Title = "Pres" };
+        var s = new SectionNode { Level = 1, Title = "Intro" };
+        s.AddChild(new ParagraphNode { Text = "Body" });
+        doc.AddChild(s);
+
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain("<div class=\"slide-content\">"));
+    }
+
+    [Test]
+    public void Slide_content_wrapper_omitted_when_slide_has_no_body()
+    {
+        // Heading-only slide: no body content -> no slide-content wrapper.
+        var doc = new DocumentNode { Title = "Pres" };
+        doc.AddChild(new SectionNode { Level = 1, Title = "Empty" });
+
+        var output = Render(doc);
+
+        // The title slide and the section both render. Title slide is heading-only.
+        // The "Empty" section also has no body content. Verify no slide-content
+        // wrapper exists anywhere in the output.
+        Assert.That(output, Does.Not.Contain("slide-content"));
+    }
+
+    [Test]
+    public void Paragraph_wrapped_in_paragraph_div()
+    {
+        var doc = new DocumentNode { Title = "P" };
+        var s = new SectionNode { Level = 1, Title = "S" };
+        s.AddChild(new ParagraphNode { Text = "Hi" });
+        doc.AddChild(s);
+
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain("<div class=\"paragraph\">\n<p>Hi</p>\n</div>"));
+    }
+
+    [Test]
+    public void Unordered_list_wrapped_in_ulist_div()
+    {
+        var doc = new DocumentNode { Title = "P" };
+        var s = new SectionNode { Level = 1, Title = "S" };
+        var list = new ListNode { ListKind = ListKind.Unordered };
+        list.AddChild(new ListItemNode { Text = "one" });
+        s.AddChild(list);
+        doc.AddChild(s);
+
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain("<div class=\"ulist\">\n<ul>"));
+    }
+
+    [Test]
+    public void Ordered_list_wrapped_in_olist_div()
+    {
+        var doc = new DocumentNode { Title = "P" };
+        var s = new SectionNode { Level = 1, Title = "S" };
+        var list = new ListNode { ListKind = ListKind.Ordered };
+        list.AddChild(new ListItemNode { Text = "one" });
+        s.AddChild(list);
+        doc.AddChild(s);
+
+        var output = Render(doc);
+
+        Assert.That(output, Does.Contain("<div class=\"olist\">\n<ol>"));
     }
 }
