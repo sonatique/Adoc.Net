@@ -132,14 +132,17 @@ public static class AdocParser
                 {
                     var mtime = System.IO.File.GetLastWriteTime(filePath);
                     var inv = System.Globalization.CultureInfo.InvariantCulture;
+                    // .NET "zzz" formats UTC offset as "+01:00"; asciidoctor (Ruby
+                    // strftime %z) formats it as "+0100" with no colon. Strip.
+                    var tz = mtime.ToString("zzz", inv).Replace(":", "");
                     parseResult.Document.SetAttribute("docdate",
                         mtime.ToString("yyyy-MM-dd", inv));
                     parseResult.Document.SetAttribute("docyear",
                         mtime.Year.ToString(inv));
                     parseResult.Document.SetAttribute("doctime",
-                        mtime.ToString("HH:mm:ss zzz", inv));
+                        mtime.ToString("HH:mm:ss", inv) + " " + tz);
                     parseResult.Document.SetAttribute("docdatetime",
-                        mtime.ToString("yyyy-MM-dd HH:mm:ss zzz", inv));
+                        mtime.ToString("yyyy-MM-dd HH:mm:ss", inv) + " " + tz);
                 }
                 catch (System.IO.IOException) { /* file moved/deleted between read+stat */ }
                 catch (UnauthorizedAccessException) { /* unreadable */ }

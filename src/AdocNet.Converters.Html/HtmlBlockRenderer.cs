@@ -251,6 +251,12 @@ public sealed partial class HtmlRenderer
             case DelimitedBlockKind.Sidebar:
                 sb.Append("<div");
                 AppendRoleClasses(sb, block, "sidebarblock");
+                if (block.Id is not null)
+                {
+                    sb.Append(" id=\"");
+                    EscapeTo(sb, block.Id);
+                    sb.Append('"');
+                }
                 sb.Append(">\n");
                 sb.Append("<div class=\"content\">\n");
                 // Asciidoctor places the title INSIDE <div class="content"> for sidebars.

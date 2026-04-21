@@ -5368,15 +5368,20 @@ internal static class BlockParser
         // Date/time built-in attributes (Asciidoctor compatibility).
         // doc* defaults to current time but is overridden by ConvertFile / AdocParser
         // to file mtime when parsing from file. local* always reflects current time.
+        // Asciidoctor uses Ruby strftime %z which formats UTC offset as "+0100"
+        // (no colon). .NET's "zzz" formats as "+01:00" — strip the colon to match.
         var now = DateTime.Now;
+        var tzOffsetNoColon = now.ToString("zzz").Replace(":", "");
+        var time = now.ToString("HH:mm:ss") + " " + tzOffsetNoColon;
+        var datetime = now.ToString("yyyy-MM-dd HH:mm:ss") + " " + tzOffsetNoColon;
         document.SetAttribute("docyear", now.Year.ToString());
         document.SetAttribute("docdate", now.ToString("yyyy-MM-dd"));
-        document.SetAttribute("doctime", now.ToString("HH:mm:ss zzz"));
-        document.SetAttribute("docdatetime", now.ToString("yyyy-MM-dd HH:mm:ss zzz"));
+        document.SetAttribute("doctime", time);
+        document.SetAttribute("docdatetime", datetime);
         document.SetAttribute("localyear", now.Year.ToString());
         document.SetAttribute("localdate", now.ToString("yyyy-MM-dd"));
-        document.SetAttribute("localtime", now.ToString("HH:mm:ss zzz"));
-        document.SetAttribute("localdatetime", now.ToString("yyyy-MM-dd HH:mm:ss zzz"));
+        document.SetAttribute("localtime", time);
+        document.SetAttribute("localdatetime", datetime);
     }
 
     /// <summary>
