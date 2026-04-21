@@ -596,6 +596,8 @@ public sealed class DocBookRenderer : DocumentRendererBase
 
             case DelimitedBlockKind.Sidebar:
                 writer.WriteStartElement("sidebar", DocBookNs);
+                if (node.Id is not null)
+                    writer.WriteAttributeString("xml", "id", XmlNs, node.Id);
                 if (node.Title is not null)
                     writer.WriteElementString("title", DocBookNs, node.Title);
                 foreach (var child in node.Children)
@@ -899,12 +901,16 @@ public sealed class DocBookRenderer : DocumentRendererBase
                 break;
 
             case InterDocumentXrefNode n:
-                writer.WriteStartElement("olink", DocBookNs);
-                writer.WriteAttributeString("targetdoc", n.Path);
-                if (n.Id is not null)
-                    writer.WriteAttributeString("targetptr", n.Id);
-                if (n.Label is not null)
-                    writer.WriteString(n.Label);
+                // Asciidoctor renders inter-document xrefs as <link xlink:href="...">
+                // (NOT <olink>), with the .adoc extension replaced by .xml. olink is
+                // a less-portable DocBook construct that requires a target database.
+                // When no explicit label is given, the label defaults to the .xml
+                // path (matches asciidoctor — the rendered DocBook target is .xml).
+                writer.WriteStartElement("link", DocBookNs);
+                var xmlPath = ConvertAdocExtensionToXml(n.Path);
+                var href = n.Id is not null ? xmlPath + "#" + n.Id : xmlPath;
+                writer.WriteAttributeString("xlink", "href", XLinkNs, href);
+                writer.WriteString(n.Label ?? xmlPath);
                 writer.WriteEndElement();
                 break;
 
@@ -996,6 +1002,9 @@ public sealed class DocBookRenderer : DocumentRendererBase
         if (node.Title is not null)
         {
             writer.WriteStartElement("formalpara", DocBookNs);
+            // Asciidoctor propagates the block's id to the formalpara wrapper.
+            if (node.Id is not null)
+                writer.WriteAttributeString("xml", "id", XmlNs, node.Id);
             writer.WriteElementString("title", DocBookNs, node.Title);
             writer.WriteStartElement("para", DocBookNs);
         }
@@ -1003,6 +1012,9 @@ public sealed class DocBookRenderer : DocumentRendererBase
         writer.WriteStartElement(elementName, DocBookNs);
         if (node.Language is not null)
             writer.WriteAttributeString("language", node.Language);
+        // Asciidoctor adds linenumbering="unnumbered" on screen/programlisting
+        // unless line numbers are explicitly enabled via the linenums attribute.
+        writer.WriteAttributeString("linenumbering", "unnumbered");
         WriteRoles(writer, node);
 
         // Write content line by line, inserting <co> elements where callout markers were
@@ -1086,6 +1098,9 @@ public sealed class DocBookRenderer : DocumentRendererBase
         if (node.Title is not null)
         {
             writer.WriteStartElement("formalpara", DocBookNs);
+            // Propagate the block's id to the formalpara wrapper (asciidoctor parity).
+            if (node.Id is not null)
+                writer.WriteAttributeString("xml", "id", XmlNs, node.Id);
             writer.WriteElementString("title", DocBookNs, node.Title);
             writer.WriteStartElement("para", DocBookNs);
         }
@@ -1145,5 +1160,17 @@ public sealed class DocBookRenderer : DocumentRendererBase
                 writer.WriteString(node.Content);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Replaces a trailing `.adoc` extension with `.xml` for inter-document
+    /// xref hrefs (asciidoctor convention: source is .adoc, rendered DocBook
+    /// target is .xml). Leaves the path unchanged if there's no .adoc suffix.
+    /// </summary>
+    private static string ConvertAdocExtensionToXml(string path)
+    {
+        if (path.EndsWith(".adoc", StringComparison.Ordinal))
+            return path[..^5] + ".xml";
+        return path;
     }
 }
