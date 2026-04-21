@@ -5365,12 +5365,17 @@ internal static class BlockParser
         foreach (var kvp in GetDefaultAttributes())
             document.SetAttribute(kvp.Key, kvp.Value);
 
-        // Date/time built-in attributes (Asciidoctor compatibility)
+        // Date/time built-in attributes (Asciidoctor compatibility).
+        // doc* defaults to current time but is overridden by ConvertFile / AdocParser
+        // to file mtime when parsing from file. local* always reflects current time.
         var now = DateTime.Now;
         document.SetAttribute("docyear", now.Year.ToString());
         document.SetAttribute("docdate", now.ToString("yyyy-MM-dd"));
+        document.SetAttribute("doctime", now.ToString("HH:mm:ss zzz"));
+        document.SetAttribute("docdatetime", now.ToString("yyyy-MM-dd HH:mm:ss zzz"));
         document.SetAttribute("localyear", now.Year.ToString());
         document.SetAttribute("localdate", now.ToString("yyyy-MM-dd"));
+        document.SetAttribute("localtime", now.ToString("HH:mm:ss zzz"));
         document.SetAttribute("localdatetime", now.ToString("yyyy-MM-dd HH:mm:ss zzz"));
     }
 

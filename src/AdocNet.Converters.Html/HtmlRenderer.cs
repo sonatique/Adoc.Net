@@ -229,10 +229,59 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
         bool useIconFont = document.Attributes.TryGetValue("icons", out var iconsValue)
             && string.Equals(iconsValue, "font", StringComparison.OrdinalIgnoreCase);
 
-        if (state.EnableIncrementalMarkers)
-            RenderChildBlocksWithMarkers(sb, document.Children, useIconFont, footnotes, secCtx, state);
+        // Asciidoctor wraps any non-Section content that precedes the first
+        // section in <div id="preamble"><div class="sectionbody">...</div></div>.
+        // Only applies in full-document mode (matches asciidoctor's standalone
+        // HTML output). Skip the preamble wrapper if the document begins with
+        // a section (no preamble content) or if not in full-doc mode.
+        int firstSectionIdx = -1;
+        if (fullDoc)
+        {
+            for (int i = 0; i < document.Children.Count; i++)
+            {
+                if (document.Children[i] is SectionNode { IsDiscrete: false })
+                {
+                    firstSectionIdx = i;
+                    break;
+                }
+            }
+        }
+        bool hasPreamble = fullDoc && firstSectionIdx != 0;
+
+        if (hasPreamble)
+        {
+            // The preamble holds children [0..firstSectionIdx) (or all children
+            // if no section ever appears). Render those children inside the
+            // preamble wrapper, then render the rest normally.
+            int preambleEnd = firstSectionIdx == -1 ? document.Children.Count : firstSectionIdx;
+            sb.Append("<div id=\"preamble\">\n<div class=\"sectionbody\">\n");
+            var preambleChildren = new List<AstNode>(preambleEnd);
+            for (int i = 0; i < preambleEnd; i++)
+                preambleChildren.Add(document.Children[i]);
+            if (state.EnableIncrementalMarkers)
+                RenderChildBlocksWithMarkers(sb, preambleChildren, useIconFont, footnotes, secCtx, state);
+            else
+                RenderChildBlocks(sb, preambleChildren, useIconFont, footnotes, secCtx, state);
+            sb.Append("</div>\n</div>\n");
+
+            if (firstSectionIdx >= 0)
+            {
+                var rest = new List<AstNode>(document.Children.Count - firstSectionIdx);
+                for (int i = firstSectionIdx; i < document.Children.Count; i++)
+                    rest.Add(document.Children[i]);
+                if (state.EnableIncrementalMarkers)
+                    RenderChildBlocksWithMarkers(sb, rest, useIconFont, footnotes, secCtx, state);
+                else
+                    RenderChildBlocks(sb, rest, useIconFont, footnotes, secCtx, state);
+            }
+        }
         else
-            RenderChildBlocks(sb, document.Children, useIconFont, footnotes, secCtx, state);
+        {
+            if (state.EnableIncrementalMarkers)
+                RenderChildBlocksWithMarkers(sb, document.Children, useIconFont, footnotes, secCtx, state);
+            else
+                RenderChildBlocks(sb, document.Children, useIconFont, footnotes, secCtx, state);
+        }
 
         // Close the <div id="content"> opened above (full-document mode only).
         if (fullDoc)

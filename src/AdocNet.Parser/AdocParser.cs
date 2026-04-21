@@ -131,10 +131,15 @@ public static class AdocParser
                 try
                 {
                     var mtime = System.IO.File.GetLastWriteTime(filePath);
+                    var inv = System.Globalization.CultureInfo.InvariantCulture;
                     parseResult.Document.SetAttribute("docdate",
-                        mtime.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+                        mtime.ToString("yyyy-MM-dd", inv));
                     parseResult.Document.SetAttribute("docyear",
-                        mtime.Year.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        mtime.Year.ToString(inv));
+                    parseResult.Document.SetAttribute("doctime",
+                        mtime.ToString("HH:mm:ss zzz", inv));
+                    parseResult.Document.SetAttribute("docdatetime",
+                        mtime.ToString("yyyy-MM-dd HH:mm:ss zzz", inv));
                 }
                 catch (System.IO.IOException) { /* file moved/deleted between read+stat */ }
                 catch (UnauthorizedAccessException) { /* unreadable */ }
