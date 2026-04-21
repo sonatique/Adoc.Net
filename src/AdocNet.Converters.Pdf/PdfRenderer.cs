@@ -46,6 +46,9 @@ public sealed partial class PdfRenderer : DocumentRendererBase
     private float _sectionSpacing = 16f;
     private float _titleMarginTop;
     private float _titleMarginBottom = 16f;
+    private float _titleFirstPageTop = 36f;
+    private float _pageHeight;
+    private float _marginTop;
     private float _h2MarginBottom = 4f;
     private float _h3MarginBottom = 4f;
     private float _h4MarginBottom = 4f;
@@ -201,6 +204,9 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         _sectionSpacing = pdfOptions.SectionSpacing;
         _titleMarginTop = pdfOptions.TitleMarginTop;
         _titleMarginBottom = pdfOptions.TitleMarginBottom;
+        _titleFirstPageTop = pdfOptions.TitleFirstPageTop;
+        _pageHeight = pdfOptions.PageHeight;
+        _marginTop = pdfOptions.MarginTop;
         _blockIndent = pdfOptions.BlockIndent;
 
         // Typography options
@@ -299,8 +305,15 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         if (document.Title is not null)
         {
             w.EnsurePage();
-            if (_titleMarginTop > 0)
-                w.MoveCursor(_titleMarginTop);
+            // Position the document title at TitleFirstPageTop from the top of
+            // page 1 (matches asciidoctor-pdf's 0.5in title offset). The cursor
+            // is currently at MarginTop after EnsurePage; move it so the title
+            // top lands at the requested offset. Subsequent pages still use the
+            // standard MarginTop for body content. TitleMarginTop is skipped on
+            // page 1 — TitleFirstPageTop fully specifies the position.
+            float deltaToFirstPageTop = _titleFirstPageTop - _marginTop;
+            if (deltaToFirstPageTop != 0)
+                w.MoveCursor(deltaToFirstPageTop);
             // Register document title as outline entry. Use level 1 so it appears
             // as a sibling of top-level sections (matches Asciidoctor's flat outline).
             w.AddOutlineEntry(document.Title, 1, "_document_title");
