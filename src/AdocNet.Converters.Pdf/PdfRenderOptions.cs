@@ -237,6 +237,14 @@ public sealed class PdfRenderOptions : RenderOptions
     /// <summary>Vertical spacing before/after sections in points. Default: 16 (matches beta.3).</summary>
     public float SectionSpacing { get; init; } = 16f;
 
+    /// <summary>
+    /// Distance in points from the top of page 1 to the document title baseline.
+    /// Used in place of <see cref="MarginTop"/> + <see cref="TitleMarginTop"/> for
+    /// the first page's title only. Default: 36 (matches asciidoctor-pdf's 0.5in
+    /// title top offset). Subsequent pages still use the standard MarginTop.
+    /// </summary>
+    public float TitleFirstPageTop { get; init; } = 36f;
+
     /// <summary>Vertical spacing above the document title in points. Default: 10.</summary>
     public float TitleMarginTop { get; init; } = 10f;
 

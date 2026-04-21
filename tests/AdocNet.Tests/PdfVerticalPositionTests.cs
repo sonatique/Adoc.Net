@@ -84,27 +84,22 @@ public class PdfVerticalPositionTests
     // ── Document title positioning (SHOULD change to match Asciidoctor) ──
 
     [Test]
-    public void Document_title_baseline_reserves_space_for_its_own_leading()
+    public void Document_title_baseline_positioned_at_first_page_top_offset()
     {
-        // This locks the corrected behavior (Option B): when the document title
-        // is the first line on a fresh page, its baseline must be positioned so
-        // that the title's ascent does NOT extend into the page margin/header zone.
-        // Specifically, the cursor must advance by titleLeading (not bodyLeading)
-        // before writing the title baseline.
+        // The document title on page 1 is positioned at TitleFirstPageTop from the
+        // top of the page (default 36pt, matching asciidoctor-pdf's 0.5in offset).
+        // PDF coords use bottom-left origin so larger Y = higher on page.
         //
-        // Default config: pageHeight=842, marginTop=72, titleFontSize=18,
-        // titleLineHeight=1.15, lineSpacing=1.35.
-        // titleLeading = 18 * 1.15 * 1.35 = 27.945 (approximately)
-        // Expected baseline = 842 - 72 - titleMarginTop(10) - titleLeading
-        //                   ≈ 842 - 72 - 10 - 27.945 ≈ 732.05 (approximately)
+        // Default config: pageHeight=842, TitleFirstPageTop=36.
+        // Title top edge ≈ pageHeight - 36 = 806pt.
+        // Title baseline ≈ 806 - titleAscent ≈ 806 - 14 ≈ 792pt (PDF coords).
+        // Allowing a generous tolerance for font ascent variation.
         var pdf = RenderToPdfText("= My Title\n\nBody text.");
         var ys = ParseTdYValues(pdf);
         Assert.That(ys.Count, Is.GreaterThanOrEqualTo(2), "Expected at least title and body baselines");
-        // Title is positioned LOWER (smaller Y in PDF coords) than the body would be alone (755.15).
-        // The Y must be at least titleLeading below the body's first-line position.
         float titleY = ys[0];
-        Assert.That(titleY, Is.LessThan(745.16f),
-            $"Title baseline should be lower than current 745.15 to reserve title leading. Got {titleY}.");
+        Assert.That(titleY, Is.GreaterThan(770f).And.LessThan(810f),
+            $"Title baseline should be near pageHeight - TitleFirstPageTop. Got {titleY}.");
     }
 
     [Test]
