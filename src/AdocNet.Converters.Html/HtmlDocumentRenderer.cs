@@ -68,12 +68,26 @@ public sealed partial class HtmlRenderer
             sb.Append(docinfoHead).Append('\n');
 
         sb.Append("</head>\n");
-        // Body class reflects the doctype (article, book, manpage, inline) — matches
-        // Asciidoctor's <body class="article"> wrapper. Default is "article".
+        // Body class reflects the doctype (article, book, manpage, inline) plus
+        // TOC layout when :toc: is set with a position (left/right). Matches
+        // Asciidoctor's <body class="article toc-left toc2"> when :toc: left.
         var doctype = document.Attributes.TryGetValue("doctype", out var dt) && !string.IsNullOrWhiteSpace(dt)
             ? dt
             : "article";
-        sb.Append($"<body class=\"{doctype}\">\n");
+        var bodyClass = doctype;
+        if (document.Attributes.TryGetValue("toc", out var tocVal))
+        {
+            var toc = tocVal.Trim().ToLowerInvariant();
+            if (toc == "left")
+                bodyClass += " toc2 toc-left";
+            else if (toc == "right")
+                bodyClass += " toc2 toc-right";
+        }
+        // Body id from :id: document attribute (asciidoctor parity).
+        sb.Append("<body class=\"").Append(bodyClass).Append('"');
+        if (document.Attributes.TryGetValue("id", out var docId) && !string.IsNullOrWhiteSpace(docId))
+            sb.Append(" id=\"").Append(docId).Append('"');
+        sb.Append(">\n");
     }
 
     /// <summary>

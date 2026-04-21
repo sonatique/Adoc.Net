@@ -35,6 +35,9 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
         public int PartCounter { get; set; }
         /// <summary>Maps section IDs to their numbering strings (e.g. "1.2") for xrefstyle.</summary>
         public Dictionary<string, string> IdNumbers { get; set; } = new(StringComparer.Ordinal);
+        /// <summary>When true, in-content TOC rendering is suppressed (TOC was already
+        /// rendered inside #header for :toc: left/right). Set in RenderDocumentBody.</summary>
+        public bool SkipInlineToc { get; set; }
     }
 
     /// <summary>
@@ -209,6 +212,18 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
             && !document.Attributes.ContainsKey("notitle")
             && !document.Attributes.ContainsKey("noheader")
             && (fullDoc || document.Attributes.ContainsKey("showtitle"));
+        // Determine if TOC should render inside the header (`:toc: left|right`)
+        // vs at the default location (top of #content for plain `:toc:`).
+        var tocPosition = document.Attributes.TryGetValue("toc", out var tocAttrVal)
+            ? tocAttrVal.Trim().ToLowerInvariant() : null;
+        bool tocInHeader = fullDoc && tocPosition is "left" or "right";
+        TocNode? tocNodeForHeader = null;
+        if (tocInHeader)
+        {
+            foreach (var c in document.Children)
+                if (c is TocNode t) { tocNodeForHeader = t; break; }
+        }
+
         if (emitTitle)
         {
             // In full-document mode the title is wrapped in <div id="header"> to match
@@ -219,7 +234,18 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
             EscapeTo(sb, document.Title!);
             sb.Append("</h1>\n");
             if (fullDoc)
+            {
+                // Author / revision details block — rendered when any of the
+                // related attributes are set (matches asciidoctor's <div class="details">).
+                AppendHeaderDetails(sb, document.Attributes);
+                // TOC inside header for :toc: left|right (asciidoctor's class="toc2").
+                if (tocNodeForHeader is not null)
+                {
+                    RenderTocInHeader(sb, tocNodeForHeader, secCtx, state);
+                    state.SkipInlineToc = true;
+                }
                 sb.Append("</div>\n");
+            }
         }
         // In full-document mode, wrap the post-header section content in <div id="content">
         // to match Asciidoctor's structure. Closed at the end of RenderDocumentBody.
@@ -423,6 +449,12 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
                 RenderBibliographyEntry(sb, bibEntry, footnotes, state);
                 break;
             case TocNode toc:
+                // When the TOC is rendered inside #header (toc: left/right),
+                // a state flag suppresses the normal in-content rendering so
+                // we don't emit the same TOC twice. State is set in
+                // RenderDocumentBody when tocInHeader is true.
+                if (state.SkipInlineToc)
+                    break;
                 RenderToc(sb, toc, secCtx, state);
                 break;
             case PageBreakNode:
@@ -588,5 +620,81 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
                 return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// Emits the &lt;div class="details"&gt; block inside the document header
+    /// when any author/email/revision attributes are set. Matches asciidoctor's
+    /// standalone HTML output structure exactly.
+    /// </summary>
+    private static void AppendHeaderDetails(StringBuilder sb, IReadOnlyDictionary<string, string> attrs)
+    {
+        bool hasAuthor = attrs.TryGetValue("author", out var author) && !string.IsNullOrWhiteSpace(author);
+        bool hasEmail = attrs.TryGetValue("email", out var email) && !string.IsNullOrWhiteSpace(email);
+        bool hasRevnumber = attrs.TryGetValue("revnumber", out var revnumber) && !string.IsNullOrWhiteSpace(revnumber);
+        bool hasRevdate = attrs.TryGetValue("revdate", out var revdate) && !string.IsNullOrWhiteSpace(revdate);
+        bool hasRevremark = attrs.TryGetValue("revremark", out var revremark) && !string.IsNullOrWhiteSpace(revremark);
+        if (!hasAuthor && !hasRevnumber && !hasRevdate)
+            return;
+
+        sb.Append("<div class=\"details\">\n");
+        if (hasAuthor)
+        {
+            sb.Append("<span id=\"author\" class=\"author\">");
+            EscapeTo(sb, author!);
+            sb.Append("</span><br>\n");
+            if (hasEmail)
+            {
+                sb.Append("<span id=\"email\" class=\"email\"><a href=\"mailto:");
+                EscapeTo(sb, email!);
+                sb.Append("\">");
+                EscapeTo(sb, email!);
+                sb.Append("</a></span><br>\n");
+            }
+        }
+        if (hasRevnumber)
+        {
+            // Asciidoctor's "version " prefix is locale-aware but for English it's
+            // hardcoded as "version " before the revnumber; revdate follows comma-separated.
+            sb.Append("<span id=\"revnumber\">version ");
+            EscapeTo(sb, revnumber!);
+            if (hasRevdate)
+                sb.Append(',');
+            sb.Append("</span>\n");
+        }
+        if (hasRevdate)
+        {
+            sb.Append("<span id=\"revdate\">");
+            EscapeTo(sb, revdate!);
+            sb.Append("</span>\n");
+        }
+        if (hasRevremark)
+        {
+            sb.Append("<br><span id=\"revremark\">");
+            EscapeTo(sb, revremark!);
+            sb.Append("</span>\n");
+        }
+        sb.Append("</div>\n");
+    }
+
+    /// <summary>
+    /// Renders the TOC inside &lt;div id="header"&gt; using asciidoctor's
+    /// class="toc2" (used when :toc: left or :toc: right). The body class is
+    /// also augmented with "toc-left toc2" / "toc-right toc2" — that's set in
+    /// HtmlDocumentRenderer.AppendDocumentPrologue.
+    /// </summary>
+    private void RenderTocInHeader(StringBuilder sb, TocNode toc, SectionNumberingContext secCtx, HtmlRenderState state)
+    {
+        if (toc.Entries.Count == 0) return;
+        sb.Append("<div id=\"toc\" class=\"toc2\">\n");
+        var tocTitle = state.DocumentAttributes.TryGetValue("toc-title", out var customTocTitle)
+            ? customTocTitle : "Table of Contents";
+        sb.Append("<div id=\"toctitle\">");
+        EscapeTo(sb, tocTitle);
+        sb.Append("</div>\n");
+        var tocSecCtx = new SectionNumberingContext(secCtx);
+        // RenderTocEntries is in HtmlSectionRenderer (partial class).
+        RenderTocEntries(sb, toc.Entries, tocSecCtx);
+        sb.Append("</div>\n");
     }
 }
