@@ -567,6 +567,8 @@ public sealed class DocBookRenderer : DocumentRendererBase
             case DelimitedBlockKind.Example:
                 var exampleElement = node.Title is not null ? "example" : "informalexample";
                 writer.WriteStartElement(exampleElement, DocBookNs);
+                if (node.Id is not null)
+                    writer.WriteAttributeString("xml", "id", XmlNs, node.Id);
                 WriteRoles(writer, node);
                 if (node.Title is not null)
                     writer.WriteElementString("title", DocBookNs, node.Title);
@@ -730,12 +732,15 @@ public sealed class DocBookRenderer : DocumentRendererBase
         writer.WriteEndElement(); // term
 
         writer.WriteStartElement("listitem", DocBookNs);
-        writer.WriteStartElement("para", DocBookNs);
+        // Asciidoctor uses <simpara> for inline-only description content; <para>
+        // is reserved for descriptions with nested block content. The description
+        // text itself is always inline so <simpara> is correct.
+        writer.WriteStartElement("simpara", DocBookNs);
         if (node.DescriptionInlines.Count > 0)
             RenderInlines(writer, node.DescriptionInlines, context);
         else
             writer.WriteString(node.Description);
-        writer.WriteEndElement(); // para
+        writer.WriteEndElement(); // simpara
 
         // Render any block children
         foreach (var child in node.Children)
@@ -818,13 +823,15 @@ public sealed class DocBookRenderer : DocumentRendererBase
             case StrongInlineNode n:
                 writer.WriteStartElement("emphasis", DocBookNs);
                 writer.WriteAttributeString("role", "strong");
-                RenderInlines(writer, n.Children, context);
+                // [.role]*text* / *[.role]text*: asciidoctor wraps inner text in
+                // <phrase role="..."> when roles are present (e.g. [.term]).
+                RenderInlinesMaybeWrappedInPhrase(writer, n.Children, n.Roles, context);
                 writer.WriteEndElement();
                 break;
 
             case EmphasisInlineNode n:
                 writer.WriteStartElement("emphasis", DocBookNs);
-                RenderInlines(writer, n.Children, context);
+                RenderInlinesMaybeWrappedInPhrase(writer, n.Children, n.Roles, context);
                 writer.WriteEndElement();
                 break;
 
@@ -1168,6 +1175,28 @@ public sealed class DocBookRenderer : DocumentRendererBase
                 // Generic fallback: just write content
                 writer.WriteString(node.Content);
                 break;
+        }
+    }
+
+    /// <summary>
+    /// Renders inline children, optionally wrapping them in a &lt;phrase role="..."&gt;
+    /// element when one or more roles are set on the parent (asciidoctor parity for
+    /// [.role]*text* and similar role-decorated formatting markers).
+    /// </summary>
+    private void RenderInlinesMaybeWrappedInPhrase(
+        XmlWriter writer, IReadOnlyList<InlineNode> children,
+        IReadOnlyList<string>? roles, RenderContext context)
+    {
+        if (roles is { Count: > 0 })
+        {
+            writer.WriteStartElement("phrase", DocBookNs);
+            writer.WriteAttributeString("role", string.Join(" ", roles));
+            RenderInlines(writer, children, context);
+            writer.WriteEndElement(); // phrase
+        }
+        else
+        {
+            RenderInlines(writer, children, context);
         }
     }
 
