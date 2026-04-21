@@ -679,17 +679,20 @@ public sealed class DocBookRenderer : DocumentRendererBase
 
         writer.WriteStartElement(elementName, DocBookNs);
 
+        // Asciidoctor uses <simpara> (inline-only paragraph) for admonition text;
+        // <para> is reserved for paragraphs with nested block content. The admonition
+        // text itself is always inline-only, so <simpara> is correct.
         if (node.Inlines.Count > 0)
         {
-            writer.WriteStartElement("para", DocBookNs);
+            writer.WriteStartElement("simpara", DocBookNs);
             RenderInlines(writer, node.Inlines, context);
-            writer.WriteEndElement(); // para
+            writer.WriteEndElement(); // simpara
         }
         else if (node.Text is not null)
         {
-            writer.WriteStartElement("para", DocBookNs);
+            writer.WriteStartElement("simpara", DocBookNs);
             writer.WriteString(node.Text);
-            writer.WriteEndElement(); // para
+            writer.WriteEndElement(); // simpara
         }
 
         // Block admonitions have children
@@ -1012,8 +1015,10 @@ public sealed class DocBookRenderer : DocumentRendererBase
         writer.WriteStartElement(elementName, DocBookNs);
         if (node.Language is not null)
             writer.WriteAttributeString("language", node.Language);
-        // Asciidoctor adds linenumbering="unnumbered" on screen/programlisting
-        // unless line numbers are explicitly enabled via the linenums attribute.
+        // Asciidoctor always adds linenumbering="unnumbered" on
+        // screen/programlisting that contain callouts (this code path is the
+        // with-callouts variant — the plain verbatim path elsewhere only adds
+        // it when language is set).
         writer.WriteAttributeString("linenumbering", "unnumbered");
         WriteRoles(writer, node);
 
@@ -1107,6 +1112,10 @@ public sealed class DocBookRenderer : DocumentRendererBase
 
         writer.WriteStartElement(elementName, DocBookNs);
         writeExtraAttrs?.Invoke(writer);
+        // Asciidoctor adds linenumbering="unnumbered" on programlisting only.
+        // Plain screen blocks don't get it (regardless of title/formalpara wrapper).
+        if (elementName == "programlisting")
+            writer.WriteAttributeString("linenumbering", "unnumbered");
         WriteRoles(writer, node);
         writer.WriteString(node.Content ?? "");
         writer.WriteEndElement();
