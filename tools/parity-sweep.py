@@ -96,8 +96,8 @@ FORMATS = [
         cand_args=["-b", "epub", "-o"],
         out_ext=".epub",
         diff_tool="epub-diff.py",
-        # epub-diff outputs "Total diff lines: N" per part; we'll grep
-        diff_metric_re=r"^Total diff lines:\s*(\d+)$",
+        # epub-diff prints "Common: N (X differ, Y identical)" — count the differ value.
+        diff_metric_re=r"Common:\s*\d+\s*\((\d+)\s*differ",
     ),
     FormatSpec(
         name="epub-visual",
