@@ -94,10 +94,21 @@ public sealed partial class HtmlRenderer
                 var lastUpdateLabel = document.Attributes.TryGetValue("last-update-label", out var lul)
                     ? lul : "Last updated";
                 sb.Append(lastUpdateLabel);
+                // Date fallback chain matches asciidoctor: :revdate: → :docdatetime: →
+                // :localdatetime:. The latter two include the time-of-day component
+                // (e.g. "2026-03-09 22:01:22 +0100") which is what asciidoctor's
+                // standalone footer always displays.
+                string? footerDate = null;
                 if (document.Attributes.TryGetValue("revdate", out var rd) && !string.IsNullOrWhiteSpace(rd))
+                    footerDate = rd;
+                else if (document.Attributes.TryGetValue("docdatetime", out var dd) && !string.IsNullOrWhiteSpace(dd))
+                    footerDate = dd;
+                else if (document.Attributes.TryGetValue("localdatetime", out var ld) && !string.IsNullOrWhiteSpace(ld))
+                    footerDate = ld;
+                if (footerDate is not null)
                 {
                     sb.Append(' ');
-                    sb.Append(rd);
+                    sb.Append(footerDate);
                 }
                 sb.Append('\n');
             }

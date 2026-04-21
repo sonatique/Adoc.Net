@@ -1051,11 +1051,55 @@ public class HtmlRendererTests
     }
 
     [Test]
-    public void Footer_omits_date_when_revdate_unset()
+    public void Preamble_wrapper_emitted_for_content_before_first_section()
     {
+        // Asciidoctor wraps any non-Section content that precedes the first section
+        // in <div id="preamble"><div class="sectionbody">...</div></div>.
+        var doc = BlockParser.Parse("= Title\n\nIntro paragraph.\n\n== Section\n\nText").Document;
+        var html = new HtmlRenderer().RenderToString(doc, new HtmlRenderOptions { FullDocument = true });
+        Assert.That(html, Does.Contain("<div id=\"preamble\">"));
+        Assert.That(html, Does.Contain("<div class=\"sectionbody\">"));
+        // Sequence: header, content open, preamble wrapper, sect1, content close
+        var preambleIdx = html.IndexOf("<div id=\"preamble\">", StringComparison.Ordinal);
+        var sect1Idx = html.IndexOf("<div class=\"sect1\">", StringComparison.Ordinal);
+        Assert.That(preambleIdx, Is.GreaterThan(0));
+        Assert.That(sect1Idx, Is.GreaterThan(preambleIdx));
+    }
+
+    [Test]
+    public void Preamble_wrapper_omitted_when_doc_starts_with_section()
+    {
+        var doc = BlockParser.Parse("= Title\n\n== Section\n\nText").Document;
+        var html = new HtmlRenderer().RenderToString(doc, new HtmlRenderOptions { FullDocument = true });
+        Assert.That(html, Does.Not.Contain("<div id=\"preamble\">"));
+    }
+
+    [Test]
+    public void Preamble_wrapper_omitted_in_embedded_mode()
+    {
+        // Asciidoctor's -s (embedded) mode also omits the preamble wrapper.
+        var doc = BlockParser.Parse("= Title\n\nIntro.\n\n== Section\n\nText").Document;
+        var html = new HtmlRenderer().RenderToString(doc, new HtmlRenderOptions { FullDocument = false });
+        Assert.That(html, Does.Not.Contain("<div id=\"preamble\">"));
+    }
+
+    [Test]
+    public void Footer_falls_back_to_localdatetime_when_revdate_unset()
+    {
+        // Asciidoctor parity: when :revdate: isn't set the footer falls back to
+        // :docdatetime: → :localdatetime: (always populated). Use :reproducible:
+        // to suppress the date entirely.
         var doc = BlockParser.Parse("= Title\n\nContent").Document;
         var html = new HtmlRenderer().RenderToString(doc, new HtmlRenderOptions { FullDocument = true });
         Assert.That(html, Does.Contain("Last updated"));
-        Assert.That(html, Does.Not.Match(@"Last updated \d{4}-\d{2}-\d{2}"));
+        Assert.That(html, Does.Match(@"Last updated \d{4}-\d{2}-\d{2}"));
+    }
+
+    [Test]
+    public void Footer_suppresses_date_when_reproducible_set()
+    {
+        var doc = BlockParser.Parse("= Title\n:reproducible:\n\nContent").Document;
+        var html = new HtmlRenderer().RenderToString(doc, new HtmlRenderOptions { FullDocument = true });
+        Assert.That(html, Does.Not.Contain("Last updated"));
     }
 }
