@@ -29,6 +29,10 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# Local helpers shared with parity-showcase.py
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _parity_render as pr  # type: ignore
+
 REPO = Path(__file__).resolve().parent.parent
 ADOCNET = ["dotnet", "run", "--project", str(REPO / "src" / "AdocNet.Cli"),
            "--no-build", "--"]
@@ -165,8 +169,61 @@ def diff(format_spec: FormatSpec, ref: Path, cand: Path, out_dir: Path) -> float
     return None
 
 
+def render_visual(format_name: str, ref: Path, cand: Path, out_dir: Path,
+                  work_dir: Path, doc_name: str, pandoc: str | None) -> Path | None:
+    """Render side-by-side PNG for the (doc, format) pair.
+
+    Returns the path to the stitched PNG, or None if visual rendering for this
+    format isn't supported (e.g. pandoc missing for DocBook/Man).
+    """
+    from PIL import Image  # type: ignore
+    out_dir.mkdir(parents=True, exist_ok=True)
+    ref_png = out_dir / "_ref.png"
+    cand_png = out_dir / "_cand.png"
+    try:
+        if format_name == "html" or format_name == "revealjs":
+            pr.screenshot(ref, ref_png)
+            pr.screenshot(cand, cand_png)
+        elif format_name == "pdf":
+            pr.render_pdf_page(ref, 0, ref_png)
+            pr.render_pdf_page(cand, 0, cand_png)
+        elif format_name == "epub-struct":
+            ref_chap = pr.extract_first_chapter(ref, work_dir)
+            cand_chap = pr.extract_first_chapter(cand, work_dir)
+            pr.screenshot(ref_chap, ref_png)
+            pr.screenshot(cand_chap, cand_png)
+        elif format_name in ("docbook", "man") and pandoc is not None:
+            ref_html = work_dir / f"_visual-{format_name}-ref.html"
+            cand_html = work_dir / f"_visual-{format_name}-cand.html"
+            pr.render_via_pandoc(pandoc, ref,
+                                 "docbook" if format_name == "docbook" else "man", ref_html)
+            pr.render_via_pandoc(pandoc, cand,
+                                 "docbook" if format_name == "docbook" else "man", cand_html)
+            pr.screenshot(ref_html, ref_png)
+            pr.screenshot(cand_html, cand_png)
+        else:
+            return None
+    except Exception as e:
+        print(f"      visual render failed: {e!s:.100}")
+        return None
+
+    if not ref_png.exists() or not cand_png.exists():
+        return None
+    left = Image.open(ref_png)
+    right = Image.open(cand_png)
+    label = f"{doc_name} — {format_name}"
+    stitched = pr.stitch(left, right, label)
+    out_png = out_dir / "side-by-side.png"
+    stitched.save(out_png)
+    # Clean up intermediate single-side PNGs
+    ref_png.unlink(missing_ok=True)
+    cand_png.unlink(missing_ok=True)
+    return out_png
+
+
 def process_doc(src: Path, work_root: Path, out_root: Path,
-                formats: list[FormatSpec]) -> list[Result]:
+                formats: list[FormatSpec], visual: bool = False,
+                pandoc: str | None = None) -> list[Result]:
     doc_name = src.stem
     doc_work = work_root / doc_name
     doc_work.mkdir(parents=True, exist_ok=True)
@@ -188,6 +245,12 @@ def process_doc(src: Path, work_root: Path, out_root: Path,
                 continue
             diff_val = diff(fmt, ref, cand, doc_out / fmt.name)
             results.append(Result(doc_name, fmt.name, diff_val))
+            if visual:
+                visual_out = render_visual(
+                    fmt.name, ref, cand, doc_out / fmt.name,
+                    doc_work, doc_name, pandoc)
+                if visual_out is not None:
+                    print(f"      visual: {visual_out}")
         except subprocess.TimeoutExpired:
             results.append(Result(doc_name, fmt.name, None, "timeout"))
         except Exception as e:
@@ -271,6 +334,10 @@ def main(argv: list[str]) -> int:
                         help="include EPUB visual pixel diff (heavy: ~30s/doc)")
     parser.add_argument("--only", default=None,
                         help="comma-separated list of formats to run (default: all enabled)")
+    parser.add_argument("--visual", action="store_true",
+                        help="produce side-by-side visual PNGs for each (doc, format) "
+                             "pair (in addition to the numeric diff). Use to catch "
+                             "rendering regressions that don't show in structural diffs.")
     args = parser.parse_args(argv)
 
     formats = list(FORMATS)
@@ -295,11 +362,17 @@ def main(argv: list[str]) -> int:
     work_root = args.out / "_work"
     work_root.mkdir(parents=True, exist_ok=True)
 
-    print(f"Sweeping {len(corpus)} docs × {sum(1 for f in formats if f.enabled)} formats...")
+    pandoc = pr.find_pandoc() if args.visual else None
+    if args.visual and pandoc is None:
+        print("WARNING: pandoc not found — DocBook/Man visual panels will be skipped.")
+
+    print(f"Sweeping {len(corpus)} docs × {sum(1 for f in formats if f.enabled)} formats"
+          f"{' (with --visual)' if args.visual else ''}...")
     all_results: list[Result] = []
     for i, src in enumerate(corpus, 1):
         print(f"  [{i}/{len(corpus)}] {src.name}")
-        results = process_doc(src, work_root, args.out, formats)
+        results = process_doc(src, work_root, args.out, formats,
+                              visual=args.visual, pandoc=pandoc)
         all_results.extend(results)
         # Per-doc inline status
         for r in results:
@@ -310,6 +383,18 @@ def main(argv: list[str]) -> int:
 
     write_summary(args.out, all_results, formats)
     print(f"\nDone. Summary: {args.out / '_summary.md'}")
+    if args.visual:
+        # Build an index of all generated visual panels for easy browsing.
+        visual_paths = sorted(args.out.rglob("side-by-side.png"))
+        if visual_paths:
+            lines = ["# Visual Panels Index", "",
+                     f"{len(visual_paths)} side-by-side panels generated. Open each PNG to inspect:",
+                     ""]
+            for p in visual_paths:
+                rel = p.relative_to(args.out)
+                lines.append(f"- `{rel}`")
+            (args.out / "_visual-index.md").write_text("\n".join(lines), encoding="utf-8")
+            print(f"Visual index: {args.out / '_visual-index.md'} ({len(visual_paths)} panels)")
 
     # Cleanup work dir to keep output dir small (per-format diffs preserved in subdirs)
     shutil.rmtree(work_root, ignore_errors=True)
