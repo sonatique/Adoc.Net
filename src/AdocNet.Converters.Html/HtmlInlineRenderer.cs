@@ -169,9 +169,19 @@ public sealed partial class HtmlRenderer
                 }
                 else
                 {
-                    // Parse only formatting (Quotes) to avoid recursion — macros inside labels
-                    // would re-enter link parsing and cause infinite recursion.
-                    var labelInlines = InlineParser.Parse(linkMacro.Label!, SubstitutionKind.Quotes, state.DocumentAttributes);
+                    // Parse formatting + typographic substitutions (smart quotes,
+                    // replacements). Skip Macros to avoid recursion — macros inside
+                    // labels would re-enter link parsing and cause infinite recursion.
+                    // Asciidoctor parity: link labels get the full text-substitution
+                    // pipeline minus Macros, so contractions like "table's" render
+                    // as "table’s" with curly apostrophe.
+                    var labelSubs = SubstitutionKind.Quotes |
+                                    SubstitutionKind.Replacements |
+                                    SubstitutionKind.PostReplacements;
+                    if (state.DocumentAttributes.ContainsKey("smartquotes")
+                        && state.DocumentAttributes.TryGetValue("smartquotes", out var sq) && sq.StartsWith("!"))
+                        labelSubs &= ~SubstitutionKind.PostReplacements;
+                    var labelInlines = InlineParser.Parse(linkMacro.Label!, labelSubs, state.DocumentAttributes);
                     RenderInlines(sb, labelInlines, linkMacro.Label!, footnotes, state);
                 }
                 sb.Append("</a>");
@@ -285,7 +295,14 @@ public sealed partial class HtmlRenderer
                     sb.Append("\">");
                     if (interXref.Label is not null)
                     {
-                        var ixLabelInlines = InlineParser.Parse(interXref.Label, SubstitutionKind.Quotes, state.DocumentAttributes);
+                        // Apply typographic substitutions to the label so contractions
+                        // ("table's") render with curly apostrophe (asciidoctor parity).
+                        var ixSubs = SubstitutionKind.Quotes |
+                                     SubstitutionKind.Replacements |
+                                     SubstitutionKind.PostReplacements;
+                        if (state.DocumentAttributes.TryGetValue("smartquotes", out var sq2) && sq2.StartsWith("!"))
+                            ixSubs &= ~SubstitutionKind.PostReplacements;
+                        var ixLabelInlines = InlineParser.Parse(interXref.Label, ixSubs, state.DocumentAttributes);
                         RenderInlines(sb, ixLabelInlines, interXref.Label, footnotes, state);
                     }
                     else
