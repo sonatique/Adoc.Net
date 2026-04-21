@@ -263,13 +263,10 @@ internal static class BlockParser
             {
                 FlushParagraph(currentContainer, paragraphLines, ref paragraphStartLine, lineNumber - 1, document.Attributes, pendingBlockId, pendingBlockRoles, seenIds, diagnostics, pendingHardbreaks, pendingAbstract ? "abstract" : null, subsOverride: ResolvePendingSubs(EffectiveNormal()));
 
-                // Asciidoctor nests a different-kind list inside the last item when
-                // separated by a single blank line.  Preserve listFrames when the next
-                // non-blank line is a list item of a different kind so AddListItem can
-                // perform the nesting.
-                // Also preserve list context when the last item had a + continuation
-                // and the next non-blank line is a list item of the SAME kind — this
-                // means it's a continuation of the list, not a new list.
+                // Asciidoctor keeps a list open across blank lines as long as the
+                // next non-blank line is a list item — same-kind items continue the
+                // list, different-kind items nest inside the last item. Only a
+                // non-list block (paragraph, section, etc.) terminates the list.
                 bool preserveListContext = false;
                 if (listFrames.Count > 0)
                 {
@@ -277,19 +274,8 @@ internal static class BlockParser
                     {
                         if (string.IsNullOrWhiteSpace(lines[peek]))
                             continue; // skip additional blank lines
-                        if (TryParseListItem(lines[peek], out var peekKind, out _, out _))
-                        {
-                            // Preserve for different-kind nesting OR same-kind continuation
-                            // when the preceding item had continuation content (children)
-                            if (listFrames[^1].List.ListKind != peekKind)
-                            {
-                                preserveListContext = true;
-                            }
-                            else if (listFrames[^1].LastItem is { } lastItem && lastItem.Children.Count > 0)
-                            {
-                                preserveListContext = true;
-                            }
-                        }
+                        if (TryParseListItem(lines[peek], out _, out _, out _))
+                            preserveListContext = true;
                         break; // only check the first non-blank line
                     }
                 }

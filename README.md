@@ -131,7 +131,17 @@ adocnet input.adoc -a version=2.0             # set document attribute
 adocnet docs/ -r -D build/                    # convert directory
 adocnet docs/ --watch -v                      # watch and rebuild
 adocnet preview input.adoc                    # live preview with hot reload
+
+# Built-in HTML themes (require -e for full document with embedded CSS)
+adocnet input.adoc -e --theme default         # AdocNet's bold, modern default
+adocnet input.adoc -e --theme asciidoctor     # iconic Asciidoctor red-on-cream look
+adocnet input.adoc -e --theme clean           # minimal monochrome
+adocnet input.adoc -e --theme github          # GitHub-flavoured markdown style
 ```
+
+The `--theme asciidoctor` option is for users migrating from Asciidoctor
+who want their HTML output to look familiar — it reproduces the iconic
+red section headings, serif body, and centered layout.
 
 See [docs/CLI.md](docs/CLI.md) for the full reference.
 

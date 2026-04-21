@@ -205,15 +205,26 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
         // This matches Asciidoctor's -s behavior: title is rendered only in standalone mode
         // or when :showtitle: is explicitly set in the document.
         // :notitle: suppresses the title entirely.
-        if (document.Title is { } docTitle
+        bool emitTitle = document.Title is not null
             && !document.Attributes.ContainsKey("notitle")
             && !document.Attributes.ContainsKey("noheader")
-            && (fullDoc || document.Attributes.ContainsKey("showtitle")))
+            && (fullDoc || document.Attributes.ContainsKey("showtitle"));
+        if (emitTitle)
         {
+            // In full-document mode the title is wrapped in <div id="header"> to match
+            // Asciidoctor's standalone HTML structure; in embedded mode the bare <h1> is emitted.
+            if (fullDoc)
+                sb.Append("<div id=\"header\">\n");
             sb.Append("<h1>");
-            EscapeTo(sb, docTitle);
+            EscapeTo(sb, document.Title!);
             sb.Append("</h1>\n");
+            if (fullDoc)
+                sb.Append("</div>\n");
         }
+        // In full-document mode, wrap the post-header section content in <div id="content">
+        // to match Asciidoctor's structure. Closed at the end of RenderDocumentBody.
+        if (fullDoc)
+            sb.Append("<div id=\"content\">\n");
 
         bool useIconFont = document.Attributes.TryGetValue("icons", out var iconsValue)
             && string.Equals(iconsValue, "font", StringComparison.OrdinalIgnoreCase);
@@ -222,6 +233,10 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
             RenderChildBlocksWithMarkers(sb, document.Children, useIconFont, footnotes, secCtx, state);
         else
             RenderChildBlocks(sb, document.Children, useIconFont, footnotes, secCtx, state);
+
+        // Close the <div id="content"> opened above (full-document mode only).
+        if (fullDoc)
+            sb.Append("</div>\n");
     }
 
     private void RenderChildBlocksWithMarkers(StringBuilder sb, IReadOnlyList<AstNode> children, bool useIconFont, FootnoteState footnotes, SectionNumberingContext secCtx, HtmlRenderState state)

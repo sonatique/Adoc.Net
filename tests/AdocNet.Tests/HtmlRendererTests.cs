@@ -983,4 +983,79 @@ public class HtmlRendererTests
         Assert.That(html, Does.Not.Contain("<img"));
         Assert.That(html, Does.Contain("&lt;img"));
     }
+
+    // ── Asciidoctor structural-wrapper parity (full-document mode) ──────
+
+    [Test]
+    public void Full_document_emits_body_class_for_doctype()
+    {
+        // Asciidoctor wraps the body as <body class="article"> (or "book" etc.)
+        // so theme CSS can target the doctype. Discovered by html-diff against HOWTO.adoc.
+        var doc = BlockParser.Parse("= Title\n\nContent").Document;
+        var html = new HtmlRenderer().RenderToString(doc, new HtmlRenderOptions { FullDocument = true });
+        Assert.That(html, Does.Contain("<body class=\"article\">"),
+            "Default doctype should render as <body class=\"article\">");
+    }
+
+    [Test]
+    public void Full_document_emits_body_class_book_for_book_doctype()
+    {
+        var doc = BlockParser.Parse("= Title\n:doctype: book\n\nContent").Document;
+        var html = new HtmlRenderer().RenderToString(doc, new HtmlRenderOptions { FullDocument = true });
+        Assert.That(html, Does.Contain("<body class=\"book\">"));
+    }
+
+    [Test]
+    public void Full_document_wraps_title_in_div_id_header()
+    {
+        // Asciidoctor wraps the document title <h1> in <div id="header">.
+        var doc = BlockParser.Parse("= My Title\n\nContent").Document;
+        var html = new HtmlRenderer().RenderToString(doc, new HtmlRenderOptions { FullDocument = true });
+        Assert.That(html, Does.Contain("<div id=\"header\">"),
+            "Document title should be wrapped in <div id=\"header\">");
+        Assert.That(html, Does.Match(@"<div id=""header"">\s*<h1>My Title</h1>\s*</div>"));
+    }
+
+    [Test]
+    public void Full_document_wraps_body_in_div_id_content()
+    {
+        var doc = BlockParser.Parse("= Title\n\nA paragraph.").Document;
+        var html = new HtmlRenderer().RenderToString(doc, new HtmlRenderOptions { FullDocument = true });
+        Assert.That(html, Does.Contain("<div id=\"content\">"),
+            "Section content should be wrapped in <div id=\"content\">");
+        var contentOpen = html.IndexOf("<div id=\"content\">", StringComparison.Ordinal);
+        var footer = html.IndexOf("<div id=\"footer\">", StringComparison.Ordinal);
+        Assert.That(contentOpen, Is.LessThan(footer),
+            "Content div must open before footer div");
+    }
+
+    [Test]
+    public void Embedded_mode_does_not_emit_header_or_content_wrappers()
+    {
+        // Default (embedded) mode renders the bare body content; no <body>, <head>,
+        // <div id="header"> or <div id="content"> wrappers.
+        var doc = BlockParser.Parse("= Title\n\nA paragraph.").Document;
+        var html = new HtmlRenderer().RenderToString(doc); // default: not full-doc
+        Assert.That(html, Does.Not.Contain("<div id=\"header\">"));
+        Assert.That(html, Does.Not.Contain("<div id=\"content\">"));
+        Assert.That(html, Does.Not.Contain("<body"));
+    }
+
+    [Test]
+    public void Footer_appends_revdate_when_set()
+    {
+        // Asciidoctor footer reads "<label> <date>" — date comes from :revdate:.
+        var doc = BlockParser.Parse("= Title\nAuthor\nv1.0, 2025-06-15\n\nContent").Document;
+        var html = new HtmlRenderer().RenderToString(doc, new HtmlRenderOptions { FullDocument = true });
+        Assert.That(html, Does.Contain("Last updated 2025-06-15"));
+    }
+
+    [Test]
+    public void Footer_omits_date_when_revdate_unset()
+    {
+        var doc = BlockParser.Parse("= Title\n\nContent").Document;
+        var html = new HtmlRenderer().RenderToString(doc, new HtmlRenderOptions { FullDocument = true });
+        Assert.That(html, Does.Contain("Last updated"));
+        Assert.That(html, Does.Not.Match(@"Last updated \d{4}-\d{2}-\d{2}"));
+    }
 }

@@ -32,7 +32,7 @@ public class HtmlThemeTests
         Assert.That(html, Does.Contain("<!DOCTYPE html>"));
         Assert.That(html, Does.Contain("<html lang=\"en\">"));
         Assert.That(html, Does.Contain("<head>"));
-        Assert.That(html, Does.Contain("<body>"));
+        Assert.That(html, Does.Contain("<body class=\"article\">"));
         Assert.That(html, Does.Contain("<style>"));
         Assert.That(html, Does.Contain("</body>"));
         Assert.That(html, Does.Contain("</html>"));
@@ -73,7 +73,7 @@ public class HtmlThemeTests
 
         Assert.That(html, Does.Contain("<!DOCTYPE html>"));
         Assert.That(html, Does.Contain("<head>"));
-        Assert.That(html, Does.Contain("<body>"));
+        Assert.That(html, Does.Contain("<body class=\"article\">"));
         Assert.That(html, Does.Not.Contain("<style>"));
     }
 
@@ -176,7 +176,7 @@ public class HtmlThemeTests
 
         Assert.That(html, Does.Contain("<!DOCTYPE html>"));
         Assert.That(html, Does.Contain("<style>"));
-        Assert.That(html, Does.Contain("<body>"));
+        Assert.That(html, Does.Contain("<body class=\"article\">"));
         Assert.That(html, Does.Contain("Hello world."));
     }
 }

@@ -164,7 +164,8 @@ public class CrossRendererTests
             Assert.That(entryNames, Does.Contain("META-INF/container.xml"));
             Assert.That(entryNames, Does.Contain("OEBPS/content.opf"));
             Assert.That(entryNames, Does.Contain("OEBPS/toc.xhtml"));
-            Assert.That(entryNames, Does.Contain("OEBPS/content.xhtml"));
+            // Chapter file is named after the document title slug
+            Assert.That(entryNames, Does.Contain("OEBPS/_test_document.xhtml"));
             Assert.That(entryNames, Does.Contain("OEBPS/style.css"));
         });
     }

@@ -33,10 +33,11 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
 
         sb.Append("<div class=\"reveal\">\n<div class=\"slides\">\n");
 
-        // Title slide from document title
+        // Title slide from document title — Asciidoctor adds class="title"
+        // and data-state="title" so reveal.js / theme CSS can target it.
         if (document.Title is not null)
         {
-            sb.Append("<section>\n<h1>");
+            sb.Append("<section class=\"title\" data-state=\"title\">\n<h1>");
             EscapeTo(sb, document.Title);
             sb.Append("</h1>\n</section>\n");
         }
@@ -168,34 +169,30 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
 
         if (hasVerticalSlides)
         {
-            // Vertical slide group
+            // Vertical slide group — outer <section> wraps all the verticals.
+            // Asciidoctor doesn't put an id on the outer wrapper, only on the
+            // inner slides.
             sb.Append("<section>\n");
 
             // Parent slide with title + non-section content
-            sb.Append("<section>\n<h2>");
+            AppendSlideOpenTag(sb, section);
+            sb.Append("<h2>");
             EscapeTo(sb, section.Title);
             sb.Append("</h2>\n");
-            foreach (var child in section.Children)
-            {
-                if (child is SectionNode) break; // stop at first subsection
-                if (child is BlockNode block)
-                    RenderBlock(sb, block);
-            }
+            AppendSlideContent(sb, section.Children, stopAtSubsection: true);
             sb.Append("</section>\n");
 
-            // Vertical slides
+            // Vertical slides — Asciidoctor uses <h2> for vertical slides too
+            // (they live at the same hierarchy as horizontal slides).
             foreach (var child in section.Children)
             {
                 if (child is SectionNode sub && sub.Level == 2)
                 {
-                    sb.Append("<section>\n<h3>");
+                    AppendSlideOpenTag(sb, sub);
+                    sb.Append("<h2>");
                     EscapeTo(sb, sub.Title);
-                    sb.Append("</h3>\n");
-                    foreach (var subChild in sub.Children)
-                    {
-                        if (subChild is BlockNode block)
-                            RenderBlock(sb, block);
-                    }
+                    sb.Append("</h2>\n");
+                    AppendSlideContent(sb, sub.Children, stopAtSubsection: false);
                     sb.Append("</section>\n");
                 }
             }
@@ -205,16 +202,52 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         else
         {
             // Simple horizontal slide
-            sb.Append("<section>\n<h2>");
+            AppendSlideOpenTag(sb, section);
+            sb.Append("<h2>");
             EscapeTo(sb, section.Title);
             sb.Append("</h2>\n");
-            foreach (var child in section.Children)
-            {
-                if (child is BlockNode block)
-                    RenderBlock(sb, block);
-            }
+            AppendSlideContent(sb, section.Children, stopAtSubsection: false);
             sb.Append("</section>\n");
         }
+    }
+
+    /// <summary>
+    /// Wraps slide body content in &lt;div class="slide-content"&gt; so reveal.js
+    /// theme CSS can scroll/scale it independently of the heading.
+    /// Skipped when there's no body content (heading-only slide).
+    /// </summary>
+    private static void AppendSlideContent(StringBuilder sb, IEnumerable<AstNode> children, bool stopAtSubsection)
+    {
+        // Pre-check: any block content?
+        bool hasContent = false;
+        foreach (var child in children)
+        {
+            if (stopAtSubsection && child is SectionNode) break;
+            if (child is BlockNode) { hasContent = true; break; }
+        }
+        if (!hasContent) return;
+
+        sb.Append("<div class=\"slide-content\">\n");
+        foreach (var child in children)
+        {
+            if (stopAtSubsection && child is SectionNode) break;
+            if (child is BlockNode block)
+                RenderBlock(sb, block);
+        }
+        sb.Append("</div>\n");
+    }
+
+    private static void AppendSlideOpenTag(StringBuilder sb, SectionNode section)
+    {
+        sb.Append("<section");
+        var id = section.Id;
+        if (!string.IsNullOrEmpty(id))
+        {
+            sb.Append(" id=\"");
+            EscapeTo(sb, id!);
+            sb.Append('"');
+        }
+        sb.Append(">\n");
     }
 
     // ── Block rendering ─────────────────────────────────────────────────
@@ -247,31 +280,38 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
 
     private static void RenderParagraph(StringBuilder sb, ParagraphNode paragraph)
     {
-        sb.Append("<p>");
+        // Asciidoctor wraps every paragraph in <div class="paragraph">.
+        sb.Append("<div class=\"paragraph\">\n<p>");
         if (paragraph.Inlines.Count > 0)
             RenderInlines(sb, paragraph.Inlines);
         else
             EscapeTo(sb, paragraph.Text);
-        sb.Append("</p>\n");
+        sb.Append("</p>\n</div>\n");
     }
 
     private static void RenderList(StringBuilder sb, ListNode list)
     {
+        // Asciidoctor wraps lists in <div class="ulist"> or "olist".
+        var listClass = list.ListKind == ListKind.Ordered ? "olist" : "ulist";
         var tag = list.ListKind == ListKind.Ordered ? "ol" : "ul";
+        sb.Append("<div class=\"").Append(listClass).Append("\">\n");
         sb.Append('<').Append(tag).Append(">\n");
         foreach (var child in list.Children)
         {
             if (child is ListItemNode item)
             {
-                sb.Append("<li>");
+                // Asciidoctor wraps list-item text in <p> for consistent paragraph
+                // styling across nested content.
+                sb.Append("<li>\n<p>");
                 if (item.Inlines.Count > 0)
                     RenderInlines(sb, item.Inlines);
                 else
                     EscapeTo(sb, item.Text);
-                sb.Append("</li>\n");
+                sb.Append("</p>\n</li>\n");
             }
         }
         sb.Append("</").Append(tag).Append(">\n");
+        sb.Append("</div>\n");
     }
 
     private static void RenderDelimitedBlock(StringBuilder sb, DelimitedBlockNode block)

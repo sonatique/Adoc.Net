@@ -35,11 +35,13 @@ public class DocBookRendererTests
     }
 
     [Test]
-    public void Paragraph_rendered_as_para()
+    public void Paragraph_rendered_as_simpara()
     {
+        // Asciidoctor emits <simpara> for inline-only body paragraphs (DocBook5 convention).
+        // Top-level body paragraphs now match.
         var result = BlockParser.Parse("Hello world");
         var xml = new DocBookRenderer().RenderToString(result.Document);
-        Assert.That(xml, Does.Contain("<para>Hello world</para>"));
+        Assert.That(xml, Does.Contain("<simpara>Hello world</simpara>"));
     }
 
     [Test]
@@ -193,5 +195,105 @@ public class DocBookRendererTests
         doc.AddChild(new PageBreakNode());
         var xml = new DocBookRenderer().RenderToString(doc);
         Assert.That(xml, Does.Contain("<?hard-pagebreak"));
+    }
+
+    // ── Asciidoctor structural-wrapper parity ─────────────────────────────
+
+    [Test]
+    public void Root_article_has_xml_lang_attribute()
+    {
+        // Asciidoctor adds xml:lang on the root. Defaults to "en".
+        var doc = BlockParser.Parse("= Title\n\nContent").Document;
+        var xml = new DocBookRenderer().RenderToString(doc);
+        Assert.That(xml, Does.Contain("xml:lang=\"en\""));
+    }
+
+    [Test]
+    public void Root_article_xml_lang_honours_document_lang_attribute()
+    {
+        var doc = BlockParser.Parse("= T\n:lang: fr\n\nContent").Document;
+        var xml = new DocBookRenderer().RenderToString(doc);
+        Assert.That(xml, Does.Contain("xml:lang=\"fr\""));
+    }
+
+    [Test]
+    public void Document_metadata_wrapped_in_info_element()
+    {
+        // Asciidoctor wraps the document title (and date when revdate is set) in <info>.
+        var doc = BlockParser.Parse("= My Title\n\nContent").Document;
+        var xml = new DocBookRenderer().RenderToString(doc);
+        Assert.That(xml, Does.Contain("<info>"));
+        Assert.That(xml, Does.Contain("<title>My Title</title>"));
+        Assert.That(xml, Does.Contain("</info>"));
+    }
+
+    [Test]
+    public void Document_info_includes_date_when_revdate_set()
+    {
+        var doc = BlockParser.Parse("= T\nAuthor\nv1.0, 2025-06-15\n\nContent").Document;
+        var xml = new DocBookRenderer().RenderToString(doc);
+        Assert.That(xml, Does.Contain("<date>2025-06-15</date>"));
+    }
+
+    [Test]
+    public void Document_info_falls_back_to_docdate_when_revdate_not_set()
+    {
+        // Asciidoctor parity: when :revdate: is absent, <date> falls back to :docdate:
+        // (which the parser always sets — to file mtime via ConvertFile, or today's
+        // date as a default). Use :reproducible: to suppress the date entirely.
+        var doc = BlockParser.Parse("= T\n\nContent").Document;
+        var xml = new DocBookRenderer().RenderToString(doc);
+        Assert.That(xml, Does.Contain("<date>"));
+    }
+
+    [Test]
+    public void List_item_with_inline_content_uses_simpara()
+    {
+        // List items with only inline content use <simpara>, not <para>.
+        var doc = BlockParser.Parse("* Item one").Document;
+        var xml = new DocBookRenderer().RenderToString(doc);
+        Assert.That(xml, Does.Contain("<simpara>Item one</simpara>"));
+    }
+
+    [Test]
+    public void List_item_text_uses_simpara_even_when_followed_by_continuation_block()
+    {
+        // Asciidoctor emits <simpara> for the item text and the continuation
+        // block as a sibling inside the <listitem>. AdocNet previously emitted
+        // <para> when the item had children, splitting from Asciidoctor.
+        var input = "* Item with block\n+\n----\ncode here\n----";
+        var doc = BlockParser.Parse(input).Document;
+        var xml = new DocBookRenderer().RenderToString(doc);
+        Assert.That(xml, Does.Contain("<simpara>Item with block</simpara>"));
+        Assert.That(xml, Does.Not.Contain("<para>Item with block</para>"));
+    }
+
+    [Test]
+    public void Date_falls_back_from_revdate_to_docdate()
+    {
+        // When :revdate: is absent but :docdate: is set, asciidoctor still emits
+        // <date> from docdate. AdocNet now matches.
+        var doc = BlockParser.Parse("= Title\n:docdate: 2026-03-09\n\nText").Document;
+        var xml = new DocBookRenderer().RenderToString(doc);
+        Assert.That(xml, Does.Contain("<date>2026-03-09</date>"));
+    }
+
+    [Test]
+    public void Date_uses_revdate_when_both_set()
+    {
+        // :revdate: takes precedence over :docdate: (Asciidoctor parity).
+        var doc = BlockParser.Parse("= T\n:revdate: 2026-04-01\n:docdate: 2026-03-09\n\nText").Document;
+        var xml = new DocBookRenderer().RenderToString(doc);
+        Assert.That(xml, Does.Contain("<date>2026-04-01</date>"));
+        Assert.That(xml, Does.Not.Contain("<date>2026-03-09</date>"));
+    }
+
+    [Test]
+    public void Date_omitted_when_reproducible_set()
+    {
+        // :reproducible: opts out of the date entirely (suppresses both revdate and docdate).
+        var doc = BlockParser.Parse("= T\n:revdate: 2026-04-01\n:reproducible:\n\nText").Document;
+        var xml = new DocBookRenderer().RenderToString(doc);
+        Assert.That(xml, Does.Not.Contain("<date>"));
     }
 }

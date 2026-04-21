@@ -278,13 +278,61 @@ public sealed partial class AdocEngine
     /// <summary>
     /// Reads an AsciiDoc file from disk, parses it, and writes the rendered output to <paramref name="output"/>.
     /// </summary>
+    /// <remarks>
+    /// File-context behaviour (Asciidoctor parity): when the source does not set <c>:docdate:</c>
+    /// or <c>:revdate:</c>, the file's last-write timestamp is used to seed <c>:docdate:</c> /
+    /// <c>:docyear:</c> so renderers (DocBook <c>&lt;date&gt;</c>, EPUB <c>dc:date</c>, HTML footer)
+    /// emit a meaningful date. Honours <c>:reproducible:</c> to suppress the override for
+    /// reproducible-build pipelines.
+    /// </remarks>
     /// <param name="inputPath">The path to the AsciiDoc source file.</param>
     /// <param name="output">The stream to write the rendered output to.</param>
     /// <param name="options">Optional render options. Uses <see cref="RenderOptions.Default"/> when null.</param>
     public void ConvertFile(string inputPath, Stream output, RenderOptions? options = null)
     {
         var text = File.ReadAllText(inputPath);
+
+        // Inject :docdate: from file mtime UNLESS the source explicitly sets a date attribute
+        // or opts out via :reproducible:. Done as text injection so the parser's normal
+        // attribute-precedence rules apply (explicit source attributes still win).
+        if (!HasDateAttribute(text) && !HasReproducible(text))
+        {
+            var mtime = File.GetLastWriteTime(inputPath);
+            var dateStr = mtime.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+            text = $":docdate: {dateStr}\n:docyear: {mtime.Year}\n" + text;
+        }
+
         Convert(text, output, options);
+    }
+
+    /// <summary>True if the source contains a <c>:docdate:</c> or <c>:revdate:</c> attribute entry.</summary>
+    private static bool HasDateAttribute(string text)
+    {
+        // Cheap line scan: matches start-of-line `:docdate:` or `:revdate:` (with optional !).
+        return ContainsAttributeEntry(text, "docdate") || ContainsAttributeEntry(text, "revdate");
+    }
+
+    /// <summary>True if the source contains a <c>:reproducible:</c> attribute entry.</summary>
+    private static bool HasReproducible(string text)
+    {
+        return ContainsAttributeEntry(text, "reproducible");
+    }
+
+    private static bool ContainsAttributeEntry(string text, string name)
+    {
+        // Match `:name:` (set) or `:!name:` / `:name!:` (unset) at start of any line
+        // (after optional leading whitespace). Plain string ops for netstandard2.0 portability.
+        foreach (var line in text.Split('\n'))
+        {
+            var trimmed = line.TrimStart();
+            if (trimmed.Length < name.Length + 2 || trimmed[0] != ':') continue;
+            var inner = trimmed[1] == '!' ? trimmed.Substring(2) : trimmed.Substring(1);
+            if (inner.Length > name.Length &&
+                inner.StartsWith(name, StringComparison.Ordinal) &&
+                (inner[name.Length] == ':' || inner[name.Length] == '!'))
+                return true;
+        }
+        return false;
     }
 
     /// <summary>

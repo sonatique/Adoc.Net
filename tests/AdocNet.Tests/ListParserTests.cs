@@ -255,4 +255,62 @@ public class ListParserTests
             Assert.That(item1.Source.End.Line, Is.EqualTo(2));
         });
     }
+
+    // ── Blank-line separation parity (Asciidoctor) ──────────────────────────────
+    // Asciidoctor keeps list items in one list across blank lines as long as the
+    // next non-blank line is a list item of the same kind.
+
+    [Test]
+    public void Blank_line_between_unordered_items_keeps_one_list()
+    {
+        var result = BlockParser.Parse("* A\n\n* B\n\n* C");
+
+        Assert.That(result.Document.Children, Has.Count.EqualTo(1));
+        var list = (ListNode)result.Document.Children[0];
+        Assert.That(list.ListKind, Is.EqualTo(ListKind.Unordered));
+        Assert.That(list.Children, Has.Count.EqualTo(3));
+    }
+
+    [Test]
+    public void Mixed_continuation_and_plain_items_stay_in_one_list()
+    {
+        // Item with continuation block, plain item, item with continuation block.
+        // Asciidoctor keeps all three in one list. AdocNet previously split
+        // because the preservation rule only kept context when the previous item
+        // had children. This is the HOWTO/DocBook diff bug.
+        var input = "* Item 1\n+\n----\nblock 1\n----\n\n* Item 2\n\n* Item 3\n+\n----\nblock 3\n----";
+        var result = BlockParser.Parse(input);
+
+        Assert.That(result.Document.Children, Has.Count.EqualTo(1));
+        var list = (ListNode)result.Document.Children[0];
+        Assert.That(list.ListKind, Is.EqualTo(ListKind.Unordered));
+        Assert.That(list.Children, Has.Count.EqualTo(3));
+        Assert.That(((ListItemNode)list.Children[0]).Children, Has.Count.EqualTo(1));
+        Assert.That(((ListItemNode)list.Children[1]).Children, Is.Empty);
+        Assert.That(((ListItemNode)list.Children[2]).Children, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void Blank_line_between_ordered_items_keeps_one_list()
+    {
+        var result = BlockParser.Parse(". A\n\n. B\n\n. C");
+
+        Assert.That(result.Document.Children, Has.Count.EqualTo(1));
+        var list = (ListNode)result.Document.Children[0];
+        Assert.That(list.ListKind, Is.EqualTo(ListKind.Ordered));
+        Assert.That(list.Children, Has.Count.EqualTo(3));
+    }
+
+    [Test]
+    public void Paragraph_between_lists_still_separates_them()
+    {
+        // Negative test: a paragraph BETWEEN two lists must still produce two lists.
+        var input = "* A\n\nSome paragraph\n\n* B";
+        var result = BlockParser.Parse(input);
+
+        Assert.That(result.Document.Children, Has.Count.EqualTo(3));
+        Assert.That(result.Document.Children[0], Is.InstanceOf<ListNode>());
+        Assert.That(result.Document.Children[1], Is.InstanceOf<ParagraphNode>());
+        Assert.That(result.Document.Children[2], Is.InstanceOf<ListNode>());
+    }
 }
