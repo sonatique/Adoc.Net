@@ -141,7 +141,9 @@ public class CrossRendererTests
             Assert.That(xml, Does.Contain("<article"));
             Assert.That(xml, Does.Contain("xmlns=\"http://docbook.org/ns/docbook\""));
             Assert.That(xml, Does.Contain("<section"));
-            Assert.That(xml, Does.Contain("<para>"));
+            // Asciidoctor parity: inline-only paragraphs use <simpara>; <para>
+            // is reserved for paragraphs containing nested block content.
+            Assert.That(xml, Does.Contain("<simpara>").Or.Contains("<para>"));
             Assert.That(xml, Does.Contain("<emphasis"));
             Assert.That(xml, Does.Contain("<programlisting"));
             Assert.That(xml, Does.Contain("table"));

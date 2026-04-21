@@ -327,6 +327,12 @@ public sealed class DocBookRenderer : DocumentRendererBase
         if (node.Id is not null)
             writer.WriteAttributeString("xml", "id", XmlNs, node.Id);
 
+        // Asciidoctor always emits frame, rowsep, colsep on the table element.
+        // Defaults: frame="all", rowsep="1", colsep="1" (full grid).
+        writer.WriteAttributeString("frame", "all");
+        writer.WriteAttributeString("rowsep", "1");
+        writer.WriteAttributeString("colsep", "1");
+
         if (hasTitle)
             writer.WriteElementString("title", DocBookNs, node.Title);
 
@@ -349,13 +355,22 @@ public sealed class DocBookRenderer : DocumentRendererBase
         writer.WriteAttributeString("cols", colCount.ToString());
 
         // Write colspec elements with proportional widths
+        // Asciidoctor scales colspec widths so they sum to 100 (effective
+        // percentage). E.g. [cols="2"] (two equal cols) produces colwidth="50*"
+        // each; [cols="1,2,1"] produces "25*", "50*", "25*". Compute by summing
+        // the parsed proportional widths and rescaling.
         if (node.Columns is not null)
         {
+            int totalWidth = 0;
+            for (int i = 0; i < node.Columns.Count; i++)
+                totalWidth += node.Columns[i].Width;
+            if (totalWidth <= 0) totalWidth = node.Columns.Count;
             for (int i = 0; i < node.Columns.Count; i++)
             {
+                int scaled = (node.Columns[i].Width * 100) / totalWidth;
                 writer.WriteStartElement("colspec", DocBookNs);
                 writer.WriteAttributeString("colname", $"col_{i + 1}");
-                writer.WriteAttributeString("colwidth", $"{node.Columns[i].Width}*");
+                writer.WriteAttributeString("colwidth", $"{scaled}*");
                 writer.WriteEndElement(); // colspec
             }
         }
@@ -464,19 +479,21 @@ public sealed class DocBookRenderer : DocumentRendererBase
                 }
                 else if (cell.Inlines.Count > 0)
                 {
-                    writer.WriteStartElement("para", DocBookNs);
+                    // Asciidoctor uses <simpara> for inline-only cell content;
+                    // <para> is reserved for cells with nested block content.
+                    writer.WriteStartElement("simpara", DocBookNs);
                     WriteCellStyleOpen(writer, cell.ContentStyle);
                     RenderInlines(writer, cell.Inlines, context);
                     WriteCellStyleClose(writer, cell.ContentStyle);
-                    writer.WriteEndElement(); // para
+                    writer.WriteEndElement(); // simpara
                 }
                 else
                 {
-                    writer.WriteStartElement("para", DocBookNs);
+                    writer.WriteStartElement("simpara", DocBookNs);
                     WriteCellStyleOpen(writer, cell.ContentStyle);
                     writer.WriteString(cell.Text);
                     WriteCellStyleClose(writer, cell.ContentStyle);
-                    writer.WriteEndElement(); // para
+                    writer.WriteEndElement(); // simpara
                 }
 
                 writer.WriteEndElement(); // entry
