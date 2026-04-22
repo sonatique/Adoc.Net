@@ -279,7 +279,14 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
                 }
             }
         }
-        bool hasPreamble = fullDoc && firstSectionIdx != 0;
+        // Only wrap in <div id="preamble"> when there's BOTH:
+        // - non-Section content at the start (firstSectionIdx > 0 OR -1 with content), AND
+        // - at least one section that follows (firstSectionIdx >= 0)
+        // If the doc has no sections at all, don't emit the preamble wrapper —
+        // matches asciidoctor's behaviour for sectionless documents.
+        bool hasPreamble = fullDoc
+            && firstSectionIdx > 0
+            && document.Children.Count > 0;
 
         if (hasPreamble)
         {
