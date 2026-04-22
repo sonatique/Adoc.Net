@@ -195,7 +195,11 @@ internal static class BlockParser
                 if (document.Title is null && IsDocTitle(line))
                 {
                     document.Title = line[2..].Trim();
-                    // Consume any pending anchor as the document's ID (not propagated to next block).
+                    // Pending [[anchor]] before the title becomes the document id
+                    // (asciidoctor writes it as the body id attribute and stores it
+                    // as the :id: document attribute).
+                    if (pendingBlockId is not null && !document.Attributes.ContainsKey("id"))
+                        document.SetAttribute("id", pendingBlockId);
                     pendingBlockId = null;
                     pendingBlockReftext = null;
                     continue;
@@ -1059,6 +1063,7 @@ internal static class BlockParser
                             Width  = blockImage.Width,
                             Height = blockImage.Height,
                             Link   = blockImage.Link,
+                            Roles  = blockImage.Roles,
                         };
                     }
 
@@ -1067,7 +1072,20 @@ internal static class BlockParser
                     {
                         ApplyPendingId(blockMacroBlock, lineNumber, line.Length);
                         if (pendingBlockRoles is not null)
-                            blockMacroBlock.Roles = pendingBlockRoles;
+                        {
+                            // Merge pendingBlockRoles (from [.role] shorthand) with
+                            // any alignment-derived roles already set on the macro node.
+                            if (blockMacroBlock.Roles.Count == 0)
+                                blockMacroBlock.Roles = pendingBlockRoles;
+                            else
+                            {
+                                var merged = new List<string>(pendingBlockRoles.Count + blockMacroBlock.Roles.Count);
+                                merged.AddRange(pendingBlockRoles);
+                                foreach (var r in blockMacroBlock.Roles)
+                                    if (!merged.Contains(r)) merged.Add(r);
+                                blockMacroBlock.Roles = merged;
+                            }
+                        }
                     }
                     // toc::[] placeholder always goes to document level for post-parse replacement.
                     if (blockMacroNode is TocNode)
@@ -4280,6 +4298,8 @@ internal static class BlockParser
         if (macroName == "image")
         {
             var imgAttrs = ParseImageAttributes(bracketContent);
+            // Asciidoctor maps align=center → text-center role and float=left → left role.
+            var imgRoles = BuildImageAlignmentRoles(imgAttrs.Align, imgAttrs.Float);
             node = new BlockImageNode
             {
                 Target = target,
@@ -4287,6 +4307,7 @@ internal static class BlockParser
                 Width = imgAttrs.Width,
                 Height = imgAttrs.Height,
                 Link = imgAttrs.Link,
+                Roles = imgRoles,
             };
             return true;
         }
@@ -4416,7 +4437,7 @@ internal static class BlockParser
         if (commaIdx < 0)
             return new ImageAttributes { Alt = bracketContent };
 
-        string? alt = null, width = null, height = null, link = null;
+        string? alt = null, width = null, height = null, link = null, align = null, floatVal = null;
         var positional = new List<string>();
 
         foreach (var part in bracketContent.Split(','))
@@ -4433,6 +4454,8 @@ internal static class BlockParser
                     case "width": width = value; break;
                     case "height": height = value; break;
                     case "link": link = value; break;
+                    case "align": align = value; break;
+                    case "float": floatVal = value; break;
                 }
             }
             else
@@ -4446,7 +4469,7 @@ internal static class BlockParser
         width ??= positional.Count > 1 ? positional[1] : null;
         height ??= positional.Count > 2 ? positional[2] : null;
 
-        return new ImageAttributes { Alt = alt, Width = width, Height = height, Link = link };
+        return new ImageAttributes { Alt = alt, Width = width, Height = height, Link = link, Align = align, Float = floatVal };
     }
 
     /// <summary>Parsed image macro attributes.</summary>
@@ -4456,6 +4479,24 @@ internal static class BlockParser
         public string? Width { get; init; }
         public string? Height { get; init; }
         public string? Link { get; init; }
+        public string? Align { get; init; }
+        public string? Float { get; init; }
+    }
+
+    /// <summary>
+    /// Builds the role list for an image's alignment/float attributes, matching
+    /// Asciidoctor's mapping: <c>align=center</c> → <c>text-center</c>; <c>float=left</c> → <c>left</c>.
+    /// </summary>
+    internal static IReadOnlyList<string> BuildImageAlignmentRoles(string? align, string? floatVal)
+    {
+        if (string.IsNullOrEmpty(align) && string.IsNullOrEmpty(floatVal))
+            return Array.Empty<string>();
+        var roles = new List<string>(2);
+        if (!string.IsNullOrEmpty(align))
+            roles.Add("text-" + align!.Trim().ToLowerInvariant());
+        if (!string.IsNullOrEmpty(floatVal))
+            roles.Add(floatVal!.Trim().ToLowerInvariant());
+        return roles;
     }
 
     /// <summary>

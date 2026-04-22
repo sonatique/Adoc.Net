@@ -101,21 +101,25 @@ public sealed partial class HtmlRenderer
             sb.Append("<div id=\"footer\">\n");
             sb.Append("<div id=\"footer-text\">\n");
             // When :reproducible: is set, suppress timestamps and update labels.
-            // Otherwise emit "<label> <date>" — date comes from :revdate: when set,
-            // matching Asciidoctor's footer (e.g. "Last updated 2026-03-09 22:01:22 +0100").
+            // Otherwise emit asciidoctor's footer template:
+            //   Version <revnumber><br>
+            //   Last updated <docdatetime>
             if (!document.Attributes.ContainsKey("reproducible"))
             {
+                if (document.Attributes.TryGetValue("revnumber", out var rn) && !string.IsNullOrWhiteSpace(rn))
+                {
+                    sb.Append("Version ");
+                    sb.Append(rn);
+                    sb.Append("\n<br>\n");
+                }
                 var lastUpdateLabel = document.Attributes.TryGetValue("last-update-label", out var lul)
                     ? lul : "Last updated";
                 sb.Append(lastUpdateLabel);
-                // Date fallback chain matches asciidoctor: :revdate: → :docdatetime: →
-                // :localdatetime:. The latter two include the time-of-day component
-                // (e.g. "2026-03-09 22:01:22 +0100") which is what asciidoctor's
-                // standalone footer always displays.
+                // Date source matches asciidoctor's footer template: :docdatetime:
+                // (file modification time). Falls back to :localdatetime: only when
+                // docdatetime isn't populated (e.g. stdin input with no file mtime).
                 string? footerDate = null;
-                if (document.Attributes.TryGetValue("revdate", out var rd) && !string.IsNullOrWhiteSpace(rd))
-                    footerDate = rd;
-                else if (document.Attributes.TryGetValue("docdatetime", out var dd) && !string.IsNullOrWhiteSpace(dd))
+                if (document.Attributes.TryGetValue("docdatetime", out var dd) && !string.IsNullOrWhiteSpace(dd))
                     footerDate = dd;
                 else if (document.Attributes.TryGetValue("localdatetime", out var ld) && !string.IsNullOrWhiteSpace(ld))
                     footerDate = ld;
