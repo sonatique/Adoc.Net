@@ -279,14 +279,28 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
                 }
             }
         }
+        // The preamble holds children [0..firstSectionIdx) — but the TocNode
+        // doesn't count as preamble body (it's rendered in header or at toc::[]).
+        // If every child before the first section is a TocNode, there's no real
+        // preamble content and the wrapper should be skipped.
+        bool preambleHasBody = false;
+        if (firstSectionIdx > 0)
+        {
+            for (int i = 0; i < firstSectionIdx; i++)
+            {
+                if (document.Children[i] is not TocNode)
+                {
+                    preambleHasBody = true;
+                    break;
+                }
+            }
+        }
         // Only wrap in <div id="preamble"> when there's BOTH:
-        // - non-Section content at the start (firstSectionIdx > 0 OR -1 with content), AND
-        // - at least one section that follows (firstSectionIdx >= 0)
-        // If the doc has no sections at all, don't emit the preamble wrapper —
-        // matches asciidoctor's behaviour for sectionless documents.
+        // - real (non-TOC) preamble content at the start, AND
+        // - at least one section that follows.
         bool hasPreamble = fullDoc
             && firstSectionIdx > 0
-            && document.Children.Count > 0;
+            && preambleHasBody;
 
         if (hasPreamble)
         {

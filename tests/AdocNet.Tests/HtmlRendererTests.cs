@@ -1042,12 +1042,14 @@ public class HtmlRendererTests
     }
 
     [Test]
-    public void Footer_appends_revdate_when_set()
+    public void Footer_emits_version_line_when_revnumber_set()
     {
-        // Asciidoctor footer reads "<label> <date>" — date comes from :revdate:.
+        // Asciidoctor footer template: "Version <revnumber><br>Last updated <docdatetime>".
         var doc = BlockParser.Parse("= Title\nAuthor\nv1.0, 2025-06-15\n\nContent").Document;
         var html = new HtmlRenderer().RenderToString(doc, new HtmlRenderOptions { FullDocument = true });
-        Assert.That(html, Does.Contain("Last updated 2025-06-15"));
+        Assert.That(html, Does.Contain("Version 1.0"));
+        Assert.That(html, Does.Contain("<br>"));
+        Assert.That(html, Does.Contain("Last updated "));
     }
 
     [Test]

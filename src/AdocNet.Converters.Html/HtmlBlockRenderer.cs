@@ -63,8 +63,12 @@ public sealed partial class HtmlRenderer
             else
                 sb.Append("Details");
             sb.Append("</summary>\n<div class=\"content\">\n");
-            // Render block content without normal title (already in <summary>).
-            RenderDelimitedBlockContent(sb, block, footnotes, secCtx, state);
+            // Render the collapsible block's children directly — RenderDelimitedBlockContent
+            // would emit its own <div class="content"> (per-block-kind), causing
+            // double-wrapping inside the <details>. Asciidoctor renders collapsible
+            // children as a flat sequence inside the single content wrapper.
+            foreach (var child in block.Children)
+                RenderBlock(sb, child, false, footnotes, secCtx, state);
             sb.Append("</div>\n</details>\n");
             return;
         }
@@ -219,9 +223,18 @@ public sealed partial class HtmlRenderer
                 break;
 
             case DelimitedBlockKind.Quote:
-                sb.Append("<blockquote");
-                AppendRoleClasses(sb, block);
-                sb.Append(">\n");
+                // Asciidoctor wraps quotes in <div class="quoteblock"><blockquote>...
+                sb.Append("<div class=\"quoteblock");
+                if (block.Roles is { Count: > 0 })
+                {
+                    foreach (var role in block.Roles)
+                    {
+                        sb.Append(' ');
+                        EscapeTo(sb, role);
+                    }
+                }
+                sb.Append("\">\n");
+                sb.Append("<blockquote>\n");
                 if (block.Content is not null && block.Children.Count == 0)
                 {
                     // Paragraph-style quote: render content as inline text (no <p> wrapper).
@@ -237,15 +250,17 @@ public sealed partial class HtmlRenderer
                 sb.Append("</blockquote>\n");
                 if (block.Attribution is not null)
                 {
-                    sb.Append("\u2014 ");
+                    sb.Append("<div class=\"attribution\">\n\u2014 ");
                     EscapeTo(sb, block.Attribution);
                     if (block.CitationSource is not null)
                     {
-                        sb.Append(", ");
+                        sb.Append("<br>\n<cite>");
                         EscapeTo(sb, block.CitationSource);
+                        sb.Append("</cite>");
                     }
-                    sb.Append('\n');
+                    sb.Append("\n</div>\n");
                 }
+                sb.Append("</div>\n");
                 break;
 
             case DelimitedBlockKind.Sidebar:
