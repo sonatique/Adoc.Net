@@ -100,6 +100,20 @@ FORMATS = [
         diff_metric_re=r"DOM diff lines:\s*(\d+)",
     ),
     FormatSpec(
+        # AdocNet HTML with --theme asciidoctor (drop-in visual compat for
+        # users migrating from asciidoctor). Same asciidoctor reference as
+        # `html`; candidate is styled to look like asciidoctor's output.
+        # Structural DOM is the same as `html` — this panel exists purely
+        # for visual inspection, so no diff tool is wired up.
+        name="html-asciidoctor-theme",
+        ref_cmd=[ASCIIDOCTOR, "-o"],
+        cand_args=["-b", "html5", "--theme", "asciidoctor", "-o"],
+        out_ext=".html",
+        diff_tool=None,
+        diff_metric_re="",
+        enabled=False,  # opt-in via --include-html-asciidoctor-theme
+    ),
+    FormatSpec(
         name="docbook",
         ref_cmd=[ASCIIDOCTOR, "-b", "docbook5", "-o"],
         cand_args=["-b", "docbook5", "-o"],
@@ -224,7 +238,7 @@ def render_visual(format_name: str, ref: Path, cand: Path, out_dir: Path,
     ref_png = out_dir / "_ref.png"
     cand_png = out_dir / "_cand.png"
     try:
-        if format_name == "html" or format_name == "revealjs":
+        if format_name in ("html", "html-asciidoctor-theme", "revealjs"):
             pr.screenshot(ref, ref_png)
             pr.screenshot(cand, cand_png)
         elif format_name in ("pdf", "pdf-asciidoctor-theme"):
@@ -255,11 +269,14 @@ def render_visual(format_name: str, ref: Path, cand: Path, out_dir: Path,
     left = Image.open(ref_png)
     right = Image.open(cand_png)
     label = f"{doc_name} — {format_name}"
-    # For the asciidoctor-themed PDF, label the right side explicitly so the
-    # viewer sees that AdocNet is rendering with the asciidoctor-pdf default theme.
+    # For asciidoctor-themed outputs, label the right side explicitly so the
+    # viewer sees that AdocNet is rendering with the asciidoctor-style theme.
     if format_name == "pdf-asciidoctor-theme":
         stitched = pr.stitch(left, right, label,
                              label_r="AdocNet (--pdf-theme asciidoctor)")
+    elif format_name == "html-asciidoctor-theme":
+        stitched = pr.stitch(left, right, label,
+                             label_r="AdocNet (--theme asciidoctor)")
     else:
         stitched = pr.stitch(left, right, label)
     out_png = out_dir / "side-by-side.png"
@@ -382,6 +399,9 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--asciidoctor-pdf-theme", default=None,
                         help="path to asciidoctor-pdf default-theme.yml; auto-discovered "
                              "from the gem install dir when omitted")
+    parser.add_argument("--include-html-asciidoctor-theme", action="store_true",
+                        help="also render AdocNet HTML with --theme asciidoctor for "
+                             "drop-in visual compat inspection")
     parser.add_argument("--include-epub-visual", action="store_true",
                         help="include EPUB visual pixel diff (heavy: ~30s/doc)")
     parser.add_argument("--only", default=None,
@@ -409,6 +429,8 @@ def main(argv: list[str]) -> int:
                 f.cand_args = [str(asciidoctor_theme.resolve()) if a == "__ASCIIDOCTOR_THEME__" else a
                                for a in f.cand_args]
                 f.enabled = True
+        if f.name == "html-asciidoctor-theme" and args.include_html_asciidoctor_theme:
+            f.enabled = True
         if f.name == "epub-visual" and args.include_epub_visual:
             f.enabled = True
     if args.only:
