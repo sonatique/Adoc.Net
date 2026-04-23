@@ -41,6 +41,35 @@ ASCIIDOCTOR_PDF = "asciidoctor-pdf"
 ASCIIDOCTOR_EPUB3 = "asciidoctor-epub3"
 ASCIIDOCTOR_REVEALJS = "asciidoctor-revealjs"
 
+# Search candidates for the asciidoctor-pdf default theme YAML, used when
+# rendering AdocNet PDFs in "asciidoctor look" mode (--include-pdf turns this on).
+ASCIIDOCTOR_PDF_THEME_CANDIDATES = [
+    Path(r"C:\Users\sylva\.local\share\gem\ruby\3.4.0\gems\asciidoctor-pdf-2.3.24\data\themes\default-theme.yml"),
+    Path.home() / ".local/share/gem/ruby/3.4.0/gems/asciidoctor-pdf-2.3.24/data/themes/default-theme.yml",
+]
+
+
+def find_asciidoctor_pdf_theme(override: str | None = None) -> Path | None:
+    """Locate the asciidoctor-pdf bundled default-theme.yml.
+
+    Honors --asciidoctor-pdf-theme CLI flag first, then probes a known set of
+    install paths. Returns None when the theme can't be found — caller should
+    skip the pdf-asciidoctor-theme format and warn.
+    """
+    if override:
+        p = Path(override)
+        return p if p.exists() else None
+    for cand in ASCIIDOCTOR_PDF_THEME_CANDIDATES:
+        if cand.exists():
+            return cand
+    # Fall back to a glob search across all installed asciidoctor-pdf gem versions.
+    for base in (Path.home() / ".local/share/gem/ruby",
+                 Path(r"C:\Users\sylva\.local\share\gem\ruby")):
+        if base.exists():
+            for theme in base.rglob("asciidoctor-pdf-*/data/themes/default-theme.yml"):
+                return theme
+    return None
+
 # Tool paths
 PYTHON = sys.executable
 TOOLS = REPO / "tools"
@@ -121,6 +150,20 @@ FORMATS = [
         diff_metric_re="",
         enabled=False,  # opt-in via --include-pdf
     ),
+    FormatSpec(
+        # AdocNet PDF rendered with asciidoctor-pdf's default theme YAML — lets
+        # the user see how close the output gets to asciidoctor-pdf's iconic
+        # look. Paired with the same asciidoctor-pdf reference as `pdf`, so the
+        # side-by-side shows reference vs AdocNet-in-asciidoctor-skin.
+        # cand_args is patched at runtime to inject the resolved theme path.
+        name="pdf-asciidoctor-theme",
+        ref_cmd=[ASCIIDOCTOR_PDF, "-o"],
+        cand_args=["-b", "pdf", "--pdf-theme", "__ASCIIDOCTOR_THEME__", "-o"],
+        out_ext=".pdf",
+        diff_tool=None,
+        diff_metric_re="",
+        enabled=False,  # opt-in via --include-pdf (same flag as `pdf`)
+    ),
 ]
 
 
@@ -184,7 +227,7 @@ def render_visual(format_name: str, ref: Path, cand: Path, out_dir: Path,
         if format_name == "html" or format_name == "revealjs":
             pr.screenshot(ref, ref_png)
             pr.screenshot(cand, cand_png)
-        elif format_name == "pdf":
+        elif format_name in ("pdf", "pdf-asciidoctor-theme"):
             pr.render_pdf_page(ref, 0, ref_png)
             pr.render_pdf_page(cand, 0, cand_png)
         elif format_name == "epub-struct":
@@ -212,7 +255,13 @@ def render_visual(format_name: str, ref: Path, cand: Path, out_dir: Path,
     left = Image.open(ref_png)
     right = Image.open(cand_png)
     label = f"{doc_name} — {format_name}"
-    stitched = pr.stitch(left, right, label)
+    # For the asciidoctor-themed PDF, label the right side explicitly so the
+    # viewer sees that AdocNet is rendering with the asciidoctor-pdf default theme.
+    if format_name == "pdf-asciidoctor-theme":
+        stitched = pr.stitch(left, right, label,
+                             label_r="AdocNet (--pdf-theme asciidoctor)")
+    else:
+        stitched = pr.stitch(left, right, label)
     out_png = out_dir / "side-by-side.png"
     stitched.save(out_png)
     # Clean up intermediate single-side PNGs
@@ -329,7 +378,10 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--limit", type=int, default=None,
                         help="process only first N docs (for quick iteration)")
     parser.add_argument("--include-pdf", action="store_true",
-                        help="include PDF format (no diff metric — render only)")
+                        help="include PDF formats (default theme + asciidoctor-theme)")
+    parser.add_argument("--asciidoctor-pdf-theme", default=None,
+                        help="path to asciidoctor-pdf default-theme.yml; auto-discovered "
+                             "from the gem install dir when omitted")
     parser.add_argument("--include-epub-visual", action="store_true",
                         help="include EPUB visual pixel diff (heavy: ~30s/doc)")
     parser.add_argument("--only", default=None,
@@ -341,9 +393,22 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
 
     formats = list(FORMATS)
+    asciidoctor_theme = None
+    if args.include_pdf:
+        asciidoctor_theme = find_asciidoctor_pdf_theme(args.asciidoctor_pdf_theme)
     for f in formats:
         if f.name == "pdf" and args.include_pdf:
             f.enabled = True
+        if f.name == "pdf-asciidoctor-theme" and args.include_pdf:
+            if asciidoctor_theme is None:
+                print("WARNING: asciidoctor-pdf default-theme.yml not found — skipping pdf-asciidoctor-theme. "
+                      "Pass --asciidoctor-pdf-theme <path> to override.")
+            else:
+                # Patch the placeholder with the resolved theme path so AdocNet
+                # CLI receives an absolute file path (works on Windows + POSIX).
+                f.cand_args = [str(asciidoctor_theme.resolve()) if a == "__ASCIIDOCTOR_THEME__" else a
+                               for a in f.cand_args]
+                f.enabled = True
         if f.name == "epub-visual" and args.include_epub_visual:
             f.enabled = True
     if args.only:
