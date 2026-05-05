@@ -726,6 +726,16 @@ public sealed class DocBookRenderer : DocumentRendererBase
         writer.WriteStartElement("mediaobject", DocBookNs);
         writer.WriteStartElement("imageobject", DocBookNs);
         writer.WriteStartElement("imagedata", DocBookNs);
+        // Asciidoctor maps the image align attribute to imagedata/@align.
+        // Our parser stores it as a "text-{align}" role; reverse the mapping here.
+        foreach (var role in node.Roles)
+        {
+            if (role.StartsWith("text-", StringComparison.Ordinal))
+            {
+                writer.WriteAttributeString("align", role.Substring(5));
+                break;
+            }
+        }
         writer.WriteAttributeString("fileref", node.Target);
         writer.WriteEndElement(); // imagedata
         writer.WriteEndElement(); // imageobject
@@ -754,6 +764,12 @@ public sealed class DocBookRenderer : DocumentRendererBase
         };
 
         writer.WriteStartElement(elementName, DocBookNs);
+
+        // Block titles set via .Title above the admonition appear as <title> child.
+        // Inline formatting in titles isn't supported here (would require a public
+        // InlineParser entry point); admonition titles are plain text in practice.
+        if (!string.IsNullOrEmpty(node.Title))
+            writer.WriteElementString("title", DocBookNs, node.Title!);
 
         // Asciidoctor uses <simpara> (inline-only paragraph) for admonition text;
         // <para> is reserved for paragraphs with nested block content. The admonition
@@ -1301,9 +1317,12 @@ public sealed class DocBookRenderer : DocumentRendererBase
         if (node.Title is not null)
         {
             writer.WriteStartElement("formalpara", DocBookNs);
-            // Propagate the block's id to the formalpara wrapper (asciidoctor parity).
+            // Propagate the block's id and roles to the formalpara wrapper
+            // (asciidoctor parity — when wrapped, role attaches to <formalpara>,
+            // not the inner programlisting/screen).
             if (node.Id is not null)
                 writer.WriteAttributeString("xml", "id", XmlNs, node.Id);
+            WriteRoles(writer, node);
             writer.WriteElementString("title", DocBookNs, node.Title);
             writer.WriteStartElement("para", DocBookNs);
         }
@@ -1315,7 +1334,9 @@ public sealed class DocBookRenderer : DocumentRendererBase
         // because some <screen> origins (e.g. literal block via [literal]) should NOT have it.
         if (elementName == "programlisting")
             writer.WriteAttributeString("linenumbering", "unnumbered");
-        WriteRoles(writer, node);
+        // When unwrapped (no title), roles attach to the inner element directly.
+        if (node.Title is null)
+            WriteRoles(writer, node);
         writer.WriteString(node.Content ?? "");
         writer.WriteEndElement();
 
