@@ -883,6 +883,21 @@ internal static class BlockParser
                 continue;
             }
 
+            // [tabs] block style — asciidoctor renders this as an example block
+            // wrapping a description list (Java::, XML::, Kotlin::, etc.). For
+            // parity we treat it as an example so the title is preserved and the
+            // inner content emits as a <div class="exampleblock"> wrapper. The
+            // primary/secondary role handling on inner [source,...,role="..."]
+            // blocks already works via the standard attribute parser.
+            if (line == "[tabs]" || (line.StartsWith("[tabs,") && line.EndsWith("]")))
+            {
+                FlushParagraph(currentContainer, paragraphLines, ref paragraphStartLine, lineNumber - 1, document.Attributes);
+                listFrames.Clear();
+                dlFrames.Clear();
+                hasPendingExample = true;
+                continue;
+            }
+
             // [listing] block style attribute.
             if (line.StartsWith("[listing") && line.EndsWith("]") && (line.Length == 9 || line[8] is ',' or '%' or ']'))
             {
