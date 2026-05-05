@@ -36,7 +36,11 @@ public sealed class DocBookRenderer : DocumentRendererBase
         using var writer = XmlWriter.Create(output, settings);
 
         writer.WriteStartDocument();
-        writer.WriteStartElement("article", DocBookNs);
+        // Root element follows asciidoctor's mapping: book doctype → <book>, others → <article>.
+        var isBook = context.Document.Attributes.TryGetValue("doctype", out var dt)
+            && string.Equals(dt, "book", StringComparison.OrdinalIgnoreCase);
+        var rootElement = isBook ? "book" : "article";
+        writer.WriteStartElement(rootElement, DocBookNs);
         writer.WriteAttributeString("version", "5.0");
         writer.WriteAttributeString("xmlns", "xlink", null, XLinkNs);
         // Asciidoctor adds xml:lang on the root, defaulting to "en". Honour the document's
@@ -75,7 +79,7 @@ public sealed class DocBookRenderer : DocumentRendererBase
         // while the AST stores them as flat siblings. Build the nesting here.
         RenderChildrenWithSectionNesting(writer, context.Document.Children, context);
 
-        writer.WriteEndElement(); // article
+        writer.WriteEndElement(); // root (article or book)
         writer.WriteEndDocument();
         writer.Flush();
     }
@@ -137,10 +141,43 @@ public sealed class DocBookRenderer : DocumentRendererBase
         XmlWriter writer, SectionNode node, IReadOnlyList<AstNode> siblings,
         ref int index, RenderContext context)
     {
+        // Discrete headings render as <bridgehead renderas="sectN"> rather than a
+        // wrapping section element. They produce no nesting and consume no siblings.
+        if (node.IsDiscrete)
+        {
+            writer.WriteStartElement("bridgehead", DocBookNs);
+            writer.WriteAttributeString("renderas", $"sect{Math.Max(1, node.Level)}");
+            if (node.Id is not null)
+                writer.WriteAttributeString("xml", "id", XmlNs, node.Id);
+            if (node.TitleInlines.Count > 0)
+                RenderInlines(writer, node.TitleInlines, context);
+            else
+                writer.WriteString(node.Title);
+            writer.WriteEndElement();
+            index++;
+            return;
+        }
+
         // Detect bibliography sections (sections containing BibliographyEntryNode children)
         bool isBibliography = node.Children.Any(c => c is BibliographyEntryNode);
 
-        writer.WriteStartElement(isBibliography ? "bibliography" : "section", DocBookNs);
+        // Asciidoctor section element mapping:
+        //   - [appendix]  → <appendix>
+        //   - book doctype, level 1 → <chapter>
+        //   - bibliography children → <bibliography>
+        //   - everything else → <section>
+        bool isBook = context.Document.Attributes.TryGetValue("doctype", out var dt)
+            && string.Equals(dt, "book", StringComparison.OrdinalIgnoreCase);
+        string sectionElement;
+        if (isBibliography)
+            sectionElement = "bibliography";
+        else if (string.Equals(node.Style, "appendix", StringComparison.OrdinalIgnoreCase))
+            sectionElement = "appendix";
+        else if (isBook && node.Level == 1)
+            sectionElement = "chapter";
+        else
+            sectionElement = "section";
+        writer.WriteStartElement(sectionElement, DocBookNs);
 
         if (node.Id is not null)
             writer.WriteAttributeString("xml", "id", XmlNs, node.Id);
@@ -201,11 +238,26 @@ public sealed class DocBookRenderer : DocumentRendererBase
             }
         }
 
-        writer.WriteEndElement(); // section or bibliography
+        writer.WriteEndElement(); // section/chapter/appendix/bibliography
     }
 
     private void RenderSection(XmlWriter writer, SectionNode node, RenderContext context)
     {
+        // Discrete sections render as <bridgehead> with no nesting (asciidoctor parity).
+        if (node.IsDiscrete)
+        {
+            writer.WriteStartElement("bridgehead", DocBookNs);
+            writer.WriteAttributeString("renderas", $"sect{Math.Max(1, node.Level)}");
+            if (node.Id is not null)
+                writer.WriteAttributeString("xml", "id", XmlNs, node.Id);
+            if (node.TitleInlines.Count > 0)
+                RenderInlines(writer, node.TitleInlines, context);
+            else
+                writer.WriteString(node.Title);
+            writer.WriteEndElement();
+            return;
+        }
+
         // Fallback for sections rendered outside the nesting context (e.g., inside blocks)
         writer.WriteStartElement("section", DocBookNs);
 
@@ -563,7 +615,10 @@ public sealed class DocBookRenderer : DocumentRendererBase
                 }
                 else
                 {
-                    WriteTitledVerbatimBlock(writer, node, "screen");
+                    // Asciidoctor emits linenumbering="unnumbered" on the
+                    // <screen> for a source block with no language.
+                    WriteTitledVerbatimBlock(writer, node, "screen",
+                        w => w.WriteAttributeString("linenumbering", "unnumbered"));
                 }
                 break;
 
@@ -571,6 +626,8 @@ public sealed class DocBookRenderer : DocumentRendererBase
                 if (node.Callouts is { Count: > 0 })
                     RenderSourceBlockWithCallouts(writer, node, context);
                 else
+                    // Asciidoctor produces bare <screen> for ---- listing blocks
+                    // (in contrast to ``` fenced source blocks which add linenumbering).
                     WriteTitledVerbatimBlock(writer, node, "screen");
                 break;
 
@@ -861,14 +918,14 @@ public sealed class DocBookRenderer : DocumentRendererBase
             case LinkInlineNode n:
                 writer.WriteStartElement("link", DocBookNs);
                 writer.WriteAttributeString("xlink", "href", XLinkNs, n.Url);
-                writer.WriteString(n.Url);
+                writer.WriteString(MaybeHideUriScheme(n.Url, context));
                 writer.WriteEndElement();
                 break;
 
             case InlineLinkMacroNode n:
                 writer.WriteStartElement("link", DocBookNs);
                 writer.WriteAttributeString("xlink", "href", XLinkNs, n.Url);
-                writer.WriteString(n.Label.Length > 0 ? n.Label : n.Url);
+                writer.WriteString(n.Label.Length > 0 ? n.Label : MaybeHideUriScheme(n.Url, context));
                 writer.WriteEndElement();
                 break;
 
@@ -997,6 +1054,23 @@ public sealed class DocBookRenderer : DocumentRendererBase
     {
         if (node.Roles is { Count: > 0 })
             writer.WriteAttributeString("role", string.Join(" ", node.Roles));
+    }
+
+    /// <summary>
+    /// Strips the URI scheme prefix (http://, https://, mailto:) when the
+    /// :hide-uri-scheme: attribute is set on the document — matches asciidoctor's
+    /// behaviour for bare URLs and link macros without an explicit label.
+    /// </summary>
+    private static string MaybeHideUriScheme(string url, RenderContext context)
+    {
+        if (!context.Document.Attributes.ContainsKey("hide-uri-scheme"))
+            return url;
+        foreach (var prefix in new[] { "https://", "http://", "ftp://", "mailto:", "irc://" })
+        {
+            if (url.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return url[prefix.Length..];
+        }
+        return url;
     }
 
     /// <summary>
@@ -1136,8 +1210,9 @@ public sealed class DocBookRenderer : DocumentRendererBase
 
         writer.WriteStartElement(elementName, DocBookNs);
         writeExtraAttrs?.Invoke(writer);
-        // Asciidoctor adds linenumbering="unnumbered" on programlisting only.
-        // Plain screen blocks don't get it (regardless of title/formalpara wrapper).
+        // Asciidoctor adds linenumbering="unnumbered" on programlisting; for
+        // screen blocks the caller is responsible (passes it via writeExtraAttrs)
+        // because some <screen> origins (e.g. literal block via [literal]) should NOT have it.
         if (elementName == "programlisting")
             writer.WriteAttributeString("linenumbering", "unnumbered");
         WriteRoles(writer, node);
