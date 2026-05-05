@@ -322,6 +322,24 @@ public sealed class DocBookRenderer : DocumentRendererBase
         if (node.Id is not null)
             writer.WriteAttributeString("xml", "id", XmlNs, node.Id);
 
+        // Asciidoctor adds mark="none" on <itemizedlist> when the list contains
+        // checklist items ([x] / [ ] markers), suppressing the default bullet
+        // since the rendered ✓ / ❏ glyph takes its place.
+        if (node.ListKind == ListKind.Unordered)
+        {
+            bool isChecklist = false;
+            foreach (var child in node.Children)
+            {
+                if (child is ListItemNode li && li.Checked is not null)
+                {
+                    isChecklist = true;
+                    break;
+                }
+            }
+            if (isChecklist)
+                writer.WriteAttributeString("mark", "none");
+        }
+
         if (node.ListKind == ListKind.Ordered)
         {
             // Cycle numeration: arabic → loweralpha → lowerroman → upperalpha → upperroman
@@ -360,6 +378,10 @@ public sealed class DocBookRenderer : DocumentRendererBase
         if (node.Inlines.Count > 0 || node.Text.Length > 0)
         {
             writer.WriteStartElement("simpara", DocBookNs);
+            // Checklist items get a leading ✓ (checked) or ❏ (unchecked) glyph
+            // followed by a space — matching asciidoctor's DocBook output.
+            if (node.Checked is not null)
+                writer.WriteString(node.Checked.Value ? "\u2713 " : "\u274F ");
             if (node.Inlines.Count > 0)
                 RenderInlines(writer, node.Inlines, context);
             else
@@ -426,21 +448,23 @@ public sealed class DocBookRenderer : DocumentRendererBase
             if (totalWidth <= 0) totalWidth = node.Columns.Count;
             for (int i = 0; i < node.Columns.Count; i++)
             {
-                int scaled = (node.Columns[i].Width * 100) / totalWidth;
+                // Asciidoctor uses 4-decimal precision (e.g. 33.3333* / 16.6666* /
+                // 50.0001*) to ensure widths sum to ~100 across rounding.
+                double scaled = (node.Columns[i].Width * 100.0) / totalWidth;
                 writer.WriteStartElement("colspec", DocBookNs);
                 writer.WriteAttributeString("colname", $"col_{i + 1}");
-                writer.WriteAttributeString("colwidth", $"{scaled}*");
+                writer.WriteAttributeString("colwidth", FormatColspecWidth(scaled));
                 writer.WriteEndElement(); // colspec
             }
         }
         else
         {
-            var defaultWidth = colCount > 0 ? 100 / colCount : 1;
+            double defaultWidth = colCount > 0 ? 100.0 / colCount : 1;
             for (var i = 0; i < colCount; i++)
             {
                 writer.WriteStartElement("colspec", DocBookNs);
                 writer.WriteAttributeString("colname", $"col_{i + 1}");
-                writer.WriteAttributeString("colwidth", $"{defaultWidth}*");
+                writer.WriteAttributeString("colwidth", FormatColspecWidth(defaultWidth));
                 writer.WriteEndElement(); // colspec
             }
         }
@@ -945,14 +969,20 @@ public sealed class DocBookRenderer : DocumentRendererBase
 
         writer.WriteStartElement("listitem", DocBookNs);
         // Asciidoctor uses <simpara> for inline-only description content; <para>
-        // is reserved for descriptions with nested block content. The description
-        // text itself is always inline so <simpara> is correct.
-        writer.WriteStartElement("simpara", DocBookNs);
-        if (node.DescriptionInlines.Count > 0)
-            RenderInlines(writer, node.DescriptionInlines, context);
-        else
-            writer.WriteString(node.Description);
-        writer.WriteEndElement(); // simpara
+        // is reserved for descriptions with nested block content. Skip the
+        // <simpara> entirely when the description is empty (asciidoctor parity).
+        bool hasInlineDescription =
+            node.DescriptionInlines.Count > 0
+            || !string.IsNullOrEmpty(node.Description);
+        if (hasInlineDescription)
+        {
+            writer.WriteStartElement("simpara", DocBookNs);
+            if (node.DescriptionInlines.Count > 0)
+                RenderInlines(writer, node.DescriptionInlines, context);
+            else
+                writer.WriteString(node.Description);
+            writer.WriteEndElement(); // simpara
+        }
 
         // Render any block children
         foreach (var child in node.Children)
@@ -1197,6 +1227,19 @@ public sealed class DocBookRenderer : DocumentRendererBase
     }
 
     /// <summary>
+    /// Formats a colspec width to match asciidoctor's "N.NNNN*" output.
+    /// Whole-number widths render as "N*" with no decimal portion.
+    /// Fractional widths render with up to 4 decimal places (trailing zeros stripped).
+    /// </summary>
+    private static string FormatColspecWidth(double width)
+    {
+        if (width == Math.Floor(width))
+            return $"{(int)width}*";
+        // Use invariant culture so the decimal separator is always '.'
+        return string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:0.####}*", width);
+    }
+
+    /// <summary>
     /// Splits a document title at the first ": " into a title and subtitle pair.
     /// Asciidoctor uses this convention to populate &lt;subtitle&gt; in DocBook.
     /// Returns (title, null) when there's no separator.
@@ -1274,6 +1317,13 @@ public sealed class DocBookRenderer : DocumentRendererBase
     private static void WriteRevhistory(XmlWriter writer, IReadOnlyDictionary<string, string> attrs)
     {
         if (!attrs.TryGetValue("revnumber", out var revnumber) || string.IsNullOrWhiteSpace(revnumber))
+            return;
+        // Asciidoctor only emits <revhistory> when there is also a :revdate: or
+        // :revremark: alongside the revnumber. Bare revnumber alone produces no
+        // revhistory in the DocBook output.
+        bool hasDate = attrs.TryGetValue("revdate", out var rd) && !string.IsNullOrWhiteSpace(rd);
+        bool hasRemark = attrs.TryGetValue("revremark", out var rr) && !string.IsNullOrWhiteSpace(rr);
+        if (!hasDate && !hasRemark)
             return;
         writer.WriteStartElement("revhistory", DocBookNs);
         writer.WriteStartElement("revision", DocBookNs);
