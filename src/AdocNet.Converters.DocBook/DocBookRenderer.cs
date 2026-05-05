@@ -783,15 +783,115 @@ public sealed class DocBookRenderer : DocumentRendererBase
 
     private void RenderDescriptionList(XmlWriter writer, DescriptionListNode node, RenderContext context)
     {
-        writer.WriteStartElement("variablelist", DocBookNs);
+        // [qanda] description lists render as <qandaset> in DocBook (asciidoctor parity).
+        // [horizontal] description lists render as a 2-column <informaltable>.
+        bool isQandA = string.Equals(node.Style, "qanda", StringComparison.OrdinalIgnoreCase);
+        bool isHorizontal = string.Equals(node.Style, "horizontal", StringComparison.OrdinalIgnoreCase);
+
+        if (isHorizontal)
+        {
+            RenderHorizontalDescriptionList(writer, node, context);
+            return;
+        }
+
+        writer.WriteStartElement(isQandA ? "qandaset" : "variablelist", DocBookNs);
 
         foreach (var child in node.Children)
         {
             if (child is DescriptionItemNode item)
-                RenderDescriptionItem(writer, item, context);
+            {
+                if (isQandA)
+                    RenderQandAEntry(writer, item, context);
+                else
+                    RenderDescriptionItem(writer, item, context);
+            }
         }
 
-        writer.WriteEndElement(); // variablelist
+        writer.WriteEndElement(); // qandaset/variablelist
+    }
+
+    private void RenderHorizontalDescriptionList(XmlWriter writer, DescriptionListNode node, RenderContext context)
+    {
+        writer.WriteStartElement("informaltable", DocBookNs);
+        writer.WriteAttributeString("colsep", "0");
+        writer.WriteAttributeString("frame", "none");
+        writer.WriteAttributeString("rowsep", "0");
+        writer.WriteAttributeString("tabstyle", "horizontal");
+
+        writer.WriteStartElement("tgroup", DocBookNs);
+        writer.WriteAttributeString("cols", "2");
+
+        writer.WriteStartElement("colspec", DocBookNs);
+        writer.WriteAttributeString("colwidth", "15*");
+        writer.WriteEndElement();
+        writer.WriteStartElement("colspec", DocBookNs);
+        writer.WriteAttributeString("colwidth", "85*");
+        writer.WriteEndElement();
+
+        writer.WriteStartElement("tbody", DocBookNs);
+        writer.WriteAttributeString("valign", "top");
+
+        foreach (var child in node.Children)
+        {
+            if (child is not DescriptionItemNode item) continue;
+            writer.WriteStartElement("row", DocBookNs);
+
+            // term cell
+            writer.WriteStartElement("entry", DocBookNs);
+            writer.WriteStartElement("simpara", DocBookNs);
+            if (item.TermInlines.Count > 0)
+                RenderInlines(writer, item.TermInlines, context);
+            else
+                writer.WriteString(item.Terms[0]);
+            writer.WriteEndElement(); // simpara
+            writer.WriteEndElement(); // entry
+
+            // description cell
+            writer.WriteStartElement("entry", DocBookNs);
+            writer.WriteStartElement("simpara", DocBookNs);
+            if (item.DescriptionInlines.Count > 0)
+                RenderInlines(writer, item.DescriptionInlines, context);
+            else
+                writer.WriteString(item.Description);
+            writer.WriteEndElement(); // simpara
+            writer.WriteEndElement(); // entry
+
+            writer.WriteEndElement(); // row
+        }
+
+        writer.WriteEndElement(); // tbody
+        writer.WriteEndElement(); // tgroup
+        writer.WriteEndElement(); // informaltable
+    }
+
+    private void RenderQandAEntry(XmlWriter writer, DescriptionItemNode node, RenderContext context)
+    {
+        writer.WriteStartElement("qandaentry", DocBookNs);
+
+        writer.WriteStartElement("question", DocBookNs);
+        writer.WriteStartElement("simpara", DocBookNs);
+        if (node.TermInlines.Count > 0)
+            RenderInlines(writer, node.TermInlines, context);
+        else
+            writer.WriteString(node.Terms[0]);
+        writer.WriteEndElement(); // simpara
+        writer.WriteEndElement(); // question
+
+        writer.WriteStartElement("answer", DocBookNs);
+        writer.WriteStartElement("simpara", DocBookNs);
+        if (node.DescriptionInlines.Count > 0)
+            RenderInlines(writer, node.DescriptionInlines, context);
+        else
+            writer.WriteString(node.Description);
+        writer.WriteEndElement(); // simpara
+        foreach (var child in node.Children)
+        {
+            if (child is BlockNode block)
+                RenderBlock(writer, block, context);
+        }
+        writer.WriteEndElement(); // answer
+
+        writer.WriteEndElement(); // qandaentry
     }
 
     private void RenderDescriptionItem(XmlWriter writer, DescriptionItemNode node, RenderContext context)
