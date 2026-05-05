@@ -1537,10 +1537,26 @@ public sealed class DocBookRenderer : DocumentRendererBase
         switch (node.Name)
         {
             case "kbd":
-                writer.WriteStartElement("keycap", DocBookNs);
-                writer.WriteString(node.Content);
-                writer.WriteEndElement();
+            {
+                // Multi-key chords (e.g. kbd:[Ctrl+Shift+P]) split at "+" into a
+                // <keycombo> with one <keycap> per key. Single keys emit a bare
+                // <keycap>.
+                var keys = node.Content.Split('+');
+                if (keys.Length > 1)
+                {
+                    writer.WriteStartElement("keycombo", DocBookNs);
+                    foreach (var k in keys)
+                        writer.WriteElementString("keycap", DocBookNs, k.Trim());
+                    writer.WriteEndElement(); // keycombo
+                }
+                else
+                {
+                    writer.WriteStartElement("keycap", DocBookNs);
+                    writer.WriteString(node.Content);
+                    writer.WriteEndElement();
+                }
                 break;
+            }
 
             case "menu":
                 writer.WriteStartElement("menuchoice", DocBookNs);
