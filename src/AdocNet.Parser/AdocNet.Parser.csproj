@@ -15,6 +15,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="AdocNet.Tests" />
     <InternalsVisibleTo Include="AdocNet.Converters.Html" />
+    <InternalsVisibleTo Include="AdocNet.Converters.DocBook" />
   </ItemGroup>
 
   <ItemGroup>

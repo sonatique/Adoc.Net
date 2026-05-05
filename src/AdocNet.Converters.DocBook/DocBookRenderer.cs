@@ -49,14 +49,18 @@ public sealed class DocBookRenderer : DocumentRendererBase
             ? l : "en";
         writer.WriteAttributeString("xml", "lang", XmlNs, lang);
 
-        // Document metadata: <info><title/><date/></info> wrapper, matching Asciidoctor.
-        // Bare <title> without <info> is also valid DocBook but Asciidoctor always wraps.
-        // Date precedence (Asciidoctor parity): :revdate: → :docdate: → omit.
+        // Document metadata: <info><title/><subtitle/><date/><author/><authorinitials/>
+        // <revhistory/></info> wrapper, matching Asciidoctor's standalone DocBook output.
+        // Date precedence: :revdate: → :docdate: → omit.
         // :reproducible: opt-out: when set, the date is suppressed entirely.
         if (context.Document.Title is not null)
         {
             writer.WriteStartElement("info", DocBookNs);
-            writer.WriteElementString("title", DocBookNs, context.Document.Title);
+            // Asciidoctor splits a "Title: Subtitle" header into <title> + <subtitle>.
+            var (titleText, subtitleText) = SplitTitleSubtitle(context.Document.Title);
+            writer.WriteElementString("title", DocBookNs, titleText);
+            if (subtitleText is not null)
+                writer.WriteElementString("subtitle", DocBookNs, subtitleText);
 
             var attrs = context.Document.Attributes;
             var reproducible = attrs.ContainsKey("reproducible");
@@ -70,6 +74,9 @@ public sealed class DocBookRenderer : DocumentRendererBase
                 if (date is not null)
                     writer.WriteElementString("date", DocBookNs, date);
             }
+
+            WriteAuthorElements(writer, attrs);
+            WriteRevhistory(writer, attrs);
 
             writer.WriteEndElement(); // info
         }
@@ -662,6 +669,17 @@ public sealed class DocBookRenderer : DocumentRendererBase
                     writer.WriteString(node.Attribution);
                     writer.WriteEndElement();
                 }
+                // Quote body lives on node.Content (raw text between delimiters)
+                // when there are no nested blocks; emit it as a <simpara>.
+                if (!string.IsNullOrEmpty(node.Content))
+                {
+                    writer.WriteStartElement("simpara", DocBookNs);
+                    var quoteInlines = AdocNet.Parser.InlineParser.Parse(
+                        node.Content!, node.Substitutions ?? SubstitutionKind.Normal,
+                        context.Document.Attributes);
+                    RenderInlines(writer, quoteInlines, context);
+                    writer.WriteEndElement(); // simpara
+                }
                 foreach (var child in node.Children)
                 {
                     if (child is BlockNode block)
@@ -766,10 +784,14 @@ public sealed class DocBookRenderer : DocumentRendererBase
         writer.WriteStartElement(elementName, DocBookNs);
 
         // Block titles set via .Title above the admonition appear as <title> child.
-        // Inline formatting in titles isn't supported here (would require a public
-        // InlineParser entry point); admonition titles are plain text in practice.
         if (!string.IsNullOrEmpty(node.Title))
-            writer.WriteElementString("title", DocBookNs, node.Title!);
+        {
+            writer.WriteStartElement("title", DocBookNs);
+            var titleInlines = AdocNet.Parser.InlineParser.Parse(
+                node.Title!, SubstitutionKind.Normal, context.Document.Attributes);
+            RenderInlines(writer, titleInlines, context);
+            writer.WriteEndElement();
+        }
 
         // Asciidoctor uses <simpara> (inline-only paragraph) for admonition text;
         // <para> is reserved for paragraphs with nested block content. The admonition
@@ -1074,12 +1096,14 @@ public sealed class DocBookRenderer : DocumentRendererBase
                     writer.WriteStartElement("footnote", DocBookNs);
                     if (n.Id is not null)
                         writer.WriteAttributeString("xml", "id", XmlNs, n.Id);
-                    writer.WriteStartElement("para", DocBookNs);
+                    // Asciidoctor uses <simpara> for inline-only footnote text;
+                    // <para> is for footnotes with nested block content.
+                    writer.WriteStartElement("simpara", DocBookNs);
                     if (n.Inlines.Count > 0)
                         RenderInlines(writer, n.Inlines, context);
                     else if (n.Text is not null)
                         writer.WriteString(n.Text);
-                    writer.WriteEndElement(); // para
+                    writer.WriteEndElement(); // simpara
                     writer.WriteEndElement(); // footnote
                 }
                 break;
@@ -1170,6 +1194,103 @@ public sealed class DocBookRenderer : DocumentRendererBase
     {
         if (node.Roles is { Count: > 0 })
             writer.WriteAttributeString("role", string.Join(" ", node.Roles));
+    }
+
+    /// <summary>
+    /// Splits a document title at the first ": " into a title and subtitle pair.
+    /// Asciidoctor uses this convention to populate &lt;subtitle&gt; in DocBook.
+    /// Returns (title, null) when there's no separator.
+    /// </summary>
+    private static (string Title, string? Subtitle) SplitTitleSubtitle(string fullTitle)
+    {
+        var idx = fullTitle.IndexOf(": ", StringComparison.Ordinal);
+        if (idx < 0) return (fullTitle, null);
+        return (fullTitle.Substring(0, idx), fullTitle.Substring(idx + 2));
+    }
+
+    /// <summary>
+    /// Emits &lt;author&gt;...&lt;/author&gt; and &lt;authorinitials&gt; elements derived
+    /// from the :author: / :email: / :authorinitials: document attributes.
+    /// Mirrors asciidoctor's DocBook author block.
+    /// </summary>
+    private static void WriteAuthorElements(XmlWriter writer, IReadOnlyDictionary<string, string> attrs)
+    {
+        if (!attrs.TryGetValue("author", out var author) || string.IsNullOrWhiteSpace(author))
+            return;
+
+        writer.WriteStartElement("author", DocBookNs);
+        writer.WriteStartElement("personname", DocBookNs);
+
+        // Asciidoctor parses author as "First [Middle] Last" — split into firstname/
+        // optional othername/surname. Single-word author becomes just <firstname>.
+        var parts = author.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1)
+        {
+            writer.WriteElementString("firstname", DocBookNs, parts[0]);
+        }
+        else if (parts.Length == 2)
+        {
+            writer.WriteElementString("firstname", DocBookNs, parts[0]);
+            writer.WriteElementString("surname", DocBookNs, parts[1]);
+        }
+        else
+        {
+            writer.WriteElementString("firstname", DocBookNs, parts[0]);
+            for (int i = 1; i < parts.Length - 1; i++)
+                writer.WriteElementString("othername", DocBookNs, parts[i]);
+            writer.WriteElementString("surname", DocBookNs, parts[^1]);
+        }
+        writer.WriteEndElement(); // personname
+
+        if (attrs.TryGetValue("email", out var email) && !string.IsNullOrWhiteSpace(email))
+            writer.WriteElementString("email", DocBookNs, email);
+
+        writer.WriteEndElement(); // author
+
+        // :authorinitials: is set explicitly by some docs but most rely on
+        // asciidoctor's auto-derivation from the author name (first letter of
+        // each part). We replicate that fallback so output matches.
+        var initials = ResolveAuthorInitials(attrs, parts);
+        if (!string.IsNullOrEmpty(initials))
+            writer.WriteElementString("authorinitials", DocBookNs, initials);
+    }
+
+    private static string? ResolveAuthorInitials(IReadOnlyDictionary<string, string> attrs, string[] authorParts)
+    {
+        if (attrs.TryGetValue("authorinitials", out var explicitInitials) && !string.IsNullOrWhiteSpace(explicitInitials))
+            return explicitInitials;
+        if (authorParts.Length == 0) return null;
+        var sb = new System.Text.StringBuilder(authorParts.Length);
+        foreach (var p in authorParts)
+        {
+            if (p.Length > 0) sb.Append(char.ToUpperInvariant(p[0]));
+        }
+        return sb.Length > 0 ? sb.ToString() : null;
+    }
+
+    /// <summary>
+    /// Emits the &lt;revhistory&gt;&lt;revision&gt; block when :revnumber: is set.
+    /// </summary>
+    private static void WriteRevhistory(XmlWriter writer, IReadOnlyDictionary<string, string> attrs)
+    {
+        if (!attrs.TryGetValue("revnumber", out var revnumber) || string.IsNullOrWhiteSpace(revnumber))
+            return;
+        writer.WriteStartElement("revhistory", DocBookNs);
+        writer.WriteStartElement("revision", DocBookNs);
+        writer.WriteElementString("revnumber", DocBookNs, revnumber);
+        if (attrs.TryGetValue("revdate", out var revdate) && !string.IsNullOrWhiteSpace(revdate))
+            writer.WriteElementString("date", DocBookNs, revdate);
+        // Compute the same auto-derived initials used in <author>; falls back to explicit attr.
+        var authorParts = attrs.TryGetValue("author", out var author) && !string.IsNullOrWhiteSpace(author)
+            ? author.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            : Array.Empty<string>();
+        var initials = ResolveAuthorInitials(attrs, authorParts);
+        if (!string.IsNullOrEmpty(initials))
+            writer.WriteElementString("authorinitials", DocBookNs, initials);
+        if (attrs.TryGetValue("revremark", out var remark) && !string.IsNullOrWhiteSpace(remark))
+            writer.WriteElementString("revremark", DocBookNs, remark);
+        writer.WriteEndElement(); // revision
+        writer.WriteEndElement(); // revhistory
     }
 
     /// <summary>
