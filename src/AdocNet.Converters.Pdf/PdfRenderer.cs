@@ -61,6 +61,18 @@ public sealed partial class PdfRenderer : DocumentRendererBase
     private PdfColor? _linkColor;
     private PdfColor? _codespanColor;
     private PdfColor? _codeBackground;
+
+    /// <summary>
+    /// Resets the writer's fill color to the body color (when configured) so
+    /// subsequent text doesn't render in the leftover heading color. Use
+    /// instead of SetFillColor(0,0,0) wherever we want to "return to normal".
+    /// </summary>
+    private void RestoreBodyFill(PdfWriter w)
+    {
+        if (_bodyColor is { } bc) w.SetFillColor(bc.R, bc.G, bc.B);
+        else w.SetFillColor(0, 0, 0);
+    }
+
     private PdfColor? _codespanBackground;
     private float _admonitionBorderWidth = 2f;
     private SyntaxColorScheme? _syntaxColors;
@@ -350,7 +362,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             w.AddOutlineEntry(document.Title, 1, "_document_title");
             if (_headingColor is { } hc) w.SetFillColor(hc.R, hc.G, hc.B);
             w.WriteWrappedText(document.Title, _fontHeading, _titleFontSize, _titleLeading, _titleAlignment);
-            if (_headingColor is not null) w.SetFillColor(0, 0, 0);
+            if (_headingColor is not null) RestoreBodyFill(w);
             w.MoveCursor(_titleMarginBottom);
         }
 
@@ -408,13 +420,16 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         w.EnsurePage();
         if (_headingColor is { } hc) w.SetFillColor(hc.R, hc.G, hc.B);
         w.WriteWrappedText("Table of Contents", _fontHeading, _h2FontSize, _headingLeading);
-        if (_headingColor is not null) w.SetFillColor(0, 0, 0);
+        if (_headingColor is not null) RestoreBodyFill(w);
         w.MoveCursor(_paragraphSpacingAfter);
 
         // Asciidoctor-pdf renders TOC entries in body text color (not link
         // blue). Suppress link coloring for the TOC and restore afterwards.
+        // Also set fill color to the body color so the TOC renders in #333333
+        // rather than the default black left over from prior heading rendering.
         var savedLinkColor = w.LinkColor;
         w.LinkColor = null;
+        RestoreBodyFill(w);
         RenderTocEntries(w, toc.Entries, 0, parentNumber: "");
         w.LinkColor = savedLinkColor;
         w.MoveCursor(_sectionSpacing);
