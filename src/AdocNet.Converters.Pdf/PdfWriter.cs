@@ -79,6 +79,10 @@ internal sealed partial class PdfWriter
     // Internal links deferred for resolution after all pages are rendered
     private readonly List<DeferredInternalLink> _deferredInternalLinks = [];
 
+    // ── Link styling ────────────────────────────────────────────────────
+    /// <summary>RGB color used to render link text. Null = body color.</summary>
+    internal PdfColor? LinkColor { get; set; }
+
     // ── Header/Footer ───────────────────────────────────────────────────
     internal bool ShowPageNumbers { get; set; }
     internal string? HeaderTemplate { get; set; }
