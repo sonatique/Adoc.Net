@@ -214,9 +214,31 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         _h4FontSize = pdfOptions.Heading4FontSize ?? scaledH4;
         _h5FontSize = pdfOptions.Heading5FontSize ?? scaledH5;
 
-        _titleLeading = _titleFontSize * (pdfOptions.TitleLineHeight ?? pdfOptions.LineSpacing);
-        _headingLeading = _h2FontSize * pdfOptions.LineSpacing;
-        _bodyLeading = _bodyFontSize * pdfOptions.LineSpacing;
+        // Asciidoctor-pdf multiplies the theme's line_height by the font's
+        // natural built-in leading factor (NotoSerif's is 1.36). AdocNet's
+        // writer skips that addition for built-in fonts (Helvetica/Courier
+        // metrics differ), so only apply the factor when an embedded body
+        // font is in play. Detected up front by checking the font path —
+        // RegisterEmbeddedFont happens later but the option is known now.
+        bool willEmbedBodyFont = pdfOptions.FontPath is not null && File.Exists(pdfOptions.FontPath);
+        if (willEmbedBodyFont)
+        {
+            // Asciidoctor-pdf style: line_height: 1 for headings/title, theme
+            // value for body, and the font's natural 1.36 factor multiplied in
+            // because prawn-pdf adds it for embedded fonts.
+            const float NaturalLeadingFactor = 1.36f;
+            _titleLeading = _titleFontSize * (pdfOptions.TitleLineHeight ?? 1f) * NaturalLeadingFactor;
+            _headingLeading = _h2FontSize * 1f * NaturalLeadingFactor;
+            _bodyLeading = _bodyFontSize * pdfOptions.LineSpacing * NaturalLeadingFactor;
+        }
+        else
+        {
+            // Built-in fonts (Helvetica/Courier): keep the legacy multiplier
+            // chain so default-theme regression tests stay locked.
+            _titleLeading = _titleFontSize * (pdfOptions.TitleLineHeight ?? pdfOptions.LineSpacing);
+            _headingLeading = _h2FontSize * pdfOptions.LineSpacing;
+            _bodyLeading = _bodyFontSize * pdfOptions.LineSpacing;
+        }
         _codeLeading = _codeFontSize * pdfOptions.LineSpacing;
         // Set BodyLeading on writer AFTER it's computed for this render (writer uses it
         // in StartPage to position the first text baseline below the top margin).

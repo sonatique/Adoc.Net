@@ -154,13 +154,7 @@ public static class PdfThemeLoader
             TitleFontSize = GetFloat(props, "heading.h1-font-size")
                           ?? GetFloat(props, "heading-h1.font-size")
                           ?? GetFloat(props, "title-page.title.font-size") ?? 24f,
-            // Asciidoctor-pdf multiplies the theme's line_height by the font's
-            // natural built-in leading (NotoSerif's is 1.36). AdocNet's writer
-            // uses the multiplier directly without adding font metrics, so the
-            // theme value 1.143 produces 12pt leading (vs asciidoctor's 15.8pt).
-            // Apply the 1.36 factor up front when loading from the theme to
-            // match asciidoctor's effective leading.
-            LineSpacing = (GetFloat(props, "base.line-height") ?? 1.35f) * 1.36f,
+            LineSpacing = GetFloat(props, "base.line-height") ?? 1.35f,
             TitleLineHeight = GetFloat(props, "heading.h1-line-height") ?? GetFloat(props, "heading-h1.line-height"),
 
             // Per-heading sizes
@@ -169,11 +163,12 @@ public static class PdfThemeLoader
             Heading4FontSize = GetFloat(props, "heading.h4-font-size") ?? GetFloat(props, "heading-h4.font-size"),
             Heading5FontSize = GetFloat(props, "heading.h5-font-size") ?? GetFloat(props, "heading-h5.font-size"),
 
-            // Per-heading margin-bottom
-            Heading2MarginBottom = GetFloat(props, "heading-h2.margin-bottom"),
-            Heading3MarginBottom = GetFloat(props, "heading-h3.margin-bottom"),
-            Heading4MarginBottom = GetFloat(props, "heading-h4.margin-bottom"),
-            Heading5MarginBottom = GetFloat(props, "heading-h5.margin-bottom"),
+            // Per-heading margin-bottom — asciidoctor's heading.margin_bottom
+            // (= $vertical_rhythm * 0.9 ≈ 10.8pt) applies to all heading levels.
+            Heading2MarginBottom = GetFloat(props, "heading.h2-margin-bottom") ?? GetFloat(props, "heading-h2.margin-bottom") ?? GetFloat(props, "heading.margin-bottom"),
+            Heading3MarginBottom = GetFloat(props, "heading.h3-margin-bottom") ?? GetFloat(props, "heading-h3.margin-bottom") ?? GetFloat(props, "heading.margin-bottom"),
+            Heading4MarginBottom = GetFloat(props, "heading.h4-margin-bottom") ?? GetFloat(props, "heading-h4.margin-bottom") ?? GetFloat(props, "heading.margin-bottom"),
+            Heading5MarginBottom = GetFloat(props, "heading.h5-margin-bottom") ?? GetFloat(props, "heading-h5.margin-bottom") ?? GetFloat(props, "heading.margin-bottom"),
 
             // Heading color: global fallback, then h1 for title
             HeadingColor = ParseColor(GetString(props, "heading-h1.font-color"))
@@ -245,7 +240,10 @@ public static class PdfThemeLoader
                                   ?? 8f,
 
             // Section spacing from heading margins
-            SectionSpacing = GetFloat(props, "heading-h2.margin-top") ?? 16f,
+            // Asciidoctor's nested heading.margin_top (= $vertical_rhythm * 0.4
+            // ≈ 4.8pt) is much smaller than our legacy 16pt default.
+            SectionSpacing = GetFloat(props, "heading.margin-top")
+                          ?? GetFloat(props, "heading-h2.margin-top") ?? 16f,
 
             // Title margins
             TitleMarginTop = GetFloat(props, "heading-h1.margin-top") ?? 0f,
