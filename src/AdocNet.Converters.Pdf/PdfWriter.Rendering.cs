@@ -148,6 +148,14 @@ internal sealed partial class PdfWriter
         _namedDestinations[id] = (_currentPageNumber - 1, _cursorY);
     }
 
+    /// <summary>
+    /// Returns the 1-based page number where the named destination was registered,
+    /// or null if no destination with that id exists. Used by the TOC renderer
+    /// to fill in page numbers after content rendering completes.
+    /// </summary>
+    internal int? GetDestinationPage(string id) =>
+        _namedDestinations.TryGetValue(id, out var dest) ? dest.PageIndex + 1 : null;
+
     // ── Image embedding ────────────────────────────────────────────────
 
     /// <summary>

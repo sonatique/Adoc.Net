@@ -387,6 +387,12 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
     private void RenderTocEntries(PdfWriter w, IReadOnlyList<TocEntry> entries, int depth)
     {
+        // NOTE: page numbers and dot-leaders are intentionally omitted here.
+        // Adding them requires a two-pass renderer (pass 1 collects section page
+        // numbers, pass 2 renders the TOC with those numbers populated) because
+        // the TOC is emitted before the sections in single-pass output.
+        // Internal links are still emitted so the TOC remains clickable.
+        // Tracked for v1.x.minor; see V1.0.0-READINESS.md.
         foreach (var entry in entries)
         {
             w.EnsurePage();
@@ -394,13 +400,12 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             float indent = depth * ListIndent;
             float savedIndent = w.PushIndent(indent);
 
-            // Build dot leader: title followed by dots
             float fontSize = depth == 0 ? _bodyFontSize : _smallFontSize;
             string font = depth == 0 ? _fontBold : _fontRegular;
 
             var segments = new List<TextSegment>
             {
-                new(entry.Title, font, fontSize, $"#internal#{entry.Id}")
+                new(entry.Title, font, fontSize, entry.Id is not null ? $"#internal#{entry.Id}" : null)
             };
             w.WriteWrappedSegments(segments, _bodyLeading, justify: false);
             w.PopIndent(savedIndent);

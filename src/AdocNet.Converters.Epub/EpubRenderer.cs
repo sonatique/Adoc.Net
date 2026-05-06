@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Text;
+using System.Text.RegularExpressions;
 using AdocNet.Ast;
 using AdocNet.Converters.Html;
 #if NETSTANDARD2_0
@@ -82,11 +83,27 @@ public sealed class EpubRenderer : DocumentRendererBase
     /// Article doctype path: render the whole document into one chapter file named after the
     /// document title slug. TOC anchors point at section IDs within that one chapter.
     /// </summary>
+    /// <summary>
+    /// HTML void elements that must be self-closed in XHTML. EPUB readers
+    /// strictly parse chapter HTML as XHTML, so unclosed &lt;col&gt;, &lt;br&gt;,
+    /// etc. trigger reader errors ("Opening and ending tag mismatch").
+    /// </summary>
+    private static readonly Regex VoidElementPattern = new(
+        @"<(br|col|hr|img|meta|link|input|area|source|track|wbr|param|embed)\b(?<attrs>[^>]*?)(?<!/)>",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// Converts the HtmlRenderer's HTML5 output into XHTML by self-closing
+    /// the void elements EPUB readers require closed. Idempotent.
+    /// </summary>
+    private static string ToXhtml(string html) =>
+        VoidElementPattern.Replace(html, "<${1}${attrs} />");
+
     private static void BuildArticleChapter(DocumentNode doc, string identifier, bool sectnumsEnabled,
         List<Chapter> chapters, List<TocEntry> tocEntries)
     {
         var htmlRenderer = new HtmlRenderer();
-        var htmlContent = htmlRenderer.RenderToString(doc);
+        var htmlContent = ToXhtml(htmlRenderer.RenderToString(doc));
         // Use the slug-based identifier as the chapter filename when a title exists; fall back
         // to a stable "_content.xhtml" otherwise (urn-based names produce illegal filenames).
         var chapterFile = doc.Title is not null
@@ -132,7 +149,7 @@ public sealed class EpubRenderer : DocumentRendererBase
             synth.AddChild(section);
 
             var chapterFile = $"{Slugify(section.Title)}.xhtml";
-            var html = htmlRenderer.RenderToString(synth);
+            var html = ToXhtml(htmlRenderer.RenderToString(synth));
             chapters.Add(new Chapter(chapterFile, section.Title, html));
             tocEntries.Add(new TocEntry(chapterFile, id, entryTitle));
         }
@@ -140,7 +157,7 @@ public sealed class EpubRenderer : DocumentRendererBase
         // Edge case: no top-level sections → emit a stub chapter so the EPUB has a spine entry.
         if (chapters.Count == 0)
         {
-            var html = htmlRenderer.RenderToString(doc);
+            var html = ToXhtml(htmlRenderer.RenderToString(doc));
             var stubName = $"{Slugify(doc.Title ?? "content")}.xhtml";
             chapters.Add(new Chapter(stubName, doc.Title ?? "Content", html));
         }
