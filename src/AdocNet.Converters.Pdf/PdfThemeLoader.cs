@@ -154,7 +154,13 @@ public static class PdfThemeLoader
             TitleFontSize = GetFloat(props, "heading.h1-font-size")
                           ?? GetFloat(props, "heading-h1.font-size")
                           ?? GetFloat(props, "title-page.title.font-size") ?? 24f,
-            LineSpacing = GetFloat(props, "base.line-height") ?? 1.35f,
+            // Asciidoctor-pdf multiplies the theme's line_height by the font's
+            // natural built-in leading (NotoSerif's is 1.36). AdocNet's writer
+            // uses the multiplier directly without adding font metrics, so the
+            // theme value 1.143 produces 12pt leading (vs asciidoctor's 15.8pt).
+            // Apply the 1.36 factor up front when loading from the theme to
+            // match asciidoctor's effective leading.
+            LineSpacing = (GetFloat(props, "base.line-height") ?? 1.35f) * 1.36f,
             TitleLineHeight = GetFloat(props, "heading.h1-line-height") ?? GetFloat(props, "heading-h1.line-height"),
 
             // Per-heading sizes
@@ -230,8 +236,11 @@ public static class PdfThemeLoader
             FooterImagePath = ResolveFooterImage(props, themeDir ?? fontsDir),
             FooterImageWidth = ParseFooterImageWidth(props),
 
-            // Paragraph spacing from prose or base margin
-            ParagraphSpacingAfter = GetFloat(props, "prose.margin-bottom")
+            // Paragraph spacing — asciidoctor-pdf uses block.margin_bottom
+            // (= $vertical_rhythm = 12pt). Try the asciidoctor key first, then
+            // our legacy keys.
+            ParagraphSpacingAfter = GetFloat(props, "block.margin-bottom")
+                                  ?? GetFloat(props, "prose.margin-bottom")
                                   ?? GetFloat(props, "base.margin-bottom")
                                   ?? 8f,
 
