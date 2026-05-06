@@ -345,15 +345,25 @@ internal static class HtmlThemeCss
            Don't add an additional `.listingblock { margin: 1em 0 }` here — it would
            reintroduce the unwanted 1em margin-top that asciidoctor doesn't have. */
         .listingblock .title { font-style: italic; }
-        #toc { margin: 1em 0; padding: 1.25em; background: #f8f8f7; border: 1px solid #e0e0dc; }
-        #toc .title { color: #7a2518; }
-        #toc ul { list-style: none; padding-left: 1.25em; }
-        #toc > ul { padding-left: 0; }
-        #toc a { color: #2156a5; }
-        /* Asciidoctor's :toc: left|right layout — body gets toc2 + toc-left/right
-           class, the in-header TOC gets class="toc2" and is fixed-positioned in
-           the side margin. Activates only on viewports >= 768px (asciidoctor
-           parity); narrower screens get the inline TOC. */
+        /* Inline TOC (default :toc: position): asciidoctor uses border-top + border-bottom only,
+           no full border; tight padding. Title is #toctitle (div id). */
+        #toc { margin-top: 1em; padding-bottom: 0.5em; border-top: 1px solid #dddddf; border-bottom: 1px solid #e7e7e9; }
+        #toctitle {
+            color: #7a2518;
+            font-family: "Open Sans", "DejaVu Sans", sans-serif;
+            font-weight: 300;
+            font-size: 1.2em;
+            margin-top: 1em;
+            margin-bottom: 0.5em;
+            line-height: 1.0125em;
+        }
+        #toc ul { list-style: none; padding-left: 1.5em; margin: 0; line-height: 1.5; }
+        #toc > ul { padding-left: 0; margin-left: 0.125em; }
+        #toc a { color: #2156a5; text-decoration: none; }
+        #toc a:hover, #toc a:focus { color: #1d4b8f; text-decoration: underline; }
+        /* :toc: left|right layout — body gets toc2 + toc-left/right class,
+           the in-header TOC gets class="toc2" and is fixed-positioned in the
+           side margin. Activates only on viewports >= 768px (asciidoctor parity). */
         @media (min-width: 768px) {
             body.toc2 { padding-left: 15em; padding-right: 0; }
             body.toc2 #toc.toc2 {
@@ -364,15 +374,16 @@ internal static class HtmlThemeCss
                 left: 0;
                 top: 0;
                 border-right: 1px solid #efefed;
-                border-top-width: 0 !important;
-                border-bottom-width: 0 !important;
+                border-top: 0 !important;
+                border-bottom: 0 !important;
                 z-index: 1000;
                 padding: 1.25em 1em;
                 height: 100%;
                 overflow: auto;
             }
-            body.toc2 #toc.toc2 > ul { font-size: 0.95em; line-height: 1.1; }
-            body.toc2 #toc.toc2 ul ul { padding-left: 1em; }
+            body.toc2 #toc.toc2 #toctitle { margin-top: 0; margin-bottom: 0.8rem; font-size: 1.2em; }
+            body.toc2 #toc.toc2 > ul { font-size: 0.9em; margin-bottom: 0; }
+            body.toc2 #toc.toc2 ul ul { margin-left: 0; padding-left: 1em; }
             body.toc2.toc-right { padding-left: 0; padding-right: 15em; }
             body.toc2.toc-right #toc.toc2 {
                 border-right-width: 0;

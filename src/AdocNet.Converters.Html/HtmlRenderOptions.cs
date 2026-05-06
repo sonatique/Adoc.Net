@@ -76,6 +76,14 @@ public sealed class HtmlRenderOptions : RenderOptions
     /// </summary>
     public IReadOnlyList<INodeTemplate>? Templates { get; init; }
 
+    /// <summary>
+    /// Suppress emission of the inline &lt;div id="toc"&gt;...&lt;/div&gt; block
+    /// during rendering. Used by the EPUB renderer to keep chapter markup
+    /// clean — EPUB readers provide their own ToC navigation panel from the
+    /// nav.xhtml document, so duplicating it inside chapters is noise.
+    /// </summary>
+    public bool SuppressInlineToc { get; init; }
+
     /// <summary>Convenience: full document with Default theme.</summary>
     public static HtmlRenderOptions Styled => new() { Theme = HtmlTheme.Default };
 }

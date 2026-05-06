@@ -178,6 +178,10 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
         state.DataUriEnabled = document.Attributes.ContainsKey("data-uri");
         state.BaseDirectory = htmlOptions?.BaseDirectory;
         state.ImagesDir = document.Attributes.TryGetValue("imagesdir", out var imgDir) ? imgDir : null;
+        // EPUB chapter rendering passes SuppressInlineToc=true so the chapter
+        // markup doesn't duplicate the EPUB reader's nav.xhtml ToC panel.
+        if (htmlOptions?.SuppressInlineToc == true)
+            state.SkipInlineToc = true;
         bool fullDoc = htmlOptions?.IsFullDocument == true;
 
         var sb = new StringBuilder();

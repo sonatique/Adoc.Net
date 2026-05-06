@@ -124,9 +124,34 @@ public sealed partial class PdfRenderer : DocumentRendererBase
     {
         lock (_renderLock)
         {
+        // Two-pass rendering when a TOC is present: pass 1 captures section
+        // page numbers into a discarded MemoryStream, pass 2 renders to the
+        // real output stream with destinations pre-seeded so the TOC renderer
+        // can emit "Title ............ N" with correct page numbers.
+        bool hasToc = false;
+        foreach (var c in context.Document.Children)
+        {
+            if (c is TocNode) { hasToc = true; break; }
+        }
+        Dictionary<string, int>? seededPages = null;
+        if (hasToc)
+        {
+            using var probe = new MemoryStream();
+            RenderToStreamCore(context, probe, seedDestinations: null, capturedPages: out seededPages);
+        }
+        RenderToStreamCore(context, output, seededPages, capturedPages: out _);
+        } // lock
+    }
+
+    private void RenderToStreamCore(RenderContext context, Stream output,
+        IReadOnlyDictionary<string, int>? seedDestinations,
+        out Dictionary<string, int> capturedPages)
+    {
         var pdfOptions = context.Options as PdfRenderOptions ?? PdfRenderOptions.Default;
         var writer = new PdfWriter(pdfOptions.PageWidth, pdfOptions.PageHeight,
             pdfOptions.MarginLeft, pdfOptions.MarginRight, pdfOptions.MarginTop, pdfOptions.MarginBottom);
+        if (seedDestinations is not null)
+            writer.SeedDestinations(seedDestinations);
 
         writer.ShowPageNumbers = pdfOptions.ShowPageNumbers;
         writer.HeaderTemplate = pdfOptions.HeaderText;
@@ -293,9 +318,9 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         RenderDocumentContent(writer, context.Document, footnotes);
         RenderFootnotesSection(writer, footnotes);
 
+        capturedPages = writer.CaptureDestinationPages();
         byte[] bytes = writer.ToBytes();
         output.Write(bytes, 0, bytes.Length);
-        } // lock
     }
 
     // ── Document rendering ──────────────────────────────────────────────
@@ -387,12 +412,6 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
     private void RenderTocEntries(PdfWriter w, IReadOnlyList<TocEntry> entries, int depth)
     {
-        // NOTE: page numbers and dot-leaders are intentionally omitted here.
-        // Adding them requires a two-pass renderer (pass 1 collects section page
-        // numbers, pass 2 renders the TOC with those numbers populated) because
-        // the TOC is emitted before the sections in single-pass output.
-        // Internal links are still emitted so the TOC remains clickable.
-        // Tracked for v1.x.minor; see V1.0.0-READINESS.md.
         foreach (var entry in entries)
         {
             w.EnsurePage();
@@ -403,14 +422,47 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             float fontSize = depth == 0 ? _bodyFontSize : _smallFontSize;
             string font = depth == 0 ? _fontBold : _fontRegular;
 
-            var segments = new List<TextSegment>
+            // Look up the page number for this section's id. Populated by the
+            // first pass of two-pass rendering (see RenderToStreamCore). When
+            // present, emit "Title ............ N" with dot-leader filling the
+            // line — matches asciidoctor-pdf.
+            int? page = entry.Id is not null ? w.GetDestinationPage(entry.Id) : null;
+            if (page is int pageNum)
             {
-                new(entry.Title, font, fontSize, entry.Id is not null ? $"#internal#{entry.Id}" : null)
-            };
-            w.WriteWrappedSegments(segments, _bodyLeading, justify: false);
+                var pageText = pageNum.ToString();
+                float titleWidth = w.MeasureText(entry.Title, font, fontSize);
+                float pageWidth = w.MeasureText(pageText, _fontRegular, fontSize);
+                float spaceWidth = w.MeasureText(" ", _fontRegular, fontSize);
+                float dotWidth = w.MeasureText(".", _fontRegular, fontSize);
+                // ContentWidth already accounts for the active indent (PushIndent
+                // above). Reserve a generous safety margin (12pt) so glyph-width
+                // estimation jitter and the leader's leading/trailing spaces
+                // don't push the page number onto a wrapped line. Also drop
+                // one dot for additional breathing room.
+                const float Safety = 12f;
+                float available = w.ContentWidth - titleWidth - pageWidth - 2 * spaceWidth - Safety;
+                int dotCount = available > 0 && dotWidth > 0
+                    ? Math.Max(1, (int)(available / dotWidth) - 1) : 1;
+                var leader = " " + new string('.', dotCount) + " ";
+                var segments = new List<TextSegment>
+                {
+                    new(entry.Title, font, fontSize, entry.Id is not null ? $"#internal#{entry.Id}" : null),
+                    new(leader, _fontRegular, fontSize, null),
+                    new(pageText, _fontRegular, fontSize, null),
+                };
+                w.WriteWrappedSegments(segments, _bodyLeading, justify: false);
+            }
+            else
+            {
+                // No registered page (e.g. for entries that aren't section anchors).
+                var segments = new List<TextSegment>
+                {
+                    new(entry.Title, font, fontSize, entry.Id is not null ? $"#internal#{entry.Id}" : null)
+                };
+                w.WriteWrappedSegments(segments, _bodyLeading, justify: false);
+            }
             w.PopIndent(savedIndent);
 
-            // Recurse into children
             if (entry.Children.Count > 0)
                 RenderTocEntries(w, entry.Children, depth + 1);
         }

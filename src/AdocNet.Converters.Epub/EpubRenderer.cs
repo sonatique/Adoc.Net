@@ -103,7 +103,8 @@ public sealed class EpubRenderer : DocumentRendererBase
         List<Chapter> chapters, List<TocEntry> tocEntries)
     {
         var htmlRenderer = new HtmlRenderer();
-        var htmlContent = ToXhtml(htmlRenderer.RenderToString(doc));
+        var htmlOptions = new HtmlRenderOptions { SuppressInlineToc = true };
+        var htmlContent = ToXhtml(htmlRenderer.RenderToString(doc, htmlOptions));
         // Use the slug-based identifier as the chapter filename when a title exists; fall back
         // to a stable "_content.xhtml" otherwise (urn-based names produce illegal filenames).
         var chapterFile = doc.Title is not null
@@ -133,6 +134,7 @@ public sealed class EpubRenderer : DocumentRendererBase
         List<Chapter> chapters, List<TocEntry> tocEntries)
     {
         var htmlRenderer = new HtmlRenderer();
+        var htmlOptions = new HtmlRenderOptions { SuppressInlineToc = true };
         int counter = 0;
         foreach (var child in doc.Children)
         {
@@ -149,7 +151,7 @@ public sealed class EpubRenderer : DocumentRendererBase
             synth.AddChild(section);
 
             var chapterFile = $"{Slugify(section.Title)}.xhtml";
-            var html = ToXhtml(htmlRenderer.RenderToString(synth));
+            var html = ToXhtml(htmlRenderer.RenderToString(synth, htmlOptions));
             chapters.Add(new Chapter(chapterFile, section.Title, html));
             tocEntries.Add(new TocEntry(chapterFile, id, entryTitle));
         }
@@ -157,7 +159,7 @@ public sealed class EpubRenderer : DocumentRendererBase
         // Edge case: no top-level sections → emit a stub chapter so the EPUB has a spine entry.
         if (chapters.Count == 0)
         {
-            var html = ToXhtml(htmlRenderer.RenderToString(doc));
+            var html = ToXhtml(htmlRenderer.RenderToString(doc, htmlOptions));
             var stubName = $"{Slugify(doc.Title ?? "content")}.xhtml";
             chapters.Add(new Chapter(stubName, doc.Title ?? "Content", html));
         }

@@ -156,6 +156,32 @@ internal sealed partial class PdfWriter
     internal int? GetDestinationPage(string id) =>
         _namedDestinations.TryGetValue(id, out var dest) ? dest.PageIndex + 1 : null;
 
+    /// <summary>
+    /// Pre-seeds the named-destinations dictionary from a previous (discarded)
+    /// render pass. Used for two-pass TOC rendering: pass 1 collects section
+    /// page numbers, pass 2 reads them when emitting the TOC. The seed is
+    /// applied before any content renders, so subsequent AddOutlineEntry /
+    /// AddNamedDestination calls overwrite the seeded values with the
+    /// authoritative pass-2 positions.
+    /// </summary>
+    internal void SeedDestinations(IReadOnlyDictionary<string, int> firstPassPages)
+    {
+        foreach (var kvp in firstPassPages)
+            _namedDestinations[kvp.Key] = (kvp.Value - 1, 0f);
+    }
+
+    /// <summary>
+    /// Captures a snapshot of the current id → 1-based-page map for use by a
+    /// two-pass renderer.
+    /// </summary>
+    internal Dictionary<string, int> CaptureDestinationPages()
+    {
+        var snapshot = new Dictionary<string, int>(_namedDestinations.Count, StringComparer.Ordinal);
+        foreach (var kvp in _namedDestinations)
+            snapshot[kvp.Key] = kvp.Value.PageIndex + 1;
+        return snapshot;
+    }
+
     // ── Image embedding ────────────────────────────────────────────────
 
     /// <summary>
