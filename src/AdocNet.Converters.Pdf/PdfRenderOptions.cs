@@ -204,6 +204,10 @@ public sealed class PdfRenderOptions : RenderOptions
     /// <summary>Background color for inline codespans. Null = no background (matches Asciidoctor default). Default: null.</summary>
     public PdfColor? CodespanBackground { get; init; }
 
+    /// <summary>Inline code (codespan) text color. Default: null (body color).
+    /// asciidoctor-pdf uses #B12146 (dark red) for codespans.</summary>
+    public PdfColor? CodespanColor { get; init; }
+
     /// <summary>Border color for code blocks. Default: light gray (#CCCCCC), matching Asciidoctor-pdf.</summary>
     public PdfColor? CodeBorderColor { get; init; } = new PdfColor(0.8f, 0.8f, 0.8f);
 

@@ -146,18 +146,22 @@ public static class PdfThemeLoader
             MarginBottom = marginBottom,
             MarginLeft = marginLeft,
 
-            // Typography
+            // Typography. Asciidoctor-pdf themes use heading.h1-font-size (nested
+            // under heading:) while our older templates used heading-h1.font-size
+            // (separate key). Try the asciidoctor form first, then the legacy form.
             FontSize = GetFloat(props, "base.font-size") ?? 11f,
             CodeFontSize = GetFloat(props, "code.font-size") ?? GetFloat(props, "codespan.font-size") ?? 9f,
-            TitleFontSize = GetFloat(props, "heading-h1.font-size") ?? GetFloat(props, "title-page.title.font-size") ?? 24f,
+            TitleFontSize = GetFloat(props, "heading.h1-font-size")
+                          ?? GetFloat(props, "heading-h1.font-size")
+                          ?? GetFloat(props, "title-page.title.font-size") ?? 24f,
             LineSpacing = GetFloat(props, "base.line-height") ?? 1.35f,
-            TitleLineHeight = GetFloat(props, "heading-h1.line-height"),
+            TitleLineHeight = GetFloat(props, "heading.h1-line-height") ?? GetFloat(props, "heading-h1.line-height"),
 
             // Per-heading sizes
-            Heading2FontSize = GetFloat(props, "heading-h2.font-size"),
-            Heading3FontSize = GetFloat(props, "heading-h3.font-size"),
-            Heading4FontSize = GetFloat(props, "heading-h4.font-size"),
-            Heading5FontSize = GetFloat(props, "heading-h5.font-size"),
+            Heading2FontSize = GetFloat(props, "heading.h2-font-size") ?? GetFloat(props, "heading-h2.font-size"),
+            Heading3FontSize = GetFloat(props, "heading.h3-font-size") ?? GetFloat(props, "heading-h3.font-size"),
+            Heading4FontSize = GetFloat(props, "heading.h4-font-size") ?? GetFloat(props, "heading-h4.font-size"),
+            Heading5FontSize = GetFloat(props, "heading.h5-font-size") ?? GetFloat(props, "heading-h5.font-size"),
 
             // Per-heading margin-bottom
             Heading2MarginBottom = GetFloat(props, "heading-h2.margin-bottom"),
@@ -218,6 +222,9 @@ public static class PdfThemeLoader
 
             // Inline codespan styling - only set background if theme explicitly specifies it (matches Asciidoctor default)
             CodespanBackground = ParseColor(GetString(props, "codespan.background-color")),
+
+            // Inline codespan font color (asciidoctor-pdf uses #B12146 dark red)
+            CodespanColor = ParseColor(GetString(props, "codespan.font-color")),
 
             // Footer image (SVG logo)
             FooterImagePath = ResolveFooterImage(props, themeDir ?? fontsDir),
@@ -510,7 +517,144 @@ public static class PdfThemeLoader
     private static float? GetFloat(Dictionary<string, string> props, string key)
     {
         if (!props.TryGetValue(key, out var v)) return null;
-        return float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out var f) ? f : null;
+        if (float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out var f))
+            return f;
+        return EvaluateFormula(v, props);
+    }
+
+    /// <summary>
+    /// Evaluates the small subset of asciidoctor-pdf theme formula syntax we
+    /// need to compute font sizes from base values. Supports
+    /// <c>$varname</c> substitution, the four arithmetic operators, and the
+    /// <c>floor() / round() / ceil()</c> wrapper functions. Resolves vars
+    /// recursively (with cycle protection) so chained references work.
+    /// </summary>
+    internal static float? EvaluateFormula(string expr, Dictionary<string, string> props,
+        HashSet<string>? resolving = null)
+    {
+        if (string.IsNullOrWhiteSpace(expr)) return null;
+        var s = expr.Trim();
+
+        // Wrapper functions: floor(...), round(...), ceil(...)
+        foreach (var fn in new[] { ("floor(", new Func<float, float>(x => (float)Math.Floor(x))),
+                                    ("round(", new Func<float, float>(x => (float)Math.Round(x, MidpointRounding.AwayFromZero))),
+                                    ("ceil(",  new Func<float, float>(x => (float)Math.Ceiling(x))) })
+        {
+            if (s.StartsWith(fn.Item1, StringComparison.OrdinalIgnoreCase) && s.EndsWith(")", StringComparison.Ordinal))
+            {
+                var inner = s.Substring(fn.Item1.Length, s.Length - fn.Item1.Length - 1);
+                var v = EvaluateFormula(inner, props, resolving);
+                return v is null ? null : fn.Item2(v.Value);
+            }
+        }
+
+        // $varname → recursive resolve (with cycle protection)
+        if (s.StartsWith("$", StringComparison.Ordinal) && !ContainsOperator(s))
+        {
+            var rawName = s.Substring(1);
+            // Asciidoctor uses `$var_name` (snake_case); our props store kebab-case. Try both.
+            var name = rawName;
+            var kebab = rawName.Replace('_', '-').Replace('.', '-');
+            // Map common variable references with `_` separator to nested key path.
+            // E.g. $heading_h1_font_size → heading.h1-font-size
+            if (props.TryGetValue(kebab, out var v1)) name = kebab;
+            else if (props.TryGetValue(name, out _)) { /* already set */ }
+            else
+            {
+                // Try last underscore as dot separator (heading_h1_font_size → heading.h1-font-size).
+                var lastUnd = rawName.LastIndexOf('_');
+                while (lastUnd > 0)
+                {
+                    var candidate = rawName.Substring(0, lastUnd).Replace('_', '.')
+                        + "." + rawName.Substring(lastUnd + 1).Replace('_', '-');
+                    candidate = candidate.Replace('_', '-');
+                    if (props.ContainsKey(candidate)) { name = candidate; break; }
+                    lastUnd = rawName.LastIndexOf('_', lastUnd - 1);
+                }
+            }
+            if (resolving is not null && resolving.Contains(name)) return null;
+            resolving ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            resolving.Add(name);
+            if (!props.TryGetValue(name, out var raw)) return BuiltinDefault(rawName);
+            if (float.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var f))
+                return f;
+            return EvaluateFormula(raw, props, resolving);
+        }
+
+        // Arithmetic: tokenize and apply * / + - left-to-right (no precedence).
+        // Sufficient for the asciidoctor-pdf formulas we encounter (unary expressions
+        // like `$base_font_size * 2.6`).
+        var tokens = TokenizeFormula(s);
+        if (tokens.Count == 0) return null;
+        float? acc = TokenValue(tokens[0], props, resolving);
+        if (acc is null) return null;
+        for (int i = 1; i + 1 < tokens.Count; i += 2)
+        {
+            var op = tokens[i];
+            var rhs = TokenValue(tokens[i + 1], props, resolving);
+            if (rhs is null) return null;
+            acc = op switch
+            {
+                "*" => acc.Value * rhs.Value,
+                "/" => rhs.Value == 0 ? null : acc.Value / rhs.Value,
+                "+" => acc.Value + rhs.Value,
+                "-" => acc.Value - rhs.Value,
+                _ => null,
+            };
+            if (acc is null) return null;
+        }
+        return acc;
+    }
+
+    /// <summary>
+    /// Hardcoded asciidoctor-pdf default values for variables that may appear
+    /// in theme formulas but not in a parsed key (e.g. <c>$base_font_size</c>
+    /// when the theme doesn't redefine it). Mirrors the defaults from base-theme.yml.
+    /// </summary>
+    private static float? BuiltinDefault(string rawName) => rawName switch
+    {
+        "base_font_size" => 10.5f,
+        "base_font_size_large" => 13f,    // round(10.5 * 1.25)
+        "base_font_size_small" => 9f,     // round(10.5 * 0.85)
+        "base_font_size_min" => 7.875f,   // 10.5 * 0.75
+        "base_line_height_length" => 12f,
+        "vertical_rhythm" => 12f,
+        "horizontal_rhythm" => 12f,
+        _ => null,
+    };
+
+    private static bool ContainsOperator(string s)
+    {
+        foreach (var c in s) if (c == '*' || c == '+' || c == '-' || c == '/') return true;
+        return false;
+    }
+
+    private static List<string> TokenizeFormula(string s)
+    {
+        var tokens = new List<string>();
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < s.Length; i++)
+        {
+            var c = s[i];
+            if (c == ' ') { if (sb.Length > 0) { tokens.Add(sb.ToString()); sb.Clear(); } continue; }
+            if (c == '*' || c == '+' || c == '/' || (c == '-' && sb.Length > 0))
+            {
+                if (sb.Length > 0) { tokens.Add(sb.ToString()); sb.Clear(); }
+                tokens.Add(c.ToString());
+                continue;
+            }
+            sb.Append(c);
+        }
+        if (sb.Length > 0) tokens.Add(sb.ToString());
+        return tokens;
+    }
+
+    private static float? TokenValue(string tok, Dictionary<string, string> props, HashSet<string>? resolving)
+    {
+        if (float.TryParse(tok, NumberStyles.Float, CultureInfo.InvariantCulture, out var f)) return f;
+        if (tok.StartsWith("$", StringComparison.Ordinal))
+            return EvaluateFormula(tok, props, resolving);
+        return null;
     }
 
     private static float ParseFloatSafe(string s)

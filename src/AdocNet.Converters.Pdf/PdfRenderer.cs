@@ -59,6 +59,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
     // ── Visual styling (initialized from PdfRenderOptions) ──────────────
     private PdfColor? _linkColor;
+    private PdfColor? _codespanColor;
     private PdfColor? _codeBackground;
     private PdfColor? _codespanBackground;
     private float _admonitionBorderWidth = 2f;
@@ -212,6 +213,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         // Visual styling from options
         _linkColor = pdfOptions.LinkColor;
         writer.LinkColor = pdfOptions.LinkColor;
+        _codespanColor = pdfOptions.CodespanColor;
         _codeBackground = pdfOptions.CodeBackground;
         _codespanBackground = pdfOptions.CodespanBackground;
         _codeBorderColor = pdfOptions.CodeBorderColor;
@@ -441,8 +443,10 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             float indent = depth * ListIndent;
             float savedIndent = w.PushIndent(indent);
 
-            float fontSize = depth == 0 ? _bodyFontSize : _smallFontSize;
-            string font = depth == 0 ? _fontBold : _fontRegular;
+            // Asciidoctor-pdf renders TOC entries in regular weight at the body
+            // font size for all levels — indentation is the only differentiator.
+            float fontSize = _bodyFontSize;
+            string font = _fontRegular;
 
             // Look up the page number for this section's id. Populated by the
             // first pass of two-pass rendering (see RenderToStreamCore). When
@@ -666,6 +670,10 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 }
 
                 w.WriteWrappedSegments(segments, _bodyLeading);
+                // Asciidoctor-pdf adds vertical breathing room between list
+                // items (matches its block.margin_bottom = vertical_rhythm).
+                // Without this each bullet runs straight into the next.
+                w.MoveCursor(_paragraphSpacingAfter / 2);
 
                 // Render child blocks (list continuation: code blocks, paragraphs, etc.)
                 // and nested lists with additional indentation
@@ -728,13 +736,10 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         if (_codeBackground is { } bg)
             w.BeginCodeBlockBackground(bg, _codeFontSize, _codeLeading, _codeBorderColor);
 
-        // Language label
-        if (block.Language is not null)
-        {
-            w.DrawCodeLineBackground();
-            w.WriteText(block.Language, _fontItalic, 8f, w.MarginLeftValue, w.CursorY);
-            w.MoveCursor(_codeLeading);
-        }
+        // Asciidoctor-pdf doesn't print the language label inside the code
+        // block — the syntax highlighter's color cues are the only visual
+        // language hint. Emitting the label takes a line of vertical space
+        // and adds visual noise that doesn't appear in the asciidoctor PDF.
 
         // Render content: highlighted if supported, plain monospace otherwise
         if (_syntaxColors is not null && block.BlockKind == DelimitedBlockKind.Source

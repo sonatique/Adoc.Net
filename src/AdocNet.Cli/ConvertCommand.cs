@@ -274,6 +274,7 @@ internal sealed class ConvertCommand(ConsoleLogger logger)
                 CodespanBackground = options.CodespanBackground,
                 LinkColor = options.LinkColor,
                 TitleAlignment = options.TitleAlignment,
+                CodespanColor = options.CodespanColor,
                 BaseDirectory = inputDir,
             };
         }
