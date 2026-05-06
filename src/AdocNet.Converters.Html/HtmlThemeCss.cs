@@ -75,6 +75,11 @@ internal static class HtmlThemeCss
         th { background: #f5f5f5; font-weight: 600; }
         .stripes-odd tr:nth-child(odd) td { background: #fafafa; }
         .stripes-even tr:nth-child(even) td { background: #fafafa; }
+        /* Horizontal description lists use class="hdlist" — borderless,
+           narrow padding so the term/description appear as a compact two-column layout. */
+        .hdlist table { border: 0; background: none; width: auto; margin: 1em 0; }
+        .hdlist td { border: 0; padding: 0 0.625em 0.5em 0; vertical-align: top; }
+        .hdlist td.hdlist1 { font-weight: bold; }
         .admonitionblock {
             margin: 1em 0;
             padding: 0.75em 1em;
@@ -303,6 +308,11 @@ internal static class HtmlThemeCss
         th { background: #f7f8f7; }
         .stripes-odd tr:nth-child(odd) td { background: #f8f8f7; }
         .stripes-even tr:nth-child(even) td { background: #f8f8f7; }
+        /* Horizontal description lists — asciidoctor renders class="hdlist"
+           tables borderless with narrow padding; .hdlist1 is bold. */
+        .hdlist table { border: 0; background: none; width: auto; margin: 1em 0; }
+        .hdlist td { border: 0; padding: 0 0.625em 0.5em 0; vertical-align: top; }
+        .hdlist td.hdlist1 { font-weight: bold; }
         .admonitionblock {
             margin: 1em 0;
         }
