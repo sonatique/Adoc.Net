@@ -177,8 +177,10 @@ public class PdfRendererTests
     }
 
     [Test]
-    public void Render_source_block_includes_language()
+    public void Render_source_block_renders_content()
     {
+        // Asciidoctor-pdf doesn't print the language label inside the code
+        // block — only the content is rendered (with optional syntax coloring).
         var doc = new DocumentNode();
         doc.AddChild(new DelimitedBlockNode
         {
@@ -188,7 +190,6 @@ public class PdfRendererTests
         });
 
         byte[] pdf = new PdfRenderer().RenderToBytes(doc);
-        AssertPdfContains(pdf, "csharp");
         AssertPdfContains(pdf, "Console.WriteLine");
     }
 

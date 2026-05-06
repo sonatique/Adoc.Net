@@ -783,12 +783,14 @@ internal sealed partial class PdfWriter
         {
             _currentStream.Append($"/{seg.Font} {Fmt(seg.FontSize)} Tf\n");
 
-            // Apply link color when this segment has a link target.
-            bool linkColored = seg.LinkUri is not null && LinkColor is not null;
-            if (linkColored)
+            // Apply explicit color (e.g. codespan red) or link color when set.
+            // Explicit Color takes precedence over LinkColor.
+            PdfColor? activeColor = seg.Color
+                ?? (seg.LinkUri is not null ? LinkColor : null);
+            if (activeColor is not null)
             {
-                var lc = LinkColor!.Value;
-                _currentStream.Append($"{Fmt(lc.R)} {Fmt(lc.G)} {Fmt(lc.B)} rg\n");
+                var c = activeColor.Value;
+                _currentStream.Append($"{Fmt(c.R)} {Fmt(c.G)} {Fmt(c.B)} rg\n");
             }
             if (_embeddedFonts.TryGetValue(seg.Font, out var ttFont))
             {
@@ -803,7 +805,7 @@ internal sealed partial class PdfWriter
                 _currentStream.Append(EscapePdfString(seg.Text));
                 _currentStream.Append(") Tj\n");
             }
-            if (linkColored)
+            if (activeColor is not null)
                 _currentStream.Append("0 0 0 rg\n");
 
             float segWidth = MeasureText(seg.Text, seg.Font, seg.FontSize);
@@ -836,7 +838,7 @@ internal record struct PdfInternalLink(float X, float Y, float Width, float Heig
 internal readonly record struct DeferredInternalLink(int PlaceholderObjId, PdfInternalLink Link);
 
 /// <summary>A text segment with font and size info for mixed-style rendering.</summary>
-internal readonly record struct TextSegment(string Text, string Font, float FontSize, string? LinkUri = null, PdfColor? Background = null);
+internal readonly record struct TextSegment(string Text, string Font, float FontSize, string? LinkUri = null, PdfColor? Background = null, PdfColor? Color = null);
 
 /// <summary>An outline/bookmark entry for the PDF document outline tree.</summary>
 internal sealed class OutlineEntry

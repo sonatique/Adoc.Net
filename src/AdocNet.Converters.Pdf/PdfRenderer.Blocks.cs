@@ -566,14 +566,15 @@ public sealed partial class PdfRenderer
 
     private void AppendInlineSegments(List<TextSegment> segments, InlineNode node,
         string defaultFont, float defaultFontSize, FootnoteState footnotes,
-        PdfColor? background = null, bool isBold = false, bool isItalic = false)
+        PdfColor? background = null, bool isBold = false, bool isItalic = false,
+        PdfColor? color = null)
     {
         switch (node)
         {
             case TextInlineNode text:
                 // Replace newlines with spaces — PDF text operators can't render \n
                 string value = text.Value.Contains('\n') ? text.Value.Replace('\n', ' ') : text.Value;
-                segments.Add(new TextSegment(value, defaultFont, defaultFontSize, Background: background));
+                segments.Add(new TextSegment(value, defaultFont, defaultFontSize, Background: background, Color: color));
                 break;
 
             case StrongInlineNode strong:
@@ -593,7 +594,8 @@ public sealed partial class PdfRenderer
                 string monoFont = ResolveMonoFont(isBold, isItalic);
                 foreach (var child in monospace.Children)
                     AppendInlineSegments(segments, child, monoFont, _codeFontSize, footnotes,
-                        background: _codespanBackground, isBold: isBold, isItalic: isItalic);
+                        background: _codespanBackground, isBold: isBold, isItalic: isItalic,
+                        color: _codespanColor);
                 break;
 
             case LinkInlineNode link:
