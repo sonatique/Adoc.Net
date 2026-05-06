@@ -91,11 +91,10 @@ public class RevealjsRendererTests
 
         var output = Render(doc);
 
-        // Outer section wraps the vertical group; first slide combines the
-        // document title (<h1>Pres</h1>) with the section heading (<h2>Chapter</h2>)
-        // — matches asciidoctor-revealjs's title-on-first-slide layout.
-        Assert.That(output, Does.Contain("<h1>Pres</h1>"));
-        Assert.That(output, Does.Contain("<h2>Chapter</h2>"));
+        // Dedicated title slide first (asciidoctor-revealjs layout), then the
+        // outer section wrapping the vertical group with the section heading.
+        Assert.That(output, Does.Contain("<section class=\"title\" data-state=\"title\">\n<h1>Pres</h1>"));
+        Assert.That(output, Does.Contain("<section>\n<section>\n<h2>Chapter</h2>"));
         // Vertical slides — Asciidoctor uses <h2> for vertical slides too.
         Assert.That(output, Does.Contain("<h2>Part A</h2>"));
         Assert.That(output, Does.Contain("<div class=\"paragraph\">\n<p>Content A</p>"));

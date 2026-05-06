@@ -446,14 +446,33 @@ public sealed class DocBookRenderer : DocumentRendererBase
             for (int i = 0; i < node.Columns.Count; i++)
                 totalWidth += node.Columns[i].Width;
             if (totalWidth <= 0) totalWidth = node.Columns.Count;
+
+            // Asciidoctor sums to ~100 by:
+            //   1. Truncating each column's percentage to 4 decimals
+            //   2. Adding the rounding residual onto the LAST column so the
+            //      total comes out as exactly 100.0001 (not 99.9999)
+            // We mirror that rather than letting Math.Round drift.
+            var widths = new double[node.Columns.Count];
+            double sum = 0;
             for (int i = 0; i < node.Columns.Count; i++)
             {
-                // Asciidoctor uses 4-decimal precision (e.g. 33.3333* / 16.6666* /
-                // 50.0001*) to ensure widths sum to ~100 across rounding.
-                double scaled = (node.Columns[i].Width * 100.0) / totalWidth;
+                double exact = (node.Columns[i].Width * 100.0) / totalWidth;
+                // Truncate to 4 decimal places (asciidoctor's effective precision)
+                widths[i] = Math.Truncate(exact * 10000) / 10000;
+                sum += widths[i];
+            }
+            // Push the residual onto the last column so the row sums to 100.0001
+            // (asciidoctor rounds UP to keep things just over 100).
+            if (widths.Length > 0)
+            {
+                double residual = 100.0001 - sum;
+                widths[^1] = Math.Truncate((widths[^1] + residual) * 10000) / 10000;
+            }
+            for (int i = 0; i < node.Columns.Count; i++)
+            {
                 writer.WriteStartElement("colspec", DocBookNs);
                 writer.WriteAttributeString("colname", $"col_{i + 1}");
-                writer.WriteAttributeString("colwidth", FormatColspecWidth(scaled));
+                writer.WriteAttributeString("colwidth", FormatColspecWidth(widths[i]));
                 writer.WriteEndElement(); // colspec
             }
         }

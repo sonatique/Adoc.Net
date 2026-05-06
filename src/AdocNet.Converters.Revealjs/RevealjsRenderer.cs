@@ -33,59 +33,37 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
 
         sb.Append("<div class=\"reveal\">\n<div class=\"slides\">\n");
 
-        // Asciidoctor-revealjs packs the document title, author, and the FIRST
-        // top-level section onto a single combined slide rather than emitting
-        // a dedicated full-page title slide. We mirror that: the first slide
-        // gets the title + author header AND the first section's content; any
-        // subsequent sections render as their own slides.
-        bool titleEmitted = false;
-        if (document.Title is null)
-            titleEmitted = true; // nothing to emit
+        // Asciidoctor-revealjs emits a dedicated title slide with class="title"
+        // and data-state="title" containing the document title and a byline
+        // wrapping the author. Subsequent sections render as their own slides.
+        if (document.Title is not null)
+        {
+            sb.Append("<section class=\"title\" data-state=\"title\">\n<h1>");
+            EscapeTo(sb, document.Title);
+            sb.Append("</h1>\n");
+            if (document.Attributes.TryGetValue("author", out var author) && !string.IsNullOrWhiteSpace(author))
+            {
+                sb.Append("<p class=\"byline\">\n<span class=\"author\">");
+                EscapeTo(sb, author);
+                sb.Append("</span>\n</p>\n");
+            }
+            sb.Append("</section>\n");
+        }
 
         foreach (var child in document.Children)
         {
             // TocNode is parser metadata — Reveal.js doesn't render an inline TOC
-            // (the slide controller provides its own navigation), so skip without
-            // consuming the title slot.
+            // (the slide controller provides its own navigation).
             if (child is TocNode) continue;
 
             if (child is SectionNode section && section.Level == 1)
-            {
-                if (!titleEmitted)
-                {
-                    RenderCombinedTitleAndFirstSlide(sb, document, section);
-                    titleEmitted = true;
-                }
-                else
-                {
-                    RenderSlide(sb, section);
-                }
-            }
+                RenderSlide(sb, section);
             else if (child is BlockNode block)
             {
-                if (!titleEmitted)
-                {
-                    sb.Append("<section>\n");
-                    AppendTitleHeader(sb, document);
-                    RenderBlock(sb, block);
-                    sb.Append("</section>\n");
-                    titleEmitted = true;
-                }
-                else
-                {
-                    sb.Append("<section>\n");
-                    RenderBlock(sb, block);
-                    sb.Append("</section>\n");
-                }
+                sb.Append("<section>\n");
+                RenderBlock(sb, block);
+                sb.Append("</section>\n");
             }
-        }
-
-        // Edge case: title-only document (no body content) — emit dedicated title slide.
-        if (!titleEmitted)
-        {
-            sb.Append("<section class=\"title\" data-state=\"title\">\n");
-            AppendTitleHeader(sb, document);
-            sb.Append("</section>\n");
         }
 
         sb.Append("</div>\n</div>\n");
@@ -186,94 +164,6 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
     }
 
     // ── Slide rendering ─────────────────────────────────────────────────
-
-    /// <summary>
-    /// Renders the document title + author header inside the current slide
-    /// (caller has already opened the &lt;section&gt; element). Mirrors
-    /// asciidoctor-revealjs's title-on-first-slide layout.
-    /// </summary>
-    private static void AppendTitleHeader(StringBuilder sb, DocumentNode document)
-    {
-        if (document.Title is not null)
-        {
-            sb.Append("<h1>");
-            EscapeTo(sb, document.Title);
-            sb.Append("</h1>\n");
-        }
-        if (document.Attributes.TryGetValue("author", out var author) && !string.IsNullOrWhiteSpace(author))
-        {
-            sb.Append("<p class=\"author\">");
-            EscapeTo(sb, author);
-            sb.Append("</p>\n");
-        }
-        if (document.Attributes.TryGetValue("revnumber", out var rev) && !string.IsNullOrWhiteSpace(rev))
-        {
-            sb.Append("<p class=\"revision\">Version ");
-            EscapeTo(sb, rev);
-            if (document.Attributes.TryGetValue("revdate", out var rd) && !string.IsNullOrWhiteSpace(rd))
-            {
-                sb.Append(", ");
-                EscapeTo(sb, rd);
-            }
-            sb.Append("</p>\n");
-        }
-    }
-
-    /// <summary>
-    /// Combined first slide: emits the title + author header followed by the
-    /// first level-1 section's content in the same &lt;section&gt; wrapper.
-    /// Asciidoctor-revealjs uses this layout instead of a dedicated full-page
-    /// title slide. Vertical sub-slides (level-2 children) get their own
-    /// slides as usual.
-    /// </summary>
-    private static void RenderCombinedTitleAndFirstSlide(
-        StringBuilder sb, DocumentNode document, SectionNode firstSection)
-    {
-        bool hasVerticalSlides = false;
-        foreach (var child in firstSection.Children)
-        {
-            if (child is SectionNode sub && sub.Level == 2)
-            {
-                hasVerticalSlides = true;
-                break;
-            }
-        }
-
-        if (hasVerticalSlides)
-        {
-            sb.Append("<section>\n");
-            AppendSlideOpenTag(sb, firstSection);
-            AppendTitleHeader(sb, document);
-            sb.Append("<h2>");
-            EscapeTo(sb, firstSection.Title);
-            sb.Append("</h2>\n");
-            AppendSlideContent(sb, firstSection.Children, stopAtSubsection: true);
-            sb.Append("</section>\n");
-            foreach (var child in firstSection.Children)
-            {
-                if (child is SectionNode sub && sub.Level == 2)
-                {
-                    AppendSlideOpenTag(sb, sub);
-                    sb.Append("<h2>");
-                    EscapeTo(sb, sub.Title);
-                    sb.Append("</h2>\n");
-                    AppendSlideContent(sb, sub.Children, stopAtSubsection: false);
-                    sb.Append("</section>\n");
-                }
-            }
-            sb.Append("</section>\n");
-        }
-        else
-        {
-            AppendSlideOpenTag(sb, firstSection);
-            AppendTitleHeader(sb, document);
-            sb.Append("<h2>");
-            EscapeTo(sb, firstSection.Title);
-            sb.Append("</h2>\n");
-            AppendSlideContent(sb, firstSection.Children, stopAtSubsection: false);
-            sb.Append("</section>\n");
-        }
-    }
 
     private static void RenderSlide(StringBuilder sb, SectionNode section)
     {
