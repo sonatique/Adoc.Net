@@ -330,6 +330,17 @@ internal static class HtmlThemeCss
         .admonitionblock.warning td.icon { color: #bf6900; }
         .admonitionblock.caution td.icon { color: #bf3400; }
         .admonitionblock.important td.icon { color: #bf0000; }
+        /* Asciidoctor's icon-{type} classes map to Font Awesome 4 unicode
+           codepoints via :before. The .fa class brings in the FontAwesome
+           font-family from the CDN; these rules add the per-type glyph and
+           coloring/sizing. The icon is wrapped in a circle for NOTE/IMPORTANT
+           via background+border-radius (asciidoctor's "interesting" iconography). */
+        .admonitionblock td.icon [class^="icon-"] { font-size: 2.5em; cursor: default; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5); }
+        .admonitionblock td.icon .icon-note:before { content: "\f05a"; color: #19407c; }
+        .admonitionblock td.icon .icon-tip:before { content: "\f0eb"; text-shadow: 1px 1px 2px rgba(155, 155, 0, 0.8); color: #111; }
+        .admonitionblock td.icon .icon-warning:before { content: "\f071"; color: #bf6900; }
+        .admonitionblock td.icon .icon-caution:before { content: "\f06d"; color: #bf3400; }
+        .admonitionblock td.icon .icon-important:before { content: "\f06a"; color: #bf0000; }
         .imageblock { text-align: center; margin: 1em 0; }
         .imageblock img { max-width: 100%; height: auto; }
         .title { font-style: italic; font-weight: 400; color: #7a2518; }
