@@ -44,6 +44,11 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
 
         foreach (var child in document.Children)
         {
+            // TocNode is parser metadata — Reveal.js doesn't render an inline TOC
+            // (the slide controller provides its own navigation), so skip without
+            // consuming the title slot.
+            if (child is TocNode) continue;
+
             if (child is SectionNode section && section.Level == 1)
             {
                 if (!titleEmitted)
