@@ -100,6 +100,18 @@ public sealed class EpubRenderer : DocumentRendererBase
         VoidElementPattern.Replace(html, "<${1}${attrs} />");
 
     /// <summary>
+    /// Inline SVG avatar silhouette used in the chapter byline. Mimics
+    /// asciidoctor-epub3's default-avatar.jpg without bundling a binary asset.
+    /// 24×24 px, dark grey on transparent background.
+    /// </summary>
+    private const string InlineAvatarSvg =
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" "
+        + "width=\"24\" height=\"24\" class=\"avatar\" "
+        + "style=\"vertical-align:middle;margin-right:0.5em;fill:#777;\">"
+        + "<path d=\"M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z\"/>"
+        + "</svg>";
+
+    /// <summary>
     /// Splits a chapter title at the first ": " separator into title + subtitle
     /// (asciidoctor-epub3's title-subtitle convention). Returns (title, null)
     /// when there's no separator.
@@ -580,8 +592,12 @@ public sealed class EpubRenderer : DocumentRendererBase
             ? $"{EscapeXml(titlePart)} <small class=\"subtitle\">{EscapeXml(subtitlePart)}</small>"
             : EscapeXml(titlePart);
         // Optional byline above the title (when :author: was set on the doc).
+        // Asciidoctor-epub3 prefixes the author name with a small avatar icon
+        // (default-avatar.jpg). We use an inline SVG silhouette so the EPUB
+        // doesn't need a bundled binary asset.
         var bylineMarkup = chapter.Author is not null
-            ? $"<p class=\"byline\"><b class=\"author\">{EscapeXml(chapter.Author)}</b></p>\n"
+            ? "<p class=\"byline\">" + InlineAvatarSvg + "<b class=\"author\">"
+                + EscapeXml(chapter.Author) + "</b></p>\n"
             : "";
         var xhtml = $"""
             <?xml version="1.0" encoding="UTF-8"?>
