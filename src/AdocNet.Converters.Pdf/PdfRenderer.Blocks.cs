@@ -481,9 +481,27 @@ public sealed partial class PdfRenderer
     {
         w.EnsurePage();
 
-        // Admonition type label in bold
-        w.WriteWrappedText($"{admonition.AdmonitionType}:", _fontBold, _bodyFontSize, _bodyLeading);
+        // Asciidoctor-pdf renders admonitions with a colored vertical bar on the
+        // left, an uppercase colored label, and indented body content. We mirror
+        // the structure: label first, then indented body, then a vertical bar
+        // drawn from start-Y to end-Y in the admonition's accent color.
+        var color = AdmonitionColor(admonition.AdmonitionType);
+        const float LabelWidth = 70f;   // horizontal slot for "NOTE"/"TIP"/etc.
+        const float BarThickness = 3f;  // vertical accent bar width
+        const float BarPadding = 4f;    // gap between bar and label
 
+        float startY = w.CursorY;
+        float startX = w.MarginLeftValue;
+
+        // Draw the colored uppercase label at the top-left of the admonition.
+        // It sits next to the bar; subsequent body text starts below the label.
+        var labelText = admonition.AdmonitionType.ToUpperInvariant();
+        w.SetFillColor(color.R, color.G, color.B);
+        w.WriteWrappedText(labelText, _fontBold, _bodyFontSize, _bodyLeading);
+        w.SetFillColor(0, 0, 0);
+
+        // Indent body content to leave room for the bar + label gutter.
+        float savedIndent = w.PushIndent(LabelWidth);
         if (admonition.Children.Count > 0)
         {
             foreach (var child in admonition.Children)
@@ -495,9 +513,31 @@ public sealed partial class PdfRenderer
                 _fontRegular, _bodyFontSize, footnotes);
             w.WriteWrappedSegments(segments, _bodyLeading);
         }
+        w.PopIndent(savedIndent);
+
+        float endY = w.CursorY;
+        // Vertical accent bar in the indent gutter.
+        float barX = startX + LabelWidth - BarThickness - BarPadding;
+        w.SetFillColor(color.R, color.G, color.B);
+        w.DrawRect(barX, endY, BarThickness, startY - endY, fill: true);
+        w.SetFillColor(0, 0, 0);
 
         w.MoveCursor(_paragraphSpacingAfter);
     }
+
+    /// <summary>
+    /// Returns asciidoctor-pdf's accent color for the given admonition type.
+    /// Falls back to a neutral grey for unknown types.
+    /// </summary>
+    private static PdfColor AdmonitionColor(string type) => type.ToLowerInvariant() switch
+    {
+        "note"      => new PdfColor(0.13f, 0.41f, 0.79f), // blue #2156a5
+        "tip"       => new PdfColor(0.13f, 0.65f, 0.35f), // green #22a559
+        "warning"   => new PdfColor(0.85f, 0.47f, 0.02f), // orange #d97706
+        "caution"   => new PdfColor(0.94f, 0.62f, 0.04f), // amber  #f59e0b
+        "important" => new PdfColor(0.86f, 0.15f, 0.15f), // red    #dc2626
+        _           => new PdfColor(0.5f, 0.5f, 0.5f),
+    };
 
     // ── Inline segment building ─────────────────────────────────────────
 
