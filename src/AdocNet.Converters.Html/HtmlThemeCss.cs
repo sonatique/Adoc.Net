@@ -358,24 +358,24 @@ internal static class HtmlThemeCss
             margin-bottom: 0.5em;
             line-height: 1.0125em;
         }
-        #toc ul { font-family: "Open Sans", "DejaVu Sans", sans-serif; list-style-type: none; padding-left: 1.5em; margin: 0; line-height: 1.5; }
+        #toc ul { font-family: "Open Sans", "DejaVu Sans", sans-serif; list-style-type: none; padding-left: 1.5em; margin: 0; }
+        #toc li { line-height: 1.3334; margin-top: 0.3334em; }
         #toc > ul { padding-left: 0; margin-left: 0.125em; }
         #toc a { color: #2156a5; text-decoration: none; }
         #toc a:hover, #toc a:focus { color: #1d4b8f; text-decoration: underline; }
         /* :toc: left|right layout — body gets toc2 + toc-left/right class,
            the in-header TOC gets class="toc2" and is fixed-positioned in the
-           side margin. Activates only on viewports >= 768px (asciidoctor parity).
-           Asciidoctor's effective width is 20em on >= 1280px viewports. */
+           side margin. Asciidoctor breakpoints: 15em at >=768px, 20em at >=1280px. */
         @media (min-width: 768px) {
-            body.toc2 { padding-left: 20em; padding-right: 0; }
+            body.toc2 { padding-left: 15em; padding-right: 0; }
             body.toc2 #toc.toc2 {
                 margin-top: 0 !important;
                 background: #f8f8f7;
                 position: fixed;
-                width: 20em;
+                width: 15em;
                 left: 0;
                 top: 0;
-                border-right: 1px solid #efefed;
+                border-right: 1px solid #e7e7e9;
                 border-top: 0 !important;
                 border-bottom: 0 !important;
                 z-index: 1000;
@@ -386,13 +386,21 @@ internal static class HtmlThemeCss
             body.toc2 #toc.toc2 #toctitle { margin-top: 0; margin-bottom: 0.8rem; font-size: 1.2em; }
             body.toc2 #toc.toc2 > ul { font-size: 0.9em; margin-bottom: 0; }
             body.toc2 #toc.toc2 ul ul { margin-left: 0; padding-left: 1em; }
-            body.toc2.toc-right { padding-left: 0; padding-right: 20em; }
+            body.toc2.toc-right { padding-left: 0; padding-right: 15em; }
             body.toc2.toc-right #toc.toc2 {
                 border-right-width: 0;
-                border-left: 1px solid #efefed;
+                border-left: 1px solid #e7e7e9;
                 left: auto;
                 right: 0;
             }
+        }
+        @media (min-width: 1280px) {
+            body.toc2 { padding-left: 20em; }
+            body.toc2 #toc.toc2 { width: 20em; }
+            body.toc2 #toc.toc2 #toctitle { font-size: 1.375em; }
+            body.toc2 #toc.toc2 > ul { font-size: 0.95em; }
+            body.toc2 #toc.toc2 ul ul { padding-left: 1.25em; }
+            body.toc2.toc-right { padding-right: 20em; }
         }
         #footnotes { margin-top: 2em; border-top: 1px solid #ddddd8; padding-top: 0.5em; font-size: 0.875em; }
         mark, .highlight { background: #ffc14f; }
