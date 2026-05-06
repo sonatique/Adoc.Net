@@ -682,9 +682,9 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
         }
         if (hasRevnumber)
         {
-            // Asciidoctor's "version " prefix is locale-aware but for English it's
-            // hardcoded as "version " before the revnumber; revdate follows comma-separated.
-            sb.Append("<span id=\"revnumber\">version ");
+            // Asciidoctor's "Version " prefix (capitalised) is locale-aware
+            // (en.yml: "version-label: Version"); revdate follows comma-separated.
+            sb.Append("<span id=\"revnumber\">Version ");
             EscapeTo(sb, revnumber!);
             if (hasRevdate)
                 sb.Append(',');

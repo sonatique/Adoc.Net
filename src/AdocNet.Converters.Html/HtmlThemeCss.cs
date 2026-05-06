@@ -182,15 +182,38 @@ internal static class HtmlThemeCss
             line-height: 1.2;
             letter-spacing: -0.01em;
             word-spacing: -0.05em;
-            border-bottom: 1px solid #dddddf;
+            /* When a .details block follows, asciidoctor anchors the horizontal
+               rule on the .details block instead of the title. Without details,
+               the title gets the rule. We replicate via #header h1:only-child
+               + #header .details below. */
             padding-bottom: 8px;
             margin-top: 2.25rem;
-            /* Asciidoctor uses margin-bottom: 0 here; the visual gap comes from
-               border-bottom + padding-bottom + the next element's margin-top. */
             margin-bottom: 0;
             font-size: 2.75em;
             text-rendering: optimizeLegibility;
         }
+        /* Author / revision details block — asciidoctor lays it out as a flex row
+           BELOW the title and ABOVE a thin grey horizontal rule. The <br> elements
+           we emit are hidden; flex separators (\u22c5 / —) take their place. */
+        #header h1 + .details {
+            border-bottom: 1px solid #dddddf;
+            line-height: 1.45;
+            padding-top: 0.25em;
+            padding-bottom: 0.25em;
+            color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            flex-flow: row wrap;
+        }
+        #header h1:last-child {
+            /* No details block: title carries the horizontal rule itself. */
+            border-bottom: 1px solid #dddddf;
+        }
+        #header .details span:first-child { margin-left: -0.125em; }
+        #header .details span.email a { color: rgba(0, 0, 0, 0.85); }
+        #header .details br { display: none; }
+        #header .details br + span:before { content: "\00a0\2013\00a0"; }
+        #header .details br + span.author:before { content: "\00a0\22c5\00a0"; color: rgba(0, 0, 0, 0.85); }
+        #header .details br + span#revremark:before { content: "\00a0|\00a0"; }
         /* Reset <pre> browser default margins (asciidoctor parity). Without this,
            Chrome adds 1em top + 1em bottom margin to every <pre>, accumulating
            ~30px per code block and pushing subsequent sections higher. */
@@ -310,6 +333,37 @@ internal static class HtmlThemeCss
         #toc ul { list-style: none; padding-left: 1.25em; }
         #toc > ul { padding-left: 0; }
         #toc a { color: #2156a5; }
+        /* Asciidoctor's :toc: left|right layout — body gets toc2 + toc-left/right
+           class, the in-header TOC gets class="toc2" and is fixed-positioned in
+           the side margin. Activates only on viewports >= 768px (asciidoctor
+           parity); narrower screens get the inline TOC. */
+        @media (min-width: 768px) {
+            body.toc2 { padding-left: 15em; padding-right: 0; }
+            body.toc2 #toc.toc2 {
+                margin-top: 0 !important;
+                background: #f8f8f7;
+                position: fixed;
+                width: 15em;
+                left: 0;
+                top: 0;
+                border-right: 1px solid #efefed;
+                border-top-width: 0 !important;
+                border-bottom-width: 0 !important;
+                z-index: 1000;
+                padding: 1.25em 1em;
+                height: 100%;
+                overflow: auto;
+            }
+            body.toc2 #toc.toc2 > ul { font-size: 0.95em; line-height: 1.1; }
+            body.toc2 #toc.toc2 ul ul { padding-left: 1em; }
+            body.toc2.toc-right { padding-left: 0; padding-right: 15em; }
+            body.toc2.toc-right #toc.toc2 {
+                border-right-width: 0;
+                border-left: 1px solid #efefed;
+                left: auto;
+                right: 0;
+            }
+        }
         #footnotes { margin-top: 2em; border-top: 1px solid #ddddd8; padding-top: 0.5em; font-size: 0.875em; }
         mark, .highlight { background: #ffc14f; }
         .verseblock pre { font-family: "Noto Serif", "DejaVu Serif", serif; background: none; border: none; padding: 0; white-space: pre-wrap; }
