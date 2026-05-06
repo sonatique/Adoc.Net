@@ -214,6 +214,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         _linkColor = pdfOptions.LinkColor;
         writer.LinkColor = pdfOptions.LinkColor;
         _codespanColor = pdfOptions.CodespanColor;
+        writer.BodyColor = pdfOptions.BodyColor;
         _codeBackground = pdfOptions.CodeBackground;
         _codespanBackground = pdfOptions.CodespanBackground;
         _codeBorderColor = pdfOptions.CodeBorderColor;
