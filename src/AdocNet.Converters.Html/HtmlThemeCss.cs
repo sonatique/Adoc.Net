@@ -76,10 +76,14 @@ internal static class HtmlThemeCss
         .stripes-odd tr:nth-child(odd) td { background: #fafafa; }
         .stripes-even tr:nth-child(even) td { background: #fafafa; }
         /* Horizontal description lists use class="hdlist" — borderless,
-           narrow padding so the term/description appear as a compact two-column layout. */
-        .hdlist table { border: 0; background: none; width: auto; margin: 1em 0; }
-        .hdlist td { border: 0; padding: 0 0.625em 0.5em 0; vertical-align: top; }
-        .hdlist td.hdlist1 { font-weight: bold; }
+           narrow padding so the term/description appear as a compact two-column
+           layout. Mirrors asciidoctor's .hdlist CSS rules verbatim. */
+        .hdlist > table { border: 0; background: none; width: auto; margin: 1em 0; }
+        .hdlist > table > tbody > tr { vertical-align: top; }
+        .hdlist > table > tbody > tr > td { border: 0; }
+        .hdlist td.hdlist1 { padding: 0 0.625em 0.5em 0; font-weight: bold; vertical-align: top; }
+        .hdlist td.hdlist2 { padding: 0 0 0.5em 0; }
+        .hdlist td.hdlist2 > p { margin: 0; }
         .admonitionblock {
             margin: 1em 0;
             padding: 0.75em 1em;
@@ -310,9 +314,12 @@ internal static class HtmlThemeCss
         .stripes-even tr:nth-child(even) td { background: #f8f8f7; }
         /* Horizontal description lists — asciidoctor renders class="hdlist"
            tables borderless with narrow padding; .hdlist1 is bold. */
-        .hdlist table { border: 0; background: none; width: auto; margin: 1em 0; }
-        .hdlist td { border: 0; padding: 0 0.625em 0.5em 0; vertical-align: top; }
-        .hdlist td.hdlist1 { font-weight: bold; }
+        .hdlist > table { border: 0; background: none; width: auto; margin: 1em 0; }
+        .hdlist > table > tbody > tr { vertical-align: top; }
+        .hdlist > table > tbody > tr > td { border: 0; }
+        .hdlist td.hdlist1 { padding: 0 0.625em 0.5em 0; font-weight: bold; vertical-align: top; }
+        .hdlist td.hdlist2 { padding: 0 0 0.5em 0; }
+        .hdlist td.hdlist2 > p { margin: 0; }
         .admonitionblock {
             margin: 1em 0;
         }
