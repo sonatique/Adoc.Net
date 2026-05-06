@@ -27,6 +27,25 @@ public static class PdfThemeLoader
     /// Parses simple YAML into a flat dictionary with dot-separated keys.
     /// E.g., "heading-h2:\n  font-size: 16" → {"heading-h2.font-size": "16"}
     /// </summary>
+    /// <summary>
+    /// Normalizes a YAML key to kebab-case for canonical lookup. Catalog font
+    /// family names live two levels deep under <c>font.catalog</c> and may
+    /// contain underscores in their style children (<c>normal/bold/italic/bold_italic</c>);
+    /// the family name itself is also preserved verbatim because it's a
+    /// user-facing identifier referenced from <c>base.font_family: Noto Serif</c>.
+    /// Conversion only happens for top-level + nested-property keys.
+    /// </summary>
+    private static string NormalizeKey(string prefix, string key)
+    {
+        // Don't touch font catalog family names (they're identifiers like
+        // "Noto Serif" that may contain spaces; not relevant here) or their
+        // style child keys (normal, bold, italic, bold_italic — bold_italic
+        // is the canonical form per asciidoctor-pdf, keep it).
+        if (prefix.StartsWith("font.catalog", StringComparison.Ordinal))
+            return key;
+        return key.Replace('_', '-');
+    }
+
     internal static Dictionary<string, string> ParseYaml(string[] lines)
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -59,7 +78,14 @@ public static class PdfThemeLoader
             var value = colonIdx + 1 < trimmed.Length ? trimmed[(colonIdx + 1)..].Trim() : "";
 
             var prefix = indentStack[^1].Prefix;
-            var fullKey = prefix.Length > 0 ? $"{prefix}.{key}" : key;
+            // Asciidoctor-pdf themes accept both snake_case (font_family) and
+            // kebab-case (font-family) for the same key. Normalize to kebab
+            // here so lookups in BuildOptions use a single canonical form.
+            // Catalog family names ("Noto Serif") may legitimately contain
+            // underscores in the value; we only normalize the KEY, not the
+            // value — and only when this isn't a catalog family child key.
+            var normalizedKey = NormalizeKey(prefix, key);
+            var fullKey = prefix.Length > 0 ? $"{prefix}.{normalizedKey}" : normalizedKey;
 
             if (value.Length == 0)
             {
@@ -236,6 +262,26 @@ public static class PdfThemeLoader
 
     private static string? ResolveAbsoluteFontPath(string relativePath, string fontsDir)
     {
+        // Asciidoctor-pdf supports a GEM_FONTS_DIR placeholder in font catalog
+        // paths that resolves to the bundled fonts folder
+        // (asciidoctor-pdf-X.Y.Z/data/fonts/). When the theme path comes from
+        // such a gem install, fontsDir points at data/themes/ — go up one level
+        // and into data/fonts/ to find the bundled TTFs.
+        if (relativePath.StartsWith("GEM_FONTS_DIR/", StringComparison.Ordinal)
+            || relativePath.StartsWith("GEM_FONTS_DIR\\", StringComparison.Ordinal))
+        {
+            var bundledName = relativePath.Substring("GEM_FONTS_DIR/".Length);
+            var gemFontsDir = ResolveGemFontsDir(fontsDir);
+            if (gemFontsDir is not null)
+            {
+                var bundled = Path.Combine(gemFontsDir, bundledName);
+                if (File.Exists(bundled)) return Path.GetFullPath(bundled);
+            }
+            // Fall through to the standard resolution paths below using just
+            // the filename portion — picks up matching TTFs in fontsDir.
+            relativePath = bundledName;
+        }
+
         // Try as-is first, then relative to fontsDir
         if (File.Exists(relativePath)) return Path.GetFullPath(relativePath);
 
@@ -254,6 +300,32 @@ public static class PdfThemeLoader
             if (File.Exists(byName)) return Path.GetFullPath(byName);
         }
 
+        return null;
+    }
+
+    /// <summary>
+    /// Locates the asciidoctor-pdf gem's bundled fonts directory.
+    /// Strategy: from the supplied fontsDir, walk up looking for a sibling
+    /// "fonts" directory under "data" (matching the
+    /// asciidoctor-pdf-X.Y.Z/data/fonts/ install layout).
+    /// </summary>
+    private static string? ResolveGemFontsDir(string fontsDir)
+    {
+        // If fontsDir is already a "fonts" dir, use it directly.
+        if (string.Equals(Path.GetFileName(fontsDir.TrimEnd(Path.DirectorySeparatorChar, '/')),
+                "fonts", StringComparison.OrdinalIgnoreCase)
+            && Directory.Exists(fontsDir))
+        {
+            return fontsDir;
+        }
+
+        // Common case: theme is in data/themes/, fonts are in data/fonts/.
+        var parent = Path.GetDirectoryName(fontsDir.TrimEnd(Path.DirectorySeparatorChar, '/'));
+        if (parent is not null)
+        {
+            var sibling = Path.Combine(parent, "fonts");
+            if (Directory.Exists(sibling)) return sibling;
+        }
         return null;
     }
 

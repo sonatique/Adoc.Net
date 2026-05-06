@@ -99,12 +99,71 @@ public sealed class EpubRenderer : DocumentRendererBase
     private static string ToXhtml(string html) =>
         VoidElementPattern.Replace(html, "<${1}${attrs} />");
 
+    /// <summary>
+    /// Wraps the chapter title in asciidoctor-epub3's chapter-header pattern:
+    /// <c>&lt;header class="chapter-header"&gt;[byline]&lt;h1 class="chapter-title"&gt;Title [&lt;small class="subtitle"&gt;Subtitle&lt;/small&gt;]&lt;/h1&gt;&lt;/header&gt;</c>.
+    /// Splits the title at the first ": " into title + subtitle (asciidoctor's
+    /// title-separator convention) and emits the byline (author) when set.
+    /// </summary>
+    private static string ApplyChapterHeader(string html, DocumentNode doc)
+    {
+        if (doc.Title is null) return html;
+
+        // Build the asciidoctor-style header markup
+        var sb = new StringBuilder();
+        sb.Append("<header class=\"chapter-header\">\n");
+        if (doc.Attributes.TryGetValue("author", out var author) && !string.IsNullOrWhiteSpace(author))
+        {
+            sb.Append("<p class=\"byline\"><b class=\"author\">");
+            EscapeXml(sb, author);
+            sb.Append("</b></p>\n");
+        }
+        sb.Append("<h1 class=\"chapter-title\">");
+        var (titlePart, subtitlePart) = SplitTitleSubtitle(doc.Title);
+        EscapeXml(sb, titlePart);
+        if (subtitlePart is not null)
+        {
+            sb.Append(" <small class=\"subtitle\">");
+            EscapeXml(sb, subtitlePart);
+            sb.Append("</small>");
+        }
+        sb.Append("</h1>\n</header>\n");
+
+        // Replace the first <h1>Title</h1> emitted by HtmlRenderer with our wrapped version.
+        var existingH1 = $"<h1>{System.Net.WebUtility.HtmlEncode(doc.Title)}</h1>";
+        var idx = html.IndexOf(existingH1, StringComparison.Ordinal);
+        if (idx < 0) return html; // shouldn't happen, but safe fallback
+        return html.Substring(0, idx) + sb + html.Substring(idx + existingH1.Length);
+    }
+
+    private static (string Title, string? Subtitle) SplitTitleSubtitle(string fullTitle)
+    {
+        var idx = fullTitle.IndexOf(": ", StringComparison.Ordinal);
+        if (idx < 0) return (fullTitle, null);
+        return (fullTitle.Substring(0, idx), fullTitle.Substring(idx + 2));
+    }
+
+    private static void EscapeXml(StringBuilder sb, string s)
+    {
+        foreach (var c in s)
+        {
+            switch (c)
+            {
+                case '&': sb.Append("&amp;"); break;
+                case '<': sb.Append("&lt;"); break;
+                case '>': sb.Append("&gt;"); break;
+                case '"': sb.Append("&quot;"); break;
+                default: sb.Append(c); break;
+            }
+        }
+    }
+
     private static void BuildArticleChapter(DocumentNode doc, string identifier, bool sectnumsEnabled,
         List<Chapter> chapters, List<TocEntry> tocEntries)
     {
         var htmlRenderer = new HtmlRenderer();
         var htmlOptions = new HtmlRenderOptions { SuppressInlineToc = true };
-        var htmlContent = ToXhtml(htmlRenderer.RenderToString(doc, htmlOptions));
+        var htmlContent = ApplyChapterHeader(ToXhtml(htmlRenderer.RenderToString(doc, htmlOptions)), doc);
         // Use the slug-based identifier as the chapter filename when a title exists; fall back
         // to a stable "_content.xhtml" otherwise (urn-based names produce illegal filenames).
         var chapterFile = doc.Title is not null
@@ -151,7 +210,7 @@ public sealed class EpubRenderer : DocumentRendererBase
             synth.AddChild(section);
 
             var chapterFile = $"{Slugify(section.Title)}.xhtml";
-            var html = ToXhtml(htmlRenderer.RenderToString(synth, htmlOptions));
+            var html = ApplyChapterHeader(ToXhtml(htmlRenderer.RenderToString(synth, htmlOptions)), synth);
             chapters.Add(new Chapter(chapterFile, section.Title, html));
             tocEntries.Add(new TocEntry(chapterFile, id, entryTitle));
         }
@@ -159,7 +218,7 @@ public sealed class EpubRenderer : DocumentRendererBase
         // Edge case: no top-level sections → emit a stub chapter so the EPUB has a spine entry.
         if (chapters.Count == 0)
         {
-            var html = ToXhtml(htmlRenderer.RenderToString(doc, htmlOptions));
+            var html = ApplyChapterHeader(ToXhtml(htmlRenderer.RenderToString(doc, htmlOptions)), doc);
             var stubName = $"{Slugify(doc.Title ?? "content")}.xhtml";
             chapters.Add(new Chapter(stubName, doc.Title ?? "Content", html));
         }
