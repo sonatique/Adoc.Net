@@ -333,6 +333,10 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         var footnotes = context.GetOrCreate(() => new FootnoteState());
 
         writer.StartPage();
+        // Set the document-wide body fill color ONCE up front so default text
+        // (lists, paragraphs, TOC entries) renders in the configured body color
+        // instead of falling back to pure black after a heading reset.
+        RestoreBodyFill(writer);
         RenderDocumentContent(writer, context.Document, footnotes);
         RenderFootnotesSection(writer, footnotes);
 
@@ -619,7 +623,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         if (secNumPrefix is not null)
             segments.Insert(0, new TextSegment(secNumPrefix, _fontHeading, fontSize));
         w.WriteWrappedSegments(segments, leading);
-        if (color is not null) w.SetFillColor(0, 0, 0);
+        if (color is not null) RestoreBodyFill(w);
         w.MoveCursor(marginBottom);
 
         foreach (var child in section.Children)
@@ -632,10 +636,10 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             w.MoveCursor(_paragraphSpacingBefore);
         w.EnsurePage();
 
-        if (_bodyColor is { } bc) w.SetFillColor(bc.R, bc.G, bc.B);
+        // Body color is set globally at start of document; no per-paragraph
+        // override needed unless we change colors mid-paragraph.
         var segments = BuildInlineSegments(paragraph.Inlines, paragraph.Text, _fontRegular, _bodyFontSize, footnotes);
         w.WriteWrappedSegments(segments, _bodyLeading);
-        if (_bodyColor is not null) w.SetFillColor(0, 0, 0);
         w.MoveCursor(_paragraphSpacingAfter);
     }
 
