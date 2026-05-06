@@ -408,13 +408,22 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         if (_headingColor is not null) w.SetFillColor(0, 0, 0);
         w.MoveCursor(_paragraphSpacingAfter);
 
-        // Render each TOC entry with indentation and internal link
+        // Asciidoctor-pdf renders TOC entries in body text color (not link
+        // blue). Suppress link coloring for the TOC and restore afterwards.
+        var savedLinkColor = w.LinkColor;
+        w.LinkColor = null;
         RenderTocEntries(w, toc.Entries, 0, parentNumber: "");
+        w.LinkColor = savedLinkColor;
         w.MoveCursor(_sectionSpacing);
     }
 
     private void RenderTocEntries(PdfWriter w, IReadOnlyList<TocEntry> entries, int depth, string parentNumber)
     {
+        // Asciidoctor-pdf TOC uses line_height 1.5 vs body's 1.4 — slightly
+        // looser to give the dot-leader rows breathing room. We compute it
+        // from the body font size scaled to that ratio.
+        float tocLeading = _bodyFontSize * 1.5f;
+
         int counter = 0;
         foreach (var entry in entries)
         {
@@ -464,7 +473,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                     new(leader, _fontRegular, fontSize, null),
                     new(pageText, _fontRegular, fontSize, null),
                 };
-                w.WriteWrappedSegments(segments, _bodyLeading, justify: false);
+                w.WriteWrappedSegments(segments, tocLeading, justify: false);
             }
             else
             {
@@ -473,7 +482,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 {
                     new(displayTitle, font, fontSize, entry.Id is not null ? $"#internal#{entry.Id}" : null)
                 };
-                w.WriteWrappedSegments(segments, _bodyLeading, justify: false);
+                w.WriteWrappedSegments(segments, tocLeading, justify: false);
             }
             w.PopIndent(savedIndent);
 
