@@ -461,12 +461,23 @@ public sealed class DocBookRenderer : DocumentRendererBase
                 widths[i] = Math.Truncate(exact * 10000) / 10000;
                 sum += widths[i];
             }
-            // Push the residual onto the last column so the row sums to 100.0001
-            // (asciidoctor rounds UP to keep things just over 100).
-            if (widths.Length > 0)
+            // Asciidoctor's last-column rule: width[last] = 100 - sum(others)
+            // when truncation shaved off something, capped at 4-decimal
+            // precision. This produces the exact "50.0001*" form rather than
+            // the 0.0002 residual our naive sum would give. When the columns
+            // already sum to exactly 100, no adjustment is needed.
+            if (widths.Length > 0 && sum < 100)
             {
-                double residual = 100.0001 - sum;
-                widths[^1] = Math.Truncate((widths[^1] + residual) * 10000) / 10000;
+                double prefixSum = 0;
+                for (int i = 0; i < widths.Length - 1; i++)
+                    prefixSum += widths[i];
+                double lastTarget = 100 - prefixSum;
+                widths[^1] = Math.Truncate(lastTarget * 10000) / 10000;
+                // Ensure minimum 0.0001 over 100 — matches asciidoctor's tendency
+                // to round just past 100 rather than just under.
+                double newSum = prefixSum + widths[^1];
+                if (newSum < 100)
+                    widths[^1] = Math.Truncate((widths[^1] + (100.0001 - newSum)) * 10000) / 10000;
             }
             for (int i = 0; i < node.Columns.Count; i++)
             {
@@ -1078,7 +1089,7 @@ public sealed class DocBookRenderer : DocumentRendererBase
         switch (node)
         {
             case TextInlineNode n:
-                writer.WriteString(n.Value);
+                WriteTextWithQuoteWrap(writer, n.Value);
                 break;
 
             case StrongInlineNode n:
@@ -1183,7 +1194,11 @@ public sealed class DocBookRenderer : DocumentRendererBase
                 var xmlPath = ConvertAdocExtensionToXml(n.Path);
                 var href = n.Id is not null ? xmlPath + "#" + n.Id : xmlPath;
                 writer.WriteAttributeString("xlink", "href", XLinkNs, href);
-                writer.WriteString(n.Label ?? xmlPath);
+                // Apply smart-punctuation (e.g. "table's" → "table's") to the
+                // label so it matches asciidoctor's substituted output.
+                writer.WriteString(n.Label is not null
+                    ? AdocNet.Parser.SmartPunctuationProcessor.Apply(n.Label)
+                    : xmlPath);
                 writer.WriteEndElement();
                 break;
 
@@ -1360,6 +1375,46 @@ public sealed class DocBookRenderer : DocumentRendererBase
             writer.WriteElementString("revremark", DocBookNs, remark);
         writer.WriteEndElement(); // revision
         writer.WriteEndElement(); // revhistory
+    }
+
+    /// <summary>
+    /// Writes text to the DocBook stream, wrapping any "...''" curly-double-quoted
+    /// span in &lt;quote&gt;...&lt;/quote&gt; (asciidoctor parity — backend-aware
+    /// substitution of straight double quotes into the DocBook quote element).
+    /// Idempotent for text without curly quotes.
+    /// </summary>
+    private static void WriteTextWithQuoteWrap(XmlWriter writer, string text)
+    {
+        // Fast path: no left-curly-quote means no work to do.
+        if (text.IndexOf('\u201C') < 0)
+        {
+            writer.WriteString(text);
+            return;
+        }
+        int i = 0;
+        while (i < text.Length)
+        {
+            int open = text.IndexOf('\u201C', i);
+            if (open < 0)
+            {
+                writer.WriteString(text.Substring(i));
+                return;
+            }
+            int close = text.IndexOf('\u201D', open + 1);
+            if (close < 0)
+            {
+                writer.WriteString(text.Substring(i));
+                return;
+            }
+            // Emit any prefix text before the opening curly quote
+            if (open > i)
+                writer.WriteString(text.Substring(i, open - i));
+            // Emit <quote>inner</quote> for the span between curly quotes
+            writer.WriteStartElement("quote", DocBookNs);
+            writer.WriteString(text.Substring(open + 1, close - open - 1));
+            writer.WriteEndElement();
+            i = close + 1;
+        }
     }
 
     /// <summary>
