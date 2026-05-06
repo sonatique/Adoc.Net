@@ -198,6 +198,10 @@ public static class PdfThemeLoader
             // Running content start-at
             RunningContentStartAt = GetString(props, "running-content.start-at"),
 
+            // Link color (asciidoctor-pdf default theme: #428BCA blue)
+            LinkColor = ParseColor(GetString(props, "link.font-color"))
+                      ?? new PdfColor(0.066f, 0.337f, 0.624f), // #115fa6 fallback
+
             // Table styling
             TableBorderColor = ParseColor(GetString(props, "table.border-color")),
             TableHeaderBackground = ParseColor(GetString(props, "table.head.background-color")),

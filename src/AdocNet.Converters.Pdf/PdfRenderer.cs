@@ -406,14 +406,24 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         w.MoveCursor(_paragraphSpacingAfter);
 
         // Render each TOC entry with indentation and internal link
-        RenderTocEntries(w, toc.Entries, 0);
+        RenderTocEntries(w, toc.Entries, 0, parentNumber: "");
         w.MoveCursor(_sectionSpacing);
     }
 
-    private void RenderTocEntries(PdfWriter w, IReadOnlyList<TocEntry> entries, int depth)
+    private void RenderTocEntries(PdfWriter w, IReadOnlyList<TocEntry> entries, int depth, string parentNumber)
     {
+        int counter = 0;
         foreach (var entry in entries)
         {
+            counter++;
+            // Compute the section number prefix when :sectnums: is enabled.
+            // Concatenates parent + counter, e.g. "1.", "1.1.", "1.1.1.".
+            string numberPrefix = "";
+            if (_sectnumsEnabled && entry.Level <= _sectnumMaxLevel)
+                numberPrefix = parentNumber.Length > 0
+                    ? $"{parentNumber}{counter}. "
+                    : $"{counter}. ";
+
             w.EnsurePage();
 
             float indent = depth * ListIndent;
@@ -427,10 +437,11 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             // present, emit "Title ............ N" with dot-leader filling the
             // line — matches asciidoctor-pdf.
             int? page = entry.Id is not null ? w.GetDestinationPage(entry.Id) : null;
+            var displayTitle = numberPrefix + entry.Title;
             if (page is int pageNum)
             {
                 var pageText = pageNum.ToString();
-                float titleWidth = w.MeasureText(entry.Title, font, fontSize);
+                float titleWidth = w.MeasureText(displayTitle, font, fontSize);
                 float pageWidth = w.MeasureText(pageText, _fontRegular, fontSize);
                 float spaceWidth = w.MeasureText(" ", _fontRegular, fontSize);
                 float dotWidth = w.MeasureText(".", _fontRegular, fontSize);
@@ -446,7 +457,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 var leader = " " + new string('.', dotCount) + " ";
                 var segments = new List<TextSegment>
                 {
-                    new(entry.Title, font, fontSize, entry.Id is not null ? $"#internal#{entry.Id}" : null),
+                    new(displayTitle, font, fontSize, entry.Id is not null ? $"#internal#{entry.Id}" : null),
                     new(leader, _fontRegular, fontSize, null),
                     new(pageText, _fontRegular, fontSize, null),
                 };
@@ -457,14 +468,21 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 // No registered page (e.g. for entries that aren't section anchors).
                 var segments = new List<TextSegment>
                 {
-                    new(entry.Title, font, fontSize, entry.Id is not null ? $"#internal#{entry.Id}" : null)
+                    new(displayTitle, font, fontSize, entry.Id is not null ? $"#internal#{entry.Id}" : null)
                 };
                 w.WriteWrappedSegments(segments, _bodyLeading, justify: false);
             }
             w.PopIndent(savedIndent);
 
+            // Recurse into children with this entry's accumulated number as the
+            // parent for nested numbering ("1." → "1.1", "1.1.1", ...).
             if (entry.Children.Count > 0)
-                RenderTocEntries(w, entry.Children, depth + 1);
+            {
+                var childParent = _sectnumsEnabled && entry.Level <= _sectnumMaxLevel
+                    ? (parentNumber.Length > 0 ? $"{parentNumber}{counter}." : $"{counter}.")
+                    : "";
+                RenderTocEntries(w, entry.Children, depth + 1, childParent);
+            }
         }
     }
 
