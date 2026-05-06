@@ -453,9 +453,24 @@ public sealed partial class PdfRenderer
                 var termSegments = BuildInlineSegments(item.TermInlines, item.Terms.Count > 0 ? item.Terms[0] : "", _fontBold, _bodyFontSize, footnotes);
                 w.WriteWrappedSegments(termSegments, _bodyLeading);
 
-                // Description indented
-                var descSegments = BuildInlineSegments(item.DescriptionInlines, item.Description, _fontRegular, _bodyFontSize, footnotes);
-                w.WriteWrappedSegments(descSegments, _bodyLeading);
+                // Description indented (only when present — empty when the item
+                // body comes entirely from continuation blocks below).
+                bool hasInlineDescription = item.DescriptionInlines.Count > 0
+                    || !string.IsNullOrEmpty(item.Description);
+                if (hasInlineDescription)
+                {
+                    var descSegments = BuildInlineSegments(item.DescriptionInlines, item.Description, _fontRegular, _bodyFontSize, footnotes);
+                    w.WriteWrappedSegments(descSegments, _bodyLeading);
+                }
+
+                // Continuation blocks (source/listing blocks attached via "+",
+                // nested lists, etc.) live in item.Children. Render them as
+                // child blocks of the description entry — matches HTML/DocBook.
+                foreach (var grandChild in item.Children)
+                {
+                    if (grandChild is BlockNode block)
+                        RenderBlock(w, block, indentLevel, footnotes);
+                }
                 w.MoveCursor(_paragraphSpacingAfter / 2);
             }
         }
