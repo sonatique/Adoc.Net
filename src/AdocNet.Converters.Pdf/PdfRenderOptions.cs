@@ -80,6 +80,12 @@ public sealed class PdfRenderOptions : RenderOptions
     public float TitleFontSize { get; init; } = 24f;
 
     /// <summary>
+    /// Horizontal alignment of the document title. Default: Left. asciidoctor-pdf
+    /// themes set this to Center, which the PdfThemeLoader applies.
+    /// </summary>
+    public PdfAlignment TitleAlignment { get; init; } = PdfAlignment.Left;
+
+    /// <summary>
     /// Heading scale factor. Each heading level is previous × scale.
     /// H2 = TitleFontSize × scale, H3 = H2 × scale, etc. Default: 0.85.
     /// </summary>

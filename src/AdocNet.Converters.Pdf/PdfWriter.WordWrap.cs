@@ -221,7 +221,8 @@ internal sealed partial class PdfWriter
     /// Word-wraps text and writes it line by line, advancing the cursor.
     /// Returns the number of points consumed vertically.
     /// </summary>
-    internal float WriteWrappedText(string text, string font, float fontSize, float leading)
+    internal float WriteWrappedText(string text, string font, float fontSize, float leading,
+        PdfAlignment alignment = PdfAlignment.Left)
     {
         var lines = WrapText(text, font, fontSize, ContentWidth);
         float consumed = 0;
@@ -229,7 +230,16 @@ internal sealed partial class PdfWriter
         {
             EnsurePage();
             ReserveFirstLineLeading(leading);
-            WriteText(line, font, fontSize, MarginLeftValue, _cursorY);
+            float x = MarginLeftValue;
+            if (alignment != PdfAlignment.Left)
+            {
+                float lineW = MeasureText(line, font, fontSize);
+                if (alignment == PdfAlignment.Center)
+                    x = MarginLeftValue + (ContentWidth - lineW) / 2f;
+                else if (alignment == PdfAlignment.Right)
+                    x = MarginLeftValue + (ContentWidth - lineW);
+            }
+            WriteText(line, font, fontSize, x, _cursorY);
             _cursorY -= leading;
             consumed += leading;
         }

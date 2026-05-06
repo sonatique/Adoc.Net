@@ -28,6 +28,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
     // ── Size configuration (initialized from PdfRenderOptions) ─────────
     private float _titleFontSize = 24f;
+    private PdfAlignment _titleAlignment = PdfAlignment.Left;
     private float _h2FontSize = 20f;
     private float _h3FontSize = 16f;
     private float _h4FontSize = 14f;
@@ -185,6 +186,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
         // Initialize typography from options
         _titleFontSize = pdfOptions.TitleFontSize;
+        _titleAlignment = pdfOptions.TitleAlignment;
         _bodyFontSize = pdfOptions.FontSize;
         _codeFontSize = pdfOptions.CodeFontSize;
         _smallFontSize = pdfOptions.CodeFontSize;
@@ -344,7 +346,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             // as a sibling of top-level sections (matches Asciidoctor's flat outline).
             w.AddOutlineEntry(document.Title, 1, "_document_title");
             if (_headingColor is { } hc) w.SetFillColor(hc.R, hc.G, hc.B);
-            w.WriteWrappedText(document.Title, _fontHeading, _titleFontSize, _titleLeading);
+            w.WriteWrappedText(document.Title, _fontHeading, _titleFontSize, _titleLeading, _titleAlignment);
             if (_headingColor is not null) w.SetFillColor(0, 0, 0);
             w.MoveCursor(_titleMarginBottom);
         }

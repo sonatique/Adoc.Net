@@ -202,6 +202,11 @@ public static class PdfThemeLoader
             LinkColor = ParseColor(GetString(props, "link.font-color"))
                       ?? new PdfColor(0.066f, 0.337f, 0.624f), // #115fa6 fallback
 
+            // Asciidoctor-pdf centers the document title for article doctype.
+            // Themes may explicitly override via heading-h1.text-align.
+            TitleAlignment = ParseAlignment(GetString(props, "heading-h1.text-align"))
+                          ?? PdfAlignment.Center,
+
             // Table styling
             TableBorderColor = ParseColor(GetString(props, "table.border-color")),
             TableHeaderBackground = ParseColor(GetString(props, "table.head.background-color")),
@@ -424,6 +429,23 @@ public static class PdfThemeLoader
     }
 
     // ── Color parsing ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Parses asciidoctor-pdf alignment values ("left", "center", "right",
+    /// "justify") into a PdfAlignment enum. "justify" is treated as Left
+    /// (the writer applies its own justification at line render time).
+    /// </summary>
+    internal static PdfAlignment? ParseAlignment(string? value)
+    {
+        return value?.Trim().ToLowerInvariant() switch
+        {
+            "left" => PdfAlignment.Left,
+            "center" => PdfAlignment.Center,
+            "right" => PdfAlignment.Right,
+            "justify" => PdfAlignment.Left,
+            _ => null,
+        };
+    }
 
     internal static PdfColor? ParseColor(string? value)
     {
