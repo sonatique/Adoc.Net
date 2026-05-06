@@ -512,7 +512,40 @@ public static class PdfThemeLoader
     }
 
     private static string? GetString(Dictionary<string, string> props, string key)
-        => props.TryGetValue(key, out var v) ? v : null;
+    {
+        if (!props.TryGetValue(key, out var v)) return null;
+        // Resolve $varname references (e.g. heading.font_color: $base_font_color
+        // points at base.font-color: 333333). Only chase one level — sufficient
+        // for the asciidoctor-pdf default theme.
+        if (v.Length > 0 && v[0] == '$')
+        {
+            var resolved = ResolveStringVar(v, props);
+            if (resolved is not null) return resolved;
+        }
+        return v;
+    }
+
+    /// <summary>
+    /// Resolves a <c>$varname</c> reference to its string value via the same
+    /// snake→nested key lookup the formula evaluator uses.
+    /// </summary>
+    private static string? ResolveStringVar(string expr, Dictionary<string, string> props)
+    {
+        var rawName = expr.TrimStart('$').Trim();
+        if (props.TryGetValue(rawName, out var v)) return v;
+        var kebab = rawName.Replace('_', '-');
+        if (props.TryGetValue(kebab, out var v2)) return v2;
+        // Try splitting on the LAST underscore as a dot (e.g. base_font_color → base.font-color).
+        var lastUnd = rawName.LastIndexOf('_');
+        while (lastUnd > 0)
+        {
+            var candidate = (rawName.Substring(0, lastUnd).Replace('_', '.')
+                + "." + rawName.Substring(lastUnd + 1)).Replace('_', '-');
+            if (props.TryGetValue(candidate, out var v3)) return v3;
+            lastUnd = rawName.LastIndexOf('_', lastUnd - 1);
+        }
+        return null;
+    }
 
     private static float? GetFloat(Dictionary<string, string> props, string key)
     {
