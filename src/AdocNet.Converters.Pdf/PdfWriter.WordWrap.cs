@@ -322,6 +322,13 @@ internal sealed partial class PdfWriter
             else
                 _currentStream.Append($"{Fmt(extraSpacing)} Tw\n"); // Apply justification
 
+            // Apply link color when this segment has a link target.
+            bool linkColored = seg.LinkUri is not null && LinkColor is not null;
+            if (linkColored)
+            {
+                var lc = LinkColor!.Value;
+                _currentStream.Append($"{Fmt(lc.R)} {Fmt(lc.G)} {Fmt(lc.B)} rg\n");
+            }
             if (_embeddedFonts.TryGetValue(seg.Font, out var ttFont))
             {
                 TrackCodePoints(seg.Font, seg.Text);
@@ -335,6 +342,10 @@ internal sealed partial class PdfWriter
                 _currentStream.Append(EscapePdfString(seg.Text));
                 _currentStream.Append(") Tj\n");
             }
+            // Restore body color (black) after link text — assumes other text
+            // segments are body-colored.
+            if (linkColored)
+                _currentStream.Append("0 0 0 rg\n");
 
             float segWidth = MeasureText(seg.Text, seg.Font, seg.FontSize);
             // Account for extra spacing per space in this segment (only for non-monospace)
