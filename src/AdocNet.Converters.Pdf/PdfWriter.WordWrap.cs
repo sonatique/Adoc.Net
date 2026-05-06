@@ -170,7 +170,7 @@ internal sealed partial class PdfWriter
                     // Flush word buffer as a segment on the current line
                     if (wordBuffer.Length > 0)
                     {
-                        currentLine.Add(new TextSegment(wordBuffer.ToString(), seg.Font, seg.FontSize, seg.LinkUri, seg.Background));
+                        currentLine.Add(new TextSegment(wordBuffer.ToString(), seg.Font, seg.FontSize, seg.LinkUri, seg.Background, seg.Color));
                         wordBuffer.Clear();
                     }
 
@@ -202,7 +202,7 @@ internal sealed partial class PdfWriter
             // Flush remaining words in buffer
             if (wordBuffer.Length > 0)
             {
-                currentLine.Add(new TextSegment(wordBuffer.ToString(), seg.Font, seg.FontSize, seg.LinkUri, seg.Background));
+                currentLine.Add(new TextSegment(wordBuffer.ToString(), seg.Font, seg.FontSize, seg.LinkUri, seg.Background, seg.Color));
             }
         }
 
@@ -336,6 +336,9 @@ internal sealed partial class PdfWriter
             // Explicit Color takes precedence over LinkColor.
             PdfColor? activeColor = seg.Color
                 ?? (seg.LinkUri is not null ? LinkColor : null);
+            // Save the BodyColor so we restore it after temporary color changes
+            // (rather than blasting to pure black, which would override the
+            // body's #333333 fill set by RenderParagraph).
             if (activeColor is not null)
             {
                 var c = activeColor.Value;
@@ -355,7 +358,12 @@ internal sealed partial class PdfWriter
                 _currentStream.Append(") Tj\n");
             }
             if (activeColor is not null)
-                _currentStream.Append("0 0 0 rg\n");
+            {
+                if (BodyColor is { } bc)
+                    _currentStream.Append($"{Fmt(bc.R)} {Fmt(bc.G)} {Fmt(bc.B)} rg\n");
+                else
+                    _currentStream.Append("0 0 0 rg\n");
+            }
 
             float segWidth = MeasureText(seg.Text, seg.Font, seg.FontSize);
             // Account for extra spacing per space in this segment (only for non-monospace)

@@ -82,6 +82,9 @@ internal sealed partial class PdfWriter
     // ── Link styling ────────────────────────────────────────────────────
     /// <summary>RGB color used to render link text. Null = body color.</summary>
     internal PdfColor? LinkColor { get; set; }
+    /// <summary>RGB body text color. Used to restore fill color after temporary
+    /// segment-level color overrides (link blue, codespan red, etc.).</summary>
+    internal PdfColor? BodyColor { get; set; }
 
     // ── Header/Footer ───────────────────────────────────────────────────
     internal bool ShowPageNumbers { get; set; }
@@ -806,7 +809,12 @@ internal sealed partial class PdfWriter
                 _currentStream.Append(") Tj\n");
             }
             if (activeColor is not null)
-                _currentStream.Append("0 0 0 rg\n");
+            {
+                if (BodyColor is { } bc)
+                    _currentStream.Append($"{Fmt(bc.R)} {Fmt(bc.G)} {Fmt(bc.B)} rg\n");
+                else
+                    _currentStream.Append("0 0 0 rg\n");
+            }
 
             float segWidth = MeasureText(seg.Text, seg.Font, seg.FontSize);
             if (seg.LinkUri is not null)
