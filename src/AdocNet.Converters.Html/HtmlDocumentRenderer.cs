@@ -14,13 +14,32 @@ public sealed partial class HtmlRenderer
         sb.Append("<html lang=\"en\">\n");
         sb.Append("<head>\n");
         sb.Append("<meta charset=\"UTF-8\">\n");
+        // X-UA-Compatible matches asciidoctor's standalone HTML output (legacy
+        // IE compatibility flag — harmless on modern browsers).
+        sb.Append("<meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">\n");
         sb.Append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n");
+        // Generator + author meta tags (asciidoctor parity).
+        sb.Append("<meta name=\"generator\" content=\"AdocNet\">\n");
+        if (document.Attributes.TryGetValue("author", out var author) && !string.IsNullOrWhiteSpace(author))
+        {
+            sb.Append("<meta name=\"author\" content=\"");
+            EscapeTo(sb, author);
+            sb.Append("\">\n");
+        }
 
         // Title: explicit option > document title > "Untitled"
         var title = options.Title ?? document.Title ?? "Untitled";
         sb.Append("<title>");
         EscapeTo(sb, title);
         sb.Append("</title>\n");
+
+        // Google Fonts link (asciidoctor parity) — load Open Sans + Noto Serif + Droid
+        // Sans Mono when using the asciidoctor theme. These are the fonts referenced
+        // throughout the asciidoctor-mimic CSS.
+        if (options.Theme == HtmlTheme.Asciidoctor)
+        {
+            sb.Append("<link rel=\"stylesheet\" href=\"https://fonts.googleapis.com/css?family=Open+Sans:300,300italic,400,400italic,600,600italic%7CNoto+Serif:400,400italic,700,700italic%7CDroid+Sans+Mono:400,700\">\n");
+        }
 
         // CSS: determine source and delivery mechanism
         AppendCssBlock(sb, document, options);
@@ -108,9 +127,11 @@ public sealed partial class HtmlRenderer
             {
                 if (document.Attributes.TryGetValue("revnumber", out var rn) && !string.IsNullOrWhiteSpace(rn))
                 {
+                    // Asciidoctor emits the <br> on the same line as the version,
+                    // not split across two lines.
                     sb.Append("Version ");
                     sb.Append(rn);
-                    sb.Append("\n<br>\n");
+                    sb.Append("<br>\n");
                 }
                 var lastUpdateLabel = document.Attributes.TryGetValue("last-update-label", out var lul)
                     ? lul : "Last updated";

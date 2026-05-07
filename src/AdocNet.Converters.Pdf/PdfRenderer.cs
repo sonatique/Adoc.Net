@@ -25,6 +25,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
     private string _fontMonoItalic = "F6";      // Courier-Oblique
     private string _fontMonoBoldItalic = "F7";  // Courier-BoldOblique
     private string _fontHeading = "F2";         // Heading font (defaults to bold)
+    private string? _fontAwesome;                // FontAwesome 5 Solid for admonition icons
 
     // ── Size configuration (initialized from PdfRenderOptions) ─────────
     private float _titleFontSize = 24f;
@@ -92,6 +93,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
     // ── Section numbering ──────────────────────────────────────────────
     private bool _sectnumsEnabled;
+    private bool _useIconAdmonitions;
     private int _sectnumMaxLevel = 3;
     private readonly int[] _sectionCounters = new int[6];
 
@@ -223,13 +225,14 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         bool willEmbedBodyFont = pdfOptions.FontPath is not null && File.Exists(pdfOptions.FontPath);
         if (willEmbedBodyFont)
         {
-            // Asciidoctor-pdf style: line_height: 1 for headings/title, theme
-            // value for body, and the font's natural 1.36 factor multiplied in
-            // because prawn-pdf adds it for embedded fonts.
-            const float NaturalLeadingFactor = 1.36f;
-            _titleLeading = _titleFontSize * (pdfOptions.TitleLineHeight ?? 1f) * NaturalLeadingFactor;
-            _headingLeading = _h2FontSize * 1f * NaturalLeadingFactor;
-            _bodyLeading = _bodyFontSize * pdfOptions.LineSpacing * NaturalLeadingFactor;
+            // Asciidoctor-pdf parity: empirically calibrated against asciidoctor-pdf
+            // user-manual output (NotoSerif 10.5pt). REF baseline-to-baseline of
+            // 15.78pt for body and 22pt heading bbox = font_size × 1.0 (heading.line_height=1).
+            // Body factor ~1.503: 1.143 (theme) × 1.315.
+            const float BodyLeadingFactor = 1.315f;
+            _titleLeading = _titleFontSize * (pdfOptions.TitleLineHeight ?? 1f) * 1.36f;
+            _headingLeading = _h2FontSize * 1.0f; // line_height: 1 (compact)
+            _bodyLeading = _bodyFontSize * pdfOptions.LineSpacing * BodyLeadingFactor;
         }
         else
         {
@@ -344,6 +347,17 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             _fontHeading = writer.RegisterEmbeddedFont("FH", font);
         }
 
+        // :icons: any non-empty value enables icon-style admonitions (asciidoctor
+        // treats `:icons: font` as the canonical opt-in but the legacy `:icons:`
+        // bare attribute also activates them).
+        _useIconAdmonitions = context.Document.Attributes.ContainsKey("icons");
+
+        // FontAwesome 5 Solid embedded as resource — used to draw admonition icons
+        // (fa-info-circle, fa-warning, etc.) with the exact same glyphs asciidoctor-pdf
+        // ships. Loaded only when icons are actually used; null if loading fails or
+        // icons aren't enabled (drawn-glyph fallback then kicks in).
+        _fontAwesome = _useIconAdmonitions ? TryLoadEmbeddedFontAwesome(writer) : null;
+
         // Section numbering
         _sectnumsEnabled = context.Document.Attributes.ContainsKey("sectnums");
         _sectnumMaxLevel = 3;
@@ -383,6 +397,15 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             float deltaToFirstPageTop = _titleFirstPageTop - _marginTop;
             if (deltaToFirstPageTop != 0)
                 w.MoveCursor(deltaToFirstPageTop);
+            // Compensate for ReserveFirstLineLeading inside WriteWrappedText: it adds
+            // (titleLeading - BodyLeading) to push the ascender below the top margin,
+            // but for an explicit-position title we want bbox top = titleFirstPageTop,
+            // i.e. baseline = titleFirstPageTop + ascender. Cancel the reservation
+            // overshoot (titleLeading - ascender ≈ 0.291 × fontSize for NotoSerif).
+            float ascenderApprox = _titleFontSize * 1.069f;
+            float overshoot = _titleLeading - ascenderApprox;
+            if (overshoot > 0)
+                w.MoveCursor(-overshoot);
             // Register document title as outline entry. Use level 1 so it appears
             // as a sibling of top-level sections (matches Asciidoctor's flat outline).
             w.AddOutlineEntry(document.Title, 1, "_document_title");
@@ -447,7 +470,10 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         if (_headingColor is { } hc) w.SetFillColor(hc.R, hc.G, hc.B);
         w.WriteWrappedText("Table of Contents", _fontHeading, _h2FontSize, _headingLeading);
         if (_headingColor is not null) RestoreBodyFill(w);
-        w.MoveCursor(_paragraphSpacingAfter);
+        // Asciidoctor-pdf uses tighter spacing here than after a body paragraph:
+        // ref baseline-to-baseline (TOC heading→first entry) ≈ 30.5pt.
+        // With heading_leading 22pt + this MoveCursor, total ≈ 30.5 ⇒ 8.5pt move.
+        w.MoveCursor(_paragraphSpacingAfter / 2f);
 
         // Asciidoctor-pdf renders TOC entries in body text color (not link
         // blue). Suppress link coloring for the TOC and restore afterwards.
@@ -458,15 +484,18 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         RestoreBodyFill(w);
         RenderTocEntries(w, toc.Entries, 0, parentNumber: "");
         w.LinkColor = savedLinkColor;
-        w.MoveCursor(_sectionSpacing);
+        // Trailing space matches asciidoctor-pdf TOC→first-section gap (~19pt).
+        // Combined with RenderSection's _sectionSpacing prefix, this lands near
+        // the REF measurement.
+        w.MoveCursor(_paragraphSpacingAfter);
     }
 
     private void RenderTocEntries(PdfWriter w, IReadOnlyList<TocEntry> entries, int depth, string parentNumber)
     {
-        // Asciidoctor-pdf TOC uses line_height 1.5 vs body's 1.4 — slightly
-        // looser to give the dot-leader rows breathing room. We compute it
-        // from the body font size scaled to that ratio.
-        float tocLeading = _bodyFontSize * 1.5f;
+        // Asciidoctor-pdf TOC line spacing measured at ~18.5pt baseline-to-baseline
+        // for 10.5pt body (factor ~1.76). Theme says toc.line-height: 1.4 but the
+        // observed visual leading is wider; matches REF measurement.
+        float tocLeading = _bodyFontSize * 1.76f;
 
         int counter = 0;
         foreach (var entry in entries)
@@ -502,17 +531,14 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 float titleWidth = w.MeasureText(displayTitle, font, fontSize);
                 float pageWidth = w.MeasureText(pageText, _fontRegular, fontSize);
                 float spaceWidth = w.MeasureText(" ", _fontRegular, fontSize);
-                float dotWidth = w.MeasureText(".", _fontRegular, fontSize);
-                // ContentWidth already accounts for the active indent (PushIndent
-                // above). Reserve a generous safety margin (12pt) so glyph-width
-                // estimation jitter and the leader's leading/trailing spaces
-                // don't push the page number onto a wrapped line. Also drop
-                // one dot for additional breathing room.
+                // Asciidoctor-pdf TOC uses ". " (dot+space) as leader content
+                // for visual breathing room between dots. Each unit is dotWidth + spaceWidth.
+                float unitWidth = w.MeasureText(". ", _fontRegular, fontSize);
                 const float Safety = 12f;
                 float available = w.ContentWidth - titleWidth - pageWidth - 2 * spaceWidth - Safety;
-                int dotCount = available > 0 && dotWidth > 0
-                    ? Math.Max(1, (int)(available / dotWidth) - 1) : 1;
-                var leader = " " + new string('.', dotCount) + " ";
+                int dotCount = available > 0 && unitWidth > 0
+                    ? Math.Max(1, (int)(available / unitWidth) - 1) : 1;
+                var leader = " " + string.Concat(System.Linq.Enumerable.Repeat(". ", dotCount)) + " ";
                 var segments = new List<TextSegment>
                 {
                     new(displayTitle, font, fontSize, entry.Id is not null ? $"#internal#{entry.Id}" : null),
@@ -598,12 +624,18 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         w.MoveCursor(_sectionSpacing);
         w.EnsurePage();
 
+        // Per-level leading and margin-bottom calibrated against asciidoctor-pdf:
+        // heading uses tight leading (font_size × 1.0, matching theme heading.line_height=1).
+        // Per-level margin-bottom is set so total advance (leading + margin_bottom)
+        // matches REF baseline-to-baseline (29.20pt for h1 22pt, 27.98pt for h2 18pt).
+        float headingFactor = _headingLeading > 0 && _h2FontSize > 0
+            ? _headingLeading / _h2FontSize : 1.0f;
         var (fontSize, leading, marginBottom, color) = section.Level switch
         {
-            1 => (_h2FontSize, _headingLeading, _h2MarginBottom, _h2Color),
-            2 => (_h3FontSize, _headingLeading, _h3MarginBottom, _h3Color),
-            3 => (_h4FontSize, _headingLeading, _h4MarginBottom, _h4Color),
-            _ => (_h5FontSize, _bodyLeading, _h5MarginBottom, _h5Color),
+            1 => (_h2FontSize, _h2FontSize * headingFactor, _h2MarginBottom, _h2Color),
+            2 => (_h3FontSize, _h3FontSize * headingFactor, _h3MarginBottom, _h3Color),
+            3 => (_h4FontSize, _h4FontSize * headingFactor, _h4MarginBottom, _h4Color),
+            _ => (_h5FontSize, _h5FontSize * headingFactor, _h5MarginBottom, _h5Color),
         };
 
         // Build section number prefix (e.g. "1. ", "1.2. ")
@@ -657,6 +689,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         if (_paragraphSpacingBefore > 0)
             w.MoveCursor(_paragraphSpacingBefore);
         w.EnsurePage();
+        w.EnsureSpaceForLine(_bodyLeading);
 
         // Body color is set globally at start of document; no per-paragraph
         // override needed unless we change colors mid-paragraph.
@@ -678,6 +711,10 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             if (child is ListItemNode item)
             {
                 w.EnsurePage();
+                // Reserve space for the line we're about to draw — prevents the line
+                // from rendering with descender intruding into the footer area
+                // (or the line clipping below the page bottom margin).
+                w.EnsureSpaceForLine(_bodyLeading);
 
                 // Bullet or number prefix
                 // Standard PDF fonts lack the bullet glyph; use it only when a TrueType body font is embedded.
@@ -727,6 +764,17 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                     }
                     else
                     {
+                        // Asciidoctor-pdf adds extra breathing room above continuation
+                        // delimited blocks (code/listing/example) within list items —
+                        // the visible gap is about half a vertical_rhythm wider than
+                        // a plain paragraph continuation. Match the REF measurement.
+                        if (nested is DelimitedBlockNode db &&
+                            (db.BlockKind == DelimitedBlockKind.Listing
+                             || db.BlockKind == DelimitedBlockKind.Source
+                             || db.BlockKind == DelimitedBlockKind.Literal))
+                        {
+                            w.MoveCursor(_paragraphSpacingAfter / 2);
+                        }
                         // Push indent so continuation blocks (code, paragraphs) render
                         // at the same indentation as their parent list item's text
                         float contSaved = w.PushIndent(w.MarginLeftValue - w.MarginLeftBase + ListIndent);
@@ -740,7 +788,11 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         }
         if (savedIndent >= 0)
             w.PopIndent(savedIndent);
-        w.MoveCursor(_paragraphSpacingAfter);
+        // Last item already added paragraphSpacingAfter/2 inside the loop; add
+        // the other half here so total trailing space matches asciidoctor-pdf
+        // (a list ends with a tighter gap than a paragraph because list items
+        // already self-space).
+        w.MoveCursor(_paragraphSpacingAfter / 2);
     }
 
     private void RenderDelimitedBlock(PdfWriter w, DelimitedBlockNode block, int indentLevel, FootnoteState footnotes)
@@ -868,5 +920,30 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             }
         }
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Loads the embedded FontAwesome 5 Solid TTF and registers it as a PDF font.
+    /// Returns the font reference name on success, or null if the resource is
+    /// missing or fails to parse (drawn-glyph fallback then kicks in).
+    /// </summary>
+    private static string? TryLoadEmbeddedFontAwesome(PdfWriter writer)
+    {
+        try
+        {
+            var asm = typeof(PdfRenderer).Assembly;
+            // Resource name follows the default <RootNamespace>.<RelativePath> format.
+            var resourceName = "AdocNet.Converters.Pdf.Resources.fa-solid.ttf";
+            using var stream = asm.GetManifestResourceStream(resourceName);
+            if (stream is null) return null;
+            using var ms = new MemoryStream();
+            stream.CopyTo(ms);
+            var font = TrueTypeFont.Parse(ms.ToArray());
+            return writer.RegisterEmbeddedFont("FA", font);
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

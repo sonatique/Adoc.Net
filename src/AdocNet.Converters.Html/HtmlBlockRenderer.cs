@@ -250,7 +250,8 @@ public sealed partial class HtmlRenderer
                 sb.Append("</blockquote>\n");
                 if (block.Attribution is not null)
                 {
-                    sb.Append("<div class=\"attribution\">\n\u2014 ");
+                    // Use HTML entity for em-dash (matches asciidoctor's output)
+                    sb.Append("<div class=\"attribution\">\n&#8212; ");
                     EscapeTo(sb, block.Attribution);
                     if (block.CitationSource is not null)
                     {

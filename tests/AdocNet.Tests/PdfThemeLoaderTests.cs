@@ -69,8 +69,10 @@ public class PdfThemeLoaderTests
     [Test]
     public void Section_spacing_from_heading_h2_margin_top()
     {
+        // SectionSpacing adds one body line_height_length (12pt) on top of the
+        // theme's heading.margin_top to match asciidoctor-pdf's body→heading gap.
         var opts = BuildFromYaml("heading-h2:", "  margin-top: 14");
-        Assert.That(opts.SectionSpacing, Is.EqualTo(14f));
+        Assert.That(opts.SectionSpacing, Is.EqualTo(26f));
     }
 
     [Test]

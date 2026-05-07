@@ -686,9 +686,10 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
         }
         if (hasRevnumber)
         {
-            // Asciidoctor's "Version " prefix (capitalised) is locale-aware
-            // (en.yml: "version-label: Version"); revdate follows comma-separated.
-            sb.Append("<span id=\"revnumber\">Version ");
+            // Asciidoctor renders this as lowercase "version " in the header
+            // (en.yml: "version-label: Version" but the header uses lowercase form).
+            // Footer remains "Version " capitalized (handled separately).
+            sb.Append("<span id=\"revnumber\">version ");
             EscapeTo(sb, revnumber!);
             if (hasRevdate)
                 sb.Append(',');

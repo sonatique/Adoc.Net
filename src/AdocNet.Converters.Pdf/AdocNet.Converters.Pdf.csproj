@@ -17,6 +17,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- FontAwesome 5 Solid (~200KB) embedded for asciidoctor-pdf admonition icons.
+         Licensed under the SIL Open Font License 1.1. -->
+    <EmbeddedResource Include="Resources\fa-solid.ttf" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\AdocNet.Core\AdocNet.Core.csproj" />
     <ProjectReference Include="..\AdocNet.Ast\AdocNet.Ast.csproj" />
   </ItemGroup>
