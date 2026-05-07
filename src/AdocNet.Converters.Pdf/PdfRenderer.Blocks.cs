@@ -507,6 +507,11 @@ public sealed partial class PdfRenderer
         float startY = w.CursorY;
         float startX = w.MarginLeftValue;
 
+        // Compute icon vertical center upfront so the column rule (drawn after
+        // body content) can be centered on it (matches asciidoctor-pdf).
+        float bodyAscent = _bodyFontSize * 1.069f;
+        float iconCenterY = startY - bodyAscent / 2f;
+
         if (_useIconAdmonitions)
         {
             // Asciidoctor-pdf renders admonition icons as Font Awesome 5 Solid glyphs
@@ -515,9 +520,7 @@ public sealed partial class PdfRenderer
             // We try to mirror that with the embedded FA font; fall back to a drawn
             // circle+glyph if FA loading failed (e.g. resource missing).
             // Icon is centered in its column (icon column width 36pt at offset 12pt).
-            float bodyAscent = _bodyFontSize * 1.069f;
             float iconCenterX = startX + AdmonPaddingLeft + IconColumnWidth / 2f;
-            float iconCenterY = startY - bodyAscent / 2f;
             // Pick the right FA variant for this admonition (TIP uses FA Regular
             // far-lightbulb, others use FA Solid). Fall back to Solid if Regular
             // failed to load.
@@ -578,9 +581,16 @@ public sealed partial class PdfRenderer
         {
             // Asciidoctor-pdf draws a thin grey vertical "column rule"
             // (base.border_color = #EEEEEE, base.border_width = 0.5pt)
-            // between the icon column and the content column.
+            // between the icon column and the content column. The rule is
+            // VERTICALLY CENTERED ON THE ICON (REF measurement: rule center
+            // y = icon center y to within rounding). Shift the rule so its
+            // center aligns with iconCenterY while preserving its height.
+            float ruleHeight = startY - endY;
+            float ruleCenterCurrent = (startY + endY) / 2f;
+            float ruleShift = iconCenterY - ruleCenterCurrent;
+            float shiftedBottom = endY + ruleShift;
             w.SetFillColor(0xEE / 255f, 0xEE / 255f, 0xEE / 255f);
-            w.DrawRect(ruleX, endY, RuleWidth, startY - endY, fill: true);
+            w.DrawRect(ruleX, shiftedBottom, RuleWidth, ruleHeight, fill: true);
             w.SetFillColor(0, 0, 0);
         }
         else
