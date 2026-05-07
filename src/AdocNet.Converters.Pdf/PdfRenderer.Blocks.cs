@@ -481,14 +481,28 @@ public sealed partial class PdfRenderer
     {
         w.EnsurePage();
 
-        // Asciidoctor-pdf renders admonitions with a colored vertical bar on the
-        // left, an uppercase colored label, and indented body content. We mirror
-        // the structure: label first, then indented body, then a vertical bar
-        // drawn from start-Y to end-Y in the admonition's accent color.
+        // Asciidoctor-pdf admonition layout (default theme):
+        //   admonition.padding = [vertical_rhythm/3, horizontal_rhythm,
+        //                          vertical_rhythm/3, horizontal_rhythm]
+        //                      = [4, 12, 4, 12]
+        //   icon column width = icon_size * 1.5 = 36pt (when icon_size = 24)
+        //   column rule between icon column and content (base.border_color
+        //   = #EEEEEE, base.border_width = 0.5pt)
+        //   content column = remaining width minus right padding
         var color = AdmonitionColor(admonition.AdmonitionType);
-        const float LabelWidth = 70f;   // horizontal slot for "NOTE"/"TIP"/etc.
-        const float BarThickness = 3f;  // vertical accent bar width
-        const float BarPadding = 4f;    // gap between bar and label
+        const float AdmonPaddingLeft = 12f;    // horizontal_rhythm
+        const float IconColumnWidth = 36f;     // icon_size (24) * 1.5
+        const float LabelPaddingRight = 12f;   // padding between icon column and rule
+        const float ContentLeftPadding = 12f;  // padding between rule and content
+        const float RuleWidth = 0.5f;          // base.border_width
+        const float BarThickness = 3f;         // for text-label fallback only
+        const float BarPadding = 4f;
+        // X coordinate of the vertical column rule (between icon column and content).
+        // Total horizontal layout per asciidoctor-pdf:
+        //   [page_margin] [pad_left=12] [icon_col=36] [pad_right=12] [rule=0.5] [pad_left=12] [content]
+        float ruleX = w.MarginLeftValue + AdmonPaddingLeft + IconColumnWidth + LabelPaddingRight;
+        // Body content starts to the right of the rule + padding
+        float labelWidth = AdmonPaddingLeft + IconColumnWidth + LabelPaddingRight + RuleWidth + ContentLeftPadding;
 
         float startY = w.CursorY;
         float startX = w.MarginLeftValue;
@@ -500,8 +514,9 @@ public sealed partial class PdfRenderer
             // ~24pt, in the type's accent color, with NO surrounding circle background.
             // We try to mirror that with the embedded FA font; fall back to a drawn
             // circle+glyph if FA loading failed (e.g. resource missing).
+            // Icon is centered in its column (icon column width 36pt at offset 12pt).
             float bodyAscent = _bodyFontSize * 1.069f;
-            float iconCenterX = startX + 11;       // ~11pt from left margin
+            float iconCenterX = startX + AdmonPaddingLeft + IconColumnWidth / 2f;
             float iconCenterY = startY - bodyAscent / 2f;
             // Pick the right FA variant for this admonition (TIP uses FA Regular
             // far-lightbulb, others use FA Solid). Fall back to Solid if Regular
@@ -543,8 +558,8 @@ public sealed partial class PdfRenderer
         }
         w.SetFillColor(0, 0, 0);
 
-        // Indent body content to leave room for the bar + label gutter.
-        float savedIndent = w.PushIndent(LabelWidth);
+        // Indent body content to the position right of the column rule.
+        float savedIndent = w.PushIndent(labelWidth);
         if (admonition.Children.Count > 0)
         {
             foreach (var child in admonition.Children)
@@ -559,12 +574,20 @@ public sealed partial class PdfRenderer
         w.PopIndent(savedIndent);
 
         float endY = w.CursorY;
-        // Vertical accent bar in the indent gutter — only in text-label mode.
-        // When :icons: is set, asciidoctor-pdf shows just the circle icon (no bar);
-        // drawing both produces a stray-looking blue line next to the icon.
-        if (!_useIconAdmonitions)
+        if (_useIconAdmonitions)
         {
-            float barX = startX + LabelWidth - BarThickness - BarPadding;
+            // Asciidoctor-pdf draws a thin grey vertical "column rule"
+            // (base.border_color = #EEEEEE, base.border_width = 0.5pt)
+            // between the icon column and the content column.
+            w.SetFillColor(0xEE / 255f, 0xEE / 255f, 0xEE / 255f);
+            w.DrawRect(ruleX, endY, RuleWidth, startY - endY, fill: true);
+            w.SetFillColor(0, 0, 0);
+        }
+        else
+        {
+            // Text-label mode: thick colored accent bar in the indent gutter
+            // (asciidoctor-pdf's behavior when :icons: is unset).
+            float barX = startX + labelWidth - BarThickness - BarPadding;
             w.SetFillColor(color.R, color.G, color.B);
             w.DrawRect(barX, endY, BarThickness, startY - endY, fill: true);
             w.SetFillColor(0, 0, 0);
