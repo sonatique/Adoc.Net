@@ -1,0 +1,246 @@
+# Deferred Parity Items vs Asciidoctor
+
+This document captures parity gaps between AdocNet output and the reference
+asciidoctor / asciidoctor-pdf / asciidoctor-revealjs / etc. tools that were
+identified during visual sweeps but **not yet fixed**. Each entry includes
+enough context to pick up the work cold.
+
+The verification methodology relies on `tools/parity-sweep.py` to render both
+sides and on PyMuPDF span extraction (font, size, color, bbox) to surface
+differences invisible at panel resolution. See
+`memory/feedback_pdf_color_extraction.md` for the lesson behind this.
+
+---
+
+## PDF (asciidoctor-theme)
+
+### 1. In-source-block conum markers — needs parser change
+
+**What's missing.** Asciidoctor renders `<1>`, `<2>` markers inside a source
+block as small circled-number glyphs (① ② …) positioned at the end of the
+referenced line, in the codespan accent color (#B12146). AdocNet currently
+strips or literal-renders them inside the verbatim text, so the connection
+between the line and the callout list below is invisible in PDF.
+
+**Why it's deferred.** Requires a layered change:
+1. **Parser** — `BlockParser` already strips `// <1>` end-of-line comments
+   when populating `DelimitedBlockNode.Callouts`. It needs to instead retain
+   their column position so the renderer can place the glyph correctly.
+2. **AST** — add a `(int line, int column, int conumNumber)` list to
+   `DelimitedBlockNode` (e.g. `InlineCallouts`).
+3. **PDF renderer** — in `RenderVerbatimBlock` / `WriteWrappedVerbatimText`,
+   after writing each line, look up any conums for that line and emit the
+   circled-number glyph in mono font + codespan color at the correct x.
+
+**Reference values** (already verified against `quarkus-getting-started.adoc`):
+- Glyph: `\u2460` + `(num - 1)` for num ≤ 20; fallback `(N)` otherwise
+- Font: `_fontMono` (codespan font)
+- Color: `_codespanColor` ?? `#B12146` (already wired up for the callout list)
+- Size: same as `_codeFontSize`
+
+**Where to hook in.** `PdfRenderer.cs` around line 865 (the verbatim line
+loop) — for each line, after `WriteWrappedVerbatimText`, check if the
+current source line has callouts and append a colored conum glyph.
+
+### 2. Color 1-bit precision differences
+
+**Symptom.** PyMuPDF reports color values one-off from REF (e.g. CAND
+`#1a407d` vs REF `#19407c`, CAND `#bf3300` vs REF `#bf3400`).
+
+**Root cause.** `PdfWriter.SetFillColor(float r, g, b)` writes RGB as
+floats with `Fmt(...)`; the resulting PDF uses fractional values that round
+differently than asciidoctor-pdf's integer-based color emission. Visually
+identical, machine-different.
+
+**Fix sketch.** Add `SetFillColorBytes(byte r, byte g, byte b)` on
+`PdfWriter` that emits `r/255 g/255 b/255 rg` with consistent precision
+(or use `r 255 div g 255 div b 255 div setrgbcolor`-like notation). Use it
+for any color sourced from a hex string.
+
+**Why deferred.** Cosmetic / not user-visible.
+
+### 3. Page-bottom rule for non-list content
+
+**What's missing.** I added `EnsureSpaceForLine(leading)` and called it from
+`RenderList` and `RenderParagraph`, but other block kinds (admonition body,
+description list items, table rows, sidebar contents) still rely on the
+weaker `_cursorY < _marginBottom` check that fires *after* a line has
+already started rendering with descender below the bottom margin.
+
+**Plan.** Audit each `RenderXxx` and add `EnsureSpaceForLine(_bodyLeading)`
+before drawing the next line of content. Most paths already call
+`EnsurePage()` first; just replace with the stricter check.
+
+---
+
+## PDF (default theme)
+
+### 4. Page-margin units in built-in defaults
+
+`PdfRenderOptions` defaults have raw numbers for margins. Once theme YAML
+loading proved that `0.5in` style values are common, the built-in defaults
+should also accept and document unit suffixes for consistency. Currently
+`MarginTop = 36f` (a magic number); cleaner as `MarginTop = "0.5in"` parsed
+through `ParseLengthSafe` at load time.
+
+---
+
+## HTML (default theme) — SIGNIFICANT, user-visible
+
+### 5. `:toc: left` not respected
+
+**Symptom.** `user-manual.adoc` has `:toc: left` and asciidoctor renders a
+fixed left sidebar TOC. AdocNet renders an inline TOC at the top of the
+document.
+
+**Plan.** In `HtmlDocumentRenderer`, read `:toc:` attribute value:
+- `left` → add `body class="toc2 toc-left"` and wrap TOC in
+  `<div id="toc" class="toc2">`
+- `right` → `body class="toc2 toc-right"`, same wrapping
+- `macro` → only render TOC at `toc::[]` macro position
+- empty / unset / `auto` → inline at top (current behavior)
+
+The CSS for `body.toc2 #toc.toc2` is already in `HtmlThemeCss.cs` (lines
+377–415) for the asciidoctor theme; likely needs porting to default theme
+too if we want the sidebar to look right outside asciidoctor mode.
+
+### 6. Section heading color
+
+**Symptom.** REF default theme uses asciidoctor's terracotta `#BA3925` for
+`<h2>`–`<h4>`; AdocNet default theme uses near-black (browser default).
+
+**Plan.** Add to default theme CSS:
+```css
+h2, h3, h4 { color: #ba3925; font-family: "Open Sans", sans-serif; font-weight: 300; }
+```
+
+### 7. `:icons: font` not honored in default theme
+
+**Symptom.** `:icons: font` injects FA stylesheet only when
+`Theme = Asciidoctor`. Default theme renders `<i class="fa icon-note">`
+without the FA `<link>`, so admonition icons show as empty space.
+
+**Plan.** In `HtmlDocumentRenderer.AppendDocumentPrologue`, the
+`:icons: font` check at line 29 already injects FA. Verify it triggers
+for default theme too (it should — there's no `Theme` guard around it).
+The issue may be missing CSS rules `.icon-note:before { content: "\f05a" }`
+in the default theme block. Port them from the asciidoctor theme block.
+
+### 8. Subtitle line-break
+
+**Symptom.** REF: `DataSync Documentation Team — Version 1.8, 2025-09-30`
+on one line with em-dash separator. AdocNet: author and revdate on two
+separate `<div class="details">` lines.
+
+**Plan.** In `HtmlRenderer.cs` around line 666 (header rendering), emit
+author + revdate on a single line when both exist, separated by
+`&#8201;–&#8201;` (thin-space + en-dash + thin-space).
+
+---
+
+## HTML (asciidoctor-theme) — minor
+
+### 9. CSS content differs from verbatim asciidoctor.css
+
+**State.** AdocNet ships ~280 lines of "asciidoctor-mimic" CSS in
+`HtmlThemeCss.cs::AsciidoctorTheme`. Reference `asciidoctor.css` is ~430
+lines including reset, print styles, callout styles, deeper table styling,
+and quoteblock variants we haven't ported.
+
+**Plan (optional).** Embed verbatim `asciidoctor.css` (~28KB) as a resource
+when `Theme = Asciidoctor`. License is MIT, attribution kept in comments.
+Pros: pixel-perfect parity. Cons: can't selectively override (e.g. our
+`#toc.toc2` width tweaks for AdocNet's slightly different content density).
+
+A middle ground: keep our CSS but add a regression test that diffs a
+representative document's rendered CSS rules against asciidoctor's output
+to catch drift.
+
+---
+
+## EPUB-struct — small
+
+### 10. `META-INF/container.xml` 1-line diff
+
+Trivial. Likely XML formatting (attribute order, self-closing style,
+whitespace). Diff: `parity-sweep-out/user-manual/epub-struct/META-INF__container.xml.diff`.
+
+---
+
+## Reveal.js — large diff (752 lines)
+
+### 11. Structural mismatch
+
+**State unknown.** Visual sweep shows the sample renders but the DOM dump
+diff is 752 lines — suggests fundamental structural difference (slide
+nesting, section markers, data attributes).
+
+**Plan.** Dump first ~50 lines of both `parity-sweep-out/user-manual/revealjs/{ref,cand}.dump`
+and start from the first divergence. Likely the slide wrapping pattern
+differs: asciidoctor-revealjs nests vertical slides differently than what
+we emit in `RevealjsRenderer.cs`.
+
+---
+
+## Man — large diff (573 lines)
+
+### 12. roff macro alignment
+
+**State unknown.** 573-line diff in normalised `.man` output suggests our
+roff macros (`.PP`, `.SH`, `.IP`, `.TP`, etc.) don't match asciidoctor's
+man backend exactly.
+
+**Plan.** Diff `parity-sweep-out/user-manual/man/{ref,cand}.normalised.man`
+line by line. Common gaps:
+- section-header macro choice (`.SH` vs `.SS`)
+- paragraph leading indent
+- `.URL` vs `.UR`/`.UE` for links
+- font-style escape sequences (`\fB`, `\fI`)
+
+---
+
+## Patterns / lessons (apply automatically)
+
+The "icon was wrong color" thread settled into a repeatable pattern:
+
+1. **Don't approximate** — when the reference uses a specific font /
+   glyph / color, embed/use that exact resource. Drawn-circle-with-vector-glyph
+   was a "looks similar" hack; embedding the actual FontAwesome was the right
+   answer always.
+
+2. **Use exact theme constants** — colors like `#19407C` come from
+   `AdmonitionIcons` in
+   `asciidoctor-pdf/lib/asciidoctor/pdf/converter.rb:41-47`,
+   not from "looks blue-ish."
+
+3. **Verify with PyMuPDF span extraction** — color/font/size differences
+   that are invisible at panel resolution show up immediately in span
+   attributes. Tool: `tools/pdf-visual-diff.py`, plus quick scripts at
+   `/c/tmp/spacing-check/*.py` for one-off checks.
+
+4. **Lazy-load embedded resources** — large fonts (FA Solid 200KB, FA
+   Regular 34KB) only embed when actually needed. Pattern:
+   ```csharp
+   _fontAwesome = _useIconFeature
+       ? TryLoadEmbeddedFont(writer, "Resources.foo.ttf", "FA")
+       : null;
+   ```
+   Tests assert "no `/CIDFontType2`" for documents that don't use the
+   feature, so unconditional embedding will fail them.
+
+5. **Tracker discipline** — when something is "small enough to skip for
+   now", write it here. Don't trust memory across sessions.
+
+---
+
+## How to extend this list
+
+When deferring an item, add a section with:
+- **Symptom.** What the user / sweep sees.
+- **Root cause.** What's actually broken.
+- **Plan.** Specific files / line ranges / code sketches.
+- **Reference values.** Exact colors / glyphs / metrics from REF when known.
+- **Why deferred.** What's blocking; e.g. needs parser change, cosmetic only,
+  large scope.
+
+Remove the section once fixed and verified by a sweep.
