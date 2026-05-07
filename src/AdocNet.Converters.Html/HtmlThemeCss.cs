@@ -354,7 +354,10 @@ internal static class HtmlThemeCss
            font-family from the CDN; these rules add the per-type glyph and
            coloring/sizing. The icon is wrapped in a circle for NOTE/IMPORTANT
            via background+border-radius (asciidoctor's "interesting" iconography). */
-        .admonitionblock td.icon [class^="icon-"] { font-size: 2.5em; cursor: default; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5); }
+        /* Match the rendered class verbatim ('fa icon-note', 'fa icon-tip', etc.).
+           Earlier '[class^="icon-"]' never matched because class actually starts
+           with 'fa', so the 2.5em sizing was never applied — icons rendered tiny. */
+        .admonitionblock td.icon [class^="fa icon-"] { font-size: 2.5em; cursor: default; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5); }
         .admonitionblock td.icon .icon-note:before { content: "\f05a"; color: #19407c; }
         .admonitionblock td.icon .icon-tip:before { content: "\f0eb"; text-shadow: 1px 1px 2px rgba(155, 155, 0, 0.8); color: #111; }
         .admonitionblock td.icon .icon-warning:before { content: "\f071"; color: #bf6900; }
