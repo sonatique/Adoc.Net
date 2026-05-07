@@ -302,14 +302,20 @@ internal static class HtmlThemeCss
             border-left: 5px solid #e0e0dc;
         }
         .quoteblock .attribution { font-size: 0.9em; color: rgba(0, 0, 0, 0.6); margin-top: 0.75em; }
-        table {
+        /* Asciidoctor parity: only table.tableblock (real AsciiDoc tables) get
+           cell borders. Generic tables (used internally by admonitions, hdlist,
+           etc.) inherit borderless behavior from their specific selectors. */
+        table.tableblock {
             border-collapse: collapse;
             width: 100%;
             margin: 1em 0;
             background: #fff;
         }
-        th, td { border: 1px solid #dedede; padding: 0.5em 0.625em; }
-        th { background: #f7f8f7; }
+        table.tableblock th, table.tableblock td {
+            border: 1px solid #dedede;
+            padding: 0.5em 0.625em;
+        }
+        table.tableblock th { background: #f7f8f7; }
         .stripes-odd tr:nth-child(odd) td { background: #f8f8f7; }
         .stripes-even tr:nth-child(even) td { background: #f8f8f7; }
         /* Horizontal description lists — asciidoctor renders class="hdlist"
@@ -321,10 +327,23 @@ internal static class HtmlThemeCss
         .hdlist td.hdlist2 { padding: 0 0 0.5em 0; }
         .hdlist td.hdlist2 > p { margin: 0; }
         .admonitionblock {
-            margin: 1em 0;
+            margin: 1.4em 0 0;
         }
-        .admonitionblock table { border: 0; background: none; width: 100%; }
-        .admonitionblock td.icon { text-align: center; width: 80px; font-size: 1.5em; font-weight: 700; }
+        /* Asciidoctor.css parity: outer table is borderless; the column rule
+           between icon and content is implemented as a left-border on the
+           content cell (1px solid #dddddf). */
+        .admonitionblock > table { border-collapse: separate; border: 0; background: none; width: 100%; }
+        .admonitionblock > table td.icon { text-align: center; width: 80px; }
+        .admonitionblock > table td.icon img { max-width: none; }
+        .admonitionblock > table td.icon .title { font-weight: bold; font-family: "Open Sans", "DejaVu Sans", sans-serif; text-transform: uppercase; }
+        .admonitionblock > table td.content {
+            padding-left: 1.125em;
+            padding-right: 1.25em;
+            border-left: 1px solid #dddddf;
+            color: rgba(0, 0, 0, 0.6);
+            word-wrap: anywhere;
+        }
+        .admonitionblock > table td.content > :last-child > :last-child { margin-bottom: 0; }
         .admonitionblock.note td.icon { color: #19407c; }
         .admonitionblock.tip td.icon { color: #111; }
         .admonitionblock.warning td.icon { color: #bf6900; }
