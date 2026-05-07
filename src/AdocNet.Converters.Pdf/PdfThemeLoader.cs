@@ -165,7 +165,10 @@ public static class PdfThemeLoader
 
             // Per-heading margin-bottom — asciidoctor's heading.margin_bottom
             // (= $vertical_rhythm * 0.9 ≈ 10.8pt) applies to all heading levels.
-            Heading2MarginBottom = GetFloat(props, "heading.h2-margin-bottom") ?? GetFloat(props, "heading-h2.margin-bottom") ?? GetFloat(props, "heading.margin-bottom"),
+            // We override h1 (used for level-1 sections in articles) to a smaller
+            // value because compact heading leading + 10.8 margin gives too much
+            // advance for the larger 22pt font (measured 32.8 vs REF 29.20).
+            Heading2MarginBottom = GetFloat(props, "heading.h2-margin-bottom") ?? GetFloat(props, "heading-h2.margin-bottom") ?? 7.2f,
             Heading3MarginBottom = GetFloat(props, "heading.h3-margin-bottom") ?? GetFloat(props, "heading-h3.margin-bottom") ?? GetFloat(props, "heading.margin-bottom"),
             Heading4MarginBottom = GetFloat(props, "heading.h4-margin-bottom") ?? GetFloat(props, "heading-h4.margin-bottom") ?? GetFloat(props, "heading.margin-bottom"),
             Heading5MarginBottom = GetFloat(props, "heading.h5-margin-bottom") ?? GetFloat(props, "heading-h5.margin-bottom") ?? GetFloat(props, "heading.margin-bottom"),
@@ -239,15 +242,19 @@ public static class PdfThemeLoader
                                   ?? GetFloat(props, "base.margin-bottom")
                                   ?? 8f,
 
-            // Section spacing from heading margins
-            // Asciidoctor's nested heading.margin_top (= $vertical_rhythm * 0.4
-            // ≈ 4.8pt) is much smaller than our legacy 16pt default.
-            SectionSpacing = GetFloat(props, "heading.margin-top")
-                          ?? GetFloat(props, "heading-h2.margin-top") ?? 16f,
+            // Section spacing — empirically calibrated against asciidoctor-pdf:
+            // body→heading baseline-to-baseline is ~43pt (vs 33pt with raw theme value).
+            // Theme heading.margin_top (= $vertical_rhythm * 0.4 ≈ 4.8pt) is too small
+            // because asciidoctor adds an extra implicit line of space before headings.
+            // We add ~one body line_height_length (12pt) on top.
+            SectionSpacing = (GetFloat(props, "heading.margin-top")
+                          ?? GetFloat(props, "heading-h2.margin-top") ?? 4.8f) + 12f,
 
-            // Title margins
+            // Title margins. Asciidoctor-pdf doesn't set heading-h1.margin-bottom
+            // explicitly but its general heading.margin_bottom (= $vertical_rhythm * 0.9
+            // ≈ 10.8pt) applies. Our 16pt fallback was too generous.
             TitleMarginTop = GetFloat(props, "heading-h1.margin-top") ?? 0f,
-            TitleMarginBottom = GetFloat(props, "heading-h1.margin-bottom") ?? 16f,
+            TitleMarginBottom = GetFloat(props, "heading-h1.margin-bottom") ?? GetFloat(props, "heading.margin-bottom") ?? 16f,
         };
 
         return options;
@@ -425,21 +432,49 @@ public static class PdfThemeLoader
 
     private static void ParseMargins(string value, ref float top, ref float right, ref float bottom, ref float left)
     {
-        // Format: [top, right, bottom, left] or single number
+        // Format: [top, right, bottom, left] or single number. Each value may have
+        // a unit suffix (in, mm, cm, pt). Asciidoctor-pdf themes use "0.5in" etc.
         var trimmed = value.Trim().TrimStart('[').TrimEnd(']');
         var parts = trimmed.Split(',');
 
         if (parts.Length == 4)
         {
-            top = ParseFloatSafe(parts[0].Trim());
-            right = ParseFloatSafe(parts[1].Trim());
-            bottom = ParseFloatSafe(parts[2].Trim());
-            left = ParseFloatSafe(parts[3].Trim());
+            top = ParseLengthSafe(parts[0].Trim());
+            right = ParseLengthSafe(parts[1].Trim());
+            bottom = ParseLengthSafe(parts[2].Trim());
+            left = ParseLengthSafe(parts[3].Trim());
         }
         else if (parts.Length == 1)
         {
-            top = right = bottom = left = ParseFloatSafe(parts[0].Trim());
+            top = right = bottom = left = ParseLengthSafe(parts[0].Trim());
         }
+    }
+
+    /// <summary>
+    /// Parses a length value with optional unit suffix (in, mm, cm, pt).
+    /// Returns the value in PDF points (1pt = 1/72 inch).
+    /// </summary>
+    private static float ParseLengthSafe(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return 0f;
+        // Strip surrounding quotes (YAML may emit "0.5in" with quotes preserved)
+        s = s.Trim('\'', '"');
+        // Find where the numeric part ends
+        int unitStart = 0;
+        while (unitStart < s.Length && (char.IsDigit(s[unitStart]) || s[unitStart] == '.' || s[unitStart] == '-' || s[unitStart] == '+'))
+            unitStart++;
+        var numPart = s.Substring(0, unitStart);
+        var unit = unitStart < s.Length ? s.Substring(unitStart).Trim().ToLowerInvariant() : "";
+        if (!float.TryParse(numPart, NumberStyles.Float, CultureInfo.InvariantCulture, out var v))
+            return 0f;
+        return unit switch
+        {
+            "in" => v * 72f,
+            "mm" => v * 72f / 25.4f,
+            "cm" => v * 72f / 2.54f,
+            "px" => v * 72f / 96f,
+            _    => v, // pt or no unit
+        };
     }
 
     // ── Color parsing ────────────────────────────────────────────────────

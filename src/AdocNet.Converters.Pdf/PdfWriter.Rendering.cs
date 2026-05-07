@@ -97,6 +97,24 @@ internal sealed partial class PdfWriter
         s.Append($"h {mode}\n");
     }
 
+    /// <summary>
+    /// Draws a circle centered at (cx, cy) with the given radius using cubic Bezier
+    /// approximation. Mode: "S" stroke, "f" fill, "B" both. Used for admonition icon
+    /// glyphs in the PDF asciidoctor theme.
+    /// </summary>
+    internal void DrawCircle(float cx, float cy, float r, string mode = "f")
+    {
+        // 4-segment Bezier circle approximation. Magic constant ≈ 0.5523.
+        float k = r * 0.5523f;
+        var s = _currentStream!;
+        s.Append($"{Fmt(cx - r)} {Fmt(cy)} m\n");
+        s.Append($"{Fmt(cx - r)} {Fmt(cy + k)} {Fmt(cx - k)} {Fmt(cy + r)} {Fmt(cx)} {Fmt(cy + r)} c\n");
+        s.Append($"{Fmt(cx + k)} {Fmt(cy + r)} {Fmt(cx + r)} {Fmt(cy + k)} {Fmt(cx + r)} {Fmt(cy)} c\n");
+        s.Append($"{Fmt(cx + r)} {Fmt(cy - k)} {Fmt(cx + k)} {Fmt(cy - r)} {Fmt(cx)} {Fmt(cy - r)} c\n");
+        s.Append($"{Fmt(cx - k)} {Fmt(cy - r)} {Fmt(cx - r)} {Fmt(cy - k)} {Fmt(cx - r)} {Fmt(cy)} c\n");
+        s.Append($"h {mode}\n");
+    }
+
     internal void SetFillColor(float r, float g, float b)
     {
         _currentStream!.Append($"{Fmt(r)} {Fmt(g)} {Fmt(b)} rg\n");

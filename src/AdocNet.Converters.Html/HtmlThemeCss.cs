@@ -413,6 +413,15 @@ internal static class HtmlThemeCss
             body.toc2 #toc.toc2 ul ul { padding-left: 1.25em; }
             body.toc2.toc-right { padding-right: 20em; }
         }
+        /* Body lists — verbatim port of asciidoctor.css rules. Uses line-height
+           on the list itself (1.6) for inter-item breathing room rather than
+           per-item margin-top. margin-left positions the bullets in alignment
+           with asciidoctor's expected indent. */
+        ul, ol, dl { line-height: 1.6; margin-bottom: 1.25em; list-style-position: outside; font-family: inherit; }
+        ul, ol { margin-left: 1.5em; }
+        ul li ul, ul li ol { margin-left: 1.25em; margin-bottom: 0; }
+        ol li ul, ol li ol { margin-left: 1.25em; margin-bottom: 0; }
+        ul li p, ol li p { margin-bottom: 0.5em; }
         #footnotes { margin-top: 2em; border-top: 1px solid #ddddd8; padding-top: 0.5em; font-size: 0.875em; }
         mark, .highlight { background: #ffc14f; }
         .verseblock pre { font-family: "Noto Serif", "DejaVu Serif", serif; background: none; border: none; padding: 0; white-space: pre-wrap; }

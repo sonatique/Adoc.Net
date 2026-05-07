@@ -203,38 +203,27 @@ public sealed partial class HtmlRenderer
                 {
                     sb.Append("<p>");
                     RenderInlines(sb, item.DescriptionInlines, item.Description, footnotes, state);
-                    sb.Append("</p>");
+                    sb.Append("</p>\n");
                 }
-                // Render child blocks attached via list continuation (+)
+                // Render child blocks attached via list continuation (+).
+                // Each child block already starts with `<` and the previous content
+                // ends in `\n`, so don't add an extra `\n` (it produces blank lines
+                // that asciidoctor doesn't emit).
                 foreach (var itemChild in item.Children)
                 {
                     if (itemChild is DescriptionListNode nestedDl)
-                    {
-                        sb.Append('\n');
                         RenderDescriptionList(sb, nestedDl, useIconFont, footnotes, secCtx, state);
-                    }
                     else if (itemChild is AdmonitionNode admon)
-                    {
-                        sb.Append('\n');
                         RenderAdmonition(sb, admon, useIconFont, footnotes, secCtx, state);
-                    }
                     else if (itemChild is ParagraphNode para)
-                    {
-                        sb.Append('\n');
                         RenderParagraph(sb, para, footnotes, state);
-                    }
                     else if (itemChild is DelimitedBlockNode block)
-                    {
-                        sb.Append('\n');
                         RenderDelimitedBlock(sb, block, footnotes, secCtx, state);
-                    }
                     else if (itemChild is ListNode nestedList)
-                    {
-                        sb.Append('\n');
                         RenderList(sb, nestedList, footnotes, state, orderedListDepth: 0);
-                    }
                 }
-                sb.Append("\n</dd>\n");
+                // Inner content always ends with `\n`, so don't double-up.
+                sb.Append("</dd>\n");
             }
         }
         sb.Append("</dl>\n");

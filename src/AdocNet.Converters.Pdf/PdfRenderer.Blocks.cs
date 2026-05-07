@@ -493,11 +493,48 @@ public sealed partial class PdfRenderer
         float startY = w.CursorY;
         float startX = w.MarginLeftValue;
 
-        // Draw the colored uppercase label at the top-left of the admonition.
-        // It sits next to the bar; subsequent body text starts below the label.
-        var labelText = admonition.AdmonitionType.ToUpperInvariant();
-        w.SetFillColor(color.R, color.G, color.B);
-        w.WriteWrappedText(labelText, _fontBold, _bodyFontSize, _bodyLeading);
+        if (_useIconAdmonitions)
+        {
+            // Asciidoctor-pdf renders admonition icons as Font Awesome 5 Solid glyphs
+            // (fa-info-circle for NOTE, fa-exclamation-triangle for WARNING, etc.) at
+            // ~24pt, in the type's accent color, with NO surrounding circle background.
+            // We try to mirror that with the embedded FA font; fall back to a drawn
+            // circle+glyph if FA loading failed (e.g. resource missing).
+            float bodyAscent = _bodyFontSize * 1.069f;
+            float iconCenterX = startX + 11;       // ~11pt from left margin
+            float iconCenterY = startY - bodyAscent / 2f;
+            if (_fontAwesome is not null)
+            {
+                // Draw the FA glyph in the admonition's accent color, centered
+                // on the body's first line baseline.
+                string fa = AdmonitionFaGlyph(admonition.AdmonitionType);
+                float faSize = 24f;
+                w.SetFillColor(color.R, color.G, color.B);
+                float gw = w.MeasureText(fa, _fontAwesome, faSize);
+                // Vertical centering: glyph baseline ≈ glyph_top - cap_height. For FA
+                // solid (cap_height ≈ 0.7 × font_size), baseline = center + 0.35×size.
+                float baselineY = iconCenterY - faSize * 0.35f;
+                w.WriteText(fa, _fontAwesome, faSize, iconCenterX - gw / 2f, baselineY);
+            }
+            else
+            {
+                // Fallback: drawn circle + vector glyph
+                float iconRadius = 9f;
+                w.SetFillColor(color.R, color.G, color.B);
+                w.DrawCircle(iconCenterX, iconCenterY, iconRadius, "f");
+                w.SetFillColor(1f, 1f, 1f);
+                DrawAdmonitionGlyph(w, admonition.AdmonitionType, iconCenterX, iconCenterY);
+            }
+            // Do NOT advance cursor — body text draws at startY, alongside the icon
+            // (icon is in the LabelWidth gutter to the left of the indented body).
+        }
+        else
+        {
+            // Text label fallback (asciidoctor's behavior when :icons: is unset)
+            var labelText = admonition.AdmonitionType.ToUpperInvariant();
+            w.SetFillColor(color.R, color.G, color.B);
+            w.WriteWrappedText(labelText, _fontBold, _bodyFontSize, _bodyLeading);
+        }
         w.SetFillColor(0, 0, 0);
 
         // Indent body content to leave room for the bar + label gutter.
@@ -516,26 +553,76 @@ public sealed partial class PdfRenderer
         w.PopIndent(savedIndent);
 
         float endY = w.CursorY;
-        // Vertical accent bar in the indent gutter.
-        float barX = startX + LabelWidth - BarThickness - BarPadding;
-        w.SetFillColor(color.R, color.G, color.B);
-        w.DrawRect(barX, endY, BarThickness, startY - endY, fill: true);
-        w.SetFillColor(0, 0, 0);
+        // Vertical accent bar in the indent gutter — only in text-label mode.
+        // When :icons: is set, asciidoctor-pdf shows just the circle icon (no bar);
+        // drawing both produces a stray-looking blue line next to the icon.
+        if (!_useIconAdmonitions)
+        {
+            float barX = startX + LabelWidth - BarThickness - BarPadding;
+            w.SetFillColor(color.R, color.G, color.B);
+            w.DrawRect(barX, endY, BarThickness, startY - endY, fill: true);
+            w.SetFillColor(0, 0, 0);
+        }
 
         w.MoveCursor(_paragraphSpacingAfter);
     }
 
     /// <summary>
+    /// Returns the FontAwesome 5 Solid codepoint for the given admonition type.
+    /// These match asciidoctor-pdf's default theme icon mappings.
+    /// </summary>
+    private static string AdmonitionFaGlyph(string type) => type.ToLowerInvariant() switch
+    {
+        "note"      => "\uf05a", // fa-info-circle
+        "tip"       => "\uf0eb", // fa-lightbulb
+        "warning"   => "\uf071", // fa-exclamation-triangle
+        "caution"   => "\uf06d", // fa-fire
+        "important" => "\uf06a", // fa-exclamation-circle
+        _           => "\uf05a", // default to info-circle
+    };
+
+    /// <summary>
+    /// Draws the white glyph inside an admonition icon circle, using vector
+    /// primitives (rectangles + small circles) to mimic FontAwesome's
+    /// fa-info-circle / fa-warning / etc. without requiring font embedding.
+    /// (cx, cy) is the circle's center; the circle radius is assumed to be 9pt.
+    /// PDF y-axis: larger y = higher on page (top of icon = cy + offset).
+    /// </summary>
+    private static void DrawAdmonitionGlyph(PdfWriter w, string type, float cx, float cy)
+    {
+        switch (type.ToLowerInvariant())
+        {
+            case "note":
+            case "tip":
+                // "i" — info-style: small dot at TOP, taller bar BELOW.
+                w.DrawCircle(cx, cy + 4f, 1.3f, "f");                    // dot above
+                w.DrawRect(cx - 1.3f, cy - 4.5f, 2.6f, 6f, fill: true);  // bar below (y0=cy-4.5 → extends up to cy+1.5)
+                break;
+            case "warning":
+            case "caution":
+            case "important":
+                // "!" — exclamation: taller bar ABOVE, small dot BELOW.
+                w.DrawRect(cx - 1.3f, cy - 1.5f, 2.6f, 6f, fill: true);  // bar above (y0=cy-1.5 → extends up to cy+4.5)
+                w.DrawCircle(cx, cy - 4f, 1.3f, "f");                    // dot below
+                break;
+            default:
+                w.DrawCircle(cx, cy, 1.5f, "f");
+                break;
+        }
+    }
+
+    /// <summary>
     /// Returns asciidoctor-pdf's accent color for the given admonition type.
-    /// Falls back to a neutral grey for unknown types.
+    /// These match the exact stroke_color values from asciidoctor-pdf's
+    /// AdmonitionIcons constant (lib/asciidoctor/pdf/converter.rb).
     /// </summary>
     private static PdfColor AdmonitionColor(string type) => type.ToLowerInvariant() switch
     {
-        "note"      => new PdfColor(0.13f, 0.41f, 0.79f), // blue #2156a5
-        "tip"       => new PdfColor(0.13f, 0.65f, 0.35f), // green #22a559
-        "warning"   => new PdfColor(0.85f, 0.47f, 0.02f), // orange #d97706
-        "caution"   => new PdfColor(0.94f, 0.62f, 0.04f), // amber  #f59e0b
-        "important" => new PdfColor(0.86f, 0.15f, 0.15f), // red    #dc2626
+        "note"      => new PdfColor(0x19 / 255f, 0x40 / 255f, 0x7C / 255f), // #19407C dark navy
+        "tip"       => new PdfColor(0x11 / 255f, 0x11 / 255f, 0x11 / 255f), // #111111 near-black
+        "warning"   => new PdfColor(0xBF / 255f, 0x69 / 255f, 0x00 / 255f), // #BF6900 dark orange
+        "caution"   => new PdfColor(0xBF / 255f, 0x34 / 255f, 0x00 / 255f), // #BF3400 red-orange
+        "important" => new PdfColor(0xBF / 255f, 0x00 / 255f, 0x00 / 255f), // #BF0000 red
         _           => new PdfColor(0.5f, 0.5f, 0.5f),
     };
 

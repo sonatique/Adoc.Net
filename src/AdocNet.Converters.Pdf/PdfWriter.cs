@@ -668,6 +668,20 @@ internal sealed partial class PdfWriter
 
     internal bool NeedsNewPage() => _cursorY < _marginBottom;
 
+    /// <summary>
+    /// Forces a new page if there isn't enough vertical space for the next line of text
+    /// at the given leading. Used by list items, paragraphs, and code blocks to prevent
+    /// content from overflowing into the footer area.
+    /// </summary>
+    internal void EnsureSpaceForLine(float leading)
+    {
+        if (_cursorY - leading < _marginBottom)
+        {
+            FinishPage();
+            StartPage();
+        }
+    }
+
     internal void EnsurePage()
     {
         if (_currentStream is null || NeedsNewPage())
