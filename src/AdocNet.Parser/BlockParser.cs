@@ -2452,10 +2452,14 @@ internal static class BlockParser
                     string? contLang = pendingSourceLang;
                     string? contHighlight = pendingHighlight;
                     bool contIsSource = hasPendingSource;
-                    if (TryParseSourceAttribute(nextLine, out var contSourceLang, out _, out _, out var contSourceHighlight))
+                    string? contBlockId = null;
+                    List<string>? contRoles = null;
+                    if (TryParseSourceAttribute(nextLine, out var contSourceLang, out var contSourceBlockId, out var contSourceRoles, out var contSourceHighlight))
                     {
                         contLang = contSourceLang;
                         contHighlight = contSourceHighlight;
+                        contBlockId = contSourceBlockId;
+                        contRoles = contSourceRoles;
                         contIsSource = true;
                         j++;
                         // Skip blank lines after [source]
@@ -2503,6 +2507,8 @@ internal static class BlockParser
                                 Content = contRawContent,
                                 Language = contLang,
                                 Highlight = contDelimKind == DelimitedBlockKind.Source ? contHighlight : null,
+                                Id = contBlockId,
+                                Roles = contRoles ?? new List<string>(),
                                 Source = new SourceRange(new(j + 1, 1), new(contClosingIdx + 1, lines[contClosingIdx].Length)),
                             };
                             lastItem.AddChild(contBlock);
@@ -2656,10 +2662,14 @@ internal static class BlockParser
                     string? contLang = pendingSourceLang;
                     string? contHighlight = pendingHighlight;
                     bool contIsSource = hasPendingSource;
-                    if (TryParseSourceAttribute(nextLine, out var contSourceLang, out _, out _, out var contSourceHighlight))
+                    string? contBlockId = null;
+                    List<string>? contRoles = null;
+                    if (TryParseSourceAttribute(nextLine, out var contSourceLang, out var contSourceBlockId, out var contSourceRoles, out var contSourceHighlight))
                     {
                         contLang = contSourceLang;
                         contHighlight = contSourceHighlight;
+                        contBlockId = contSourceBlockId;
+                        contRoles = contSourceRoles;
                         contIsSource = true;
                         j++;
                         // Skip blank lines after [source]
@@ -2706,6 +2716,8 @@ internal static class BlockParser
                                 Content = contRawContent,
                                 Language = contLang,
                                 Highlight = contDelimKind == DelimitedBlockKind.Source ? contHighlight : null,
+                                Id = contBlockId,
+                                Roles = contRoles ?? new List<string>(),
                                 Source = new SourceRange(new(j + 1, 1), new(contClosingIdx + 1, lines[contClosingIdx].Length)),
                             };
                             continuationTarget.AddChild(contBlock);
