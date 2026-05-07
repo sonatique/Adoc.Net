@@ -503,18 +503,24 @@ public sealed partial class PdfRenderer
             float bodyAscent = _bodyFontSize * 1.069f;
             float iconCenterX = startX + 11;       // ~11pt from left margin
             float iconCenterY = startY - bodyAscent / 2f;
-            if (_fontAwesome is not null)
+            // Pick the right FA variant for this admonition (TIP uses FA Regular
+            // far-lightbulb, others use FA Solid). Fall back to Solid if Regular
+            // failed to load.
+            bool useRegular = string.Equals(admonition.AdmonitionType, "tip", StringComparison.OrdinalIgnoreCase)
+                              && _fontAwesomeRegular is not null;
+            string? faFont = useRegular ? _fontAwesomeRegular : _fontAwesome;
+            if (faFont is not null)
             {
                 // Draw the FA glyph in the admonition's accent color, centered
                 // on the body's first line baseline.
                 string fa = AdmonitionFaGlyph(admonition.AdmonitionType);
                 float faSize = 24f;
                 w.SetFillColor(color.R, color.G, color.B);
-                float gw = w.MeasureText(fa, _fontAwesome, faSize);
+                float gw = w.MeasureText(fa, faFont, faSize);
                 // Vertical centering: glyph baseline ≈ glyph_top - cap_height. For FA
-                // solid (cap_height ≈ 0.7 × font_size), baseline = center + 0.35×size.
+                // (cap_height ≈ 0.7 × font_size), baseline = center + 0.35×size.
                 float baselineY = iconCenterY - faSize * 0.35f;
-                w.WriteText(fa, _fontAwesome, faSize, iconCenterX - gw / 2f, baselineY);
+                w.WriteText(fa, faFont, faSize, iconCenterX - gw / 2f, baselineY);
             }
             else
             {
@@ -730,11 +736,96 @@ public sealed partial class PdfRenderer
                     segments.Add(new TextSegment(macro.Content, _fontMono, defaultFontSize));
                 else if (macro.Name == "menu")
                     segments.Add(new TextSegment($"{macro.Target} > {macro.Content}", _fontRegular, defaultFontSize));
+                else if (macro.Name == "icon" && _useIconAdmonitions && _fontAwesome is not null)
+                    AppendInlineIconSegments(segments, macro, defaultFontSize);
                 else
                     segments.Add(new TextSegment(macro.Content, _fontRegular, defaultFontSize));
                 break;
         }
     }
+
+    /// <summary>
+    /// Renders an inline `icon:name[]` macro as a FontAwesome glyph, mirroring
+    /// asciidoctor-pdf's inline icon support. Looks up the icon name (e.g.
+    /// "info-circle", "rocket") in the FA codepoint map and emits a single
+    /// segment using the FA Solid (default) or Regular font as appropriate.
+    /// </summary>
+    private void AppendInlineIconSegments(List<TextSegment> segments, InlineMacroNode macro, float fontSize)
+    {
+        var codepoint = InlineIconCodepoint(macro.Target);
+        if (codepoint is null)
+        {
+            // Unknown icon — fall back to literal name in regular font
+            segments.Add(new TextSegment($"[{macro.Target}]", _fontRegular, fontSize));
+            return;
+        }
+        // Asciidoctor-pdf's prawn-icon resolves icons by trying FA variants in
+        // order: brands → regular → solid. For icons that exist in both Regular
+        // and Solid (e.g. star, heart, user), Regular wins (outline style).
+        var font = (_fontAwesomeRegular is not null && IsRegularIcon(macro.Target))
+            ? _fontAwesomeRegular
+            : _fontAwesome!;
+        segments.Add(new TextSegment(codepoint, font, fontSize));
+    }
+
+    /// <summary>
+    /// Returns true for icon names that exist in FontAwesome Regular and where
+    /// the Regular variant should be preferred (matches asciidoctor-pdf's
+    /// resolution order: brands → regular → solid).
+    /// </summary>
+    private static bool IsRegularIcon(string? name) => name?.ToLowerInvariant() switch
+    {
+        "lightbulb" or "lightbulb-o"
+        or "bell" or "bookmark" or "building" or "calendar" or "chart-bar"
+        or "check-circle" or "check-square" or "circle" or "clock" or "comment"
+        or "envelope" or "file" or "flag" or "folder" or "handshake" or "heart"
+        or "image" or "moon" or "newspaper" or "paper-plane" or "registered"
+        or "save" or "smile" or "snowflake" or "square" or "star" or "sun"
+        or "thumbs-down" or "thumbs-up" or "user"
+        or "window-maximize" or "window-minimize" or "window-restore" => true,
+        _ => false,
+    };
+
+    /// <summary>
+    /// Maps common asciidoctor icon: macro names to FontAwesome 5 codepoints.
+    /// Extend as needed; unknown names fall back to literal `[name]` text.
+    /// </summary>
+    private static string? InlineIconCodepoint(string? name) => name?.ToLowerInvariant() switch
+    {
+        null              => null,
+        "info-circle"     => "\uf05a",
+        "info"            => "\uf129",
+        "lightbulb"       => "\uf0eb",
+        "lightbulb-o"     => "\uf0eb",
+        "warning"         => "\uf071",
+        "exclamation-triangle" => "\uf071",
+        "exclamation-circle"   => "\uf06a",
+        "fire"            => "\uf06d",
+        "check"           => "\uf00c",
+        "check-square"    => "\uf14a",
+        "square"          => "\uf0c8",
+        "times"           => "\uf00d",
+        "rocket"          => "\uf135",
+        "cog"             => "\uf013",
+        "user"            => "\uf007",
+        "home"            => "\uf015",
+        "bookmark"        => "\uf02e",
+        "tag"             => "\uf02b",
+        "tags"            => "\uf02c",
+        "link"            => "\uf0c1",
+        "globe"           => "\uf0ac",
+        "search"          => "\uf002",
+        "envelope"        => "\uf0e0",
+        "phone"           => "\uf095",
+        "calendar"        => "\uf073",
+        "clock-o"         => "\uf017",
+        "clock"           => "\uf017",
+        "star"            => "\uf005",
+        "heart"           => "\uf004",
+        "thumbs-up"       => "\uf164",
+        "thumbs-down"     => "\uf165",
+        _                 => null,
+    };
 
     /// <summary>
     /// Resolves the appropriate monospace font variant based on the parent formatting context.

@@ -25,7 +25,8 @@ public sealed partial class PdfRenderer : DocumentRendererBase
     private string _fontMonoItalic = "F6";      // Courier-Oblique
     private string _fontMonoBoldItalic = "F7";  // Courier-BoldOblique
     private string _fontHeading = "F2";         // Heading font (defaults to bold)
-    private string? _fontAwesome;                // FontAwesome 5 Solid for admonition icons
+    private string? _fontAwesome;                // FontAwesome 5 Solid for admonition / inline icons
+    private string? _fontAwesomeRegular;          // FontAwesome 5 Regular (TIP fa-lightbulb etc.)
 
     // ── Size configuration (initialized from PdfRenderOptions) ─────────
     private float _titleFontSize = 24f;
@@ -352,11 +353,19 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         // bare attribute also activates them).
         _useIconAdmonitions = context.Document.Attributes.ContainsKey("icons");
 
-        // FontAwesome 5 Solid embedded as resource — used to draw admonition icons
-        // (fa-info-circle, fa-warning, etc.) with the exact same glyphs asciidoctor-pdf
-        // ships. Loaded only when icons are actually used; null if loading fails or
-        // icons aren't enabled (drawn-glyph fallback then kicks in).
-        _fontAwesome = _useIconAdmonitions ? TryLoadEmbeddedFontAwesome(writer) : null;
+        // FontAwesome 5 Solid + Regular embedded as resources — used to draw
+        // admonition icons (fa-info-circle, fa-warning, etc.) and inline icon:
+        // macros with the exact same glyphs asciidoctor-pdf ships. Loaded only
+        // when icons are actually used; null if loading fails or icons aren't
+        // enabled (drawn-glyph fallback then kicks in).
+        // TIP admonition uses far-lightbulb (FA Regular variant) — different
+        // outline-style design than the solid version.
+        _fontAwesome = _useIconAdmonitions
+            ? TryLoadEmbeddedFont(writer, "AdocNet.Converters.Pdf.Resources.fa-solid.ttf", "FA")
+            : null;
+        _fontAwesomeRegular = _useIconAdmonitions
+            ? TryLoadEmbeddedFont(writer, "AdocNet.Converters.Pdf.Resources.fa-regular.ttf", "FAR")
+            : null;
 
         // Section numbering
         _sectnumsEnabled = context.Document.Attributes.ContainsKey("sectnums");
@@ -725,16 +734,25 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 {
                     if (_hasTrueTypeBodyFont)
                     {
-                        prefix = indentLevel switch
-                        {
-                            0 => "\u2022 ",  // • filled disc
-                            1 => "\u25E6 ",  // ◦ hollow circle (white bullet)
-                            _ => "\u25AA ",  // ▪ filled small square
-                        };
+                        // Checklist items: use Unicode ballot boxes (matches asciidoctor-pdf
+                        // exactly — same characters in NotoSerif).
+                        if (item.Checked == true)
+                            prefix = "\u2611 "; // ☑ ballot box with check
+                        else if (item.Checked == false)
+                            prefix = "\u2610 "; // ☐ ballot box
+                        else
+                            prefix = indentLevel switch
+                            {
+                                0 => "\u2022 ",  // • filled disc
+                                1 => "\u25E6 ",  // ◦ hollow circle (white bullet)
+                                _ => "\u25AA ",  // ▪ filled small square
+                            };
                     }
                     else
                     {
-                        prefix = "- ";
+                        prefix = item.Checked == true ? "[x] "
+                              : item.Checked == false ? "[ ] "
+                              : "- ";
                     }
                 }
                 else
@@ -851,14 +869,26 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         w.EndCodeBlockBackground();
         w.MoveCursor(_bodyLeading);
 
-        // Render callout list
+        // Render callout list — asciidoctor-pdf renders the conum (callout
+        // number) as a circled-number glyph (U+2460 ① for 1, U+2461 ② for 2,
+        // etc.) in the codespan (mono) font with the codespan accent color
+        // (#B12146). Numbers >20 fall back to "(N)".
         if (block.Callouts is { Count: > 0 })
         {
             int num = 1;
             foreach (var entry in block.Callouts)
             {
                 w.EnsurePage();
-                w.WriteWrappedText($"({num}) {entry.Text}", _fontRegular, _bodyFontSize, _bodyLeading);
+                var conumGlyph = num <= 20
+                    ? char.ConvertFromUtf32(0x245F + num) // U+2460 = ①, +1 each
+                    : $"({num})";
+                var conumColor = _codespanColor ?? new PdfColor(0.694f, 0.129f, 0.275f); // #B12146
+                var segments = new List<TextSegment>
+                {
+                    new(conumGlyph, _fontMono, _bodyFontSize, Color: conumColor),
+                    new(" " + entry.Text, _fontRegular, _bodyFontSize),
+                };
+                w.WriteWrappedSegments(segments, _bodyLeading, justify: false);
                 num++;
             }
             w.MoveCursor(_paragraphSpacingAfter);
@@ -923,23 +953,21 @@ public sealed partial class PdfRenderer : DocumentRendererBase
     }
 
     /// <summary>
-    /// Loads the embedded FontAwesome 5 Solid TTF and registers it as a PDF font.
+    /// Loads an embedded TTF resource and registers it as a PDF font.
     /// Returns the font reference name on success, or null if the resource is
-    /// missing or fails to parse (drawn-glyph fallback then kicks in).
+    /// missing or fails to parse (caller's drawn-glyph fallback then kicks in).
     /// </summary>
-    private static string? TryLoadEmbeddedFontAwesome(PdfWriter writer)
+    private static string? TryLoadEmbeddedFont(PdfWriter writer, string resourceName, string pdfRefName)
     {
         try
         {
             var asm = typeof(PdfRenderer).Assembly;
-            // Resource name follows the default <RootNamespace>.<RelativePath> format.
-            var resourceName = "AdocNet.Converters.Pdf.Resources.fa-solid.ttf";
             using var stream = asm.GetManifestResourceStream(resourceName);
             if (stream is null) return null;
             using var ms = new MemoryStream();
             stream.CopyTo(ms);
             var font = TrueTypeFont.Parse(ms.ToArray());
-            return writer.RegisterEmbeddedFont("FA", font);
+            return writer.RegisterEmbeddedFont(pdfRefName, font);
         }
         catch
         {
