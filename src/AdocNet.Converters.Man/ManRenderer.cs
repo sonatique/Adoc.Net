@@ -274,7 +274,7 @@ public sealed partial class ManRenderer : IDocumentRenderer
                 if (block.Title is not null)
                 {
                     sb.Append(".PP\n\\fB");
-                    sb.Append(EscapeBodyText(block.Title));
+                    RenderTextAsInlines(sb, block.Title);
                     sb.Append("\\fP\n");
                 }
                 sb.Append(".nf\n");
@@ -311,7 +311,7 @@ public sealed partial class ManRenderer : IDocumentRenderer
                 if (block.Title is not null)
                 {
                     sb.Append(".PP\n\\fB");
-                    sb.Append(EscapeBodyText(block.Title));
+                    RenderTextAsInlines(sb, block.Title);
                     sb.Append("\\fP\n");
                 }
                 sb.Append(".RS\n");
@@ -378,7 +378,7 @@ public sealed partial class ManRenderer : IDocumentRenderer
         if (table.Title is not null)
         {
             sb.Append(".PP\n\\fB");
-            sb.Append(EscapeBodyText(table.Title));
+            RenderTextAsInlines(sb, table.Title);
             sb.Append("\\fP\n");
         }
 
@@ -408,7 +408,7 @@ public sealed partial class ManRenderer : IDocumentRenderer
         if (stem.Title is not null)
         {
             sb.Append(".PP\n\\fB");
-            sb.Append(EscapeBodyText(stem.Title));
+            RenderTextAsInlines(sb, stem.Title);
             sb.Append("\\fP\n");
         }
         sb.Append(".nf\n");

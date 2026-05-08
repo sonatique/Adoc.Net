@@ -14,6 +14,35 @@ public sealed partial class RevealjsRenderer
             RenderInline(sb, node);
     }
 
+    /// <summary>
+    /// Parses a title or label string with formatting substitutions and renders
+    /// the resulting inlines so backticks become &lt;code&gt;, *text* becomes
+    /// &lt;strong&gt;, etc. Macros are excluded to avoid re-entering link parsing.
+    /// </summary>
+    private static void RenderTextAsInlines(StringBuilder sb, string text)
+    {
+        var subs = SubstitutionKind.Quotes |
+                   SubstitutionKind.Replacements |
+                   SubstitutionKind.PostReplacements;
+        var inlines = AdocNet.Parser.InlineParser.Parse(text, subs, EmptyAttrs);
+        RenderInlines(sb, inlines);
+    }
+
+    private static readonly Dictionary<string, string> EmptyAttrs = new();
+
+    /// <summary>
+    /// Renders a section's title using its pre-parsed TitleInlines when available,
+    /// falling back to parsing the raw Title string. The parser already populates
+    /// TitleInlines for section nodes, so this avoids redundant work.
+    /// </summary>
+    private static void RenderSectionTitle(StringBuilder sb, SectionNode section)
+    {
+        if (section.TitleInlines is { Count: > 0 })
+            RenderInlines(sb, section.TitleInlines);
+        else
+            RenderTextAsInlines(sb, section.Title);
+    }
+
     private static void RenderInline(StringBuilder sb, InlineNode node)
     {
         switch (node)
@@ -47,7 +76,10 @@ public sealed partial class RevealjsRenderer
                 sb.Append("<a href=\"");
                 EscapeTo(sb, n.Url);
                 sb.Append("\">");
-                EscapeTo(sb, n.Label.Length > 0 ? n.Label : n.Url);
+                if (n.Label.Length > 0)
+                    RenderTextAsInlines(sb, n.Label);
+                else
+                    EscapeTo(sb, n.Url);
                 sb.Append("</a>");
                 break;
             case HighlightInlineNode n:

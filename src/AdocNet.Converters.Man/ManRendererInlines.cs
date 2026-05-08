@@ -14,6 +14,22 @@ public sealed partial class ManRenderer
             RenderInline(sb, node);
     }
 
+    /// <summary>
+    /// Parses a title or label string with formatting substitutions and renders
+    /// the resulting inlines. Backticks become bold, *text* becomes bold, etc.
+    /// Macros are excluded to avoid re-entry into link parsing.
+    /// </summary>
+    private static void RenderTextAsInlines(StringBuilder sb, string text)
+    {
+        var subs = SubstitutionKind.Quotes |
+                   SubstitutionKind.Replacements |
+                   SubstitutionKind.PostReplacements;
+        var inlines = AdocNet.Parser.InlineParser.Parse(text, subs, EmptyAttrs);
+        RenderInlines(sb, inlines);
+    }
+
+    private static readonly Dictionary<string, string> EmptyAttrs = new();
+
     private static void RenderInline(StringBuilder sb, InlineNode node)
     {
         switch (node)
@@ -49,7 +65,7 @@ public sealed partial class ManRenderer
             case InlineLinkMacroNode n:
                 if (n.Label.Length > 0)
                 {
-                    sb.Append(EscapeBodyText(n.Label));
+                    RenderTextAsInlines(sb, n.Label);
                     sb.Append(" (\\fI");
                     sb.Append(EscapeBodyText(n.Url));
                     sb.Append("\\fP)");
@@ -64,13 +80,19 @@ public sealed partial class ManRenderer
 
             case CrossReferenceInlineNode n:
                 sb.Append("\\fI");
-                sb.Append(EscapeBodyText(n.Label ?? n.Target));
+                if (n.Label is not null)
+                    RenderTextAsInlines(sb, n.Label);
+                else
+                    sb.Append(EscapeBodyText(n.Target));
                 sb.Append("\\fP");
                 break;
 
             case InterDocumentXrefNode n:
                 sb.Append("\\fI");
-                sb.Append(EscapeBodyText(n.Label ?? n.Path));
+                if (n.Label is not null)
+                    RenderTextAsInlines(sb, n.Label);
+                else
+                    sb.Append(EscapeBodyText(n.Path));
                 sb.Append("\\fP");
                 break;
 
