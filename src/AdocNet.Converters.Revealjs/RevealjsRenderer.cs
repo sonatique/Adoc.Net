@@ -39,7 +39,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         if (document.Title is not null)
         {
             sb.Append("<section class=\"title\" data-state=\"title\">\n<h1>");
-            EscapeTo(sb, document.Title);
+            RenderTextAsInlines(sb, document.Title);
             sb.Append("</h1>\n");
             if (document.Attributes.TryGetValue("author", out var author) && !string.IsNullOrWhiteSpace(author))
             {
@@ -187,7 +187,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
             // Parent slide with title + non-section content
             AppendSlideOpenTag(sb, section);
             sb.Append("<h2>");
-            EscapeTo(sb, section.Title);
+            RenderSectionTitle(sb, section);
             sb.Append("</h2>\n");
             AppendSlideContent(sb, section.Children, stopAtSubsection: true);
             sb.Append("</section>\n");
@@ -200,7 +200,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
                 {
                     AppendSlideOpenTag(sb, sub);
                     sb.Append("<h2>");
-                    EscapeTo(sb, sub.Title);
+                    RenderSectionTitle(sb, sub);
                     sb.Append("</h2>\n");
                     AppendSlideContent(sb, sub.Children, stopAtSubsection: false);
                     sb.Append("</section>\n");
@@ -214,7 +214,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
             // Simple horizontal slide
             AppendSlideOpenTag(sb, section);
             sb.Append("<h2>");
-            EscapeTo(sb, section.Title);
+            RenderSectionTitle(sb, section);
             sb.Append("</h2>\n");
             AppendSlideContent(sb, section.Children, stopAtSubsection: false);
             sb.Append("</section>\n");
@@ -278,7 +278,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
                 // Deeper sections rendered as headings within the slide
                 var tag = n.Level switch { 3 => "h4", 4 => "h5", _ => "h6" };
                 sb.Append('<').Append(tag).Append('>');
-                EscapeTo(sb, n.Title);
+                RenderSectionTitle(sb, n);
                 sb.Append("</").Append(tag).Append(">\n");
                 foreach (var child in n.Children)
                     if (child is BlockNode block)
