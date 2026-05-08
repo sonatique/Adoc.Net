@@ -265,7 +265,7 @@ internal static class BlockParser
             // ── Body state ─────────────────────────────────────────────────
             if (string.IsNullOrWhiteSpace(line))
             {
-                FlushParagraph(currentContainer, paragraphLines, ref paragraphStartLine, lineNumber - 1, document.Attributes, pendingBlockId, pendingBlockRoles, seenIds, diagnostics, pendingHardbreaks, pendingAbstract ? "abstract" : null, subsOverride: ResolvePendingSubs(EffectiveNormal()));
+                FlushParagraph(currentContainer, paragraphLines, ref paragraphStartLine, lineNumber - 1, document.Attributes, pendingBlockId, pendingBlockRoles, seenIds, diagnostics, pendingHardbreaks, pendingAbstract ? "abstract" : null, subsOverride: ResolvePendingSubs(EffectiveNormal()), admonitionType: pendingAdmonitionType);
 
                 // Asciidoctor keeps a list open across blank lines as long as the
                 // next non-blank line is a list item — same-kind items continue the
@@ -2984,7 +2984,7 @@ internal static class BlockParser
             pendingGrid = null;
             pendingFrame = null;
             pendingFormat = null;
-            pendingAdmonitionType = null;
+            // pendingAdmonitionType is intentionally preserved: [WARNING] before a paragraph turns it into an admonition (consumed by FlushParagraph).
             // pendingSubs is intentionally preserved: [subs="..."] before a paragraph applies to that paragraph.
             // pendingBlockId is intentionally preserved: [[id]] before a paragraph applies to that paragraph.
 
@@ -3057,7 +3057,7 @@ internal static class BlockParser
             paragraphLines.Add(line);
         }
 
-        FlushParagraph(currentContainer, paragraphLines, ref paragraphStartLine, lines.Length, document.Attributes, pendingBlockId, pendingBlockRoles, seenIds, diagnostics, pendingHardbreaks, pendingAbstract ? "abstract" : null, subsOverride: ResolvePendingSubs(EffectiveNormal()));
+        FlushParagraph(currentContainer, paragraphLines, ref paragraphStartLine, lines.Length, document.Attributes, pendingBlockId, pendingBlockRoles, seenIds, diagnostics, pendingHardbreaks, pendingAbstract ? "abstract" : null, subsOverride: ResolvePendingSubs(EffectiveNormal()), admonitionType: pendingAdmonitionType);
         pendingBlockId = null;
         pendingBlockReftext = null;
         pendingBlockRoles = null;
@@ -3642,7 +3642,8 @@ internal static class BlockParser
         List<Diagnostic>? diagnostics = null,
         bool hasHardbreaks = false,
         string? style = null,
-        SubstitutionKind? subsOverride = null)
+        SubstitutionKind? subsOverride = null,
+        string? admonitionType = null)
     {
         if (lines.Count == 0) return;
 
@@ -3653,12 +3654,45 @@ internal static class BlockParser
         if (hasPerLineBreak)
             rawText = rawText.Replace(" +\n", "\n");
 
+        var sourceRange = new SourceRange(new(startLine, 1), new(endLine, lines[^1].Length));
+        var inlines = InlineParser.Parse(rawText, subsOverride ?? EffectiveNormalSubs(attributes), attributes);
+
+        if (admonitionType is not null)
+        {
+            // Paragraph-style admonition: [WARNING]\nText becomes an AdmonitionNode.
+            var admon = new AdmonitionNode
+            {
+                AdmonitionType = admonitionType,
+                Text = rawText,
+                Inlines = inlines,
+                Source = sourceRange,
+            };
+            if (blockId is not null)
+            {
+                if (seenIds is not null && diagnostics is not null && !seenIds.Add(blockId))
+                {
+                    diagnostics.Add(new Diagnostic(
+                        DiagnosticSeverity.Warning,
+                        $"Duplicate anchor ID '{blockId}'",
+                        new SourceRange(new(startLine, 1), new(startLine, lines[0].Length))));
+                }
+                admon.Id = blockId;
+            }
+            if (blockRoles is not null)
+                admon.Roles = blockRoles;
+            container.AddChild(admon);
+
+            lines.Clear();
+            startLine = 0;
+            return;
+        }
+
         var paragraph = new ParagraphNode
         {
             Text    = rawText,
             Style   = style,
-            Inlines = InlineParser.Parse(rawText, subsOverride ?? EffectiveNormalSubs(attributes), attributes),
-            Source  = new SourceRange(new(startLine, 1), new(endLine, lines[^1].Length)),
+            Inlines = inlines,
+            Source  = sourceRange,
             HasHardbreaks = hasHardbreaks || hasPerLineBreak || attributes.ContainsKey("hardbreaks-option"),
         };
         if (blockId is not null)
