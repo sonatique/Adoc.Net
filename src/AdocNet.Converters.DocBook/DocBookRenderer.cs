@@ -43,6 +43,10 @@ public sealed class DocBookRenderer : DocumentRendererBase
         writer.WriteStartElement(rootElement, DocBookNs);
         writer.WriteAttributeString("version", "5.0");
         writer.WriteAttributeString("xmlns", "xlink", null, XLinkNs);
+        // [[anchor]] before the document title is captured as the "id" attribute and
+        // becomes xml:id on the root element (Asciidoctor parity).
+        if (context.Document.Attributes.TryGetValue("id", out var docId) && !string.IsNullOrWhiteSpace(docId))
+            writer.WriteAttributeString("xml", "id", XmlNs, docId);
         // Asciidoctor adds xml:lang on the root, defaulting to "en". Honour the document's
         // :lang: attribute when set.
         var lang = context.Document.Attributes.TryGetValue("lang", out var l) && !string.IsNullOrWhiteSpace(l)
@@ -706,7 +710,11 @@ public sealed class DocBookRenderer : DocumentRendererBase
                     writer.WriteAttributeString("xml", "id", XmlNs, node.Id);
                 WriteRoles(writer, node);
                 if (node.Title is not null)
-                    writer.WriteElementString("title", DocBookNs, node.Title);
+                {
+                    writer.WriteStartElement("title", DocBookNs);
+                    RenderLabelInlines(writer, node.Title, context);
+                    writer.WriteEndElement();
+                }
                 foreach (var child in node.Children)
                 {
                     if (child is BlockNode block)
@@ -747,7 +755,11 @@ public sealed class DocBookRenderer : DocumentRendererBase
                 if (node.Id is not null)
                     writer.WriteAttributeString("xml", "id", XmlNs, node.Id);
                 if (node.Title is not null)
-                    writer.WriteElementString("title", DocBookNs, node.Title);
+                {
+                    writer.WriteStartElement("title", DocBookNs);
+                    RenderLabelInlines(writer, node.Title, context);
+                    writer.WriteEndElement();
+                }
                 foreach (var child in node.Children)
                 {
                     if (child is BlockNode block)
@@ -1123,7 +1135,10 @@ public sealed class DocBookRenderer : DocumentRendererBase
             case InlineLinkMacroNode n:
                 writer.WriteStartElement("link", DocBookNs);
                 writer.WriteAttributeString("xlink", "href", XLinkNs, n.Url);
-                writer.WriteString(n.Label.Length > 0 ? n.Label : MaybeHideUriScheme(n.Url, context));
+                if (n.Label.Length > 0)
+                    RenderLabelInlines(writer, n.Label, context);
+                else
+                    writer.WriteString(MaybeHideUriScheme(n.Url, context));
                 writer.WriteEndElement();
                 break;
 
@@ -1173,7 +1188,7 @@ public sealed class DocBookRenderer : DocumentRendererBase
                 {
                     writer.WriteStartElement("link", DocBookNs);
                     writer.WriteAttributeString("linkend", n.Target);
-                    writer.WriteString(n.Label);
+                    RenderLabelInlines(writer, n.Label, context);
                     writer.WriteEndElement();
                 }
                 else
@@ -1194,11 +1209,12 @@ public sealed class DocBookRenderer : DocumentRendererBase
                 var xmlPath = ConvertAdocExtensionToXml(n.Path);
                 var href = n.Id is not null ? xmlPath + "#" + n.Id : xmlPath;
                 writer.WriteAttributeString("xlink", "href", XLinkNs, href);
-                // Apply smart-punctuation (e.g. "table's" → "table's") to the
-                // label so it matches asciidoctor's substituted output.
-                writer.WriteString(n.Label is not null
-                    ? AdocNet.Parser.SmartPunctuationProcessor.Apply(n.Label)
-                    : xmlPath);
+                // Parse the label as inlines so backticks become <literal>, etc.
+                // RenderLabelInlines includes the smart-punctuation/replacement passes.
+                if (n.Label is not null)
+                    RenderLabelInlines(writer, n.Label, context);
+                else
+                    writer.WriteString(xmlPath);
                 writer.WriteEndElement();
                 break;
 
@@ -1418,6 +1434,21 @@ public sealed class DocBookRenderer : DocumentRendererBase
     }
 
     /// <summary>
+    /// Renders a string label (link/xref text) as parsed inlines. Backticks become
+    /// &lt;literal&gt;, *text* becomes &lt;emphasis role="strong"&gt;, etc. Matches Asciidoctor
+    /// which applies the full text-substitution pipeline (minus Macros, to avoid
+    /// re-entering link parsing) to link labels.
+    /// </summary>
+    private void RenderLabelInlines(XmlWriter writer, string label, RenderContext context)
+    {
+        var subs = SubstitutionKind.Quotes |
+                   SubstitutionKind.Replacements |
+                   SubstitutionKind.PostReplacements;
+        var inlines = AdocNet.Parser.InlineParser.Parse(label, subs, context.Document.Attributes);
+        RenderInlines(writer, inlines, context);
+    }
+
+    /// <summary>
     /// Strips the URI scheme prefix (http://, https://, mailto:) when the
     /// :hide-uri-scheme: attribute is set on the document — matches asciidoctor's
     /// behaviour for bare URLs and link macros without an explicit label.
@@ -1461,6 +1492,19 @@ public sealed class DocBookRenderer : DocumentRendererBase
 
         var elementName = node.Language is not null ? "programlisting" : "screen";
 
+        // Pre-scan whether any line actually has a callout marker. Asciidoctor only
+        // emits linenumbering="unnumbered" and fills <callout arearefs="…"> when the
+        // source content has real callout markers. Without them (e.g. include macro
+        // stubbed for conformance testing), we still emit the calloutlist but with
+        // empty arearefs and no linenumbering attribute.
+        var content = node.Content ?? "";
+        var lines = content.Split('\n');
+        bool hasCalloutMarkers = false;
+        for (int i = 0; i < lines.Length; i++)
+        {
+            if (lineCallouts.ContainsKey(i)) { hasCalloutMarkers = true; break; }
+        }
+
         if (node.Title is not null)
         {
             writer.WriteStartElement("formalpara", DocBookNs);
@@ -1474,16 +1518,12 @@ public sealed class DocBookRenderer : DocumentRendererBase
         writer.WriteStartElement(elementName, DocBookNs);
         if (node.Language is not null)
             writer.WriteAttributeString("language", node.Language);
-        // Asciidoctor always adds linenumbering="unnumbered" on
-        // screen/programlisting that contain callouts (this code path is the
-        // with-callouts variant — the plain verbatim path elsewhere only adds
-        // it when language is set).
-        writer.WriteAttributeString("linenumbering", "unnumbered");
+        // linenumbering only when language is set OR actual <co> markers will be emitted.
+        if (node.Language is not null || hasCalloutMarkers)
+            writer.WriteAttributeString("linenumbering", "unnumbered");
         WriteRoles(writer, node);
 
         // Write content line by line, inserting <co> elements where callout markers were
-        var content = node.Content ?? "";
-        var lines = content.Split('\n');
         for (int i = 0; i < lines.Length; i++)
         {
             var line = lines[i];
@@ -1524,7 +1564,11 @@ public sealed class DocBookRenderer : DocumentRendererBase
             foreach (var entry in entriesWithText)
             {
                 writer.WriteStartElement("callout", DocBookNs);
-                writer.WriteAttributeString("arearefs", $"CO{groupId}-{entry.Number}");
+                // arearefs only refers to <co> ids that were actually emitted in the
+                // listing. When the source has no callout markers (e.g. include macro
+                // was stripped), arearefs stays empty — Asciidoctor's behaviour.
+                writer.WriteAttributeString("arearefs",
+                    hasCalloutMarkers ? $"CO{groupId}-{entry.Number}" : "");
                 writer.WriteStartElement("para", DocBookNs);
                 if (entry.Inlines.Count > 0)
                     RenderInlines(writer, entry.Inlines, context);
