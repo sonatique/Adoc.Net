@@ -245,7 +245,7 @@ public sealed class EpubRenderer : DocumentRendererBase
             <?xml version="1.0" encoding="UTF-8"?>
             <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
               <rootfiles>
-                <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+                <rootfile full-path="EPUB/package.opf" media-type="application/oebps-package+xml"/>
               </rootfiles>
             </container>
             """);
@@ -291,7 +291,7 @@ public sealed class EpubRenderer : DocumentRendererBase
               </spine>
             </package>
             """;
-        WriteEntry(archive, "OEBPS/content.opf", xml);
+        WriteEntry(archive, "EPUB/package.opf", xml);
     }
 
     private static void WriteTocXhtml(ZipArchive archive, string title, List<Chapter> chapters,
@@ -335,7 +335,7 @@ public sealed class EpubRenderer : DocumentRendererBase
         sb.Append("</nav>\n");
         sb.Append("</body>\n");
         sb.Append("</html>\n");
-        WriteEntry(archive, "OEBPS/toc.xhtml", sb.ToString());
+        WriteEntry(archive, "EPUB/toc.xhtml", sb.ToString());
     }
 
     /// <summary>
@@ -374,7 +374,7 @@ public sealed class EpubRenderer : DocumentRendererBase
         sb.Append("</navPoint>\n");
         sb.Append("</navMap>\n");
         sb.Append("</ncx>\n");
-        WriteEntry(archive, "OEBPS/toc.ncx", sb.ToString());
+        WriteEntry(archive, "EPUB/toc.ncx", sb.ToString());
     }
 
     private static void WriteStyleCss(ZipArchive archive)
@@ -383,7 +383,7 @@ public sealed class EpubRenderer : DocumentRendererBase
         // (sect1..sect5, paragraph, listingblock, exampleblock, sidebarblock, admonitionblock,
         // quoteblock, tableblock, hdlist, qanda, etc.). Uses generic font-family stacks so
         // readers fall back to their own embedded fonts — no need to bundle TTFs.
-        WriteEntry(archive, "OEBPS/style.css",
+        WriteEntry(archive, "EPUB/style.css",
             """
             /* Reset + box-sizing (asciidoctor-epub3 parity) */
             html, body { margin: 0; padding: 0; }
@@ -616,7 +616,7 @@ public sealed class EpubRenderer : DocumentRendererBase
             </body>
             </html>
             """;
-        WriteEntry(archive, $"OEBPS/{chapter.FileName}", xhtml);
+        WriteEntry(archive, $"EPUB/{chapter.FileName}", xhtml);
     }
 
     private static void WriteEntry(ZipArchive archive, string path, string content)

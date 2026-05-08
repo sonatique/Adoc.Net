@@ -48,7 +48,7 @@ public class EpubRendererTests
         var bytes = new EpubRenderer().RenderToBytes(doc);
         using var ms = new MemoryStream(bytes);
         using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
-        var opf = zip.GetEntry("OEBPS/content.opf");
+        var opf = zip.GetEntry("EPUB/package.opf");
         Assert.That(opf, Is.Not.Null);
         using var reader = new StreamReader(opf!.Open());
         var content = reader.ReadToEnd();
@@ -63,7 +63,7 @@ public class EpubRendererTests
         var bytes = new EpubRenderer().RenderToBytes(doc);
         using var ms = new MemoryStream(bytes);
         using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
-        var toc = zip.GetEntry("OEBPS/toc.xhtml");
+        var toc = zip.GetEntry("EPUB/toc.xhtml");
         Assert.That(toc, Is.Not.Null);
         using var reader = new StreamReader(toc!.Open());
         var content = reader.ReadToEnd();
@@ -80,7 +80,7 @@ public class EpubRendererTests
         var bytes = new EpubRenderer().RenderToBytes(doc);
         using var ms = new MemoryStream(bytes);
         using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
-        var content = zip.GetEntry("OEBPS/_content.xhtml");
+        var content = zip.GetEntry("EPUB/_content.xhtml");
         Assert.That(content, Is.Not.Null,
             "Expected fallback chapter name '_content.xhtml' for untitled document");
         using var reader = new StreamReader(content!.Open());
@@ -95,7 +95,7 @@ public class EpubRendererTests
         var bytes = new EpubRenderer().RenderToBytes(doc);
         using var ms = new MemoryStream(bytes);
         using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
-        Assert.That(zip.GetEntry("OEBPS/style.css"), Is.Not.Null);
+        Assert.That(zip.GetEntry("EPUB/style.css"), Is.Not.Null);
     }
 
     [Test]
@@ -120,7 +120,7 @@ public class EpubRendererTests
         var bytes = new EpubRenderer().RenderToBytes(doc);
         using var ms = new MemoryStream(bytes);
         using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
-        var opf = zip.GetEntry("OEBPS/content.opf");
+        var opf = zip.GetEntry("EPUB/package.opf");
         using var reader = new StreamReader(opf!.Open());
         var content = reader.ReadToEnd();
         Assert.That(content, Does.Contain("John Doe"));
@@ -219,7 +219,7 @@ public class EpubRendererTests
         var bytes = new EpubRenderer().RenderToBytes(doc);
         using var ms = new MemoryStream(bytes);
         using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
-        Assert.That(zip.GetEntry("OEBPS/toc.ncx"), Is.Not.Null,
+        Assert.That(zip.GetEntry("EPUB/toc.ncx"), Is.Not.Null,
             "toc.ncx missing — EPUB2 readers will not see the nav structure");
     }
 
@@ -254,10 +254,10 @@ public class EpubRendererTests
         var bytes = new EpubRenderer().RenderToBytes(doc);
         using var ms = new MemoryStream(bytes);
         using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
-        Assert.That(zip.GetEntry("OEBPS/_how_to_generate_pdf_from_adoc.xhtml"), Is.Not.Null,
+        Assert.That(zip.GetEntry("EPUB/_how_to_generate_pdf_from_adoc.xhtml"), Is.Not.Null,
             "Article-doctype chapter should be named after the doc title slug");
         // Old fixed name should NOT exist
-        Assert.That(zip.GetEntry("OEBPS/content.xhtml"), Is.Null);
+        Assert.That(zip.GetEntry("EPUB/content.xhtml"), Is.Null);
     }
 
     [Test]
@@ -291,13 +291,13 @@ public class EpubRendererTests
         var bytes = new EpubRenderer().RenderToBytes(doc);
         using var ms = new MemoryStream(bytes);
         using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
-        Assert.That(zip.GetEntry("OEBPS/_first_chapter.xhtml"), Is.Not.Null,
+        Assert.That(zip.GetEntry("EPUB/_first_chapter.xhtml"), Is.Not.Null,
             "Expected per-chapter file for the first top-level section");
-        Assert.That(zip.GetEntry("OEBPS/_second_chapter.xhtml"), Is.Not.Null,
+        Assert.That(zip.GetEntry("EPUB/_second_chapter.xhtml"), Is.Not.Null,
             "Expected per-chapter file for the second top-level section");
         // No fallback single-content file should exist
-        Assert.That(zip.GetEntry("OEBPS/_my_book.xhtml"), Is.Null);
-        Assert.That(zip.GetEntry("OEBPS/content.xhtml"), Is.Null);
+        Assert.That(zip.GetEntry("EPUB/_my_book.xhtml"), Is.Null);
+        Assert.That(zip.GetEntry("EPUB/content.xhtml"), Is.Null);
     }
 
     [Test]
@@ -336,7 +336,7 @@ public class EpubRendererTests
         var bytes = new EpubRenderer().RenderToBytes(doc);
         using var ms = new MemoryStream(bytes);
         using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
-        using var reader = new StreamReader(zip.GetEntry("OEBPS/style.css")!.Open());
+        using var reader = new StreamReader(zip.GetEntry("EPUB/style.css")!.Open());
         var css = reader.ReadToEnd();
         Assert.That(css, Does.Contain(".admonitionblock.note"), "Note admonition styling missing");
         Assert.That(css, Does.Contain(".admonitionblock.warning"), "Warning admonition styling missing");
@@ -355,7 +355,7 @@ public class EpubRendererTests
         var bytes = new EpubRenderer().RenderToBytes(doc);
         using var ms = new MemoryStream(bytes);
         using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
-        var entry = zip.GetEntry("OEBPS/_my_title.xhtml")
+        var entry = zip.GetEntry("EPUB/_my_title.xhtml")
                     ?? throw new InvalidOperationException("chapter file missing");
         using var reader = new StreamReader(entry.Open());
         var xhtml = reader.ReadToEnd();
@@ -370,7 +370,7 @@ public class EpubRendererTests
     {
         using var ms = new MemoryStream(bytes);
         using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
-        using var reader = new StreamReader(zip.GetEntry("OEBPS/toc.ncx")!.Open());
+        using var reader = new StreamReader(zip.GetEntry("EPUB/toc.ncx")!.Open());
         return reader.ReadToEnd();
     }
 
@@ -378,7 +378,7 @@ public class EpubRendererTests
     {
         using var ms = new MemoryStream(bytes);
         using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
-        using var reader = new StreamReader(zip.GetEntry("OEBPS/content.opf")!.Open());
+        using var reader = new StreamReader(zip.GetEntry("EPUB/package.opf")!.Open());
         return reader.ReadToEnd();
     }
 
@@ -386,7 +386,7 @@ public class EpubRendererTests
     {
         using var ms = new MemoryStream(bytes);
         using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
-        using var reader = new StreamReader(zip.GetEntry("OEBPS/toc.xhtml")!.Open());
+        using var reader = new StreamReader(zip.GetEntry("EPUB/toc.xhtml")!.Open());
         return reader.ReadToEnd();
     }
 }
