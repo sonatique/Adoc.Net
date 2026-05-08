@@ -871,9 +871,14 @@ internal static class InlineParser
             }
 
             // ── Constrained highlight: #content# ───────────────────────────
-            if (doFormatting && c == '#' && !activeMarkers.HasFlag(ActiveMarkers.Highlight))
+            // Boundary-checked like *, _, `: opening # must not be preceded by a word char
+            // and must not be followed by whitespace; closing # must not be preceded by whitespace
+            // and must not be followed by a word char. This prevents matching across e.g.
+            // javadoc:foo[Bar#baz] or User#name where # appears mid-word.
+            if (doFormatting && c == '#' && !activeMarkers.HasFlag(ActiveMarkers.Highlight)
+                && IsConstrainedOpenValid(text, i, endIndex))
             {
-                int close = IndexOf(text, '#', i + 1, endIndex);
+                int close = FindConstrainedClose(text, '#', i + 1, endIndex);
                 if (close > i + 1)
                 {
                     FlushPlain(nodes, plain, doReplacements, doPostReplacements);
