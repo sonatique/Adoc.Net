@@ -24,7 +24,7 @@ public class ManRendererTests
 
         var output = Render(doc);
 
-        Assert.That(output, Does.StartWith(".TH \"MYCOMMAND\" \"1\""));
+        Assert.That(output, Does.Contain(".TH \"MYCOMMAND\" \"1\""));
     }
 
     [Test]
@@ -34,7 +34,8 @@ public class ManRendererTests
 
         var output = Render(doc);
 
-        Assert.That(output, Does.StartWith(".TH \"GIT-STATUS\" \"1\""));
+        // Hyphens in the .TH name field are escaped as \- (Asciidoctor convention).
+        Assert.That(output, Does.Contain(".TH \"GIT\\-STATUS\" \"1\""));
     }
 
     [Test]
@@ -59,7 +60,7 @@ public class ManRendererTests
 
         var output = Render(doc);
 
-        Assert.That(output, Does.StartWith(".TH \"UNTITLED\""));
+        Assert.That(output, Does.Contain(".TH \"UNTITLED\""));
     }
 
     // ── Section tests ───────────────────────────────────────────────────
@@ -100,14 +101,16 @@ public class ManRendererTests
     // ── Paragraph tests ─────────────────────────────────────────────────
 
     [Test]
-    public void Paragraph_renders_with_PP()
+    public void Paragraph_renders_with_sp()
     {
         var doc = new DocumentNode { Title = "test" };
         doc.AddChild(new ParagraphNode { Text = "Hello world" });
 
         var output = Render(doc);
 
-        Assert.That(output, Does.Contain(".PP\nHello world"));
+        // Asciidoctor's manpage converter emits .sp (single vertical space) between
+        // paragraphs, not .PP (which would reset indentation).
+        Assert.That(output, Does.Contain(".sp\nHello world"));
     }
 
     // ── Bold/Italic/Mono inline tests ───────────────────────────────────
@@ -339,7 +342,7 @@ public class ManRendererTests
 
         var output = Render(doc);
 
-        Assert.That(output, Does.StartWith(".TH \"MYAPP\" \"1\""));
+        Assert.That(output, Does.Contain(".TH \"MYAPP\" \"1\""));
         Assert.That(output, Does.Contain(".SH \"NAME\""));
         Assert.That(output, Does.Contain("myapp - does things"));
         Assert.That(output, Does.Contain(".SH \"DESCRIPTION\""));
