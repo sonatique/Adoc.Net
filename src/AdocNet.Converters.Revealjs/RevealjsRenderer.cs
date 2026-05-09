@@ -34,8 +34,21 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         sb.Append("<div class=\"reveal\">\n<div class=\"slides\">\n");
 
         // Asciidoctor-revealjs emits a dedicated title slide with class="title"
-        // and data-state="title" containing the document title and a byline
-        // wrapping the author. Subsequent sections render as their own slides.
+        // and data-state="title" containing the document title, author byline,
+        // and any preamble content (BlockNodes that appear before the first
+        // top-level SectionNode) wrapped in <div class="preamble">.
+        // Subsequent level-1 sections render as their own slides.
+        var children = document.Children;
+        int firstSectionIdx = children.Count;
+        for (int i = 0; i < children.Count; i++)
+        {
+            if (children[i] is SectionNode s && s.Level == 1)
+            {
+                firstSectionIdx = i;
+                break;
+            }
+        }
+
         if (document.Title is not null)
         {
             sb.Append("<section class=\"title\" data-state=\"title\">\n<h1>");
@@ -47,19 +60,55 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
                 EscapeTo(sb, author);
                 sb.Append("</span>\n</p>\n");
             }
+
+            // Preamble: top-level blocks before the first level-1 section,
+            // wrapped in <div class="preamble"> inside the title slide.
+            bool wrotePreambleOpen = false;
+            for (int i = 0; i < firstSectionIdx; i++)
+            {
+                var child = children[i];
+                if (child is TocNode) continue;
+                if (child is BlockNode block)
+                {
+                    if (!wrotePreambleOpen)
+                    {
+                        sb.Append("<div class=\"preamble\">\n");
+                        wrotePreambleOpen = true;
+                    }
+                    RenderBlock(sb, block);
+                }
+            }
+            if (wrotePreambleOpen)
+                sb.Append("</div>\n");
+
             sb.Append("</section>\n");
         }
-
-        foreach (var child in document.Children)
+        else
         {
-            // TocNode is parser metadata — Reveal.js doesn't render an inline TOC
-            // (the slide controller provides its own navigation).
-            if (child is TocNode) continue;
+            // No document title — preamble blocks each get their own slide.
+            for (int i = 0; i < firstSectionIdx; i++)
+            {
+                var child = children[i];
+                if (child is TocNode) continue;
+                if (child is BlockNode block)
+                {
+                    sb.Append("<section>\n");
+                    RenderBlock(sb, block);
+                    sb.Append("</section>\n");
+                }
+            }
+        }
 
+        for (int i = firstSectionIdx; i < children.Count; i++)
+        {
+            var child = children[i];
+            if (child is TocNode) continue;
             if (child is SectionNode section && section.Level == 1)
                 RenderSlide(sb, section);
             else if (child is BlockNode block)
             {
+                // BlockNodes appearing AFTER the first section are unusual but
+                // still render as standalone slides (matches prior behaviour).
                 sb.Append("<section>\n");
                 RenderBlock(sb, block);
                 sb.Append("</section>\n");
@@ -275,8 +324,10 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
             case StemBlockNode n: RenderStemBlock(sb, n); break;
             case DescriptionListNode n: RenderDescriptionList(sb, n); break;
             case SectionNode n:
-                // Deeper sections rendered as headings within the slide
-                var tag = n.Level switch { 3 => "h4", 4 => "h5", _ => "h6" };
+                // Deeper sections rendered as headings within the slide.
+                // Asciidoctor's reveal.js converter maps level N → <h{N}>:
+                // level 3 → <h3>, level 4 → <h4>, level 5 → <h5>.
+                var tag = n.Level switch { 3 => "h3", 4 => "h4", 5 => "h5", _ => "h6" };
                 sb.Append('<').Append(tag).Append('>');
                 RenderSectionTitle(sb, n);
                 sb.Append("</").Append(tag).Append(">\n");
