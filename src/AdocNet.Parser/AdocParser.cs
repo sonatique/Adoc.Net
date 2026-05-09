@@ -147,6 +147,28 @@ public static class AdocParser
                 catch (System.IO.IOException) { /* file moved/deleted between read+stat */ }
                 catch (UnauthorizedAccessException) { /* unreadable */ }
             }
+
+            // Asciidoctor parity: file-path-derived intrinsic attributes.
+            // docname     = basename without extension          (e.g. "chapter1")
+            // docfilesuffix = the extension with leading dot     (e.g. ".adoc")
+            // docfile     = absolute path                       (e.g. "/abs/path/chapter1.adoc")
+            // Renderers (Man's .TH, EPUB metadata, etc.) consume these.
+            var pathAttrs = parseResult.Document.Attributes;
+            try
+            {
+                if (!pathAttrs.ContainsKey("docname"))
+                    parseResult.Document.SetAttribute("docname",
+                        System.IO.Path.GetFileNameWithoutExtension(filePath));
+                if (!pathAttrs.ContainsKey("docfilesuffix"))
+                {
+                    var ext = System.IO.Path.GetExtension(filePath);
+                    if (!string.IsNullOrEmpty(ext))
+                        parseResult.Document.SetAttribute("docfilesuffix", ext);
+                }
+                if (!pathAttrs.ContainsKey("docfile"))
+                    parseResult.Document.SetAttribute("docfile", filePath);
+            }
+            catch (ArgumentException) { /* malformed path */ }
         }
 
         return new ParseResult(parseResult.Document, allDiagnostics);

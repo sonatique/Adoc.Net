@@ -23,6 +23,9 @@ public sealed partial class ManRenderer : IDocumentRenderer
 
     private static void RenderDocument(StringBuilder sb, DocumentNode document)
     {
+        // Asciidoctor emits the tbl preprocessor request line at the very top
+        // so groff/mandoc invoke tbl(1) for any tables in the page.
+        sb.Append("'\\\" t\n");
         RenderTitleHeader(sb, document);
 
         foreach (var child in document.Children)
@@ -39,18 +42,29 @@ public sealed partial class ManRenderer : IDocumentRenderer
         var name = document.Title?.ToUpperInvariant() ?? "UNTITLED";
         var section = "1";
         var date = "";
-        var source = "";
-        var manual = "";
+        // Asciidoctor's default for unset source / manual fields is the roff
+        // idiom "\ \&" — non-break space followed by a zero-width spacer. This
+        // keeps the .TH layout from collapsing while making it visually empty.
+        const string EmptyMan = "\\ \\&";
+        var source = EmptyMan;
+        var manual = EmptyMan;
 
-        if (document.Attributes.TryGetValue("mansource", out var src))
+        var attrs = document.Attributes;
+        if (attrs.TryGetValue("mansource", out var src) && !string.IsNullOrEmpty(src))
             source = src;
-        if (document.Attributes.TryGetValue("manmanual", out var man))
+        if (attrs.TryGetValue("manmanual", out var man) && !string.IsNullOrEmpty(man))
             manual = man;
-        if (document.Attributes.TryGetValue("revdate", out var rd))
+        if (attrs.TryGetValue("revdate", out var rd))
             date = rd;
 
-        // Parse manpage title format: NAME(section)
-        if (document.Title is not null)
+        // Asciidoctor uses the file basename (docname) for the .TH name field,
+        // falling back to the doctitle when no source file is known. The basename
+        // becomes UPPERCASE and hyphens are escaped (\-) per roff convention.
+        if (attrs.TryGetValue("docname", out var docname) && !string.IsNullOrEmpty(docname))
+        {
+            name = docname.ToUpperInvariant();
+        }
+        else if (document.Title is not null)
         {
             var title = document.Title;
             var parenIdx = title.LastIndexOf('(');
@@ -66,15 +80,17 @@ public sealed partial class ManRenderer : IDocumentRenderer
         }
 
         sb.Append(".TH \"");
-        sb.Append(EscapeRoff(name));
+        // .TH name field escapes hyphens as \- so groff doesn't reflow word boundaries.
+        sb.Append(EscapeRoffWithHyphens(name));
         sb.Append("\" \"");
         sb.Append(EscapeRoff(section));
         sb.Append("\" \"");
         sb.Append(EscapeRoff(date));
         sb.Append("\" \"");
-        sb.Append(EscapeRoff(source));
+        // mansource/manmanual default to "\ \&" already pre-escaped — pass through.
+        sb.Append(source == EmptyMan ? source : EscapeRoff(source));
         sb.Append("\" \"");
-        sb.Append(EscapeRoff(manual));
+        sb.Append(manual == EmptyMan ? manual : EscapeRoff(manual));
         sb.Append("\"\n");
 
         AppendStandardPreamble(sb);
@@ -173,7 +189,9 @@ public sealed partial class ManRenderer : IDocumentRenderer
 
     private static void RenderParagraph(StringBuilder sb, ParagraphNode paragraph)
     {
-        sb.Append(".PP\n");
+        // Asciidoctor uses .sp (single vertical space) between paragraphs in man
+        // output, not .PP (which is a paragraph macro that resets indentation).
+        sb.Append(".sp\n");
         if (paragraph.Inlines.Count > 0)
         {
             RenderInlines(sb, paragraph.Inlines);
@@ -466,6 +484,31 @@ public sealed partial class ManRenderer : IDocumentRenderer
     }
 
     /// <summary>
+    /// Like <see cref="EscapeRoff"/> but additionally escapes hyphen-minus as \-.
+    /// Used for the .TH name field where Asciidoctor writes hyphens explicitly so
+    /// groff renders them as ASCII '-' rather than reflowing them as soft breaks.
+    /// </summary>
+    internal static string EscapeRoffWithHyphens(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return text;
+
+        var sb = new StringBuilder(text.Length);
+        for (int i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            switch (c)
+            {
+                case '\\': sb.Append("\\\\"); break;
+                case '"':  sb.Append("\\(dq"); break;
+                case '-':  sb.Append("\\-"); break;
+                default:   sb.Append(c); break;
+            }
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// Escapes text for use in roff body content (not inside quotes).
     /// Handles leading dots and apostrophes that would be interpreted as directives.
     /// </summary>
@@ -497,7 +540,20 @@ public sealed partial class ManRenderer : IDocumentRenderer
             }
             else
             {
-                sb.Append(c);
+                // Asciidoctor maps Unicode typographic punctuation to roff escape
+                // sequences so the man output stays portable across terminals that
+                // can't render UTF-8 directly.
+                switch (c)
+                {
+                    case '\u2018': sb.Append("\\(oq"); break; // left single quote
+                    case '\u2019': sb.Append("\\(cq"); break; // right single quote / apostrophe
+                    case '\u201C': sb.Append("\\(lq"); break; // left double quote
+                    case '\u201D': sb.Append("\\(rq"); break; // right double quote
+                    case '\u2014': sb.Append("\\(em"); break; // em dash
+                    case '\u2013': sb.Append("\\(en"); break; // en dash
+                    case '\u2026': sb.Append("\\&..."); break; // horizontal ellipsis
+                    default:       sb.Append(c); break;
+                }
                 lineStart = false;
             }
         }
