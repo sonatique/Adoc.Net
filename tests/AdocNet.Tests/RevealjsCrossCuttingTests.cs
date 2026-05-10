@@ -239,6 +239,24 @@ public class RevealjsCrossCuttingTests
     }
 
     [Test]
+    public void Sectnums_does_not_number_deeper_inline_headings()
+    {
+        // In reveal.js, only slide-title sections (h2) are numbered. Deeper
+        // sections rendered inline (h3/h4/...) keep their plain title even
+        // with :sectnums: enabled. Asciidoctor reveal.js convention.
+        var output = Render(
+            "= Doc\n" +
+            ":sectnums:\n\n" +
+            "== Slide\n\n" +
+            "=== Sub\n\n" +
+            "==== Inner Heading\n\nbody");
+        Assert.That(output, Does.Contain(">1. Slide<"));
+        // Deeper levels (h3, h4) get no number prefix.
+        Assert.That(output, Does.Not.Contain("1.1. Inner"));
+        Assert.That(output, Does.Contain(">Inner Heading</"));
+    }
+
+    [Test]
     public void Sectnums_disabled_emits_no_numeric_prefix()
     {
         var output = Render(
