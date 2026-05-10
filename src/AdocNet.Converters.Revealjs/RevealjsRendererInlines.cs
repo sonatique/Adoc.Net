@@ -32,11 +32,15 @@ public sealed partial class RevealjsRenderer
 
     /// <summary>
     /// Renders a section's title using its pre-parsed TitleInlines when available,
-    /// falling back to parsing the raw Title string. The parser already populates
-    /// TitleInlines for section nodes, so this avoids redundant work.
+    /// falling back to parsing the raw Title string. When :sectnums: is enabled
+    /// the title is prefixed with the section's positional number (e.g. "1. " or
+    /// "2.3. ").
     /// </summary>
-    private static void RenderSectionTitle(StringBuilder sb, SectionNode section)
+    private void RenderSectionTitle(StringBuilder sb, SectionNode section)
     {
+        var prefix = AdvanceSectionNumber(section.Level);
+        if (prefix is not null)
+            sb.Append(prefix);
         if (section.TitleInlines is { Count: > 0 })
             RenderInlines(sb, section.TitleInlines);
         else
@@ -66,14 +70,20 @@ public sealed partial class RevealjsRenderer
                 sb.Append("</code>");
                 break;
             case LinkInlineNode n:
-                sb.Append("<a href=\"");
+                // Auto-detected URLs (no explicit label) get class="bare" matching
+                // Asciidoctor's convention.
+                sb.Append("<a class=\"bare\" href=\"");
                 EscapeTo(sb, n.Url);
                 sb.Append("\">");
                 EscapeTo(sb, n.Url);
                 sb.Append("</a>");
                 break;
             case InlineLinkMacroNode n:
-                sb.Append("<a href=\"");
+                bool isBare = n.Label.Length == 0 || n.Label == n.Url;
+                sb.Append("<a");
+                if (isBare)
+                    sb.Append(" class=\"bare\"");
+                sb.Append(" href=\"");
                 EscapeTo(sb, n.Url);
                 sb.Append("\">");
                 if (n.Label.Length > 0)
