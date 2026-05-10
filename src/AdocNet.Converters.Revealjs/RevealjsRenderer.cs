@@ -556,6 +556,24 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         sb.Append(">\n");
         AppendOptionalTitle(sb, block.Title);
         sb.Append("<div class=\"content\">\n");
+
+        // Build line-number → callout-numbers map for inline conum markers.
+        Dictionary<int, List<int>>? conumMap = null;
+        if (block.Callouts is { Count: > 0 })
+        {
+            foreach (var entry in block.Callouts)
+            {
+                if (entry.LineNumber < 0) continue;
+                conumMap ??= new();
+                if (!conumMap.TryGetValue(entry.LineNumber, out var nums))
+                {
+                    nums = new();
+                    conumMap[entry.LineNumber] = nums;
+                }
+                nums.Add(entry.Number);
+            }
+        }
+
         if (block.BlockKind == DelimitedBlockKind.Source)
         {
             // :source-highlighter: highlight.js → add 'highlightjs' to <pre>
@@ -573,16 +591,66 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
             if (_highlightJs)
                 sb.Append(" data-noescape=\"true\"");
             sb.Append('>');
-            EscapeTo(sb, block.Content ?? "");
+            AppendVerbatimWithConums(sb, block.Content ?? "", conumMap);
             sb.Append("</code></pre>\n");
         }
         else
         {
             sb.Append("<pre>");
-            EscapeTo(sb, block.Content ?? "");
+            AppendVerbatimWithConums(sb, block.Content ?? "", conumMap);
             sb.Append("</pre>\n");
         }
         sb.Append("</div>\n</div>\n");
+
+        // Callout list: <div class="arabic colist"><ol>... after the listing.
+        // Asciidoctor's reveal.js converter uses 'arabic colist' (note order)
+        // and renders only when entries have explanation text.
+        if (block.Callouts is { Count: > 0 } && block.Callouts.Any(e => e.Text.Length > 0 || e.Inlines.Count > 0))
+        {
+            sb.Append("<div class=\"arabic colist\">\n<ol>\n");
+            foreach (var entry in block.Callouts)
+            {
+                sb.Append("<li>\n<p>");
+                if (entry.Inlines.Count > 0)
+                    RenderInlines(sb, entry.Inlines);
+                else
+                    EscapeTo(sb, entry.Text);
+                sb.Append("</p>\n</li>\n");
+            }
+            sb.Append("</ol>\n</div>\n");
+        }
+    }
+
+    /// <summary>
+    /// Writes verbatim content line by line, appending &lt;b&gt;(N)&lt;/b&gt; markers
+    /// after each line that has callout markers (matching Asciidoctor's reveal.js
+    /// output, which uses bare &lt;b&gt; rather than &lt;b class=\"conum\"&gt;).
+    /// When <paramref name="conumMap"/> is null, falls back to a single
+    /// EscapeTo of the whole content.
+    /// </summary>
+    private static void AppendVerbatimWithConums(StringBuilder sb, string content, Dictionary<int, List<int>>? conumMap)
+    {
+        if (conumMap is null)
+        {
+            EscapeTo(sb, content);
+            return;
+        }
+        var lines = content.Split('\n');
+        for (int i = 0; i < lines.Length; i++)
+        {
+            EscapeTo(sb, lines[i]);
+            if (conumMap.TryGetValue(i, out var nums))
+            {
+                foreach (var num in nums)
+                {
+                    sb.Append(" <b>(");
+                    sb.Append(num);
+                    sb.Append(")</b>");
+                }
+            }
+            if (i < lines.Length - 1)
+                sb.Append('\n');
+        }
     }
 
     private void AppendOptionalTitle(StringBuilder sb, string? title)

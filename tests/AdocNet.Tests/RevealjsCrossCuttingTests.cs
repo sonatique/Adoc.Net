@@ -330,6 +330,41 @@ public class RevealjsCrossCuttingTests
         Assert.That(titleSlide, Does.Not.Contain("<h2>"));
     }
 
+    // ── Callouts (conums + colist) ────────────────────────────────────────────
+
+    [Test]
+    public void Callout_markers_emit_b_tags_in_listing()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "[source,java]\n" +
+            "----\n" +
+            "int x = 1; // <1>\n" +
+            "int y = 2; // <2>\n" +
+            "----\n" +
+            "<1> First.\n" +
+            "<2> Second.\n");
+        // Asciidoctor's reveal.js converter renders callout numbers as <b>(N)</b>.
+        Assert.That(output, Does.Contain("<b>(1)</b>"));
+        Assert.That(output, Does.Contain("<b>(2)</b>"));
+    }
+
+    [Test]
+    public void Callout_list_emitted_after_listing()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "[source,java]\n" +
+            "----\n" +
+            "int x = 1; // <1>\n" +
+            "----\n" +
+            "<1> First explanation.\n");
+        Assert.That(output, Does.Contain("<div class=\"arabic colist\">"));
+        Assert.That(output, Does.Contain("First explanation."));
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {
