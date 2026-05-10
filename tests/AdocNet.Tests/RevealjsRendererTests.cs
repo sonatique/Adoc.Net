@@ -436,6 +436,8 @@ public class RevealjsRendererTests
 
         var output = Render(doc);
 
-        Assert.That(output, Does.Contain("<div class=\"olist\">\n<ol>"));
+        // Asciidoctor parity: ordered lists carry a numbering style class
+        // (default "arabic" at depth 0). Wrapper class order: "<style> olist".
+        Assert.That(output, Does.Contain("<div class=\"arabic olist\">\n<ol class=\"arabic\">"));
     }
 }

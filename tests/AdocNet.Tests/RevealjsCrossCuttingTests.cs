@@ -410,6 +410,36 @@ public class RevealjsCrossCuttingTests
         Assert.That(output, Does.Not.Contain("`class`"));
     }
 
+    // ── Quote block content ──────────────────────────────────────────────────
+
+    [Test]
+    public void Quote_block_renders_inline_content_property()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "[quote, Werner Vogels]\n" +
+            "____\n" +
+            "Everything fails all the time.\n" +
+            "____\n");
+        Assert.That(output, Does.Contain("Everything fails all the time."));
+        Assert.That(output, Does.Contain("Werner Vogels"));
+    }
+
+    // ── Ordered list style classes ───────────────────────────────────────────
+
+    [Test]
+    public void Ordered_list_emits_arabic_class_by_default()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            ". First\n" +
+            ". Second\n");
+        Assert.That(output, Does.Contain("class=\"arabic olist\""));
+        Assert.That(output, Does.Contain("<ol class=\"arabic\">"));
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {
