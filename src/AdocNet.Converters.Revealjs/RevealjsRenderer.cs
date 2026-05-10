@@ -508,6 +508,13 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
             });
         }
 
+        // Checklist: any unordered list whose items have Checked set (from the
+        // [x] / [ ] markers) renders with the 'checklist' class on both the
+        // outer div and the <ul>, and each item's <li> opens with an <input
+        // type="checkbox"> reflecting the checked state.
+        bool isChecklist = list.ListKind == ListKind.Unordered
+            && list.Children.Any(c => c is ListItemNode it && it.Checked is not null);
+
         var tag = list.ListKind == ListKind.Ordered ? "ol" : "ul";
         sb.Append("<div class=\"");
         if (list.ListKind == ListKind.Ordered)
@@ -518,7 +525,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         }
         else
         {
-            sb.Append("ulist");
+            sb.Append(isChecklist ? "checklist ulist" : "ulist");
         }
         sb.Append("\">\n");
 
@@ -539,6 +546,8 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
             if (typeAttr is not null)
                 sb.Append(" type=\"").Append(typeAttr).Append('"');
         }
+        if (isChecklist)
+            sb.Append(" class=\"checklist\"");
         sb.Append(">\n");
 
         // Track ordered-list nesting depth so child lists pick the next style
@@ -552,6 +561,18 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
             if (child is ListItemNode item)
             {
                 sb.Append("<li>\n<p>");
+                // Checklist item: prepend an <input type="checkbox"> reflecting
+                // Checked. The marker pair is "checked + data-item-complete=1"
+                // for true, none of them for false. disabled="" is always set
+                // (asciidoctor renders the boxes as non-interactive).
+                if (item.Checked is not null)
+                {
+                    if (item.Checked == true)
+                        sb.Append("<input checked=\"\" data-item-complete=\"1\" disabled=\"\" type=\"checkbox\">");
+                    else
+                        sb.Append("<input disabled=\"\" type=\"checkbox\">");
+                    sb.Append("\n</input>\n");
+                }
                 if (item.Inlines.Count > 0)
                     RenderInlines(sb, item.Inlines);
                 else
