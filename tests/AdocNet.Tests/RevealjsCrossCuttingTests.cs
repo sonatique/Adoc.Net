@@ -655,6 +655,41 @@ public class RevealjsCrossCuttingTests
         Assert.That(output, Does.Not.Contain("<div class=\"footnotes\">"));
     }
 
+    // ── Block roles propagated to wrapper class ──────────────────────────────
+
+    [Test]
+    public void Source_block_role_appended_to_listingblock_class()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "[source,java,role=\"primary\"]\n" +
+            "----\nint x;\n----");
+        Assert.That(output, Does.Contain("<div class=\"listingblock primary\""));
+    }
+
+    [Test]
+    public void Listing_block_with_dot_role_propagates()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "[.secondary]\n" +
+            "----\nplain\n----");
+        Assert.That(output, Does.Contain("<div class=\"listingblock secondary\""));
+    }
+
+    [Test]
+    public void Listing_block_without_role_keeps_plain_class()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "----\nplain\n----");
+        Assert.That(output, Does.Contain("<div class=\"listingblock\""));
+        Assert.That(output, Does.Not.Contain("<div class=\"listingblock \""));
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {
