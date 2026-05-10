@@ -284,6 +284,52 @@ public class RevealjsCrossCuttingTests
         Assert.That(output, Does.Not.Contain("class=\"bare\""));
     }
 
+    // ── Nested list rendering ────────────────────────────────────────────────
+
+    [Test]
+    public void Nested_unordered_list_renders_inside_parent_item()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "* Earth\n" +
+            "** Moon\n" +
+            "* Mars\n");
+        // The "Moon" sub-item must appear as a nested <ul> inside the "Earth" <li>.
+        Assert.That(output, Does.Contain("Moon"));
+        // Two list opens (outer + inner)
+        int ulistCount = 0;
+        int idx = 0;
+        while ((idx = output.IndexOf("<div class=\"ulist\">", idx)) >= 0) { ulistCount++; idx++; }
+        Assert.That(ulistCount, Is.GreaterThanOrEqualTo(2),
+            "expected a nested ulist for the Moon sub-item");
+    }
+
+    [Test]
+    public void Document_title_with_colon_splits_into_h1_and_h2()
+    {
+        var output = Render(
+            "= Main Title: Subtitle Here\n\n" +
+            "== Slide\n\nbody");
+        Assert.That(output, Does.Contain("<h1>Main Title</h1>"));
+        Assert.That(output, Does.Contain("<h2>Subtitle Here</h2>"));
+    }
+
+    [Test]
+    public void Document_title_without_colon_renders_as_h1_only()
+    {
+        var output = Render(
+            "= Plain Title\n\n" +
+            "== Slide\n\nbody");
+        Assert.That(output, Does.Contain("<h1>Plain Title</h1>"));
+        // No <h2> for subtitle should appear in the title slide; only slide title h2s.
+        // Verify by checking the title slide region (between "title\" data-state="title">" and the next </section>).
+        var titleStart = output.IndexOf("data-state=\"title\"");
+        var titleEnd = output.IndexOf("</section>", titleStart);
+        var titleSlide = output.Substring(titleStart, titleEnd - titleStart);
+        Assert.That(titleSlide, Does.Not.Contain("<h2>"));
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {

@@ -44,6 +44,18 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
     }
 
     /// <summary>
+    /// Splits a document title on the first ": " separator into title + subtitle.
+    /// Mirrors Asciidoctor's standalone-document title splitting behaviour so
+    /// the title slide can render the subtitle as a separate &lt;h2&gt;.
+    /// </summary>
+    private static (string Title, string? Subtitle) SplitTitleSubtitle(string fullTitle)
+    {
+        var idx = fullTitle.IndexOf(": ", StringComparison.Ordinal);
+        if (idx < 0) return (fullTitle, null);
+        return (fullTitle.Substring(0, idx), fullTitle.Substring(idx + 2));
+    }
+
+    /// <summary>
     /// Advances the section counter for <paramref name="level"/> and returns the
     /// numeric prefix (e.g. "1. " or "1.2. "), or null when numbering is off
     /// or the level exceeds <c>:sectnumlevels:</c>.
@@ -95,8 +107,16 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         if (document.Title is not null)
         {
             sb.Append("<section class=\"title\" data-state=\"title\">\n<h1>");
-            RenderTextAsInlines(sb, document.Title);
+            // Asciidoctor splits a "Title: Subtitle" on the first ": " into <h1>+<h2>.
+            var (titleText, subtitleText) = SplitTitleSubtitle(document.Title);
+            RenderTextAsInlines(sb, titleText);
             sb.Append("</h1>\n");
+            if (subtitleText is not null)
+            {
+                sb.Append("<h2>");
+                RenderTextAsInlines(sb, subtitleText);
+                sb.Append("</h2>\n");
+            }
             if (document.Attributes.TryGetValue("author", out var author) && !string.IsNullOrWhiteSpace(author))
             {
                 sb.Append("<p class=\"byline\">\n<span class=\"author\">");
@@ -393,7 +413,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         sb.Append("</p>\n</div>\n");
     }
 
-    private static void RenderList(StringBuilder sb, ListNode list)
+    private void RenderList(StringBuilder sb, ListNode list)
     {
         // Asciidoctor wraps lists in <div class="ulist"> or "olist".
         var listClass = list.ListKind == ListKind.Ordered ? "olist" : "ulist";
@@ -411,7 +431,11 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
                     RenderInlines(sb, item.Inlines);
                 else
                     EscapeTo(sb, item.Text);
-                sb.Append("</p>\n</li>\n");
+                sb.Append("</p>\n");
+                // Recurse into list-item children (nested lists, list continuations).
+                foreach (var child2 in item.Children)
+                    if (child2 is BlockNode b) RenderBlock(sb, b);
+                sb.Append("</li>\n");
             }
         }
         sb.Append("</").Append(tag).Append(">\n");
