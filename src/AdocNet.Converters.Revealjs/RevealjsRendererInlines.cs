@@ -114,6 +114,61 @@ public sealed partial class RevealjsRenderer
                     sb.Append("\\)");
                 }
                 break;
+            case CrossReferenceInlineNode n:
+                sb.Append("<a href=\"#");
+                EscapeTo(sb, n.Target);
+                sb.Append("\">");
+                if (n.Label is not null)
+                    RenderTextAsInlines(sb, n.Label);
+                else
+                {
+                    sb.Append('[');
+                    EscapeTo(sb, n.Target);
+                    sb.Append(']');
+                }
+                sb.Append("</a>");
+                break;
+            case InterDocumentXrefNode n:
+                {
+                    // .adoc -> .html; append #id when present.
+                    var href = n.Path.EndsWith(".adoc", StringComparison.Ordinal)
+                        ? n.Path[..^5] + ".html"
+                        : n.Path;
+                    if (n.Id is not null)
+                        href += "#" + n.Id;
+                    sb.Append("<a href=\"");
+                    EscapeTo(sb, href);
+                    sb.Append("\">");
+                    if (n.Label is not null)
+                        RenderTextAsInlines(sb, n.Label);
+                    else
+                        EscapeTo(sb, href);
+                    sb.Append("</a>");
+                    break;
+                }
+            case InlineImageNode n:
+                sb.Append("<span class=\"image\"><img src=\"");
+                EscapeTo(sb, n.Target);
+                sb.Append("\" alt=\"");
+                EscapeTo(sb, n.Alt);
+                sb.Append("\"></span>");
+                break;
+            case FootnoteInlineNode n:
+                // Reveal.js doesn't currently track footnote state; render the
+                // footnote text inline as a parenthesised note so content survives.
+                if (n.Inlines.Count > 0)
+                {
+                    sb.Append(" (");
+                    RenderInlines(sb, n.Inlines);
+                    sb.Append(')');
+                }
+                else if (n.Text is not null)
+                {
+                    sb.Append(" (");
+                    EscapeTo(sb, n.Text);
+                    sb.Append(')');
+                }
+                break;
             default:
                 break;
         }

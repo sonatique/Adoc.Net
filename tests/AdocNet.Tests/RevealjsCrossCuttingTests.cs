@@ -80,6 +80,41 @@ public class RevealjsCrossCuttingTests
         Assert.That(output, Does.Not.Contain("<div class=\"preamble\">"));
     }
 
+    // ── Inline xref / interdocument xref must render their content ────────────
+
+    [Test]
+    public void Cross_reference_emits_link_with_label()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "[[my-target]]\n" +
+            "== Slide\n\n" +
+            "See <<my-target,the slide>> for details.\n");
+        Assert.That(output, Does.Contain("<a href=\"#my-target\">"));
+        Assert.That(output, Does.Contain("the slide"));
+    }
+
+    [Test]
+    public void Interdocument_xref_emits_link_with_html_target()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "See xref:other.adoc[the other doc].\n");
+        Assert.That(output, Does.Contain("<a href=\"other.html\">"));
+        Assert.That(output, Does.Contain("the other doc"));
+    }
+
+    [Test]
+    public void Interdocument_xref_label_with_backticks_renders_as_code()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "See xref:other.adoc[learn how `Foo` works].\n");
+        Assert.That(output, Does.Contain("<code>Foo</code>"));
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {
