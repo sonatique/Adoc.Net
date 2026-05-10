@@ -15,6 +15,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
     // multiple invocations on the same renderer produce deterministic output.
     private int _exampleCounter;
     private int _tableCounter;
+    private int _figureCounter;
     private int _orderedListDepth;
     private bool _sectnumsEnabled;
     private bool _iconsFont;
@@ -36,6 +37,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
     {
         _exampleCounter = 0;
         _tableCounter = 0;
+        _figureCounter = 0;
         _orderedListDepth = 0;
         _sectnumsEnabled = document.Attributes.ContainsKey("sectnums");
         _sectnumLevels = 3;
@@ -818,13 +820,27 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         sb.Append("</div>\n");
     }
 
-    private static void RenderBlockImage(StringBuilder sb, BlockImageNode image)
+    private void RenderBlockImage(StringBuilder sb, BlockImageNode image)
     {
+        // Asciidoctor wraps block images in <div class="imageblock">. Titled
+        // images receive a numbered "Figure N. <title>" caption div after the
+        // image (matching the example-block convention).
+        sb.Append("<div class=\"imageblock\">\n");
         sb.Append("<img src=\"");
         EscapeTo(sb, image.Target);
         sb.Append("\" alt=\"");
         EscapeTo(sb, image.Alt);
         sb.Append("\">\n");
+        if (image.Title is not null)
+        {
+            _figureCounter++;
+            sb.Append("<div class=\"title\">Figure ");
+            sb.Append(_figureCounter);
+            sb.Append(". ");
+            RenderTextAsInlines(sb, image.Title);
+            sb.Append("</div>\n");
+        }
+        sb.Append("</div>\n");
     }
 
     private void RenderAdmonition(StringBuilder sb, AdmonitionNode admonition)
@@ -854,6 +870,15 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
             sb.Append("</div>");
         }
         sb.Append("\n</td>\n<td class=\"content\">\n");
+        // Asciidoctor renders the admonition's block title (.Title from a
+        // preceding `.Title` line) as <div class="title"> inside the content
+        // cell, before the body. AdocNet was silently dropping it.
+        if (!string.IsNullOrEmpty(admonition.Title))
+        {
+            sb.Append("<div class=\"title\">");
+            RenderTextAsInlines(sb, admonition.Title!);
+            sb.Append("</div>\n");
+        }
         if (admonition.Inlines.Count > 0)
             RenderInlines(sb, admonition.Inlines);
         else if (admonition.Text is not null)
