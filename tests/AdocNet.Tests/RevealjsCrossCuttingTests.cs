@@ -690,6 +690,38 @@ public class RevealjsCrossCuttingTests
         Assert.That(output, Does.Not.Contain("<div class=\"listingblock \""));
     }
 
+    // ── Horizontal description list ──────────────────────────────────────────
+
+    [Test]
+    public void Horizontal_dlist_uses_table_structure()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "[horizontal]\n" +
+            "CPU:: Intel i7\n" +
+            "RAM:: 16 GB\n");
+        // Asciidoctor: <div class="hdlist"><table><tr>
+        //   <td class="hdlist1">CPU</td><td class="hdlist2"><p>Intel i7</p></td>
+        Assert.That(output, Does.Contain("<div class=\"hdlist\">"));
+        Assert.That(output, Does.Contain("<td class=\"hdlist1\">"));
+        Assert.That(output, Does.Contain("<td class=\"hdlist2\">"));
+        Assert.That(output, Does.Not.Contain("<dl>"),
+            "horizontal dlist must not use <dl> structure");
+    }
+
+    [Test]
+    public void Plain_dlist_still_uses_dl_structure()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "Term:: definition.\n");
+        // Sanity: non-horizontal dlist unchanged
+        Assert.That(output, Does.Contain("<dl>"));
+        Assert.That(output, Does.Not.Contain("<div class=\"hdlist\">"));
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {
