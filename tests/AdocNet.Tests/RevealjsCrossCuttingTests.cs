@@ -224,6 +224,66 @@ public class RevealjsCrossCuttingTests
         Assert.That(output, Does.Contain(">[separating]<"));
     }
 
+    // ── Section numbering :sectnums: ──────────────────────────────────────────
+
+    [Test]
+    public void Sectnums_attribute_prefixes_section_titles()
+    {
+        var output = Render(
+            "= Doc\n" +
+            ":sectnums:\n\n" +
+            "== First\n\nbody\n\n" +
+            "== Second\n\nbody");
+        Assert.That(output, Does.Contain(">1. First<"));
+        Assert.That(output, Does.Contain(">2. Second<"));
+    }
+
+    [Test]
+    public void Sectnums_disabled_emits_no_numeric_prefix()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== First\n\nbody");
+        Assert.That(output, Does.Not.Contain(">1. First<"));
+    }
+
+    // ── highlight.js source highlighter ──────────────────────────────────────
+
+    [Test]
+    public void Source_highlighter_highlightjs_adds_hljs_classes()
+    {
+        var output = Render(
+            "= Doc\n" +
+            ":source-highlighter: highlight.js\n\n" +
+            "== Code\n\n" +
+            "[source,java]\n----\nint x;\n----");
+        Assert.That(output, Does.Contain("class=\"highlight highlightjs\""));
+        Assert.That(output, Does.Contain("class=\"hljs language-java\""));
+        Assert.That(output, Does.Contain("data-noescape=\"true\""));
+    }
+
+    // ── Bare link: <a class="bare"> when no explicit label ───────────────────
+
+    [Test]
+    public void Bare_url_in_text_emits_class_bare()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "Visit https://example.com for details.");
+        Assert.That(output, Does.Contain("class=\"bare\""));
+    }
+
+    [Test]
+    public void Link_with_explicit_label_no_bare_class()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "Visit link:https://example.com[the site] for details.");
+        Assert.That(output, Does.Not.Contain("class=\"bare\""));
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {

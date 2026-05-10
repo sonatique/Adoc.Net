@@ -14,6 +14,12 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
     // Per-render mutable state. Reset at the start of each Render() call so
     // multiple invocations on the same renderer produce deterministic output.
     private int _exampleCounter;
+    private bool _sectnumsEnabled;
+    // sectnumlevels: which depths get numbered (default 3). Counters indexed
+    // by section level minus one.
+    private int[] _sectionCounters = [];
+    private int _sectnumLevels;
+    private bool _highlightJs;
 
     /// <inheritdoc />
     public string Format => "revealjs";
@@ -22,10 +28,42 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
     public void Render(DocumentNode document, Stream output, RenderOptions options)
     {
         _exampleCounter = 0;
+        _sectnumsEnabled = document.Attributes.ContainsKey("sectnums");
+        _sectnumLevels = 3;
+        if (document.Attributes.TryGetValue("sectnumlevels", out var lvls)
+            && int.TryParse(lvls, out var parsedLvls) && parsedLvls >= 0)
+            _sectnumLevels = parsedLvls;
+        _sectionCounters = new int[Math.Max(_sectnumLevels, 1)];
+        _highlightJs = document.Attributes.TryGetValue("source-highlighter", out var sh)
+            && (sh == "highlight.js" || sh == "highlightjs");
+
         var sb = new StringBuilder();
         RenderPresentation(sb, document);
         var bytes = Encoding.UTF8.GetBytes(sb.ToString());
         output.Write(bytes, 0, bytes.Length);
+    }
+
+    /// <summary>
+    /// Advances the section counter for <paramref name="level"/> and returns the
+    /// numeric prefix (e.g. "1. " or "1.2. "), or null when numbering is off
+    /// or the level exceeds <c>:sectnumlevels:</c>.
+    /// </summary>
+    private string? AdvanceSectionNumber(int level)
+    {
+        if (!_sectnumsEnabled) return null;
+        if (level < 1 || level > _sectnumLevels) return null;
+        int idx = level - 1;
+        _sectionCounters[idx]++;
+        for (int i = idx + 1; i < _sectionCounters.Length; i++)
+            _sectionCounters[i] = 0;
+        var sb = new StringBuilder();
+        for (int i = 0; i <= idx; i++)
+        {
+            sb.Append(_sectionCounters[i]);
+            sb.Append('.');
+        }
+        sb.Append(' ');
+        return sb.ToString();
     }
 
     private void RenderPresentation(StringBuilder sb, DocumentNode document)
@@ -496,15 +534,20 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         sb.Append("<div class=\"content\">\n");
         if (block.BlockKind == DelimitedBlockKind.Source)
         {
-            sb.Append("<pre class=\"highlight\"><code");
+            // :source-highlighter: highlight.js → add 'highlightjs' to <pre>
+            // and 'hljs' + data-noescape to <code> (matches Asciidoctor's hint
+            // markup for client-side syntax highlighting).
+            sb.Append(_highlightJs ? "<pre class=\"highlight highlightjs\"><code" : "<pre class=\"highlight\"><code");
             if (block.Language is not null)
             {
-                sb.Append(" class=\"language-");
+                sb.Append(_highlightJs ? " class=\"hljs language-" : " class=\"language-");
                 EscapeTo(sb, block.Language);
                 sb.Append("\" data-lang=\"");
                 EscapeTo(sb, block.Language);
                 sb.Append('"');
             }
+            if (_highlightJs)
+                sb.Append(" data-noescape=\"true\"");
             sb.Append('>');
             EscapeTo(sb, block.Content ?? "");
             sb.Append("</code></pre>\n");
