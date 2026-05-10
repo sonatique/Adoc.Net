@@ -557,6 +557,68 @@ public class RevealjsCrossCuttingTests
         Assert.That(output, Does.Contain("<div class=\"title\">Note</div>"));
     }
 
+    // ── Author email in byline ────────────────────────────────────────────────
+
+    [Test]
+    public void Author_email_renders_as_mailto_link_after_name()
+    {
+        var output = Render(
+            "= Doc\n" +
+            ":author: Alice\n" +
+            ":email: alice@example.com\n\n" +
+            "== Slide\n\nbody");
+        Assert.That(output, Does.Contain("Alice"));
+        Assert.That(output, Does.Contain("<a href=\"mailto:alice@example.com\">alice@example.com</a>"));
+    }
+
+    [Test]
+    public void No_email_no_mailto_link()
+    {
+        var output = Render(
+            "= Doc\n" +
+            ":author: Alice\n\n" +
+            "== Slide\n\nbody");
+        Assert.That(output, Does.Not.Contain("mailto:"));
+    }
+
+    // ── Ordered list type attribute ───────────────────────────────────────────
+
+    [Test]
+    public void Ordered_list_loweralpha_emits_type_a()
+    {
+        // [loweralpha] explicit style → type="a" on <ol>.
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "[loweralpha]\n" +
+            ". First\n" +
+            ". Second\n");
+        Assert.That(output, Does.Contain("<ol class=\"loweralpha\" type=\"a\">"));
+    }
+
+    [Test]
+    public void Ordered_list_lowerroman_emits_type_i()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "[lowerroman]\n" +
+            ". First\n");
+        Assert.That(output, Does.Contain("type=\"i\""));
+    }
+
+    [Test]
+    public void Ordered_list_arabic_does_not_emit_type()
+    {
+        // arabic is the default — Asciidoctor omits the type attribute.
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            ". First\n");
+        Assert.That(output, Does.Not.Contain("type=\"1\""));
+        Assert.That(output, Does.Contain("<ol class=\"arabic\">"));
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {
