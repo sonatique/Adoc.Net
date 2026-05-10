@@ -680,7 +680,15 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
 
     private void AppendListingBlock(StringBuilder sb, DelimitedBlockNode block)
     {
-        sb.Append("<div class=\"listingblock\"");
+        sb.Append("<div class=\"listingblock");
+        // Per-block role classes (e.g. [.primary], [.secondary]) get appended
+        // to the listingblock class — Asciidoctor parity.
+        for (int i = 0; i < block.Roles.Count; i++)
+        {
+            sb.Append(' ');
+            EscapeTo(sb, block.Roles[i]);
+        }
+        sb.Append('"');
         if (block.Id is not null)
         {
             sb.Append(" id=\"");
