@@ -18,6 +18,10 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
     private int _orderedListDepth;
     private bool _sectnumsEnabled;
     private bool _iconsFont;
+    // Per-slide footnote state. _slideFootnoteTexts[i] holds the resolved
+    // text/inlines for footnote (i+1) in the current slide. Reset before each
+    // slide; emitted as <div class="footnotes"> at the end of the slide.
+    private readonly List<string> _slideFootnoteTexts = new();
     // sectnumlevels: which depths get numbered (default 3). Counters indexed
     // by section level minus one.
     private int[] _sectionCounters = [];
@@ -333,11 +337,13 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
             sb.Append("<section>\n");
 
             // Parent slide with title + non-section content
+            BeginSlideFootnotes();
             AppendSlideOpenTag(sb, section);
             sb.Append("<h2>");
             RenderSectionTitle(sb, section);
             sb.Append("</h2>\n");
             AppendSlideContent(sb, section.Children, stopAtSubsection: true);
+            EndSlideFootnotes(sb);
             sb.Append("</section>\n");
 
             // Vertical slides — Asciidoctor uses <h2> for vertical slides too
@@ -346,11 +352,13 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
             {
                 if (child is SectionNode sub && sub.Level == 2)
                 {
+                    BeginSlideFootnotes();
                     AppendSlideOpenTag(sb, sub);
                     sb.Append("<h2>");
                     RenderSectionTitle(sb, sub);
                     sb.Append("</h2>\n");
                     AppendSlideContent(sb, sub.Children, stopAtSubsection: false);
+                    EndSlideFootnotes(sb);
                     sb.Append("</section>\n");
                 }
             }
@@ -360,13 +368,45 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         else
         {
             // Simple horizontal slide
+            BeginSlideFootnotes();
             AppendSlideOpenTag(sb, section);
             sb.Append("<h2>");
             RenderSectionTitle(sb, section);
             sb.Append("</h2>\n");
             AppendSlideContent(sb, section.Children, stopAtSubsection: false);
+            EndSlideFootnotes(sb);
             sb.Append("</section>\n");
         }
+    }
+
+    /// <summary>
+    /// Resets the per-slide footnote buffer. Called at the start of each slide
+    /// (horizontal, vertical-parent, or vertical-child) so footnotes track
+    /// per-slide as Asciidoctor's reveal.js converter does.
+    /// </summary>
+    private void BeginSlideFootnotes()
+    {
+        _slideFootnoteTexts.Clear();
+    }
+
+    /// <summary>
+    /// Emits &lt;div class="footnotes"&gt; with one numbered &lt;div class="footnote"&gt;
+    /// per buffered footnote, then clears the buffer. No-op when empty.
+    /// </summary>
+    private void EndSlideFootnotes(StringBuilder sb)
+    {
+        if (_slideFootnoteTexts.Count == 0) return;
+        sb.Append("<div class=\"footnotes\">\n");
+        for (int i = 0; i < _slideFootnoteTexts.Count; i++)
+        {
+            sb.Append("<div class=\"footnote\">");
+            sb.Append(i + 1);
+            sb.Append(". ");
+            sb.Append(_slideFootnoteTexts[i]);
+            sb.Append("</div>\n");
+        }
+        sb.Append("</div>\n");
+        _slideFootnoteTexts.Clear();
     }
 
     /// <summary>
@@ -438,7 +478,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         }
     }
 
-    private static void RenderParagraph(StringBuilder sb, ParagraphNode paragraph)
+    private void RenderParagraph(StringBuilder sb, ParagraphNode paragraph)
     {
         // Asciidoctor wraps every paragraph in <div class="paragraph">.
         sb.Append("<div class=\"paragraph\">\n<p>");
@@ -887,7 +927,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         if (table.HasFooter && rows.Count > 0)
         {
             sb.Append("<tfoot>\n");
-            AppendTableRow(sb, rows[^1], isHeader: false);
+            AppendTableRow(sb, rows[rows.Count - 1], isHeader: false);
             sb.Append("</tfoot>\n");
         }
 
