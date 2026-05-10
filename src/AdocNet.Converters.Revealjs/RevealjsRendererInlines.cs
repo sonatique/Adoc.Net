@@ -7,7 +7,7 @@ public sealed partial class RevealjsRenderer
 {
     // ── Inline rendering ────────────────────────────────────────────────
 
-    private static void RenderInlines(
+    private void RenderInlines(
         StringBuilder sb, IEnumerable<InlineNode> inlines)
     {
         foreach (var node in inlines)
@@ -19,7 +19,7 @@ public sealed partial class RevealjsRenderer
     /// the resulting inlines so backticks become &lt;code&gt;, *text* becomes
     /// &lt;strong&gt;, etc. Macros are excluded to avoid re-entering link parsing.
     /// </summary>
-    private static void RenderTextAsInlines(StringBuilder sb, string text)
+    private void RenderTextAsInlines(StringBuilder sb, string text)
     {
         var subs = SubstitutionKind.Quotes |
                    SubstitutionKind.Replacements |
@@ -47,7 +47,7 @@ public sealed partial class RevealjsRenderer
             RenderTextAsInlines(sb, section.Title);
     }
 
-    private static void RenderInline(StringBuilder sb, InlineNode node)
+    private void RenderInline(StringBuilder sb, InlineNode node)
     {
         switch (node)
         {
@@ -177,19 +177,28 @@ public sealed partial class RevealjsRenderer
                 sb.Append("\"></span>");
                 break;
             case FootnoteInlineNode n:
-                // Reveal.js doesn't currently track footnote state; render the
-                // footnote text inline as a parenthesised note so content survives.
-                if (n.Inlines.Count > 0)
+                // Asciidoctor reveal.js inline marker:
+                //   <sup class="footnote">[<span class="footnote" title="View footnote.">N</span>]</sup>
+                // The footnote text is buffered into the per-slide list and
+                // emitted as a numbered <div class="footnote"> by EndSlideFootnotes.
                 {
-                    sb.Append(" (");
-                    RenderInlines(sb, n.Inlines);
-                    sb.Append(')');
-                }
-                else if (n.Text is not null)
-                {
-                    sb.Append(" (");
-                    EscapeTo(sb, n.Text);
-                    sb.Append(')');
+                    // Resolve footnote text (rendered inline children → string).
+                    string footnoteText;
+                    if (n.Inlines.Count > 0)
+                    {
+                        var inner = new StringBuilder();
+                        RenderInlines(inner, n.Inlines);
+                        footnoteText = inner.ToString();
+                    }
+                    else
+                    {
+                        footnoteText = n.Text ?? "";
+                    }
+                    _slideFootnoteTexts.Add(footnoteText);
+                    int num = _slideFootnoteTexts.Count;
+                    sb.Append("<sup class=\"footnote\">[<span class=\"footnote\" title=\"View footnote.\">");
+                    sb.Append(num);
+                    sb.Append("</span>]</sup>");
                 }
                 break;
             default:

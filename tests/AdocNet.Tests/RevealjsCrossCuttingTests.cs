@@ -619,6 +619,42 @@ public class RevealjsCrossCuttingTests
         Assert.That(output, Does.Contain("<ol class=\"arabic\">"));
     }
 
+    // ── Footnote rendering ────────────────────────────────────────────────────
+
+    [Test]
+    public void Inline_footnote_emits_sup_marker()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "A line.footnote:[The note text.]\n");
+        // Marker: <sup class="footnote">[<span class="footnote" title="View footnote.">1</span>]</sup>
+        Assert.That(output, Does.Contain("<sup class=\"footnote\">"));
+        Assert.That(output, Does.Contain("<span class=\"footnote\" title=\"View footnote.\">1</span>"));
+    }
+
+    [Test]
+    public void Slide_with_footnote_emits_footnotes_div_at_end()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "Text.footnote:[The note.]\n");
+        // Per-slide footnotes div with numbered entries.
+        Assert.That(output, Does.Contain("<div class=\"footnotes\">"));
+        Assert.That(output, Does.Contain("<div class=\"footnote\">1. The note.</div>"));
+    }
+
+    [Test]
+    public void Slide_without_footnotes_emits_no_footnotes_div()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "Plain text.\n");
+        Assert.That(output, Does.Not.Contain("<div class=\"footnotes\">"));
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {
