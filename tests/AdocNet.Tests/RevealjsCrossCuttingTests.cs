@@ -784,6 +784,38 @@ public class RevealjsCrossCuttingTests
         Assert.That(output, Does.Contain("My Image"));
     }
 
+    // ── Checklist items ──────────────────────────────────────────────────────
+
+    [Test]
+    public void Checked_list_items_emit_checkbox_input_and_checklist_class()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "* [x] Done\n" +
+            "* [ ] Todo\n");
+        Assert.That(output, Does.Contain("class=\"checklist ulist\""));
+        Assert.That(output, Does.Contain("<ul class=\"checklist\">"));
+        Assert.That(output, Does.Contain("<input"));
+        Assert.That(output, Does.Contain("type=\"checkbox\""));
+        // Checked item
+        Assert.That(output, Does.Contain("checked=\"\""));
+        Assert.That(output, Does.Contain("data-item-complete=\"1\""));
+        Assert.That(output, Does.Contain("disabled=\"\""));
+    }
+
+    [Test]
+    public void Plain_unordered_list_unchanged_no_checklist_class()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "* one\n" +
+            "* two\n");
+        Assert.That(output, Does.Not.Contain("checklist"));
+        Assert.That(output, Does.Contain("<div class=\"ulist\">"));
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {
