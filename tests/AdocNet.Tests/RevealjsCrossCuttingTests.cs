@@ -722,6 +722,25 @@ public class RevealjsCrossCuttingTests
         Assert.That(output, Does.Not.Contain("<div class=\"hdlist\">"));
     }
 
+    // ── Q&A description list ─────────────────────────────────────────────────
+
+    [Test]
+    public void Qanda_dlist_uses_qlist_ol_structure()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "[qanda]\n" +
+            "Question one?:: Answer one.\n" +
+            "Question two?:: Answer two.\n");
+        Assert.That(output, Does.Contain("<div class=\"qanda qlist\">"));
+        Assert.That(output, Does.Contain("<ol>"));
+        Assert.That(output, Does.Contain("<em>Question one?</em>"));
+        Assert.That(output, Does.Contain("Answer one."));
+        Assert.That(output, Does.Not.Contain("<dl>"),
+            "qanda dlist must not use <dl>");
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {
