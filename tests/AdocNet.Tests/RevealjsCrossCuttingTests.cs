@@ -365,6 +365,51 @@ public class RevealjsCrossCuttingTests
         Assert.That(output, Does.Contain("First explanation."));
     }
 
+    // ── Description list structure ───────────────────────────────────────────
+
+    [Test]
+    public void Description_list_wrapped_in_dlist_div()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "Term One:: First definition.\n" +
+            "Term Two:: Second definition.\n");
+        Assert.That(output, Does.Contain("<div class=\"dlist\">"));
+        Assert.That(output, Does.Contain("<dt class=\"hdlist1\">"));
+    }
+
+    [Test]
+    public void Description_list_dd_wraps_text_in_p()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "Term:: Some description.\n");
+        Assert.That(output, Does.Contain("<dd>\n<p>Some description.</p>"));
+    }
+
+    [Test]
+    public void Description_list_term_parses_inline_formatting()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "`code term`:: Description here.\n");
+        Assert.That(output, Does.Contain("<code>code term</code>"));
+    }
+
+    [Test]
+    public void Description_list_description_parses_inline_formatting()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "Term:: The `class` attribute.\n");
+        Assert.That(output, Does.Contain("<code>class</code>"));
+        Assert.That(output, Does.Not.Contain("`class`"));
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {
