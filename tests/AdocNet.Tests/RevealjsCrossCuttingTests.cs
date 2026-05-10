@@ -440,6 +440,62 @@ public class RevealjsCrossCuttingTests
         Assert.That(output, Does.Contain("<ol class=\"arabic\">"));
     }
 
+    // ── Table structure ───────────────────────────────────────────────────────
+
+    [Test]
+    public void Table_emits_class_frame_grid_tableblock()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "|===\n" +
+            "|A |B\n" +
+            "|===\n");
+        Assert.That(output, Does.Contain("class=\"frame-all grid-all tableblock\""));
+    }
+
+    [Test]
+    public void Table_cell_wrapped_in_p_tableblock_with_halign_valign()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "|===\n" +
+            "|cell content\n" +
+            "|===\n");
+        Assert.That(output, Does.Contain("class=\"halign-left tableblock valign-top\""));
+        Assert.That(output, Does.Contain("<p class=\"tableblock\">cell content</p>"));
+    }
+
+    [Test]
+    public void Table_with_header_emits_thead_with_th_cells()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "[%header]\n" +
+            "|===\n" +
+            "|H1 |H2\n\n" +
+            "|cell1 |cell2\n" +
+            "|===\n");
+        Assert.That(output, Does.Contain("<thead>"));
+        Assert.That(output, Does.Contain("<th class=\"halign-left tableblock valign-top\">H1</th>"));
+        Assert.That(output, Does.Contain("<tbody>"));
+    }
+
+    [Test]
+    public void Table_with_title_emits_numbered_caption()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            ".My Table\n" +
+            "|===\n" +
+            "|cell\n" +
+            "|===\n");
+        Assert.That(output, Does.Contain("<caption class=\"title\">Table 1. My Table</caption>"));
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {
