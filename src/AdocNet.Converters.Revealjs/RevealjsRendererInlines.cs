@@ -31,6 +31,62 @@ public sealed partial class RevealjsRenderer
     private static readonly Dictionary<string, string> EmptyAttrs = new();
 
     /// <summary>
+    /// Renders the supported subset of inline macros (kbd, btn, menu) to match
+    /// Asciidoctor's reveal.js output. Unrecognised macros fall through to a
+    /// literal-text rendering of their target/content.
+    /// </summary>
+    private void RenderInlineMacro(StringBuilder sb, InlineMacroNode macro)
+    {
+        switch (macro.Name)
+        {
+            case "kbd":
+                {
+                    var keys = macro.Content.Split('+');
+                    if (keys.Length == 1)
+                    {
+                        sb.Append("<kbd>");
+                        EscapeTo(sb, keys[0].Trim());
+                        sb.Append("</kbd>");
+                    }
+                    else
+                    {
+                        sb.Append("<span class=\"keyseq\">");
+                        for (int k = 0; k < keys.Length; k++)
+                        {
+                            if (k > 0) sb.Append('+');
+                            sb.Append("<kbd>");
+                            EscapeTo(sb, keys[k].Trim());
+                            sb.Append("</kbd>");
+                        }
+                        sb.Append("</span>");
+                    }
+                }
+                break;
+            case "btn":
+                sb.Append("<b class=\"button\">");
+                EscapeTo(sb, macro.Content);
+                sb.Append("</b>");
+                break;
+            case "menu":
+                sb.Append("<span class=\"menuseq\"><span class=\"menu\">");
+                EscapeTo(sb, macro.Target);
+                sb.Append("</span>&#160;&#9656; <span class=\"submenu\">");
+                EscapeTo(sb, macro.Content);
+                sb.Append("</span></span>");
+                break;
+            default:
+                // Unknown macro: render as plain text "name:target[content]".
+                EscapeTo(sb, macro.Name);
+                sb.Append(':');
+                EscapeTo(sb, macro.Target);
+                sb.Append('[');
+                EscapeTo(sb, macro.Content);
+                sb.Append(']');
+                break;
+        }
+    }
+
+    /// <summary>
     /// Renders a section's title using its pre-parsed TitleInlines when available,
     /// falling back to parsing the raw Title string. When :sectnums: is enabled,
     /// slide-level sections (level 1 horizontal slides and level 2 vertical
@@ -179,6 +235,9 @@ public sealed partial class RevealjsRenderer
                 sb.Append("\" alt=\"");
                 EscapeTo(sb, n.Alt);
                 sb.Append("\"></span>");
+                break;
+            case InlineMacroNode macro:
+                RenderInlineMacro(sb, macro);
                 break;
             case FootnoteInlineNode n:
                 // Asciidoctor reveal.js inline marker:
