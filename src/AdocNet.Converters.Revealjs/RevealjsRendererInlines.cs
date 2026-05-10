@@ -32,15 +32,19 @@ public sealed partial class RevealjsRenderer
 
     /// <summary>
     /// Renders a section's title using its pre-parsed TitleInlines when available,
-    /// falling back to parsing the raw Title string. When :sectnums: is enabled
-    /// the title is prefixed with the section's positional number (e.g. "1. " or
-    /// "2.3. ").
+    /// falling back to parsing the raw Title string. When :sectnums: is enabled,
+    /// slide-level sections (level 1 horizontal slides and level 2 vertical
+    /// slides) get a numeric prefix; deeper headings rendered inside a slide
+    /// (level 3+) are not numbered, matching Asciidoctor's reveal.js convention.
     /// </summary>
     private void RenderSectionTitle(StringBuilder sb, SectionNode section)
     {
-        var prefix = AdvanceSectionNumber(section.Level);
-        if (prefix is not null)
-            sb.Append(prefix);
+        if (section.Level <= 2)
+        {
+            var prefix = AdvanceSectionNumber(section.Level);
+            if (prefix is not null)
+                sb.Append(prefix);
+        }
         if (section.TitleInlines is { Count: > 0 })
             RenderInlines(sb, section.TitleInlines);
         else
