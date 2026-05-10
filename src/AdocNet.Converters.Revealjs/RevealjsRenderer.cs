@@ -14,6 +14,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
     // Per-render mutable state. Reset at the start of each Render() call so
     // multiple invocations on the same renderer produce deterministic output.
     private int _exampleCounter;
+    private int _orderedListDepth;
     private bool _sectnumsEnabled;
     // sectnumlevels: which depths get numbered (default 3). Counters indexed
     // by section level minus one.
@@ -28,6 +29,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
     public void Render(DocumentNode document, Stream output, RenderOptions options)
     {
         _exampleCounter = 0;
+        _orderedListDepth = 0;
         _sectnumsEnabled = document.Attributes.ContainsKey("sectnums");
         _sectnumLevels = 3;
         if (document.Attributes.TryGetValue("sectnumlevels", out var lvls)
@@ -415,29 +417,66 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
 
     private void RenderList(StringBuilder sb, ListNode list)
     {
-        // Asciidoctor wraps lists in <div class="ulist"> or "olist".
-        var listClass = list.ListKind == ListKind.Ordered ? "olist" : "ulist";
+        // Ordered lists carry a numbering style (arabic, loweralpha, lowerroman, …)
+        // that becomes a CSS class on both the wrapper div and the <ol>. Default
+        // by depth when no explicit style is set.
+        string? olStyle = null;
+        if (list.ListKind == ListKind.Ordered)
+        {
+            olStyle = list.ListStyle ?? (_orderedListDepth switch
+            {
+                0 => "arabic",
+                1 => "loweralpha",
+                2 => "lowerroman",
+                _ => "arabic",
+            });
+        }
+
         var tag = list.ListKind == ListKind.Ordered ? "ol" : "ul";
-        sb.Append("<div class=\"").Append(listClass).Append("\">\n");
-        sb.Append('<').Append(tag).Append(">\n");
+        sb.Append("<div class=\"");
+        if (list.ListKind == ListKind.Ordered)
+        {
+            // Asciidoctor's reveal.js converter puts the style class first:
+            // <div class="arabic olist">  (HTML uses "olist arabic" instead).
+            sb.Append(olStyle).Append(" olist");
+        }
+        else
+        {
+            sb.Append("ulist");
+        }
+        sb.Append("\">\n");
+
+        sb.Append('<').Append(tag);
+        if (olStyle is not null)
+        {
+            sb.Append(" class=\"").Append(olStyle).Append('"');
+        }
+        sb.Append(">\n");
+
+        // Track ordered-list nesting depth so child lists pick the next style
+        // in the cycle (loweralpha, lowerroman, …).
+        var savedDepth = _orderedListDepth;
+        if (list.ListKind == ListKind.Ordered)
+            _orderedListDepth++;
+
         foreach (var child in list.Children)
         {
             if (child is ListItemNode item)
             {
-                // Asciidoctor wraps list-item text in <p> for consistent paragraph
-                // styling across nested content.
                 sb.Append("<li>\n<p>");
                 if (item.Inlines.Count > 0)
                     RenderInlines(sb, item.Inlines);
                 else
                     EscapeTo(sb, item.Text);
                 sb.Append("</p>\n");
-                // Recurse into list-item children (nested lists, list continuations).
                 foreach (var child2 in item.Children)
                     if (child2 is BlockNode b) RenderBlock(sb, b);
                 sb.Append("</li>\n");
             }
         }
+
+        _orderedListDepth = savedDepth;
+
         sb.Append("</").Append(tag).Append(">\n");
         sb.Append("</div>\n");
     }
@@ -479,6 +518,15 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
                 sb.Append("<div class=\"quoteblock\">\n");
                 AppendOptionalTitle(sb, block.Title);
                 sb.Append("<blockquote>\n");
+                // Quote text often lives in block.Content (paragraph form) rather
+                // than child blocks. Render Content as a paragraph first, then any
+                // explicit child blocks below it.
+                if (!string.IsNullOrEmpty(block.Content))
+                {
+                    sb.Append("<div class=\"paragraph\">\n<p>");
+                    RenderTextAsInlines(sb, block.Content);
+                    sb.Append("</p>\n</div>\n");
+                }
                 foreach (var child in block.Children)
                     if (child is BlockNode b) RenderBlock(sb, b);
                 sb.Append("</blockquote>\n");
