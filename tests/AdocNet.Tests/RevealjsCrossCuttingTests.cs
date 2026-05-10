@@ -115,6 +115,62 @@ public class RevealjsCrossCuttingTests
         Assert.That(output, Does.Contain("<code>Foo</code>"));
     }
 
+    // ── Block wrappers ────────────────────────────────────────────────────────
+
+    [Test]
+    public void Sidebar_block_wrapped_in_sidebarblock_div()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "****\nSidebar text.\n****");
+        Assert.That(output, Does.Contain("<div class=\"sidebarblock\">"));
+        Assert.That(output, Does.Contain("<div class=\"content\">"));
+    }
+
+    [Test]
+    public void Example_block_wrapped_in_exampleblock_div_with_numbered_title()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            ".My Example\n====\nExample body.\n====");
+        Assert.That(output, Does.Contain("<div class=\"exampleblock\">"));
+        Assert.That(output, Does.Contain("Example 1. My Example"));
+    }
+
+    [Test]
+    public void Source_block_wrapped_in_listingblock_div()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "[source,java]\n----\nint x = 1;\n----");
+        Assert.That(output, Does.Contain("<div class=\"listingblock\">"));
+        Assert.That(output, Does.Contain("<pre"));
+        Assert.That(output, Does.Contain("language-java"));
+    }
+
+    [Test]
+    public void Listing_block_without_language_wrapped_in_listingblock_div()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "----\nplain text\n----");
+        Assert.That(output, Does.Contain("<div class=\"listingblock\">"));
+    }
+
+    [Test]
+    public void Literal_block_wrapped_in_literalblock_div()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "....\nliteral text\n....");
+        Assert.That(output, Does.Contain("<div class=\"literalblock\">"));
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {
