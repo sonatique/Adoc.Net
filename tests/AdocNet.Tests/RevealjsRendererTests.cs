@@ -237,7 +237,10 @@ public class RevealjsRendererTests
 
         var output = Render(doc);
 
-        Assert.That(output, Does.Contain("<pre><code class=\"language-javascript\">"));
+        // Asciidoctor parity: source blocks wrap in <div class="listingblock"> and
+        // <pre class="highlight"><code class="language-X" data-lang="X">.
+        Assert.That(output, Does.Contain("<div class=\"listingblock\">"));
+        Assert.That(output, Does.Contain("class=\"language-javascript\" data-lang=\"javascript\""));
         Assert.That(output, Does.Contain("console.log(&#39;hi&#39;);"));
     }
 

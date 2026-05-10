@@ -11,19 +11,24 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
 {
     private const string DefaultCdnBase = "https://cdn.jsdelivr.net/npm/reveal.js@4/dist";
 
+    // Per-render mutable state. Reset at the start of each Render() call so
+    // multiple invocations on the same renderer produce deterministic output.
+    private int _exampleCounter;
+
     /// <inheritdoc />
     public string Format => "revealjs";
 
     /// <inheritdoc />
     public void Render(DocumentNode document, Stream output, RenderOptions options)
     {
+        _exampleCounter = 0;
         var sb = new StringBuilder();
         RenderPresentation(sb, document);
         var bytes = Encoding.UTF8.GetBytes(sb.ToString());
         output.Write(bytes, 0, bytes.Length);
     }
 
-    private static void RenderPresentation(StringBuilder sb, DocumentNode document)
+    private void RenderPresentation(StringBuilder sb, DocumentNode document)
     {
         var theme = GetAttribute(document, "revealjs_theme", "black");
         var transition = GetAttribute(document, "revealjs_transition", "slide");
@@ -214,7 +219,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
 
     // ── Slide rendering ─────────────────────────────────────────────────
 
-    private static void RenderSlide(StringBuilder sb, SectionNode section)
+    private void RenderSlide(StringBuilder sb, SectionNode section)
     {
         bool hasVerticalSlides = false;
         foreach (var child in section.Children)
@@ -275,7 +280,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
     /// theme CSS can scroll/scale it independently of the heading.
     /// Skipped when there's no body content (heading-only slide).
     /// </summary>
-    private static void AppendSlideContent(StringBuilder sb, IEnumerable<AstNode> children, bool stopAtSubsection)
+    private void AppendSlideContent(StringBuilder sb, IEnumerable<AstNode> children, bool stopAtSubsection)
     {
         // Pre-check: any block content?
         bool hasContent = false;
@@ -311,7 +316,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
 
     // ── Block rendering ─────────────────────────────────────────────────
 
-    private static void RenderBlock(StringBuilder sb, BlockNode node)
+    private void RenderBlock(StringBuilder sb, BlockNode node)
     {
         switch (node)
         {
@@ -375,7 +380,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         sb.Append("</div>\n");
     }
 
-    private static void RenderDelimitedBlock(StringBuilder sb, DelimitedBlockNode block)
+    private void RenderDelimitedBlock(StringBuilder sb, DelimitedBlockNode block)
     {
         // Speaker notes: [.notes] role
         if (block.Roles.Contains("notes"))
@@ -396,43 +401,122 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         switch (block.BlockKind)
         {
             case DelimitedBlockKind.Source:
-                sb.Append("<pre><code");
-                if (block.Language is not null)
-                {
-                    sb.Append(" class=\"language-");
-                    EscapeTo(sb, block.Language);
-                    sb.Append('"');
-                }
-                sb.Append('>');
-                EscapeTo(sb, block.Content ?? "");
-                sb.Append("</code></pre>\n");
+            case DelimitedBlockKind.Listing:
+                AppendListingBlock(sb, block);
                 break;
 
-            case DelimitedBlockKind.Listing:
             case DelimitedBlockKind.Literal:
-                sb.Append("<pre>");
+                sb.Append("<div class=\"literalblock\">\n");
+                AppendOptionalTitle(sb, block.Title);
+                sb.Append("<div class=\"content\">\n<pre>");
                 EscapeTo(sb, block.Content ?? "");
-                sb.Append("</pre>\n");
+                sb.Append("</pre>\n</div>\n</div>\n");
                 break;
 
             case DelimitedBlockKind.Quote:
+                sb.Append("<div class=\"quoteblock\">\n");
+                AppendOptionalTitle(sb, block.Title);
                 sb.Append("<blockquote>\n");
                 foreach (var child in block.Children)
                     if (child is BlockNode b) RenderBlock(sb, b);
+                sb.Append("</blockquote>\n");
                 if (block.Attribution is not null)
                 {
-                    sb.Append("<footer>");
+                    sb.Append("<div class=\"attribution\">&#8212; ");
                     EscapeTo(sb, block.Attribution);
-                    sb.Append("</footer>\n");
+                    sb.Append("</div>\n");
                 }
-                sb.Append("</blockquote>\n");
+                sb.Append("</div>\n");
+                break;
+
+            case DelimitedBlockKind.Example:
+                // Asciidoctor wraps example blocks in <div class="exampleblock">.
+                // Titled examples receive a numbered prefix ("Example N. <title>").
+                sb.Append("<div class=\"exampleblock\">\n");
+                if (block.Title is not null)
+                {
+                    sb.Append("<div class=\"title\">Example ");
+                    sb.Append(++_exampleCounter);
+                    sb.Append(". ");
+                    RenderTextAsInlines(sb, block.Title);
+                    sb.Append("</div>\n");
+                }
+                sb.Append("<div class=\"content\">\n");
+                foreach (var child in block.Children)
+                    if (child is BlockNode b) RenderBlock(sb, b);
+                sb.Append("</div>\n</div>\n");
+                break;
+
+            case DelimitedBlockKind.Sidebar:
+                sb.Append("<div class=\"sidebarblock\"");
+                if (block.Id is not null)
+                {
+                    sb.Append(" id=\"");
+                    EscapeTo(sb, block.Id);
+                    sb.Append('"');
+                }
+                sb.Append(">\n<div class=\"content\">\n");
+                if (block.Title is not null)
+                {
+                    sb.Append("<div class=\"title\">");
+                    RenderTextAsInlines(sb, block.Title);
+                    sb.Append("</div>\n");
+                }
+                foreach (var child in block.Children)
+                    if (child is BlockNode b) RenderBlock(sb, b);
+                sb.Append("</div>\n</div>\n");
                 break;
 
             default:
+                // Open block etc.: pass through children with no wrapper.
                 foreach (var child in block.Children)
                     if (child is BlockNode b) RenderBlock(sb, b);
                 break;
         }
+    }
+
+    private void AppendListingBlock(StringBuilder sb, DelimitedBlockNode block)
+    {
+        sb.Append("<div class=\"listingblock\"");
+        if (block.Id is not null)
+        {
+            sb.Append(" id=\"");
+            EscapeTo(sb, block.Id);
+            sb.Append('"');
+        }
+        sb.Append(">\n");
+        AppendOptionalTitle(sb, block.Title);
+        sb.Append("<div class=\"content\">\n");
+        if (block.BlockKind == DelimitedBlockKind.Source)
+        {
+            sb.Append("<pre class=\"highlight\"><code");
+            if (block.Language is not null)
+            {
+                sb.Append(" class=\"language-");
+                EscapeTo(sb, block.Language);
+                sb.Append("\" data-lang=\"");
+                EscapeTo(sb, block.Language);
+                sb.Append('"');
+            }
+            sb.Append('>');
+            EscapeTo(sb, block.Content ?? "");
+            sb.Append("</code></pre>\n");
+        }
+        else
+        {
+            sb.Append("<pre>");
+            EscapeTo(sb, block.Content ?? "");
+            sb.Append("</pre>\n");
+        }
+        sb.Append("</div>\n</div>\n");
+    }
+
+    private void AppendOptionalTitle(StringBuilder sb, string? title)
+    {
+        if (title is null) return;
+        sb.Append("<div class=\"title\">");
+        RenderTextAsInlines(sb, title);
+        sb.Append("</div>\n");
     }
 
     private static void RenderBlockImage(StringBuilder sb, BlockImageNode image)
@@ -444,7 +528,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         sb.Append("\">\n");
     }
 
-    private static void RenderAdmonition(StringBuilder sb, AdmonitionNode admonition)
+    private void RenderAdmonition(StringBuilder sb, AdmonitionNode admonition)
     {
         sb.Append("<div class=\"admonition ");
         sb.Append(admonition.AdmonitionType.ToLowerInvariant());
@@ -458,7 +542,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         sb.Append("\n</div>\n");
     }
 
-    private static void RenderTable(StringBuilder sb, TableNode table)
+    private void RenderTable(StringBuilder sb, TableNode table)
     {
         sb.Append("<table>\n");
         foreach (var child in table.Children)
@@ -499,7 +583,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         sb.Append("\n</div>\n");
     }
 
-    private static void RenderDescriptionList(StringBuilder sb, DescriptionListNode list)
+    private void RenderDescriptionList(StringBuilder sb, DescriptionListNode list)
     {
         sb.Append("<dl>\n");
         foreach (var child in list.Children)

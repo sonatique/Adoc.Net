@@ -132,7 +132,7 @@ public sealed partial class RevealjsRenderer
                 {
                     // .adoc -> .html; append #id when present.
                     var href = n.Path.EndsWith(".adoc", StringComparison.Ordinal)
-                        ? n.Path[..^5] + ".html"
+                        ? n.Path.Substring(0, n.Path.Length - 5) + ".html"
                         : n.Path;
                     if (n.Id is not null)
                         href += "#" + n.Id;
