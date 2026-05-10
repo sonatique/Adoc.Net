@@ -803,7 +803,11 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         var lines = content.Split('\n');
         for (int i = 0; i < lines.Length; i++)
         {
-            EscapeTo(sb, lines[i]);
+            // Strip trailing comment markers (// or #) when this line carries
+            // a callout marker — Asciidoctor hides the comment that introduced
+            // the marker so only the conum glyph remains.
+            var line = conumMap.ContainsKey(i) ? StripTrailingCommentMarker(lines[i]) : lines[i];
+            EscapeTo(sb, line);
             if (conumMap.TryGetValue(i, out var nums))
             {
                 foreach (var num in nums)
@@ -816,6 +820,16 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
             if (i < lines.Length - 1)
                 sb.Append('\n');
         }
+    }
+
+    private static string StripTrailingCommentMarker(string line)
+    {
+        var trimmed = line.TrimEnd();
+        if (trimmed.EndsWith("//", StringComparison.Ordinal))
+            return trimmed.Substring(0, trimmed.Length - 2);
+        if (trimmed.Length > 0 && trimmed[trimmed.Length - 1] == '#')
+            return trimmed.Substring(0, trimmed.Length - 1);
+        return line;
     }
 
     /// <summary>
