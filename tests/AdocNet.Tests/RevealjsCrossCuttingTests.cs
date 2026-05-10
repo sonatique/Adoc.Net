@@ -496,6 +496,67 @@ public class RevealjsCrossCuttingTests
         Assert.That(output, Does.Contain("<caption class=\"title\">Table 1. My Table</caption>"));
     }
 
+    // ── Preamble + no-section edge case ───────────────────────────────────────
+
+    [Test]
+    public void No_section_doc_emits_blocks_as_bare_siblings_no_preamble_div()
+    {
+        // When there are NO level-1 sections at all, Asciidoctor emits the
+        // title slide and then bare <div> blocks as siblings of <section> —
+        // not wrapped in a preamble div inside the title slide.
+        var output = Render(
+            "= Doc\n\n" +
+            "First paragraph.\n\n" +
+            "Second paragraph.");
+        Assert.That(output, Does.Not.Contain("<div class=\"preamble\">"));
+        // Both paragraphs render outside the title slide.
+        var titleEnd = output.IndexOf("</section>");
+        var firstPara = output.IndexOf("First paragraph");
+        Assert.That(firstPara, Is.GreaterThan(titleEnd),
+            "preamble blocks must follow the title </section> when no section exists");
+    }
+
+    // ── Admonition icon-font support :icons: font ─────────────────────────────
+
+    [Test]
+    public void Admonition_with_icons_font_uses_fa_icon_in_icon_cell()
+    {
+        var output = Render(
+            "= Doc\n" +
+            ":icons: font\n\n" +
+            "== Slide\n\n" +
+            "NOTE: hello.");
+        // With :icons: font, the icon cell holds <i class="fa fa-info-circle" title="Note">
+        // instead of <div class="title">Note</div>.
+        Assert.That(output, Does.Contain("<i class=\"fa fa-info-circle\" title=\"Note\">"));
+        Assert.That(output, Does.Not.Contain("<div class=\"title\">Note</div>"));
+    }
+
+    [TestCase("NOTE", "fa-info-circle", "Note")]
+    [TestCase("TIP", "fa-lightbulb-o", "Tip")]
+    [TestCase("WARNING", "fa-warning", "Warning")]
+    [TestCase("CAUTION", "fa-fire", "Caution")]
+    [TestCase("IMPORTANT", "fa-exclamation-circle", "Important")]
+    public void Admonition_icon_font_glyph_per_type(string adType, string faClass, string title)
+    {
+        var output = Render(
+            "= Doc\n" +
+            ":icons: font\n\n" +
+            "== Slide\n\n" +
+            $"[{adType}]\n====\nhello\n====");
+        Assert.That(output, Does.Contain($"<i class=\"fa {faClass}\" title=\"{title}\">"));
+    }
+
+    [Test]
+    public void Admonition_without_icons_attribute_still_uses_text_label()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "NOTE: hi.");
+        Assert.That(output, Does.Contain("<div class=\"title\">Note</div>"));
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {

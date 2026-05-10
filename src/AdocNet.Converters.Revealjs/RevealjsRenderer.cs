@@ -17,6 +17,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
     private int _tableCounter;
     private int _orderedListDepth;
     private bool _sectnumsEnabled;
+    private bool _iconsFont;
     // sectnumlevels: which depths get numbered (default 3). Counters indexed
     // by section level minus one.
     private int[] _sectionCounters = [];
@@ -40,6 +41,8 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         _sectionCounters = new int[Math.Max(_sectnumLevels, 1)];
         _highlightJs = document.Attributes.TryGetValue("source-highlighter", out var sh)
             && (sh == "highlight.js" || sh == "highlightjs");
+        _iconsFont = document.Attributes.TryGetValue("icons", out var iconsVal)
+            && string.Equals(iconsVal, "font", StringComparison.OrdinalIgnoreCase);
 
         var sb = new StringBuilder();
         RenderPresentation(sb, document);
@@ -129,26 +132,46 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
             }
 
             // Preamble: top-level blocks before the first level-1 section,
-            // wrapped in <div class="preamble"> inside the title slide.
-            bool wrotePreambleOpen = false;
-            for (int i = 0; i < firstSectionIdx; i++)
+            // wrapped in <div class="preamble"> *only* when at least one section
+            // follows. When there are no sections at all, Asciidoctor emits
+            // the preamble blocks as bare siblings of the title <section>.
+            bool hasAnySection = firstSectionIdx < children.Count;
+            if (hasAnySection)
             {
-                var child = children[i];
-                if (child is TocNode) continue;
-                if (child is BlockNode block)
+                bool wrotePreambleOpen = false;
+                for (int i = 0; i < firstSectionIdx; i++)
                 {
-                    if (!wrotePreambleOpen)
+                    var child = children[i];
+                    if (child is TocNode) continue;
+                    if (child is BlockNode block)
                     {
-                        sb.Append("<div class=\"preamble\">\n");
-                        wrotePreambleOpen = true;
+                        if (!wrotePreambleOpen)
+                        {
+                            sb.Append("<div class=\"preamble\">\n");
+                            wrotePreambleOpen = true;
+                        }
+                        RenderBlock(sb, block);
                     }
-                    RenderBlock(sb, block);
                 }
+                if (wrotePreambleOpen)
+                    sb.Append("</div>\n");
             }
-            if (wrotePreambleOpen)
-                sb.Append("</div>\n");
 
             sb.Append("</section>\n");
+
+            // No-section case: emit preamble blocks as bare siblings outside
+            // the title <section>, matching Asciidoctor's reveal.js output for
+            // section-less documents.
+            if (!hasAnySection)
+            {
+                for (int i = 0; i < firstSectionIdx; i++)
+                {
+                    var child = children[i];
+                    if (child is TocNode) continue;
+                    if (child is BlockNode block)
+                        RenderBlock(sb, block);
+                }
+            }
         }
         else
         {
@@ -703,6 +726,21 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         }
     }
 
+    /// <summary>
+    /// Maps an admonition type (lowercased) to the Font Awesome class used by
+    /// Asciidoctor when :icons: font is set. The classes are pre-FA-5 names —
+    /// matching the asciidoctor-revealjs reference output.
+    /// </summary>
+    private static string GetAdmonitionFaClass(string typeLower) => typeLower switch
+    {
+        "note" => "fa-info-circle",
+        "tip" => "fa-lightbulb-o",
+        "warning" => "fa-warning",
+        "caution" => "fa-fire",
+        "important" => "fa-exclamation-circle",
+        _ => "fa-info-circle",
+    };
+
     private void AppendOptionalTitle(StringBuilder sb, string? title)
     {
         if (title is null) return;
@@ -723,16 +761,30 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
     private void RenderAdmonition(StringBuilder sb, AdmonitionNode admonition)
     {
         // Asciidoctor's admonition is a 2-column table: icon cell + content cell.
-        // The icon cell holds <div class="title">Note</div> (title-case).
+        // Default icon cell holds <div class="title">Note</div> (title-case).
+        // With :icons: font set, the icon cell becomes <i class="fa fa-{glyph}" title="Note">.
         var typeLower = admonition.AdmonitionType.ToLowerInvariant();
         var typeTitle = char.ToUpperInvariant(admonition.AdmonitionType[0])
                         + admonition.AdmonitionType.Substring(1).ToLowerInvariant();
 
         sb.Append("<div class=\"admonitionblock ");
         sb.Append(typeLower);
-        sb.Append("\">\n<table>\n<tr>\n<td class=\"icon\">\n<div class=\"title\">");
-        sb.Append(typeTitle);
-        sb.Append("</div>\n</td>\n<td class=\"content\">\n");
+        sb.Append("\">\n<table>\n<tr>\n<td class=\"icon\">\n");
+        if (_iconsFont)
+        {
+            sb.Append("<i class=\"fa ");
+            sb.Append(GetAdmonitionFaClass(typeLower));
+            sb.Append("\" title=\"");
+            sb.Append(typeTitle);
+            sb.Append("\">\n</i>");
+        }
+        else
+        {
+            sb.Append("<div class=\"title\">");
+            sb.Append(typeTitle);
+            sb.Append("</div>");
+        }
+        sb.Append("\n</td>\n<td class=\"content\">\n");
         if (admonition.Inlines.Count > 0)
             RenderInlines(sb, admonition.Inlines);
         else if (admonition.Text is not null)
