@@ -736,19 +736,57 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
 
     private void RenderDescriptionList(StringBuilder sb, DescriptionListNode list)
     {
-        sb.Append("<dl>\n");
+        // Asciidoctor wraps the list in <div class="dlist"> with the <dl> inside.
+        // Each term gets <dt class="hdlist1"> and the description sits in <dd>
+        // with the inline text wrapped in <p>. Multi-term entries emit one <dt>
+        // per term. Nested block content (continuation paragraphs, sub-lists)
+        // renders after the <p>, before </dd>.
+        sb.Append("<div class=\"dlist\">\n<dl>\n");
         foreach (var child in list.Children)
         {
             if (child is DescriptionItemNode item)
             {
-                sb.Append("<dt>");
-                EscapeTo(sb, item.Terms[0]);
-                sb.Append("</dt>\n<dd>");
-                EscapeTo(sb, item.Description);
+                // Render every term: prefer AllTermInlines (multi-term entries)
+                // and fall back to TermInlines / Terms[0].
+                if (item.AllTermInlines is { Count: > 0 })
+                {
+                    foreach (var termInlines in item.AllTermInlines)
+                    {
+                        sb.Append("<dt class=\"hdlist1\">");
+                        if (termInlines.Count > 0)
+                            RenderInlines(sb, termInlines);
+                        sb.Append("</dt>\n");
+                    }
+                }
+                else
+                {
+                    sb.Append("<dt class=\"hdlist1\">");
+                    if (item.TermInlines.Count > 0)
+                        RenderInlines(sb, item.TermInlines);
+                    else if (item.Terms.Count > 0)
+                        EscapeTo(sb, item.Terms[0]);
+                    sb.Append("</dt>\n");
+                }
+
+                sb.Append("<dd>\n");
+                bool hasInlineDescription = item.DescriptionInlines.Count > 0
+                                            || !string.IsNullOrEmpty(item.Description);
+                if (hasInlineDescription)
+                {
+                    sb.Append("<p>");
+                    if (item.DescriptionInlines.Count > 0)
+                        RenderInlines(sb, item.DescriptionInlines);
+                    else
+                        EscapeTo(sb, item.Description);
+                    sb.Append("</p>\n");
+                }
+                // Continuation blocks (nested paragraphs, lists, source blocks…)
+                foreach (var nested in item.Children)
+                    if (nested is BlockNode b) RenderBlock(sb, b);
                 sb.Append("</dd>\n");
             }
         }
-        sb.Append("</dl>\n");
+        sb.Append("</dl>\n</div>\n");
     }
 
     // Inline rendering, utilities -> RevealjsRendererInlines.cs
