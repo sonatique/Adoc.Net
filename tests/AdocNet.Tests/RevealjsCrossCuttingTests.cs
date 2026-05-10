@@ -741,6 +741,49 @@ public class RevealjsCrossCuttingTests
             "qanda dlist must not use <dl>");
     }
 
+    // ── Admonition title in content cell ─────────────────────────────────────
+
+    [Test]
+    public void Admonition_with_title_renders_title_div_in_content_cell()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            ".My Note Title\n" +
+            "[NOTE]\n====\nThe note body.\n====\n");
+        // Asciidoctor: <td class="content">
+        //   <div class="title">My Note Title</div>
+        //   <div class="paragraph"><p>The note body.</p></div>
+        // </td>
+        Assert.That(output, Does.Contain("<div class=\"title\">My Note Title</div>"));
+    }
+
+    // ── Image block wrapper ──────────────────────────────────────────────────
+
+    [Test]
+    public void Image_block_wrapped_in_imageblock_div()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "image::pic.png[Caption]\n");
+        Assert.That(output, Does.Contain("<div class=\"imageblock\">"));
+        Assert.That(output, Does.Contain("<img"));
+    }
+
+    [Test]
+    public void Image_block_with_title_emits_caption()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            ".My Image\n" +
+            "image::pic.png[Caption]\n");
+        Assert.That(output, Does.Contain("<div class=\"imageblock\">"));
+        // Asciidoctor emits a numbered "Figure N. Title" caption div.
+        Assert.That(output, Does.Contain("My Image"));
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {
