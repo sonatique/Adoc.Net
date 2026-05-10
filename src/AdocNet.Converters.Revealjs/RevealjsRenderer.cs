@@ -14,6 +14,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
     // Per-render mutable state. Reset at the start of each Render() call so
     // multiple invocations on the same renderer produce deterministic output.
     private int _exampleCounter;
+    private int _tableCounter;
     private int _orderedListDepth;
     private bool _sectnumsEnabled;
     // sectnumlevels: which depths get numbered (default 3). Counters indexed
@@ -29,6 +30,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
     public void Render(DocumentNode document, Stream output, RenderOptions options)
     {
         _exampleCounter = 0;
+        _tableCounter = 0;
         _orderedListDepth = 0;
         _sectnumsEnabled = document.Attributes.ContainsKey("sectnums");
         _sectnumLevels = 3;
@@ -743,25 +745,140 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
 
     private void RenderTable(StringBuilder sb, TableNode table)
     {
-        sb.Append("<table>\n");
-        foreach (var child in table.Children)
+        // Asciidoctor table: <table class="frame-{frame} grid-{grid} tableblock">
+        // with frame/grid defaulting to "all", halign defaulting to "left",
+        // valign to "top". Cells wrap content in <p class="tableblock">.
+        var frame = table.Frame ?? "all";
+        var grid = table.Grid ?? "all";
+        sb.Append("<table class=\"frame-");
+        EscapeTo(sb, frame);
+        sb.Append(" grid-");
+        EscapeTo(sb, grid);
+        sb.Append(" tableblock\">\n");
+
+        // Caption: <caption class="title">Table N. <title></caption>.
+        if (table.Title is not null)
         {
-            if (child is TableRowNode row)
+            _tableCounter++;
+            sb.Append("<caption class=\"title\">Table ");
+            sb.Append(_tableCounter);
+            sb.Append(". ");
+            RenderTextAsInlines(sb, table.Title);
+            sb.Append("</caption>\n");
+        }
+
+        // <colgroup> with one <col> per column. Use TableColumnSpec count when
+        // available, else infer from the first row.
+        int colCount = table.Columns?.Count ?? 0;
+        if (colCount == 0)
+        {
+            foreach (var c in table.Children)
             {
-                sb.Append("<tr>\n");
-                foreach (var cell in row.Children)
-                {
-                    if (cell is TableCellNode cellNode)
-                    {
-                        sb.Append("<td>");
-                        EscapeTo(sb, cellNode.Text);
-                        sb.Append("</td>\n");
-                    }
-                }
-                sb.Append("</tr>\n");
+                if (c is TableRowNode r0) { colCount = r0.Children.Count; break; }
             }
         }
+        if (colCount > 0)
+        {
+            sb.Append("<colgroup>\n");
+            for (int i = 0; i < colCount; i++)
+                sb.Append("<col>\n</col>\n");
+            sb.Append("</colgroup>\n");
+        }
+
+        // Split rows: header (when HasHeader) is the first row; rest are body.
+        // Footer is the last row when HasFooter is set.
+        var rows = new List<TableRowNode>();
+        foreach (var c in table.Children)
+            if (c is TableRowNode r) rows.Add(r);
+
+        int bodyStart = 0;
+        int bodyEnd = rows.Count;
+        if (table.HasHeader && rows.Count > 0)
+        {
+            sb.Append("<thead>\n");
+            AppendTableRow(sb, rows[0], isHeader: true);
+            sb.Append("</thead>\n");
+            bodyStart = 1;
+        }
+        if (table.HasFooter && bodyEnd > bodyStart)
+            bodyEnd--;
+
+        if (bodyEnd > bodyStart)
+        {
+            sb.Append("<tbody>\n");
+            for (int i = bodyStart; i < bodyEnd; i++)
+                AppendTableRow(sb, rows[i], isHeader: false);
+            sb.Append("</tbody>\n");
+        }
+
+        if (table.HasFooter && rows.Count > 0)
+        {
+            sb.Append("<tfoot>\n");
+            AppendTableRow(sb, rows[^1], isHeader: false);
+            sb.Append("</tfoot>\n");
+        }
+
         sb.Append("</table>\n");
+    }
+
+    private void AppendTableRow(StringBuilder sb, TableRowNode row, bool isHeader)
+    {
+        sb.Append("<tr>\n");
+        foreach (var cell in row.Children)
+        {
+            if (cell is TableCellNode cellNode)
+            {
+                var halign = cellNode.Alignment switch
+                {
+                    TableAlignment.Right => "right",
+                    TableAlignment.Center => "center",
+                    _ => "left",
+                };
+                var valign = cellNode.VerticalAlignment switch
+                {
+                    TableVerticalAlignment.Bottom => "bottom",
+                    TableVerticalAlignment.Middle => "middle",
+                    _ => "top",
+                };
+                sb.Append(isHeader ? "<th class=\"halign-" : "<td class=\"halign-");
+                sb.Append(halign);
+                sb.Append(" tableblock valign-");
+                sb.Append(valign);
+                sb.Append('"');
+                if (cellNode.ColSpan > 1)
+                {
+                    sb.Append(" colspan=\"");
+                    sb.Append(cellNode.ColSpan);
+                    sb.Append('"');
+                }
+                if (cellNode.RowSpan > 1)
+                {
+                    sb.Append(" rowspan=\"");
+                    sb.Append(cellNode.RowSpan);
+                    sb.Append('"');
+                }
+                sb.Append('>');
+                if (isHeader)
+                {
+                    // <th> content is rendered without the <p class="tableblock"> wrapper.
+                    if (cellNode.Inlines.Count > 0)
+                        RenderInlines(sb, cellNode.Inlines);
+                    else
+                        EscapeTo(sb, cellNode.Text);
+                    sb.Append("</th>\n");
+                }
+                else
+                {
+                    sb.Append("<p class=\"tableblock\">");
+                    if (cellNode.Inlines.Count > 0)
+                        RenderInlines(sb, cellNode.Inlines);
+                    else
+                        EscapeTo(sb, cellNode.Text);
+                    sb.Append("</p>\n</td>\n");
+                }
+            }
+        }
+        sb.Append("</tr>\n");
     }
 
     private static void RenderStemBlock(StringBuilder sb, StemBlockNode stem)
