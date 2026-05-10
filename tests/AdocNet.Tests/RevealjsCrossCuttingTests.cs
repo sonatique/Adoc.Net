@@ -834,6 +834,45 @@ public class RevealjsCrossCuttingTests
         Assert.That(output, Does.Contain("<div class=\"ulist\">"));
     }
 
+    // ── Passthrough block ─────────────────────────────────────────────────────
+
+    [Test]
+    public void Passthrough_block_emits_raw_content()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "++++\n" +
+            "<div class=\"my-widget\"><p>raw HTML</p></div>\n" +
+            "++++\n");
+        Assert.That(output, Does.Contain("<div class=\"my-widget\"><p>raw HTML</p></div>"));
+    }
+
+    // ── Inline kbd macro ─────────────────────────────────────────────────────
+
+    [Test]
+    public void Inline_kbd_macro_single_key()
+    {
+        var output = Render(
+            "= Doc\n" +
+            ":experimental:\n\n" +
+            "== Slide\n\n" +
+            "Press kbd:[F1] for help.");
+        Assert.That(output, Does.Contain("<kbd>F1</kbd>"));
+    }
+
+    [Test]
+    public void Inline_kbd_macro_keyseq()
+    {
+        var output = Render(
+            "= Doc\n" +
+            ":experimental:\n\n" +
+            "== Slide\n\n" +
+            "Press kbd:[Ctrl+Shift+P] to act.");
+        Assert.That(output, Does.Contain("<span class=\"keyseq\">"));
+        Assert.That(output, Does.Contain("<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>"));
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {

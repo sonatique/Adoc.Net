@@ -628,13 +628,14 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
                 AppendOptionalTitle(sb, block.Title);
                 sb.Append("<blockquote>\n");
                 // Quote text often lives in block.Content (paragraph form) rather
-                // than child blocks. Render Content as a paragraph first, then any
-                // explicit child blocks below it.
+                // than child blocks. Asciidoctor's reveal.js converter renders it
+                // as bare inline content inside <blockquote> — NOT wrapped in
+                // <div class="paragraph"><p>. Then any explicit child blocks
+                // render below.
                 if (!string.IsNullOrEmpty(block.Content))
                 {
-                    sb.Append("<div class=\"paragraph\">\n<p>");
                     RenderTextAsInlines(sb, block.Content);
-                    sb.Append("</p>\n</div>\n");
+                    sb.Append('\n');
                 }
                 foreach (var child in block.Children)
                     if (child is BlockNode b) RenderBlock(sb, b);
@@ -691,6 +692,19 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
                 foreach (var child in block.Children)
                     if (child is BlockNode b) RenderBlock(sb, b);
                 sb.Append("</div>\n</div>\n");
+                break;
+
+            case DelimitedBlockKind.Passthrough:
+                // Passthrough block: emit Content as raw HTML — Asciidoctor's
+                // ++++ delimited block carries pre-rendered markup that should
+                // bypass escaping entirely.
+                if (block.Content is not null)
+                {
+                    sb.Append(block.Content);
+                    sb.Append('\n');
+                }
+                foreach (var child in block.Children)
+                    if (child is BlockNode b) RenderBlock(sb, b);
                 break;
 
             default:
