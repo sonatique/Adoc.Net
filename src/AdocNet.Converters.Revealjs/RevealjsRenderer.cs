@@ -128,6 +128,15 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
             {
                 sb.Append("<p class=\"byline\">\n<span class=\"author\">");
                 EscapeTo(sb, author);
+                // :email: → <a href="mailto:...">email</a> appended inside the author span.
+                if (document.Attributes.TryGetValue("email", out var email) && !string.IsNullOrWhiteSpace(email))
+                {
+                    sb.Append(" <a href=\"mailto:");
+                    EscapeTo(sb, email);
+                    sb.Append("\">");
+                    EscapeTo(sb, email);
+                    sb.Append("</a>");
+                }
                 sb.Append("</span>\n</p>\n");
             }
 
@@ -475,6 +484,18 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         if (olStyle is not null)
         {
             sb.Append(" class=\"").Append(olStyle).Append('"');
+            // type attribute mirrors the style for non-arabic ordered lists
+            // (HTML's built-in list-style-type values).
+            var typeAttr = olStyle switch
+            {
+                "loweralpha" => "a",
+                "upperalpha" => "A",
+                "lowerroman" => "i",
+                "upperroman" => "I",
+                _ => null,
+            };
+            if (typeAttr is not null)
+                sb.Append(" type=\"").Append(typeAttr).Append('"');
         }
         sb.Append(">\n");
 
