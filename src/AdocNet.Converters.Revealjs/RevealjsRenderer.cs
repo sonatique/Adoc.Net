@@ -896,6 +896,38 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         sb.Append("</table>\n</div>\n");
     }
 
+    private void RenderQandaDescriptionList(StringBuilder sb, DescriptionListNode list)
+    {
+        sb.Append("<div class=\"qanda qlist\">\n<ol>\n");
+        foreach (var child in list.Children)
+        {
+            if (child is DescriptionItemNode item)
+            {
+                sb.Append("<li>\n<p><em>");
+                if (item.TermInlines.Count > 0)
+                    RenderInlines(sb, item.TermInlines);
+                else if (item.Terms.Count > 0)
+                    EscapeTo(sb, item.Terms[0]);
+                sb.Append("</em></p>\n");
+                bool hasInline = item.DescriptionInlines.Count > 0
+                                 || !string.IsNullOrEmpty(item.Description);
+                if (hasInline)
+                {
+                    sb.Append("<p>");
+                    if (item.DescriptionInlines.Count > 0)
+                        RenderInlines(sb, item.DescriptionInlines);
+                    else
+                        EscapeTo(sb, item.Description);
+                    sb.Append("</p>\n");
+                }
+                foreach (var nested in item.Children)
+                    if (nested is BlockNode b) RenderBlock(sb, b);
+                sb.Append("</li>\n");
+            }
+        }
+        sb.Append("</ol>\n</div>\n");
+    }
+
     private void RenderTable(StringBuilder sb, TableNode table)
     {
         // Asciidoctor table: <table class="frame-{frame} grid-{grid} tableblock">
@@ -1059,6 +1091,13 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         if (string.Equals(list.Style, "horizontal", StringComparison.OrdinalIgnoreCase))
         {
             RenderHorizontalDescriptionList(sb, list);
+            return;
+        }
+        // [qanda] description lists render as an ordered list with each item
+        // wrapping the question in <em> followed by the answer paragraph.
+        if (string.Equals(list.Style, "qanda", StringComparison.OrdinalIgnoreCase))
+        {
+            RenderQandaDescriptionList(sb, list);
             return;
         }
         // Asciidoctor wraps the list in <div class="dlist"> with the <dl> inside.
