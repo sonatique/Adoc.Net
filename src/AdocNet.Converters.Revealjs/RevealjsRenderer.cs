@@ -864,6 +864,38 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         sb.Append("\n</td>\n</tr>\n</table>\n</div>\n");
     }
 
+    private void RenderHorizontalDescriptionList(StringBuilder sb, DescriptionListNode list)
+    {
+        sb.Append("<div class=\"hdlist\">\n<table>\n");
+        foreach (var child in list.Children)
+        {
+            if (child is DescriptionItemNode item)
+            {
+                sb.Append("<tr>\n<td class=\"hdlist1\">");
+                if (item.TermInlines.Count > 0)
+                    RenderInlines(sb, item.TermInlines);
+                else if (item.Terms.Count > 0)
+                    EscapeTo(sb, item.Terms[0]);
+                sb.Append("</td>\n<td class=\"hdlist2\">\n");
+                bool hasInline = item.DescriptionInlines.Count > 0
+                                 || !string.IsNullOrEmpty(item.Description);
+                if (hasInline)
+                {
+                    sb.Append("<p>");
+                    if (item.DescriptionInlines.Count > 0)
+                        RenderInlines(sb, item.DescriptionInlines);
+                    else
+                        EscapeTo(sb, item.Description);
+                    sb.Append("</p>\n");
+                }
+                foreach (var nested in item.Children)
+                    if (nested is BlockNode b) RenderBlock(sb, b);
+                sb.Append("</td>\n</tr>\n");
+            }
+        }
+        sb.Append("</table>\n</div>\n");
+    }
+
     private void RenderTable(StringBuilder sb, TableNode table)
     {
         // Asciidoctor table: <table class="frame-{frame} grid-{grid} tableblock">
@@ -1022,6 +1054,13 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
 
     private void RenderDescriptionList(StringBuilder sb, DescriptionListNode list)
     {
+        // [horizontal] description lists use a 2-column table structure rather
+        // than <dl>/<dt>/<dd> — matching Asciidoctor's reveal.js converter.
+        if (string.Equals(list.Style, "horizontal", StringComparison.OrdinalIgnoreCase))
+        {
+            RenderHorizontalDescriptionList(sb, list);
+            return;
+        }
         // Asciidoctor wraps the list in <div class="dlist"> with the <dl> inside.
         // Each term gets <dt class="hdlist1"> and the description sits in <dd>
         // with the inline text wrapped in <p>. Multi-term entries emit one <dt>
