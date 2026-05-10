@@ -171,6 +171,59 @@ public class RevealjsCrossCuttingTests
         Assert.That(output, Does.Contain("<div class=\"literalblock\">"));
     }
 
+    // ── Admonition table structure ─────────────────────────────────────────────
+
+    [Test]
+    public void Admonition_renders_with_table_structure()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "NOTE: Be aware.");
+        // Asciidoctor wraps admonitions in a 2-column table:
+        // class="admonitionblock note" > table > tr > td.icon | td.content
+        Assert.That(output, Does.Contain("admonitionblock note"));
+        Assert.That(output, Does.Contain("<table>"));
+        Assert.That(output, Does.Contain("td class=\"icon\""));
+        Assert.That(output, Does.Contain("td class=\"content\""));
+    }
+
+    [Test]
+    public void Admonition_label_uses_titlecase_in_icon_cell()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "WARNING: Danger.");
+        // The icon cell has <div class="title">Warning</div> (title-case label, not WARNING).
+        Assert.That(output, Does.Contain("<div class=\"title\">Warning</div>"));
+    }
+
+    // ── Example block id propagation ───────────────────────────────────────────
+
+    [Test]
+    public void Example_block_id_emitted_on_outer_div()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "[#my-example]\n.Title\n====\nbody.\n====");
+        Assert.That(output, Does.Contain("<div class=\"exampleblock\" id=\"my-example\">"));
+    }
+
+    // ── InterDocumentXref empty-label fallback ─────────────────────────────────
+
+    [Test]
+    public void Interdocument_xref_with_empty_label_uses_bracketed_basename()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "See xref:separating.adoc[] for more.");
+        // Asciidoctor displays "[separating]" when no label is given.
+        Assert.That(output, Does.Contain(">[separating]<"));
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {

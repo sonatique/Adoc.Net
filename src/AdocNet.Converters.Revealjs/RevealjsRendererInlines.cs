@@ -140,9 +140,22 @@ public sealed partial class RevealjsRenderer
                     EscapeTo(sb, href);
                     sb.Append("\">");
                     if (n.Label is not null)
+                    {
                         RenderTextAsInlines(sb, n.Label);
+                    }
                     else
-                        EscapeTo(sb, href);
+                    {
+                        // Asciidoctor's no-label fallback: [basename] (no extension,
+                        // wrapped in brackets) — not the converted .html path.
+                        var basename = n.Path;
+                        var lastSlash = basename.LastIndexOfAny(new[] { '/', '\\' });
+                        if (lastSlash >= 0) basename = basename.Substring(lastSlash + 1);
+                        var dot = basename.LastIndexOf('.');
+                        if (dot > 0) basename = basename.Substring(0, dot);
+                        sb.Append('[');
+                        EscapeTo(sb, basename);
+                        sb.Append(']');
+                    }
                     sb.Append("</a>");
                     break;
                 }

@@ -432,7 +432,14 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
             case DelimitedBlockKind.Example:
                 // Asciidoctor wraps example blocks in <div class="exampleblock">.
                 // Titled examples receive a numbered prefix ("Example N. <title>").
-                sb.Append("<div class=\"exampleblock\">\n");
+                sb.Append("<div class=\"exampleblock\"");
+                if (block.Id is not null)
+                {
+                    sb.Append(" id=\"");
+                    EscapeTo(sb, block.Id);
+                    sb.Append('"');
+                }
+                sb.Append(">\n");
                 if (block.Title is not null)
                 {
                     sb.Append("<div class=\"title\">Example ");
@@ -530,16 +537,25 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
 
     private void RenderAdmonition(StringBuilder sb, AdmonitionNode admonition)
     {
-        sb.Append("<div class=\"admonition ");
-        sb.Append(admonition.AdmonitionType.ToLowerInvariant());
-        sb.Append("\">\n<strong>");
-        EscapeTo(sb, admonition.AdmonitionType);
-        sb.Append(":</strong> ");
+        // Asciidoctor's admonition is a 2-column table: icon cell + content cell.
+        // The icon cell holds <div class="title">Note</div> (title-case).
+        var typeLower = admonition.AdmonitionType.ToLowerInvariant();
+        var typeTitle = char.ToUpperInvariant(admonition.AdmonitionType[0])
+                        + admonition.AdmonitionType.Substring(1).ToLowerInvariant();
+
+        sb.Append("<div class=\"admonitionblock ");
+        sb.Append(typeLower);
+        sb.Append("\">\n<table>\n<tr>\n<td class=\"icon\">\n<div class=\"title\">");
+        sb.Append(typeTitle);
+        sb.Append("</div>\n</td>\n<td class=\"content\">\n");
         if (admonition.Inlines.Count > 0)
             RenderInlines(sb, admonition.Inlines);
         else if (admonition.Text is not null)
             EscapeTo(sb, admonition.Text);
-        sb.Append("\n</div>\n");
+        // Render any child blocks (multi-paragraph admonitions) inside the content cell.
+        foreach (var child in admonition.Children)
+            if (child is BlockNode b) RenderBlock(sb, b);
+        sb.Append("\n</td>\n</tr>\n</table>\n</div>\n");
     }
 
     private void RenderTable(StringBuilder sb, TableNode table)
