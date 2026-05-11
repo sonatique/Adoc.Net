@@ -31,6 +31,27 @@ public sealed partial class RevealjsRenderer
     private static readonly Dictionary<string, string> EmptyAttrs = new();
 
     /// <summary>
+    /// Opens an inline element tag, appending a class attribute when roles are
+    /// present. Used by strong/emphasis/monospace to propagate [.role]…[/role]
+    /// span roles (e.g. [.term]*target* → &lt;strong class="term"&gt;).
+    /// </summary>
+    private static void AppendInlineWithRoles(StringBuilder sb, string tagName, IReadOnlyList<string>? roles)
+    {
+        sb.Append('<').Append(tagName);
+        if (roles is { Count: > 0 })
+        {
+            sb.Append(" class=\"");
+            for (int i = 0; i < roles.Count; i++)
+            {
+                if (i > 0) sb.Append(' ');
+                EscapeTo(sb, roles[i]);
+            }
+            sb.Append('"');
+        }
+        sb.Append('>');
+    }
+
+    /// <summary>
     /// Renders the supported subset of inline macros (kbd, btn, menu) to match
     /// Asciidoctor's reveal.js output. Unrecognised macros fall through to a
     /// literal-text rendering of their target/content.
@@ -115,17 +136,17 @@ public sealed partial class RevealjsRenderer
                 EscapeTo(sb, n.Value);
                 break;
             case StrongInlineNode n:
-                sb.Append("<strong>");
+                AppendInlineWithRoles(sb, "strong", n.Roles);
                 RenderInlines(sb, n.Children);
                 sb.Append("</strong>");
                 break;
             case EmphasisInlineNode n:
-                sb.Append("<em>");
+                AppendInlineWithRoles(sb, "em", n.Roles);
                 RenderInlines(sb, n.Children);
                 sb.Append("</em>");
                 break;
             case MonospaceInlineNode n:
-                sb.Append("<code>");
+                AppendInlineWithRoles(sb, "code", n.Roles);
                 RenderInlines(sb, n.Children);
                 sb.Append("</code>");
                 break;
@@ -145,7 +166,17 @@ public sealed partial class RevealjsRenderer
                     sb.Append(" class=\"bare\"");
                 sb.Append(" href=\"");
                 EscapeTo(sb, n.Url);
-                sb.Append("\">");
+                sb.Append('"');
+                // Window (link target — '_blank' from '^' suffix or window= attr)
+                // becomes target="…" on <a>. Asciidoctor adds rel="noopener" only
+                // when window=_blank, but reveal.js converter omits rel for parity.
+                if (n.Window is not null)
+                {
+                    sb.Append(" target=\"");
+                    EscapeTo(sb, n.Window);
+                    sb.Append('"');
+                }
+                sb.Append('>');
                 if (n.Label.Length > 0)
                     RenderTextAsInlines(sb, n.Label);
                 else

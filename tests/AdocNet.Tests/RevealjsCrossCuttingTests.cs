@@ -873,6 +873,50 @@ public class RevealjsCrossCuttingTests
         Assert.That(output, Does.Contain("<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>"));
     }
 
+    // ── Inline role propagation ──────────────────────────────────────────────
+
+    [Test]
+    public void Strong_with_role_emits_class()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "The [.term]*target* of a link.");
+        Assert.That(output, Does.Contain("<strong class=\"term\">target</strong>"));
+    }
+
+    [Test]
+    public void Strong_without_role_emits_plain_strong()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "*plain bold* text.");
+        Assert.That(output, Does.Contain("<strong>plain bold</strong>"));
+    }
+
+    // ── Link target attribute (window) ───────────────────────────────────────
+
+    [Test]
+    public void Link_with_window_caret_emits_target_blank()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "See https://example.com[the site^] for more.");
+        Assert.That(output, Does.Contain("target=\"_blank\""));
+    }
+
+    [Test]
+    public void Link_without_window_no_target_attr()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "See https://example.com[the site] for more.");
+        Assert.That(output, Does.Not.Contain("target=\""));
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {
