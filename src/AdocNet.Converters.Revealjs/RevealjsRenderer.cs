@@ -16,6 +16,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
     private int _exampleCounter;
     private int _tableCounter;
     private int _figureCounter;
+    private int _appendixCounter;
     private int _orderedListDepth;
     private bool _sectnumsEnabled;
     private bool _iconsFont;
@@ -39,6 +40,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
         _exampleCounter = 0;
         _tableCounter = 0;
         _figureCounter = 0;
+        _appendixCounter = 0;
         _orderedListDepth = 0;
         _sectnumsEnabled = document.Attributes.ContainsKey("sectnums");
         _sectnumLevels = 3;
