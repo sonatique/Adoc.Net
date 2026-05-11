@@ -469,6 +469,25 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
             case StemBlockNode n: RenderStemBlock(sb, n); break;
             case DescriptionListNode n: RenderDescriptionList(sb, n); break;
             case SectionNode n:
+                // Discrete headings ([discrete]) render as <h{level+1}> with
+                // class="discrete" and the auto-generated id. They do NOT
+                // create a slide and do NOT recurse into children — Asciidoctor
+                // treats them as standalone inline headings.
+                if (n.IsDiscrete)
+                {
+                    var dtag = n.Level switch { 1 => "h2", 2 => "h3", 3 => "h4", 4 => "h5", _ => "h6" };
+                    sb.Append('<').Append(dtag).Append(" class=\"discrete\"");
+                    if (n.Id is not null)
+                    {
+                        sb.Append(" id=\"");
+                        EscapeTo(sb, n.Id);
+                        sb.Append('"');
+                    }
+                    sb.Append('>');
+                    RenderSectionTitle(sb, n);
+                    sb.Append("</").Append(dtag).Append(">\n");
+                    break;
+                }
                 // Deeper sections rendered as headings within the slide.
                 // Asciidoctor's reveal.js converter maps level N → <h{N}>:
                 // level 3 → <h3>, level 4 → <h4>, level 5 → <h5>.
