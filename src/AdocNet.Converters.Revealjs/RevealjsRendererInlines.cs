@@ -132,20 +132,25 @@ public sealed partial class RevealjsRenderer
     /// </summary>
     private void RenderSectionTitle(StringBuilder sb, SectionNode section)
     {
-        // Appendix sections get an "Appendix A: ", "Appendix B: " prefix
-        // (Asciidoctor parity). The appendix counter is global to the document.
-        if (string.Equals(section.Style, "appendix", StringComparison.OrdinalIgnoreCase))
+        // Discrete headings never receive numbering or appendix prefixes —
+        // they're standalone inline headings with no positional meaning.
+        if (!section.IsDiscrete)
         {
-            char letter = (char)('A' + _appendixCounter++);
-            sb.Append("Appendix ");
-            sb.Append(letter);
-            sb.Append(": ");
-        }
-        else if (section.Level <= 2)
-        {
-            var prefix = AdvanceSectionNumber(section.Level);
-            if (prefix is not null)
-                sb.Append(prefix);
+            // Appendix sections get an "Appendix A: ", "Appendix B: " prefix
+            // (Asciidoctor parity). The appendix counter is global to the document.
+            if (string.Equals(section.Style, "appendix", StringComparison.OrdinalIgnoreCase))
+            {
+                char letter = (char)('A' + _appendixCounter++);
+                sb.Append("Appendix ");
+                sb.Append(letter);
+                sb.Append(": ");
+            }
+            else if (section.Level <= 2)
+            {
+                var prefix = AdvanceSectionNumber(section.Level);
+                if (prefix is not null)
+                    sb.Append(prefix);
+            }
         }
         if (section.TitleInlines is { Count: > 0 })
             RenderInlines(sb, section.TitleInlines);

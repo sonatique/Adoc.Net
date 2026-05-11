@@ -968,6 +968,54 @@ public class RevealjsCrossCuttingTests
         Assert.That(output, Does.Not.Contain("Appendix"));
     }
 
+    // ── Discrete headings ────────────────────────────────────────────────────
+
+    [Test]
+    public void Discrete_heading_renders_with_class_discrete_and_id()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "Content.\n\n" +
+            "[discrete]\n" +
+            "== Discrete Heading\n\n" +
+            "More content.");
+        Assert.That(output, Does.Contain("<h2 class=\"discrete\" id=\"_discrete_heading\">"));
+        Assert.That(output, Does.Contain("Discrete Heading"));
+    }
+
+    [Test]
+    public void Discrete_heading_does_not_consume_following_paragraph_as_section()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "[discrete]\n" +
+            "== Discrete\n\n" +
+            "Sibling paragraph.");
+        // The paragraph should appear inside the same slide, not nested.
+        Assert.That(output, Does.Contain("Sibling paragraph"));
+    }
+
+    [Test]
+    public void Discrete_heading_does_not_advance_section_numbering()
+    {
+        var output = Render(
+            "= Doc\n" +
+            ":sectnums:\n\n" +
+            "== First\n\n" +
+            "[discrete]\n" +
+            "== Discrete\n\n" +
+            "body\n\n" +
+            "== Second\n\nbody");
+        // First slide is "1. First", second is "2. Second" — discrete didn't
+        // advance the slide-section counter.
+        Assert.That(output, Does.Contain(">1. First<"));
+        Assert.That(output, Does.Contain(">2. Second<"));
+        // The discrete heading itself is unnumbered.
+        Assert.That(output, Does.Not.Contain("2. Discrete"));
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {
