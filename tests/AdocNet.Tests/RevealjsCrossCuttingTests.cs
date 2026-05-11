@@ -942,6 +942,32 @@ public class RevealjsCrossCuttingTests
         Assert.That(output, Does.Contain(">https://example.com</a>"));
     }
 
+    // ── Appendix sections ────────────────────────────────────────────────────
+
+    [Test]
+    public void Appendix_section_gets_letter_prefix()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "[appendix]\n" +
+            "== First Appendix\n\n" +
+            "body\n\n" +
+            "[appendix]\n" +
+            "== Second Appendix\n\n" +
+            "body");
+        Assert.That(output, Does.Contain("Appendix A: First Appendix"));
+        Assert.That(output, Does.Contain("Appendix B: Second Appendix"));
+    }
+
+    [Test]
+    public void Non_appendix_section_no_appendix_prefix()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Regular\n\nbody");
+        Assert.That(output, Does.Not.Contain("Appendix"));
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {
