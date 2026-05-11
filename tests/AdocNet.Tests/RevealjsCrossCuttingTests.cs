@@ -1042,6 +1042,30 @@ public class RevealjsCrossCuttingTests
         Assert.That(output, Does.Contain("Example 1. My Example"));
     }
 
+    // ── Paragraph roles propagated ────────────────────────────────────────────
+
+    [Test]
+    public void Paragraph_with_dot_role_emits_role_in_class()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "[.lead]\n" +
+            "*Important text.*");
+        Assert.That(output, Does.Contain("<div class=\"lead paragraph\">"));
+    }
+
+    [Test]
+    public void Paragraph_without_role_keeps_plain_class()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "Regular paragraph.");
+        Assert.That(output, Does.Contain("<div class=\"paragraph\">"));
+        Assert.That(output, Does.Not.Contain("<div class=\" paragraph\">"));
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {
