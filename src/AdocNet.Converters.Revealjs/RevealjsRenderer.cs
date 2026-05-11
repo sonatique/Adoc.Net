@@ -674,7 +674,9 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
 
             case DelimitedBlockKind.Example:
                 // Asciidoctor wraps example blocks in <div class="exampleblock">.
-                // Titled examples receive a numbered prefix ("Example N. <title>").
+                // Non-collapsible titled examples receive a numbered prefix
+                // ("Example N. <title>"). [%collapsible] examples skip the
+                // numbering — their title becomes a <summary>-equivalent.
                 sb.Append("<div class=\"exampleblock\"");
                 if (block.Id is not null)
                 {
@@ -685,9 +687,13 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
                 sb.Append(">\n");
                 if (block.Title is not null)
                 {
-                    sb.Append("<div class=\"title\">Example ");
-                    sb.Append(++_exampleCounter);
-                    sb.Append(". ");
+                    sb.Append("<div class=\"title\">");
+                    if (!block.IsCollapsible)
+                    {
+                        sb.Append("Example ");
+                        sb.Append(++_exampleCounter);
+                        sb.Append(". ");
+                    }
                     RenderTextAsInlines(sb, block.Title);
                     sb.Append("</div>\n");
                 }
