@@ -1066,6 +1066,19 @@ public class RevealjsCrossCuttingTests
         Assert.That(output, Does.Not.Contain("<div class=\" paragraph\">"));
     }
 
+    // ── Paragraph id ─────────────────────────────────────────────────────────
+
+    [Test]
+    public void Paragraph_id_emitted_on_wrapper_div()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "[[my-para]]\n" +
+            "Paragraph content.");
+        Assert.That(output, Does.Contain("<div class=\"paragraph\" id=\"my-para\">"));
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {
