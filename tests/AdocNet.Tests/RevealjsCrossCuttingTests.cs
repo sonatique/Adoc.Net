@@ -1016,6 +1016,32 @@ public class RevealjsCrossCuttingTests
         Assert.That(output, Does.Not.Contain("2. Discrete"));
     }
 
+    // ── Collapsible example block title (no Example N. prefix) ──────────────
+
+    [Test]
+    public void Collapsible_example_title_skips_example_n_prefix()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "[%collapsible]\n" +
+            ".Click to expand\n" +
+            "====\nbody\n====\n");
+        Assert.That(output, Does.Contain("<div class=\"title\">Click to expand</div>"));
+        Assert.That(output, Does.Not.Contain("Example 1"));
+    }
+
+    [Test]
+    public void Non_collapsible_example_keeps_example_n_prefix()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            ".My Example\n" +
+            "====\nbody\n====\n");
+        Assert.That(output, Does.Contain("Example 1. My Example"));
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {
