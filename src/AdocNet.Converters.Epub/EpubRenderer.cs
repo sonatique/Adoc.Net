@@ -69,12 +69,19 @@ public sealed class EpubRenderer : DocumentRendererBase
         // Build EPUB ZIP archive
         using var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true);
 
+        // :description: doc attribute → <dc:description> in OPF metadata.
+        var description = doc.Attributes.TryGetValue("description", out var desc) && !string.IsNullOrWhiteSpace(desc)
+            ? desc : null;
+
         WriteMimetype(archive);
         WriteContainerXml(archive);
-        WriteContentOpf(archive, title, author, language, identifier, revdate, chapters);
-        WriteTocXhtml(archive, title, chapters, tocEntries);
+        WriteContentOpf(archive, title, author, language, identifier, revdate, description, chapters);
+        WriteNavXhtml(archive, title, chapters, tocEntries);
         WriteTocNcx(archive, title, identifier, language, chapters, tocEntries);
-        WriteStyleCss(archive);
+        // Bundled fonts/CSS/images + iBooks display options. Asset paths inside
+        // the EPUB match asciidoctor-epub3 conventions so manifest item href
+        // attributes resolve correctly.
+        WriteAssets(archive);
         foreach (var ch in chapters)
             WriteChapterXhtml(archive, ch);
     }
@@ -252,30 +259,64 @@ public sealed class EpubRenderer : DocumentRendererBase
     }
 
     private static void WriteContentOpf(ZipArchive archive, string title, string? author, string language,
-        string identifier, string? revdate, List<Chapter> chapters)
+        string identifier, string? revdate, string? description, List<Chapter> chapters)
     {
+        // Metadata field order matches asciidoctor-epub3 exactly:
+        // identifier, identifier-type meta, title, (creator), language,
+        // (date), dcterms:modified, (description). Only the parenthesised
+        // fields are conditional.
         var meta = new StringBuilder();
         meta.Append($"    <dc:identifier id=\"pub-identifier\">{EscapeXml(identifier)}</dc:identifier>\n");
         meta.Append("    <meta property=\"identifier-type\" refines=\"#pub-identifier\">uuid</meta>\n");
         meta.Append($"    <dc:title id=\"pub-title\">{EscapeXml(title)}</dc:title>\n");
-        meta.Append($"    <dc:language id=\"pub-language\">{EscapeXml(language)}</dc:language>\n");
         if (author is not null)
             meta.Append($"    <dc:creator>{EscapeXml(author)}</dc:creator>\n");
+        meta.Append($"    <dc:language id=\"pub-language\">{EscapeXml(language)}</dc:language>\n");
         if (revdate is not null)
             meta.Append($"    <dc:date>{EscapeXml(revdate)}</dc:date>\n");
         meta.Append("    <meta property=\"dcterms:modified\">2026-01-01T00:00:00Z</meta>\n");
+        if (description is not null)
+            meta.Append($"    <dc:description>{EscapeXml(description)}</dc:description>\n");
 
+        // Manifest order (asciidoctor-epub3 parity):
+        //   1. nav.xhtml (EPUB 3 navigation document, properties="nav")
+        //   2. each chapter (properties="scripted" — Calibre-style detection JS)
+        //   3. toc.ncx (EPUB 2 fallback)
+        //   4. styles (epub3, epub3-css3-only, epub3-fonts)
+        //   5. fonts (Noto Serif x4, M+ 1p x3, M+ 1mn x4, FA solid, assorted)
+        //   6. avatars/headshots default JPEGs
         var manifest = new StringBuilder();
-        manifest.Append("    <item id=\"nav\" href=\"toc.xhtml\" media-type=\"application/xhtml+xml\" properties=\"nav\"/>\n");
-        manifest.Append("    <item id=\"ncx\" href=\"toc.ncx\" media-type=\"application/x-dtbncx+xml\"/>\n");
-        manifest.Append("    <item id=\"style\" href=\"style.css\" media-type=\"text/css\"/>\n");
+        manifest.Append("    <item href=\"nav.xhtml\" id=\"nav\" media-type=\"application/xhtml+xml\" properties=\"nav\"/>\n");
         var spine = new StringBuilder();
-        for (int i = 0; i < chapters.Count; i++)
+        foreach (var ch in chapters)
         {
-            var chapterId = $"chapter_{i + 1}";
-            manifest.Append($"    <item id=\"{chapterId}\" href=\"{EscapeXml(chapters[i].FileName)}\" media-type=\"application/xhtml+xml\"/>\n");
-            spine.Append($"    <itemref idref=\"{chapterId}\"/>\n");
+            // Item id = "item_" + filename without ".xhtml" extension.
+            var stem = ch.FileName.EndsWith(".xhtml", StringComparison.Ordinal)
+                ? ch.FileName.Substring(0, ch.FileName.Length - 6)
+                : ch.FileName;
+            var itemId = $"item_{stem}";
+            manifest.Append($"    <item href=\"{EscapeXml(ch.FileName)}\" id=\"{EscapeXml(itemId)}\" media-type=\"application/xhtml+xml\" properties=\"scripted\"/>\n");
+            spine.Append($"    <itemref idref=\"{EscapeXml(itemId)}\"/>\n");
         }
+        manifest.Append("    <item href=\"toc.ncx\" id=\"ncx\" media-type=\"application/x-dtbncx+xml\"/>\n");
+        manifest.Append("    <item href=\"styles/epub3.css\" id=\"item_epub3\" media-type=\"text/css\"/>\n");
+        manifest.Append("    <item href=\"styles/epub3-css3-only.css\" id=\"item_epub3-css3-only\" media-type=\"text/css\"/>\n");
+        manifest.Append("    <item href=\"styles/epub3-fonts.css\" id=\"item_epub3-fonts\" media-type=\"text/css\"/>\n");
+        manifest.Append("    <item href=\"fonts/notoserif-regular-latin.ttf\" id=\"item_notoserif-regular-latin\" media-type=\"application/vnd.ms-opentype\"/>\n");
+        manifest.Append("    <item href=\"fonts/notoserif-italic-latin.ttf\" id=\"item_notoserif-italic-latin\" media-type=\"application/vnd.ms-opentype\"/>\n");
+        manifest.Append("    <item href=\"fonts/notoserif-bold-latin.ttf\" id=\"item_notoserif-bold-latin\" media-type=\"application/vnd.ms-opentype\"/>\n");
+        manifest.Append("    <item href=\"fonts/notoserif-bolditalic-latin.ttf\" id=\"item_notoserif-bolditalic-latin\" media-type=\"application/vnd.ms-opentype\"/>\n");
+        manifest.Append("    <item href=\"fonts/mplus1p-regular-latin.ttf\" id=\"item_mplus1p-regular-latin\" media-type=\"application/vnd.ms-opentype\"/>\n");
+        manifest.Append("    <item href=\"fonts/mplus1p-light-latin.ttf\" id=\"item_mplus1p-light-latin\" media-type=\"application/vnd.ms-opentype\"/>\n");
+        manifest.Append("    <item href=\"fonts/mplus1p-bold-latin.ttf\" id=\"item_mplus1p-bold-latin\" media-type=\"application/vnd.ms-opentype\"/>\n");
+        manifest.Append("    <item href=\"fonts/mplus1mn-regular-ascii-conums.ttf\" id=\"item_mplus1mn-regular-ascii-conums\" media-type=\"application/vnd.ms-opentype\"/>\n");
+        manifest.Append("    <item href=\"fonts/mplus1mn-italic-ascii.ttf\" id=\"item_mplus1mn-italic-ascii\" media-type=\"application/vnd.ms-opentype\"/>\n");
+        manifest.Append("    <item href=\"fonts/mplus1mn-bold-ascii.ttf\" id=\"item_mplus1mn-bold-ascii\" media-type=\"application/vnd.ms-opentype\"/>\n");
+        manifest.Append("    <item href=\"fonts/mplus1mn-bolditalic-ascii.ttf\" id=\"item_mplus1mn-bolditalic-ascii\" media-type=\"application/vnd.ms-opentype\"/>\n");
+        manifest.Append("    <item href=\"fonts/awesome/fa-solid-900.ttf\" id=\"item_fa-solid-900\" media-type=\"application/vnd.ms-opentype\"/>\n");
+        manifest.Append("    <item href=\"fonts/assorted-icons.ttf\" id=\"item_assorted-icons\" media-type=\"application/vnd.ms-opentype\"/>\n");
+        manifest.Append("    <item href=\"avatars/default.jpg\" id=\"item_default\" media-type=\"image/jpeg\"/>\n");
+        manifest.Append("    <item href=\"headshots/default.jpg\" id=\"item_default1\" media-type=\"image/jpeg\"/>\n");
 
         var xml = $"""
             <?xml version="1.0" encoding="UTF-8"?>
@@ -294,48 +335,53 @@ public sealed class EpubRenderer : DocumentRendererBase
         WriteEntry(archive, "EPUB/package.opf", xml);
     }
 
-    private static void WriteTocXhtml(ZipArchive archive, string title, List<Chapter> chapters,
+    private static void WriteNavXhtml(ZipArchive archive, string title, List<Chapter> chapters,
         List<TocEntry> tocEntries)
     {
-        // Nest section entries under the document title to match asciidoctor-epub3's
-        // nav.xhtml shape — same hierarchy fix as PDF outline in beta.25.
-        // Top-level <a> points at the first chapter (article doctype) or the doc-title pseudo-page
-        // (book doctype lacks a title page, so use the first chapter file).
+        // EPUB 3 navigation document. Structure mirrors asciidoctor-epub3:
+        //   <section class="chapter"> wrapping
+        //     <header><h1 class="chapter-title"><small class="subtitle">Table of Contents</small></h1></header>
+        //     <nav epub:type="toc"><ol>…</ol></nav>
+        //     <nav epub:type="landmarks" hidden><ol>…</ol></nav>
+        // Top-level <li><a> points at the first chapter; per-chapter section
+        // entries nest under it.
         string firstChapterFile = chapters.Count > 0 ? chapters[0].FileName : "content.xhtml";
         var sb = new StringBuilder();
-        sb.Append("""
-            <?xml version="1.0" encoding="UTF-8"?>
-            <!DOCTYPE html>
-            <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
-            <head><title>Table of Contents</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
-            <body>
-            <nav epub:type="toc" id="toc">
-              <h1>Table of Contents</h1>
-              <ol>
-                <li><a href="
-            """);
-        sb.Append(EscapeXml(firstChapterFile));
-        sb.Append("\">").Append(EscapeXml(title)).Append("</a>");
-
+        sb.Append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+        sb.Append("<!DOCTYPE html>\n");
+        sb.Append("<html xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:epub=\"http://www.idpf.org/2007/ops\" xml:lang=\"en\" lang=\"en\">\n");
+        sb.Append("<head>\n");
+        sb.Append($"<title>{EscapeXml(title)}</title>\n");
+        sb.Append("<link rel=\"stylesheet\" type=\"text/css\" href=\"styles/epub3.css\"/>\n");
+        sb.Append("<link rel=\"stylesheet\" type=\"text/css\" href=\"styles/epub3-css3-only.css\" media=\"(min-device-width: 0px)\"/>\n");
+        sb.Append("</head>\n");
+        sb.Append("<body>\n");
+        sb.Append("<section class=\"chapter\">\n");
+        sb.Append("<header class=\"chapter-header\">\n");
+        sb.Append("<h1 class=\"chapter-title\"><small class=\"subtitle\">Table of Contents</small></h1>\n");
+        sb.Append("</header>\n");
+        sb.Append("<nav epub:type=\"toc\" id=\"toc\">\n");
+        sb.Append("<ol>\n");
+        sb.Append($"<li><a href=\"{EscapeXml(firstChapterFile)}\">{EscapeXml(title)}</a>");
         if (tocEntries.Count > 0)
         {
-            sb.Append("\n      <ol>\n");
+            sb.Append("\n<ol>\n");
             foreach (var entry in tocEntries)
-            {
-                sb.Append($"        <li><a href=\"{EscapeXml(entry.ChapterFile)}#{EscapeXml(entry.AnchorId)}\">{EscapeXml(entry.Title)}</a></li>\n");
-            }
-            sb.Append("      </ol>\n    ");
+                sb.Append($"<li><a href=\"{EscapeXml(entry.ChapterFile)}#{EscapeXml(entry.AnchorId)}\">{EscapeXml(entry.Title)}</a></li>\n");
+            sb.Append("</ol>\n");
         }
-
-        sb.Append("</li>\n  </ol>\n</nav>\n");
+        sb.Append("</li>\n");
+        sb.Append("</ol>\n");
+        sb.Append("</nav>\n\n");
         sb.Append("<nav epub:type=\"landmarks\" id=\"landmarks\" hidden=\"hidden\">\n");
-        sb.Append("  <ol>\n");
-        sb.Append($"    <li><a epub:type=\"bodymatter\" href=\"{EscapeXml(firstChapterFile)}\">Start of Content</a></li>\n");
-        sb.Append("  </ol>\n");
+        sb.Append("<ol>\n");
+        sb.Append($"<li><a epub:type=\"bodymatter\" href=\"{EscapeXml(firstChapterFile)}\">Start of Content</a></li>\n\n");
+        sb.Append("</ol>\n");
         sb.Append("</nav>\n");
+        sb.Append("</section>\n");
         sb.Append("</body>\n");
         sb.Append("</html>\n");
-        WriteEntry(archive, "EPUB/toc.xhtml", sb.ToString());
+        WriteEntry(archive, "EPUB/nav.xhtml", sb.ToString());
     }
 
     /// <summary>
@@ -377,206 +423,6 @@ public sealed class EpubRenderer : DocumentRendererBase
         WriteEntry(archive, "EPUB/toc.ncx", sb.ToString());
     }
 
-    private static void WriteStyleCss(ZipArchive archive)
-    {
-        // Bundled stylesheet covers the structural classes the HtmlRenderer emits
-        // (sect1..sect5, paragraph, listingblock, exampleblock, sidebarblock, admonitionblock,
-        // quoteblock, tableblock, hdlist, qanda, etc.). Uses generic font-family stacks so
-        // readers fall back to their own embedded fonts — no need to bundle TTFs.
-        WriteEntry(archive, "EPUB/style.css",
-            """
-            /* Reset + box-sizing (asciidoctor-epub3 parity) */
-            html, body { margin: 0; padding: 0; }
-            *, *:before, *:after { box-sizing: border-box; }
-
-            body {
-                font-family: "Noto Serif", Georgia, "Times New Roman", serif;
-                margin: 1em;
-                color: #1a1a1a;
-            }
-
-            /* Body paragraphs (asciidoctor parity: margin-top only, justified) */
-            body p {
-                font-family: "Noto Serif", Georgia, "Times New Roman", serif;
-                line-height: 1.6;
-                margin: 1em 0 0 0;
-                text-align: justify;
-                widows: 2;
-                orphans: 2;
-            }
-
-            /* Headings — sans-serif, kerning-friendly weights matching asciidoctor */
-            h1, h2, h3, h4, h5, h6 {
-                font-family: "M+ 1p", "Helvetica Neue", Helvetica, Arial, sans-serif;
-                font-weight: 400;
-                letter-spacing: -0.01em;
-                line-height: 1.4;
-                page-break-after: avoid;
-                page-break-inside: avoid;
-            }
-            h1, h2 {
-                font-size: 1.5em;
-                word-spacing: -0.075em;
-                margin-top: 1em;
-                margin-bottom: 0.3em;
-            }
-            h3 { font-size: 1.25em; margin-top: 0.84em; margin-bottom: 0.3em; }
-            h4 { font-size: 1.2em; font-weight: 200; color: #202020; margin-top: 0.92em; margin-bottom: 0.3em; }
-            h5 { font-size: 0.9em; font-weight: 700; text-transform: uppercase; color: #333332; margin-top: 1.1em; margin-bottom: 0.3em; }
-            h6 { font-size: 0.85em; font-weight: 700; margin-top: 1em; margin-bottom: 0.3em; }
-
-            a { color: #2156a5; text-decoration: none; border-bottom: 1px dashed #333332; }
-            a:hover { text-decoration: underline; }
-
-            /* Code & monospace (asciidoctor uses #E0E0E0 bg, top+right borders) */
-            code, kbd, pre, samp {
-                font-family: "M+ 1mn", "Courier New", Consolas, monospace;
-                color: #101010;
-            }
-            code { background: #E0E0E0; padding: 0.1em 0.3em; font-size: 0.9em; }
-            pre {
-                background: #E0E0E0;
-                padding: 8px 12px;
-                font-size: 0.85em;
-                line-height: 1.4;
-                border-top: 1px solid #C8C8C8;
-                border-right: 1px solid #C8C8C8;
-                white-space: pre-wrap;
-                overflow-wrap: break-word;
-                page-break-inside: avoid;
-            }
-            pre code { background: none; padding: 0; }
-
-            /* Chapter wrapper (asciidoctor-epub3 parity) */
-            .chapter { display: block; }
-            .chapter-header {
-                padding: 0.25em 0;
-                margin-bottom: 2.5em;
-                border-bottom: 1px solid #333332;
-            }
-            .chapter-title {
-                /* Asciidoctor-epub3 chapter title rules (epub3.css). When the title
-                   includes <small class="subtitle">…</small>, the small element is
-                   visually larger via .subtitle scale below. */
-                font-weight: 200;
-                font-size: 1.2em;
-                margin-top: 3.5em;
-                margin-bottom: 0;
-                padding-bottom: 0.5em;
-                color: #333332;
-                text-transform: uppercase;
-                word-spacing: -0.075em;
-                letter-spacing: -0.01em;
-            }
-            /* Asciidoctor renders the subtitle larger than the title text via
-               this 1.5em multiplier (net effective ≈1.8em on top of .chapter-title
-               1.2em). Display:block stacks it under the title text. */
-            .chapter-title .subtitle {
-                display: block;
-                font-size: 1.5em;
-                font-weight: 300;
-                margin-top: 0.25em;
-                color: #555;
-            }
-            /* Author byline above the chapter title. */
-            .byline {
-                margin: 0;
-                color: #555;
-                font-size: 0.95em;
-            }
-            .byline .author { font-weight: bold; }
-
-            /* Sections */
-            .sect1, .sect2, .sect3 { margin-top: 1em; }
-            .sectionbody { margin-top: 0.5em; }
-
-            /* Block wrappers */
-            .paragraph, .listingblock, .literalblock, .exampleblock,
-            .sidebarblock, .quoteblock, .verseblock, .imageblock,
-            .videoblock, .audioblock, .openblock, .ulist, .olist,
-            .dlist, .hdlist, .qlist, .colist { margin: 1em 0; }
-            .listingblock .title, .imageblock .title, .tableblock caption,
-            .exampleblock .title { font-style: italic; color: #555; margin-bottom: 0.3em; }
-
-            /* Admonitions */
-            .admonitionblock {
-                margin: 1em 0;
-                padding: 0.75em 1em;
-                border-left: 4px solid #888;
-                background: #f8f8f8;
-                page-break-inside: avoid;
-            }
-            .admonitionblock.note { border-color: #4a90d9; background: #eaf4fb; }
-            .admonitionblock.tip { border-color: #57ad68; background: #ecf7ef; }
-            .admonitionblock.warning { border-color: #d97a2c; background: #fdf2e9; }
-            .admonitionblock.caution { border-color: #d97a2c; background: #fdf2e9; }
-            .admonitionblock.important { border-color: #c83737; background: #fbe9e9; }
-            .admonitionblock .title { font-weight: bold; margin-bottom: 0.25em; }
-
-            /* Quotes */
-            .quoteblock { padding-left: 1em; border-left: 3px solid #ccc; color: #444; }
-            .quoteblock .attribution { font-size: 0.9em; text-align: right; color: #666; }
-
-            /* Sidebars */
-            .sidebarblock {
-                background: #f6f6f6;
-                border: 1px solid #ddd;
-                padding: 0.75em 1em;
-                page-break-inside: avoid;
-            }
-
-            /* Tables */
-            table.tableblock, table {
-                border-collapse: collapse;
-                width: 100%;
-                margin: 1em 0;
-            }
-            table.tableblock th, table.tableblock td, table th, table td {
-                border: 1px solid #c8c8c8;
-                padding: 0.4em 0.6em;
-                vertical-align: top;
-            }
-            table.tableblock th, table th { background: #f0f0f0; font-weight: bold; text-align: left; }
-
-            /* Lists (asciidoctor uses ::before pseudo-elements for custom bullets) */
-            ul, ol { padding-left: 1em; margin-left: 1em; }
-            ul { list-style: none; }
-            ul > li::before {
-                float: left;
-                margin-left: -1em;
-                padding-left: 0.25em;
-                width: 0;
-                content: "▪";
-                color: #333332;
-            }
-            ul ul > li::before { content: "◦"; color: #57AD68; }
-            ul ul ul > li::before { content: "•"; color: #333332; }
-            ul ul ul ul > li::before { content: "▫"; color: #57AD68; }
-            ol { list-style-type: decimal; padding-left: 1.75em; margin-left: 0; }
-            ul li, ol li { margin-top: 0.4em; }
-            dl dt { font-weight: bold; margin-top: 0.5em; }
-            dl dd { margin-left: 1.5em; }
-            .hdlist > table > tbody > tr > td.hdlist1 { font-weight: bold; padding-right: 1em; vertical-align: top; }
-
-            /* Inline elements */
-            mark { background: #fff8a8; padding: 0 0.15em; }
-            sub, sup { font-size: 0.75em; line-height: 0; }
-            kbd {
-                display: inline-block;
-                background: #f0f0f0;
-                border: 1px solid #c8c8c8;
-                border-radius: 3px;
-                padding: 0.05em 0.4em;
-                font-size: 0.9em;
-                box-shadow: 0 1px 0 rgba(0,0,0,0.15);
-            }
-
-            /* Images */
-            img { max-width: 100%; height: auto; }
-            figure { margin: 1em 0; text-align: center; }
-            figcaption { font-style: italic; color: #555; margin-top: 0.3em; }
-            """);
-    }
 
     private static void WriteChapterXhtml(ZipArchive archive, Chapter chapter)
     {
@@ -605,7 +451,8 @@ public sealed class EpubRenderer : DocumentRendererBase
             <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="en" lang="en">
             <head>
               <title>{titleHtml}</title>
-              <link rel="stylesheet" type="text/css" href="style.css"/>
+              <link rel="stylesheet" type="text/css" href="styles/epub3.css"/>
+              <link rel="stylesheet" type="text/css" href="styles/epub3-css3-only.css" media="(min-device-width: 0px)"/>
             </head>
             <body>
             <section class="chapter" id="{chapterId}">
@@ -625,6 +472,68 @@ public sealed class EpubRenderer : DocumentRendererBase
         entry.LastWriteTime = DeterministicTimestamp;
         using var stream = entry.Open();
         stream.Write(Encoding.UTF8.GetBytes(content));
+    }
+
+    /// <summary>
+    /// Writes all embedded asset resources (fonts, CSS, default avatar/headshot,
+    /// iBooks display options) into the EPUB archive at the asciidoctor-epub3
+    /// canonical paths. The resources are bundled with the assembly via
+    /// &lt;EmbeddedResource&gt; in the csproj.
+    /// </summary>
+    private static void WriteAssets(ZipArchive archive)
+    {
+        // (assembly resource name, archive path) tuples. Resource names follow
+        // the .NET convention: {RootNamespace}.{folder}.{file}.
+        var assets = new (string ResourceName, string ArchivePath)[]
+        {
+            // Stylesheets — chapter XHTML references epub3.css; epub3-css3-only.css
+            // is loaded conditionally by readers that support media-query gates;
+            // epub3-fonts.css declares the @font-face rules for the embedded TTFs.
+            ("AdocNet.Converters.Epub.Resources.epub3.css",                       "EPUB/styles/epub3.css"),
+            ("AdocNet.Converters.Epub.Resources.epub3-css3-only.css",             "EPUB/styles/epub3-css3-only.css"),
+            ("AdocNet.Converters.Epub.Resources.epub3-fonts.css",                 "EPUB/styles/epub3-fonts.css"),
+
+            // Noto Serif body-text fonts (Latin subset).
+            ("AdocNet.Converters.Epub.Resources.notoserif-regular-latin.ttf",     "EPUB/fonts/notoserif-regular-latin.ttf"),
+            ("AdocNet.Converters.Epub.Resources.notoserif-italic-latin.ttf",      "EPUB/fonts/notoserif-italic-latin.ttf"),
+            ("AdocNet.Converters.Epub.Resources.notoserif-bold-latin.ttf",        "EPUB/fonts/notoserif-bold-latin.ttf"),
+            ("AdocNet.Converters.Epub.Resources.notoserif-bolditalic-latin.ttf",  "EPUB/fonts/notoserif-bolditalic-latin.ttf"),
+
+            // M+ 1p heading fonts (Latin subset).
+            ("AdocNet.Converters.Epub.Resources.mplus1p-regular-latin.ttf",       "EPUB/fonts/mplus1p-regular-latin.ttf"),
+            ("AdocNet.Converters.Epub.Resources.mplus1p-light-latin.ttf",         "EPUB/fonts/mplus1p-light-latin.ttf"),
+            ("AdocNet.Converters.Epub.Resources.mplus1p-bold-latin.ttf",          "EPUB/fonts/mplus1p-bold-latin.ttf"),
+
+            // M+ 1mn monospace + ASCII conums fallback.
+            ("AdocNet.Converters.Epub.Resources.mplus1mn-regular-ascii-conums.ttf","EPUB/fonts/mplus1mn-regular-ascii-conums.ttf"),
+            ("AdocNet.Converters.Epub.Resources.mplus1mn-italic-ascii.ttf",       "EPUB/fonts/mplus1mn-italic-ascii.ttf"),
+            ("AdocNet.Converters.Epub.Resources.mplus1mn-bold-ascii.ttf",         "EPUB/fonts/mplus1mn-bold-ascii.ttf"),
+            ("AdocNet.Converters.Epub.Resources.mplus1mn-bolditalic-ascii.ttf",   "EPUB/fonts/mplus1mn-bolditalic-ascii.ttf"),
+
+            // FontAwesome 5 Solid + assorted-icons supplementary glyphs.
+            ("AdocNet.Converters.Epub.Resources.awesome.fa-solid-900.ttf",        "EPUB/fonts/awesome/fa-solid-900.ttf"),
+            ("AdocNet.Converters.Epub.Resources.assorted-icons.ttf",              "EPUB/fonts/assorted-icons.ttf"),
+
+            // Default author avatar / chapter headshot (used when :author: has
+            // no explicit avatar override).
+            ("AdocNet.Converters.Epub.Resources.avatar.jpg",                      "EPUB/avatars/default.jpg"),
+            ("AdocNet.Converters.Epub.Resources.headshot.jpg",                    "EPUB/headshots/default.jpg"),
+
+            // iBooks-specific metadata: keeps the reader from substituting fonts.
+            ("AdocNet.Converters.Epub.Resources.com.apple.ibooks.display-options.xml",
+             "META-INF/com.apple.ibooks.display-options.xml"),
+        };
+
+        var asm = typeof(EpubRenderer).Assembly;
+        foreach (var (resourceName, archivePath) in assets)
+        {
+            using var resource = asm.GetManifestResourceStream(resourceName);
+            if (resource is null) continue; // resource missing — skip silently
+            var entry = archive.CreateEntry(archivePath, CompressionLevel.Optimal);
+            entry.LastWriteTime = DeterministicTimestamp;
+            using var stream = entry.Open();
+            resource.CopyTo(stream);
+        }
     }
 
     private static string EscapeXml(string value)

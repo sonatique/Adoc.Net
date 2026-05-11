@@ -63,9 +63,9 @@ public class EpubRendererTests
         var bytes = new EpubRenderer().RenderToBytes(doc);
         using var ms = new MemoryStream(bytes);
         using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
-        var toc = zip.GetEntry("EPUB/toc.xhtml");
-        Assert.That(toc, Is.Not.Null);
-        using var reader = new StreamReader(toc!.Open());
+        var nav = zip.GetEntry("EPUB/nav.xhtml");
+        Assert.That(nav, Is.Not.Null, "Expected EPUB 3 nav.xhtml (Asciidoctor convention)");
+        using var reader = new StreamReader(nav!.Open());
         var content = reader.ReadToEnd();
         Assert.That(content, Does.Contain("Chapter 1"));
         Assert.That(content, Does.Contain("Chapter 2"));
@@ -95,7 +95,10 @@ public class EpubRendererTests
         var bytes = new EpubRenderer().RenderToBytes(doc);
         using var ms = new MemoryStream(bytes);
         using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
-        Assert.That(zip.GetEntry("EPUB/style.css"), Is.Not.Null);
+        // Asciidoctor parity: ships full asciidoctor-epub3 stylesheet trio.
+        Assert.That(zip.GetEntry("EPUB/styles/epub3.css"), Is.Not.Null);
+        Assert.That(zip.GetEntry("EPUB/styles/epub3-css3-only.css"), Is.Not.Null);
+        Assert.That(zip.GetEntry("EPUB/styles/epub3-fonts.css"), Is.Not.Null);
     }
 
     [Test]
@@ -241,7 +244,8 @@ public class EpubRendererTests
     {
         var doc = BlockParser.Parse("= Doc\n\nText").Document;
         var content = ReadOpf(new EpubRenderer().RenderToBytes(doc));
-        Assert.That(content, Does.Contain("<item id=\"ncx\" href=\"toc.ncx\" media-type=\"application/x-dtbncx+xml\"/>"));
+        // Asciidoctor parity: attribute order is href, id, media-type.
+        Assert.That(content, Does.Contain("<item href=\"toc.ncx\" id=\"ncx\" media-type=\"application/x-dtbncx+xml\"/>"));
         Assert.That(content, Does.Contain("<spine toc=\"ncx\">"));
     }
 
@@ -266,7 +270,8 @@ public class EpubRendererTests
         var doc = BlockParser.Parse("= My Book\n\nText").Document;
         var content = ReadOpf(new EpubRenderer().RenderToBytes(doc));
         Assert.That(content, Does.Contain("href=\"_my_book.xhtml\""));
-        Assert.That(content, Does.Contain("<itemref idref=\"chapter_1\"/>"));
+        // Asciidoctor parity: chapter manifest item id = "item_<basename>".
+        Assert.That(content, Does.Contain("<itemref idref=\"item__my_book\"/>"));
     }
 
     [Test]
@@ -329,20 +334,23 @@ public class EpubRendererTests
     [Test]
     public void Stylesheet_includes_admonition_and_code_styling()
     {
-        // Tier 3: bundled CSS now covers Asciidoctor's structural classes
-        // (sect1, paragraph, listingblock, admonitionblock, sidebarblock, etc.)
-        // so EPUB readers without their own stylesheet show themed output.
+        // Asciidoctor parity: ships the asciidoctor-epub3 epub3.css which covers
+        // structural classes (sect1, paragraph, listingblock, admonitionblock,
+        // sidebarblock, etc.) so EPUB readers without their own stylesheet show
+        // themed output.
         var doc = BlockParser.Parse("Hello").Document;
         var bytes = new EpubRenderer().RenderToBytes(doc);
         using var ms = new MemoryStream(bytes);
         using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
-        using var reader = new StreamReader(zip.GetEntry("EPUB/style.css")!.Open());
+        using var reader = new StreamReader(zip.GetEntry("EPUB/styles/epub3.css")!.Open());
         var css = reader.ReadToEnd();
-        Assert.That(css, Does.Contain(".admonitionblock.note"), "Note admonition styling missing");
-        Assert.That(css, Does.Contain(".admonitionblock.warning"), "Warning admonition styling missing");
-        Assert.That(css, Does.Contain(".sidebarblock"), "Sidebar styling missing");
-        Assert.That(css, Does.Contain(".listingblock"), "Listing block styling missing");
-        Assert.That(css, Does.Contain("table.tableblock"), "Tableblock styling missing");
+        // The asciidoctor-epub3 stylesheet uses semantic HTML5 elements with
+        // role-like classes (aside.admonition, figure.listing, table.table)
+        // rather than the `*block`-suffixed wrappers HtmlRenderer emits.
+        Assert.That(css, Does.Contain("aside.admonition"), "admonition styling missing");
+        Assert.That(css, Does.Contain("aside.sidebar"), "sidebar styling missing");
+        Assert.That(css, Does.Contain("pre.source"), "source-block styling missing");
+        Assert.That(css, Does.Contain("table.table"), "table styling missing");
     }
 
     [Test]
@@ -386,7 +394,7 @@ public class EpubRendererTests
     {
         using var ms = new MemoryStream(bytes);
         using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
-        using var reader = new StreamReader(zip.GetEntry("EPUB/toc.xhtml")!.Open());
+        using var reader = new StreamReader(zip.GetEntry("EPUB/nav.xhtml")!.Open());
         return reader.ReadToEnd();
     }
 }

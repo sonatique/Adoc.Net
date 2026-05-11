@@ -12,6 +12,18 @@
     <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
   </ItemGroup>
 
+  <!-- Asciidoctor-EPUB compatibility resources: fonts, stylesheets, default
+       avatar/headshot images, and the iBooks display-options metadata.
+       Embedded so AdocNet.Converters.Epub produces byte-comparable output to
+       asciidoctor-epub3 without external file lookups at runtime. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\*.ttf" />
+    <EmbeddedResource Include="Resources\awesome\fa-solid-900.ttf" />
+    <EmbeddedResource Include="Resources\*.css" />
+    <EmbeddedResource Include="Resources\*.jpg" />
+    <EmbeddedResource Include="Resources\com.apple.ibooks.display-options.xml" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\AdocNet.Core\AdocNet.Core.csproj" />
     <ProjectReference Include="..\AdocNet.Ast\AdocNet.Ast.csproj" />

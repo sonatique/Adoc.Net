@@ -165,10 +165,10 @@ public class CrossRendererTests
             Assert.That(entryNames, Does.Contain("mimetype"));
             Assert.That(entryNames, Does.Contain("META-INF/container.xml"));
             Assert.That(entryNames, Does.Contain("EPUB/package.opf"));
-            Assert.That(entryNames, Does.Contain("EPUB/toc.xhtml"));
+            Assert.That(entryNames, Does.Contain("EPUB/nav.xhtml"));
             // Chapter file is named after the document title slug
             Assert.That(entryNames, Does.Contain("EPUB/_test_document.xhtml"));
-            Assert.That(entryNames, Does.Contain("EPUB/style.css"));
+            Assert.That(entryNames, Does.Contain("EPUB/styles/epub3.css"));
         });
     }
 
