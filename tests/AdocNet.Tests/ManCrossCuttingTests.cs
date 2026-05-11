@@ -66,6 +66,53 @@ public class ManCrossCuttingTests
         Assert.That(output, Does.Not.Contain(".PP\nA paragraph."));
     }
 
+    // ── Backtick monospace renders as bold-monospace (\f(CB) ────────────────
+
+    [Test]
+    public void Backtick_monospace_renders_as_bold_courier()
+    {
+        var output = Render("= Test\n\nThe `name` is set.");
+        // Bold-monospace combo: \f(CB...\fP — Courier Bold (the 'best of both
+        // worlds' — semantically correct monospace + readable bold weight).
+        Assert.That(output, Does.Contain("\\f(CB"));
+        Assert.That(output, Does.Contain("name"));
+    }
+
+    // ── Tab expansion in source/literal blocks ────────────────────────────────
+
+    [Test]
+    public void Listing_block_expands_tabs_to_spaces()
+    {
+        // Asciidoctor parity: tabs in verbatim content expand to 8 spaces by default.
+        var output = Render("= Test\n\n----\nfunc foo() {\n\treturn 42\n}\n----");
+        Assert.That(output, Does.Not.Contain("\treturn"),
+            "tab in verbatim block should be expanded to spaces");
+        Assert.That(output, Does.Contain("        return"),
+            "8-space expansion expected (default tabsize)");
+    }
+
+    // ── ASCII '-' escaped as \- in body content ───────────────────────────────
+
+    [Test]
+    public void Hyphen_minus_in_body_text_escaped_as_backslash_dash()
+    {
+        // Asciidoctor escapes ASCII '-' as \- so groff renders it as a literal
+        // hyphen-minus rather than reflowing it.
+        var output = Render("= Test\n\nUse the user-friendly tool.");
+        Assert.That(output, Does.Contain("user\\-friendly"));
+    }
+
+    // ── Example block title gets numbered prefix ──────────────────────────────
+
+    [Test]
+    public void Example_block_title_gets_numbered_prefix()
+    {
+        var output = Render("= Test\n\n.My Example\n====\nbody.\n====");
+        // Asciidoctor: ".B Example 1. My Example" (with .br + .RS).
+        // We want a numbered prefix — 'Example N. <title>'.
+        Assert.That(output, Does.Contain("Example 1. My Example"));
+    }
+
     // ── 5. Smart quotes: typographic apostrophe → \(cq ───────────────────────
 
     [Test]

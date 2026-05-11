@@ -51,7 +51,10 @@ public sealed partial class ManRenderer
                 break;
 
             case MonospaceInlineNode n:
-                sb.Append("\\fB");
+                // Bold-monospace ('best of both worlds'): \f(CB selects Courier
+                // Bold, giving Asciidoctor's monospace semantics with the visible
+                // weight of bold for terminal readability. \fP restores prior font.
+                sb.Append("\\f(CB");
                 RenderInlines(sb, n.Children);
                 sb.Append("\\fP");
                 break;
