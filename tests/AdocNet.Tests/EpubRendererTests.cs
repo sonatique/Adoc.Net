@@ -370,7 +370,9 @@ public class EpubRendererTests
 
         Assert.That(xhtml, Does.Contain("<section class=\"chapter\""));
         Assert.That(xhtml, Does.Contain("<header class=\"chapter-header\">"));
-        Assert.That(xhtml, Does.Contain("<h1 class=\"chapter-title\">My Title</h1>"));
+        // Asciidoctor-epub3 parity: chapter title text is wrapped in
+        // <small class="subtitle"> inside <h1 class="chapter-title">.
+        Assert.That(xhtml, Does.Contain("<h1 class=\"chapter-title\"><small class=\"subtitle\">My Title</small></h1>"));
         Assert.That(xhtml, Does.Contain("xmlns:epub=\"http://www.idpf.org/2007/ops\""));
     }
 
