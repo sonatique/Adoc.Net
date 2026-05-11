@@ -514,7 +514,15 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
             EscapeTo(sb, paragraph.Roles[i]);
             sb.Append(' ');
         }
-        sb.Append("paragraph\">\n<p>");
+        sb.Append("paragraph\"");
+        // [[anchor]] becomes id="anchor" on the wrapper div.
+        if (paragraph.Id is not null)
+        {
+            sb.Append(" id=\"");
+            EscapeTo(sb, paragraph.Id);
+            sb.Append('"');
+        }
+        sb.Append(">\n<p>");
         if (paragraph.Inlines.Count > 0)
             RenderInlines(sb, paragraph.Inlines);
         else
