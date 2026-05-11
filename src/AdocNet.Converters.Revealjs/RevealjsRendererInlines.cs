@@ -31,6 +31,22 @@ public sealed partial class RevealjsRenderer
     private static readonly Dictionary<string, string> EmptyAttrs = new();
 
     /// <summary>
+    /// Strips http://, https://, mailto: prefixes from the displayed URL when
+    /// :hide-uri-scheme: is set on the document. The href stays untouched —
+    /// only the user-visible text is shortened (Asciidoctor parity).
+    /// </summary>
+    private string MaybeHideUriScheme(string url)
+    {
+        if (!_hideUriScheme) return url;
+        foreach (var prefix in new[] { "https://", "http://", "ftp://", "mailto:", "irc://" })
+        {
+            if (url.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return url.Substring(prefix.Length);
+        }
+        return url;
+    }
+
+    /// <summary>
     /// Opens an inline element tag, appending a class attribute when roles are
     /// present. Used by strong/emphasis/monospace to propagate [.role]…[/role]
     /// span roles (e.g. [.term]*target* → &lt;strong class="term"&gt;).
@@ -152,11 +168,12 @@ public sealed partial class RevealjsRenderer
                 break;
             case LinkInlineNode n:
                 // Auto-detected URLs (no explicit label) get class="bare" matching
-                // Asciidoctor's convention.
+                // Asciidoctor's convention. The href keeps the full URL; the
+                // displayed text strips the scheme when :hide-uri-scheme: is set.
                 sb.Append("<a class=\"bare\" href=\"");
                 EscapeTo(sb, n.Url);
                 sb.Append("\">");
-                EscapeTo(sb, n.Url);
+                EscapeTo(sb, MaybeHideUriScheme(n.Url));
                 sb.Append("</a>");
                 break;
             case InlineLinkMacroNode n:
@@ -180,7 +197,7 @@ public sealed partial class RevealjsRenderer
                 if (n.Label.Length > 0)
                     RenderTextAsInlines(sb, n.Label);
                 else
-                    EscapeTo(sb, n.Url);
+                    EscapeTo(sb, MaybeHideUriScheme(n.Url));
                 sb.Append("</a>");
                 break;
             case HighlightInlineNode n:

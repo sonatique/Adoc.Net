@@ -19,6 +19,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
     private int _orderedListDepth;
     private bool _sectnumsEnabled;
     private bool _iconsFont;
+    private bool _hideUriScheme;
     // Per-slide footnote state. _slideFootnoteTexts[i] holds the resolved
     // text/inlines for footnote (i+1) in the current slide. Reset before each
     // slide; emitted as <div class="footnotes"> at the end of the slide.
@@ -49,6 +50,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
             && (sh == "highlight.js" || sh == "highlightjs");
         _iconsFont = document.Attributes.TryGetValue("icons", out var iconsVal)
             && string.Equals(iconsVal, "font", StringComparison.OrdinalIgnoreCase);
+        _hideUriScheme = document.Attributes.ContainsKey("hide-uri-scheme");
 
         var sb = new StringBuilder();
         RenderPresentation(sb, document);

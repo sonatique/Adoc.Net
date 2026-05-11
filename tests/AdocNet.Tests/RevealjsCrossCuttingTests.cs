@@ -917,6 +917,31 @@ public class RevealjsCrossCuttingTests
         Assert.That(output, Does.Not.Contain("target=\""));
     }
 
+    // ── :hide-uri-scheme: attribute ──────────────────────────────────────────
+
+    [Test]
+    public void Hide_uri_scheme_strips_https_from_displayed_text()
+    {
+        var output = Render(
+            "= Doc\n" +
+            ":hide-uri-scheme:\n\n" +
+            "== Slide\n\n" +
+            "Visit https://example.com today.");
+        Assert.That(output, Does.Contain("href=\"https://example.com\""));
+        Assert.That(output, Does.Contain(">example.com</a>"));
+        Assert.That(output, Does.Not.Contain(">https://example.com</a>"));
+    }
+
+    [Test]
+    public void Without_hide_uri_scheme_displays_full_url()
+    {
+        var output = Render(
+            "= Doc\n\n" +
+            "== Slide\n\n" +
+            "Visit https://example.com today.");
+        Assert.That(output, Does.Contain(">https://example.com</a>"));
+    }
+
     [Test]
     public void Preamble_does_not_create_multiple_slides()
     {
