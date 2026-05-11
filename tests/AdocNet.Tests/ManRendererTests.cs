@@ -158,7 +158,7 @@ public class ManRendererTests
     }
 
     [Test]
-    public void Monospace_text_renders_as_fB()
+    public void Monospace_text_renders_as_courier_bold()
     {
         var doc = new DocumentNode { Title = "test" };
         doc.AddChild(new ParagraphNode
@@ -175,7 +175,9 @@ public class ManRendererTests
 
         var output = Render(doc);
 
-        Assert.That(output, Does.Contain("\\fBcode\\fP"));
+        // Bold-monospace ('best of both worlds'): \f(CB selects Courier Bold,
+        // giving Asciidoctor's monospace semantics with bold weight readability.
+        Assert.That(output, Does.Contain("\\f(CBcode\\fP"));
     }
 
     // ── Code block tests ────────────────────────────────────────────────
@@ -344,7 +346,8 @@ public class ManRendererTests
 
         Assert.That(output, Does.Contain(".TH \"MYAPP\" \"1\""));
         Assert.That(output, Does.Contain(".SH \"NAME\""));
-        Assert.That(output, Does.Contain("myapp - does things"));
+        // ASCII '-' in body text is escaped as \- so groff renders the literal hyphen.
+        Assert.That(output, Does.Contain("myapp \\- does things"));
         Assert.That(output, Does.Contain(".SH \"DESCRIPTION\""));
         Assert.That(output, Does.Contain("\\fBmyapp\\fP"));
     }

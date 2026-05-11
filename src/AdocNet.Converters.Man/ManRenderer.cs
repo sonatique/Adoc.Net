@@ -9,19 +9,24 @@ namespace AdocNet.Converters.Man;
 /// </summary>
 public sealed partial class ManRenderer : IDocumentRenderer
 {
+    // Per-render mutable state. Reset in Render() so multiple invocations on
+    // the same renderer are deterministic.
+    private int _exampleCounter;
+
     /// <inheritdoc />
     public string Format => "man";
 
     /// <inheritdoc />
     public void Render(DocumentNode document, Stream output, RenderOptions options)
     {
+        _exampleCounter = 0;
         var sb = new StringBuilder();
         RenderDocument(sb, document);
         var bytes = Encoding.UTF8.GetBytes(sb.ToString());
         output.Write(bytes, 0, bytes.Length);
     }
 
-    private static void RenderDocument(StringBuilder sb, DocumentNode document)
+    private void RenderDocument(StringBuilder sb, DocumentNode document)
     {
         // Asciidoctor emits the tbl preprocessor request line at the very top
         // so groff/mandoc invoke tbl(1) for any tables in the page.
@@ -37,7 +42,7 @@ public sealed partial class ManRenderer : IDocumentRenderer
 
     // ── Title header ────────────────────────────────────────────────────
 
-    private static void RenderTitleHeader(StringBuilder sb, DocumentNode document)
+    private void RenderTitleHeader(StringBuilder sb, DocumentNode document)
     {
         var name = document.Title?.ToUpperInvariant() ?? "UNTITLED";
         var section = "1";
@@ -127,7 +132,7 @@ public sealed partial class ManRenderer : IDocumentRenderer
 
     // ── Block rendering ─────────────────────────────────────────────────
 
-    private static void RenderBlock(StringBuilder sb, BlockNode node)
+    private void RenderBlock(StringBuilder sb, BlockNode node)
     {
         switch (node)
         {
@@ -151,7 +156,7 @@ public sealed partial class ManRenderer : IDocumentRenderer
         }
     }
 
-    private static void RenderSection(StringBuilder sb, SectionNode section)
+    private void RenderSection(StringBuilder sb, SectionNode section)
     {
         if (section.Level == 1)
         {
@@ -187,7 +192,7 @@ public sealed partial class ManRenderer : IDocumentRenderer
         return section.Title;
     }
 
-    private static void RenderParagraph(StringBuilder sb, ParagraphNode paragraph)
+    private void RenderParagraph(StringBuilder sb, ParagraphNode paragraph)
     {
         // Asciidoctor uses .sp (single vertical space) between paragraphs in man
         // output, not .PP (which is a paragraph macro that resets indentation).
@@ -204,7 +209,7 @@ public sealed partial class ManRenderer : IDocumentRenderer
         }
     }
 
-    private static void RenderList(StringBuilder sb, ListNode list)
+    private void RenderList(StringBuilder sb, ListNode list)
     {
         int itemNumber = list.Start ?? 1;
         foreach (var child in list.Children)
@@ -248,7 +253,7 @@ public sealed partial class ManRenderer : IDocumentRenderer
         }
     }
 
-    private static void RenderDescriptionList(StringBuilder sb, DescriptionListNode list)
+    private void RenderDescriptionList(StringBuilder sb, DescriptionListNode list)
     {
         foreach (var child in list.Children)
         {
@@ -282,7 +287,7 @@ public sealed partial class ManRenderer : IDocumentRenderer
         }
     }
 
-    private static void RenderDelimitedBlock(StringBuilder sb, DelimitedBlockNode block)
+    private void RenderDelimitedBlock(StringBuilder sb, DelimitedBlockNode block)
     {
         switch (block.BlockKind)
         {
@@ -296,7 +301,10 @@ public sealed partial class ManRenderer : IDocumentRenderer
                     sb.Append("\\fP\n");
                 }
                 sb.Append(".nf\n");
-                sb.Append(EscapeBodyText(block.Content ?? ""));
+                // Asciidoctor parity: tabs in verbatim content expand to 8 spaces
+                // (default tabsize) so source code aligns the same way in any
+                // man-page viewer regardless of its tab handling.
+                sb.Append(EscapeBodyText(ExpandTabs(block.Content ?? "", 8)));
                 sb.Append('\n');
                 sb.Append(".fi\n");
                 break;
@@ -324,6 +332,25 @@ public sealed partial class ManRenderer : IDocumentRenderer
                 break;
 
             case DelimitedBlockKind.Example:
+                if (block.Title is not null)
+                {
+                    // Numbered "Example N. <title>" prefix matches Asciidoctor.
+                    _exampleCounter++;
+                    sb.Append(".PP\n\\fBExample ");
+                    sb.Append(_exampleCounter);
+                    sb.Append(". ");
+                    RenderTextAsInlines(sb, block.Title);
+                    sb.Append("\\fP\n");
+                }
+                sb.Append(".RS\n");
+                foreach (var child in block.Children)
+                {
+                    if (child is BlockNode childBlock)
+                        RenderBlock(sb, childBlock);
+                }
+                sb.Append(".RE\n");
+                break;
+
             case DelimitedBlockKind.Sidebar:
             case DelimitedBlockKind.Open:
                 if (block.Title is not null)
@@ -343,7 +370,7 @@ public sealed partial class ManRenderer : IDocumentRenderer
 
             case DelimitedBlockKind.Verse:
                 sb.Append(".nf\n");
-                sb.Append(EscapeBodyText(block.Content ?? ""));
+                sb.Append(EscapeBodyText(ExpandTabs(block.Content ?? "", 8)));
                 sb.Append('\n');
                 sb.Append(".fi\n");
                 break;
@@ -355,7 +382,7 @@ public sealed partial class ManRenderer : IDocumentRenderer
         }
     }
 
-    private static void RenderAdmonition(StringBuilder sb, AdmonitionNode admonition)
+    private void RenderAdmonition(StringBuilder sb, AdmonitionNode admonition)
     {
         sb.Append(".PP\n\\fB");
         sb.Append(admonition.AdmonitionType.ToUpperInvariant());
@@ -382,7 +409,7 @@ public sealed partial class ManRenderer : IDocumentRenderer
         }
     }
 
-    private static void RenderBlockImage(StringBuilder sb, BlockImageNode image)
+    private void RenderBlockImage(StringBuilder sb, BlockImageNode image)
     {
         sb.Append(".PP\n[Image: ");
         sb.Append(EscapeBodyText(image.Alt.Length > 0 ? image.Alt : image.Target));
@@ -391,7 +418,7 @@ public sealed partial class ManRenderer : IDocumentRenderer
         sb.Append(")]\n");
     }
 
-    private static void RenderTable(StringBuilder sb, TableNode table)
+    private void RenderTable(StringBuilder sb, TableNode table)
     {
         if (table.Title is not null)
         {
@@ -421,7 +448,7 @@ public sealed partial class ManRenderer : IDocumentRenderer
         sb.Append(".fi\n");
     }
 
-    private static void RenderStemBlock(StringBuilder sb, StemBlockNode stem)
+    private void RenderStemBlock(StringBuilder sb, StemBlockNode stem)
     {
         if (stem.Title is not null)
         {
@@ -435,7 +462,7 @@ public sealed partial class ManRenderer : IDocumentRenderer
         sb.Append(".fi\n");
     }
 
-    private static void RenderBibliographyEntry(
+    private void RenderBibliographyEntry(
         StringBuilder sb, BibliographyEntryNode entry)
     {
         sb.Append(".IP \"[");
@@ -552,9 +579,45 @@ public sealed partial class ManRenderer : IDocumentRenderer
                     case '\u2014': sb.Append("\\(em"); break; // em dash
                     case '\u2013': sb.Append("\\(en"); break; // en dash
                     case '\u2026': sb.Append("\\&..."); break; // horizontal ellipsis
+                    case '-':      sb.Append("\\-"); break;     // ASCII hyphen-minus
                     default:       sb.Append(c); break;
                 }
                 lineStart = false;
+            }
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Expands tab characters to <paramref name="tabWidth"/> spaces, matching
+    /// Asciidoctor's default verbatim-block behaviour. Required so source code
+    /// indentation aligns identically across man-page viewers regardless of
+    /// their tab-rendering settings.
+    /// </summary>
+    internal static string ExpandTabs(string text, int tabWidth)
+    {
+        if (string.IsNullOrEmpty(text) || text.IndexOf('\t') < 0)
+            return text;
+        var sb = new StringBuilder(text.Length);
+        int col = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (c == '\n')
+            {
+                sb.Append('\n');
+                col = 0;
+            }
+            else if (c == '\t')
+            {
+                int spaces = tabWidth - (col % tabWidth);
+                for (int s = 0; s < spaces; s++) sb.Append(' ');
+                col += spaces;
+            }
+            else
+            {
+                sb.Append(c);
+                col++;
             }
         }
         return sb.ToString();
