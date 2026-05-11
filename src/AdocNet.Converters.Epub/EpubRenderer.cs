@@ -42,7 +42,16 @@ public sealed class EpubRenderer : DocumentRendererBase
         var title = doc.Title ?? "Untitled";
         var author = doc.Attributes.TryGetValue("author", out var a) && !string.IsNullOrWhiteSpace(a) ? a : null;
         var language = doc.Attributes.TryGetValue("lang", out var l) ? l : "en";
-        var revdate = doc.Attributes.TryGetValue("revdate", out var rd) && !string.IsNullOrWhiteSpace(rd) ? rd : null;
+        // Asciidoctor uses :revdate: when set, otherwise the file mtime
+        // (:docdatetime: or :docdate:) — both are populated by the parser when
+        // the document has a SourceFilePath. Falls back to no date.
+        string? revdate = null;
+        if (doc.Attributes.TryGetValue("revdate", out var rd) && !string.IsNullOrWhiteSpace(rd))
+            revdate = rd;
+        else if (doc.Attributes.TryGetValue("docdatetime", out var ddt) && !string.IsNullOrWhiteSpace(ddt))
+            revdate = ConvertToIso8601Z(ddt);
+        else if (doc.Attributes.TryGetValue("docdate", out var dd) && !string.IsNullOrWhiteSpace(dd))
+            revdate = ConvertToIso8601Z(dd);
         // Derive identifier from the document title slug, mirroring asciidoctor-epub3.
         // Falls back to a deterministic urn if the document has no title.
         var identifier = doc.Title is not null
@@ -261,20 +270,24 @@ public sealed class EpubRenderer : DocumentRendererBase
     private static void WriteContentOpf(ZipArchive archive, string title, string? author, string language,
         string identifier, string? revdate, string? description, List<Chapter> chapters)
     {
-        // Metadata field order matches asciidoctor-epub3 exactly:
-        // identifier, identifier-type meta, title, (creator), language,
-        // (date), dcterms:modified, (description). Only the parenthesised
-        // fields are conditional.
+        // Metadata field order matches asciidoctor-epub3 exactly (per the
+        // canonicalized reference output):
+        //   language, identifier, identifier-type, title, (creator), date,
+        //   modified, (description). Only the parenthesised fields are conditional.
         var meta = new StringBuilder();
+        meta.Append($"    <dc:language id=\"pub-language\">{EscapeXml(language)}</dc:language>\n");
         meta.Append($"    <dc:identifier id=\"pub-identifier\">{EscapeXml(identifier)}</dc:identifier>\n");
         meta.Append("    <meta property=\"identifier-type\" refines=\"#pub-identifier\">uuid</meta>\n");
         meta.Append($"    <dc:title id=\"pub-title\">{EscapeXml(title)}</dc:title>\n");
         if (author is not null)
             meta.Append($"    <dc:creator>{EscapeXml(author)}</dc:creator>\n");
-        meta.Append($"    <dc:language id=\"pub-language\">{EscapeXml(language)}</dc:language>\n");
         if (revdate is not null)
             meta.Append($"    <dc:date>{EscapeXml(revdate)}</dc:date>\n");
-        meta.Append("    <meta property=\"dcterms:modified\">2026-01-01T00:00:00Z</meta>\n");
+        // dcterms:modified should be the document's last-modified timestamp.
+        // Use the source-file mtime when available (deterministic per file)
+        // and fall back to a fixed instant for in-memory documents.
+        var modified = revdate ?? "2026-01-01T00:00:00Z";
+        meta.Append($"    <meta property=\"dcterms:modified\">{EscapeXml(modified)}</meta>\n");
         if (description is not null)
             meta.Append($"    <dc:description>{EscapeXml(description)}</dc:description>\n");
 
@@ -431,20 +444,31 @@ public sealed class EpubRenderer : DocumentRendererBase
         // (and external stylesheets) can target the chapter-title hook consistently.
         var chapterId = Slugify(chapter.PageTitle);
         var titleHtml = EscapeXml(chapter.PageTitle);
-        // Split title at first ": " into title + subtitle (asciidoctor-epub3
-        // convention: <h1 class="chapter-title">Title <small class="subtitle">…</small></h1>).
-        var (titlePart, subtitlePart) = SplitTitleSubtitle(chapter.PageTitle);
-        var titleMarkup = subtitlePart is not null
-            ? $"{EscapeXml(titlePart)} <small class=\"subtitle\">{EscapeXml(subtitlePart)}</small>"
-            : EscapeXml(titlePart);
-        // Optional byline above the title (when :author: was set on the doc).
-        // Asciidoctor-epub3 prefixes the author name with a small avatar icon
-        // (default-avatar.jpg). We use an inline SVG silhouette so the EPUB
-        // doesn't need a bundled binary asset.
-        var bylineMarkup = chapter.Author is not null
-            ? "<p class=\"byline\">" + InlineAvatarSvg + "<b class=\"author\">"
-                + EscapeXml(chapter.Author) + "</b></p>\n"
-            : "";
+        // Asciidoctor-epub3 wraps the chapter title text in <small class="subtitle">
+        // unconditionally (even when there's no explicit ': ' split — the small element
+        // gets a CSS-driven larger size). We follow the same convention.
+        var titleMarkup = $"<small class=\"subtitle\">{EscapeXml(chapter.PageTitle)}</small>";
+        // Asciidoctor-epub3 always emits the byline header — uses the bundled
+        // default avatar JPEG and an empty <b class="author"> when no :author:
+        // is set. Provides a consistent layout hook for reader-side CSS.
+        var authorName = chapter.Author is not null ? EscapeXml(chapter.Author) : "";
+        var bylineMarkup =
+            $"<p class=\"byline\"><img src=\"avatars/default.jpg\"/><b class=\"author\">{authorName}</b></p>\n";
+        // Calibre/reader detection script — matches asciidoctor-epub3's chapter
+        // template. Sets the body class to the reading-system name so per-reader
+        // CSS hooks can target Kindle, Calibre, etc. The 'scripted' manifest
+        // property points at this script.
+        const string CalibreScript = """
+            <script type="text/javascript">
+            document.addEventListener('DOMContentLoaded', function(event, reader) {
+              if (!(reader = navigator.epubReadingSystem)) {
+                if (navigator.userAgent.indexOf(' calibre/') >= 0) reader = { name: 'calibre-desktop' };
+                else if (window.parent == window || !(reader = window.parent.navigator.epubReadingSystem)) return;
+              }
+              document.body.setAttribute('class', reader.name.toLowerCase().replace(/ /g, '-'));
+            });
+            </script>
+            """;
         var xhtml = $"""
             <?xml version="1.0" encoding="UTF-8"?>
             <!DOCTYPE html>
@@ -453,9 +477,10 @@ public sealed class EpubRenderer : DocumentRendererBase
               <title>{titleHtml}</title>
               <link rel="stylesheet" type="text/css" href="styles/epub3.css"/>
               <link rel="stylesheet" type="text/css" href="styles/epub3-css3-only.css" media="(min-device-width: 0px)"/>
+              {CalibreScript}
             </head>
             <body>
-            <section class="chapter" id="{chapterId}">
+            <section class="chapter" id="{chapterId}" title="{titleHtml}">
             <header class="chapter-header">
             {bylineMarkup}<h1 class="chapter-title">{titleMarkup}</h1>
             </header>
@@ -534,6 +559,23 @@ public sealed class EpubRenderer : DocumentRendererBase
             using var stream = entry.Open();
             resource.CopyTo(stream);
         }
+    }
+
+    /// <summary>
+    /// Converts a parser-emitted date attribute (e.g. "2026-04-15" or
+    /// "2026-04-15 13:10:19 +0000") into an ISO 8601 UTC instant
+    /// ("2026-04-15T13:10:19Z") for &lt;dc:date&gt;. Returns the input
+    /// unchanged if it doesn't look like one of the known formats.
+    /// </summary>
+    private static string ConvertToIso8601Z(string raw)
+    {
+        if (DateTimeOffset.TryParse(raw, System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+            out var dto))
+        {
+            return dto.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
+        }
+        return raw;
     }
 
     private static string EscapeXml(string value)
