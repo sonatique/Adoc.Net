@@ -505,8 +505,16 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
 
     private void RenderParagraph(StringBuilder sb, ParagraphNode paragraph)
     {
-        // Asciidoctor wraps every paragraph in <div class="paragraph">.
-        sb.Append("<div class=\"paragraph\">\n<p>");
+        // Asciidoctor wraps every paragraph in <div class="paragraph">. Paragraph
+        // roles ([.lead], [.text-center], etc.) are appended *before* "paragraph"
+        // in the class — Asciidoctor convention is "<role…> paragraph".
+        sb.Append("<div class=\"");
+        for (int i = 0; i < paragraph.Roles.Count; i++)
+        {
+            EscapeTo(sb, paragraph.Roles[i]);
+            sb.Append(' ');
+        }
+        sb.Append("paragraph\">\n<p>");
         if (paragraph.Inlines.Count > 0)
             RenderInlines(sb, paragraph.Inlines);
         else
