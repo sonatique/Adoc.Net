@@ -315,6 +315,7 @@ public sealed class EpubRenderer : DocumentRendererBase
         manifest.Append("    <item href=\"styles/epub3.css\" id=\"item_epub3\" media-type=\"text/css\"/>\n");
         manifest.Append("    <item href=\"styles/epub3-css3-only.css\" id=\"item_epub3-css3-only\" media-type=\"text/css\"/>\n");
         manifest.Append("    <item href=\"styles/epub3-fonts.css\" id=\"item_epub3-fonts\" media-type=\"text/css\"/>\n");
+        manifest.Append("    <item href=\"styles/adocnet-overrides.css\" id=\"item_adocnet-overrides\" media-type=\"text/css\"/>\n");
         manifest.Append("    <item href=\"fonts/notoserif-regular-latin.ttf\" id=\"item_notoserif-regular-latin\" media-type=\"application/vnd.ms-opentype\"/>\n");
         manifest.Append("    <item href=\"fonts/notoserif-italic-latin.ttf\" id=\"item_notoserif-italic-latin\" media-type=\"application/vnd.ms-opentype\"/>\n");
         manifest.Append("    <item href=\"fonts/notoserif-bold-latin.ttf\" id=\"item_notoserif-bold-latin\" media-type=\"application/vnd.ms-opentype\"/>\n");
@@ -477,6 +478,7 @@ public sealed class EpubRenderer : DocumentRendererBase
               <title>{titleHtml}</title>
               <link rel="stylesheet" type="text/css" href="styles/epub3.css"/>
               <link rel="stylesheet" type="text/css" href="styles/epub3-css3-only.css" media="(min-device-width: 0px)"/>
+              <link rel="stylesheet" type="text/css" href="styles/adocnet-overrides.css"/>
               {CalibreScript}
             </head>
             <body>
@@ -517,6 +519,10 @@ public sealed class EpubRenderer : DocumentRendererBase
             ("AdocNet.Converters.Epub.Resources.epub3.css",                       "EPUB/styles/epub3.css"),
             ("AdocNet.Converters.Epub.Resources.epub3-css3-only.css",             "EPUB/styles/epub3-css3-only.css"),
             ("AdocNet.Converters.Epub.Resources.epub3-fonts.css",                 "EPUB/styles/epub3-fonts.css"),
+            // AdocNet-specific overrides: styles HtmlRenderer's class structure
+            // (admonitionblock, listingblock, etc.) using asciidoctor's design
+            // language. Loaded AFTER epub3.css so the overrides cascade.
+            ("AdocNet.Converters.Epub.Resources.adocnet-overrides.css",           "EPUB/styles/adocnet-overrides.css"),
 
             // Noto Serif body-text fonts (Latin subset).
             ("AdocNet.Converters.Epub.Resources.notoserif-regular-latin.ttf",     "EPUB/fonts/notoserif-regular-latin.ttf"),
