@@ -3,6 +3,93 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.0] - 2026-05-17
+
+The 1.0.0 release. Headline achievement: **byte-identical output to
+Asciidoctor across the 36-document conformance corpus** for three of the
+five output formats — HTML, DocBook, and Reveal.js. EPUB ships the full
+asciidoctor-epub3 asset payload with a dedicated chapter renderer that
+produces the same semantic HTML5. Man output is cleaner roff than the
+reference while remaining structurally equivalent.
+
+### Parity sweep results (`tools/parity-sweep.py` over 36 conformance docs)
+
+| Format | Perfect docs | Sum diff lines | Notes |
+|---|---|---|---|
+| HTML | 36/36 ✓ | 0 | Byte-identical |
+| DocBook | 36/36 ✓ | 0 | Byte-identical |
+| Reveal.js | 36/36 ✓ | 0 | Byte-identical (slide DOM) |
+| Man | 11/36 | 5510 | Remaining diffs are stylistic roff conventions |
+| EPUB-struct | 0/36 | 87 | All 25 EPUB parts present, 23/25 byte-identical per doc; chapter visually indistinguishable |
+
+### Added
+
+#### Reveal.js converter — from 8052 → 0 diff over the corpus
+- Full Asciidoctor table structure (`frame-`/`grid-`/`halign-`/`valign-` classes, `<colgroup>`, `<thead>/<tbody>/<tfoot>`, `<p class="tableblock">` cell wrappers)
+- Asciidoctor delimited-block wrappers for source/listing/literal/quote/example/sidebar
+- Per-slide footnote rendering (`<sup class="footnote">` markers + `<div class="footnotes">` end-of-slide block)
+- Description-list variants: standard, `[horizontal]` (table-based), `[qanda]` (numbered ordered list)
+- Callout markers (`<b>(N)</b>` inline after marked lines) + colist (`<div class="arabic colist">`)
+- Admonition table structure with `:icons: font` support (Font Awesome class+title attribute pairs)
+- Checklist items (`<input type="checkbox">` with `checked`/`data-item-complete` attributes)
+- Section numbering with appendix prefix (`Appendix A:`)
+- Discrete headings (`<hN class="discrete">`)
+- Document-title subtitle splitting on `": "` (`<h1>` + `<h2>`)
+- Conditional preamble div (only when sections follow; bare siblings otherwise)
+- Author email in title-slide byline (`<a href="mailto:…">`)
+- Ordered-list `type` attribute (`a`/`A`/`i`/`I`)
+- highlight.js source-highlighter classes (`hljs`, `language-X`, `data-noescape`)
+- Inline xref / interdoc-xref / footnote / image / kbd / btn / menu rendering
+- `:hide-uri-scheme:` strips scheme from displayed URLs
+
+#### DocBook converter
+- Root `xml:id` from document `[[anchor]]`
+- Link / xref labels parsed as inlines (backticks → `<literal>`)
+- Block titles parsed for inline formatting
+- Conditional `linenumbering="unnumbered"` on `<screen>`/`<programlisting>`
+- Conditional `arearefs` on callouts (empty when no `<co>` markers emitted)
+
+#### EPUB converter
+- Standard EPUB 3 paths (`EPUB/package.opf` not `OEBPS/content.opf`)
+- Full asciidoctor-epub3 asset bundle embedded as resources:
+  - 13 TTF fonts (Noto Serif, M+ 1p, M+ 1mn, FontAwesome 5 Solid, assorted-icons)
+  - 3 CSS files (epub3.css, epub3-css3-only.css, epub3-fonts.css)
+  - Default avatar + headshot JPEGs
+  - `META-INF/com.apple.ibooks.display-options.xml`
+- `<dc:date>` and `dcterms:modified` from file mtime
+- `<dc:description>` from `:description:` doc attribute
+- Always-emitted byline (with bundled avatar default when no `:author:`)
+- Calibre/reader-detection JavaScript in chapter `<head>`
+- `<small class="subtitle">` wrapping for chapter titles
+- **New `EpubChapterRenderer`**: dedicated renderer emitting asciidoctor-epub3's semantic HTML5 chapter structure (`<section class="sect{N}">`, `<aside class="admonition">`, `<figure class="listing">`, etc.) instead of HtmlRenderer's div-wrapped output. Visually indistinguishable from reference.
+
+#### Man converter
+- `'\" t` preprocessor directive for tbl
+- `.TH` name from `:docname:` (uppercased + escaped hyphens)
+- `.TH` source/manual default to `"\ \&"` (nbsp+zwsp idiom)
+- `.sp` for paragraphs instead of `.PP`
+- Smart-quote escapes (U+2018→`\(cq`, etc.)
+- Bold-monospace (`\f(CB`) for backtick text
+- Tab expansion to 8 spaces in verbatim blocks
+- `\-` escape for ASCII hyphens in body text
+- Numbered `Example N.` block titles
+- Inline formatting in titles and labels
+
+#### Parser
+- Source-block role/id preserved in list-continuation contexts (`[source,role="primary"]` inside `tabs`/`dlist`)
+- Paragraph-style admonitions (`[WARNING]\nparagraph`) emit `AdmonitionNode`
+- Constrained `#text#` highlight gets word-boundary check (matches `*`/`_`/`` ` ``)
+- `:docname:` / `:docfile:` / `:docfilesuffix:` intrinsic attributes populated from `ParseOptions.SourceFilePath`
+
+### Changed
+- `Directory.Build.props` version 1.0.0
+- 90 new tests added across the parity-sweep arc (3048 pass / 0 fail)
+
+### Documentation
+- `docs/V1.0.0-READINESS.md` — release readiness assessment
+- `docs/DEFERRED-PARITY-ITEMS.md` — known parity gaps tracked for follow-up
+- `docs/SESSION-HANDOFF-2026-05-11.md` — context handoff covering 35-commit parity arc
+
 ## [1.0.0-beta.21] - 2026-04-13
 
 ### Added
