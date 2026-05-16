@@ -142,9 +142,12 @@ public sealed class EpubRenderer : DocumentRendererBase
     private static void BuildArticleChapter(DocumentNode doc, string identifier, bool sectnumsEnabled,
         List<Chapter> chapters, List<TocEntry> tocEntries)
     {
-        var htmlRenderer = new HtmlRenderer();
-        var htmlOptions = new HtmlRenderOptions { SuppressInlineToc = true };
-        var htmlContent = ToXhtml(htmlRenderer.RenderToString(doc, htmlOptions));
+        // EpubChapterRenderer emits asciidoctor-epub3's semantic-HTML5 chapter
+        // body (section/aside/figure with role-like classes) — different from
+        // HtmlRenderer's div-wrapped output, but matching the structure that
+        // the bundled epub3.css targets.
+        var chapterRenderer = new EpubChapterRenderer(doc);
+        var htmlContent = chapterRenderer.RenderBody(doc.Children);
         // Use the slug-based identifier as the chapter filename when a title exists; fall back
         // to a stable "_content.xhtml" otherwise (urn-based names produce illegal filenames).
         var chapterFile = doc.Title is not null
@@ -174,8 +177,6 @@ public sealed class EpubRenderer : DocumentRendererBase
     private static void BuildBookChapters(DocumentNode doc, bool sectnumsEnabled,
         List<Chapter> chapters, List<TocEntry> tocEntries)
     {
-        var htmlRenderer = new HtmlRenderer();
-        var htmlOptions = new HtmlRenderOptions { SuppressInlineToc = true };
         int counter = 0;
         foreach (var child in doc.Children)
         {
@@ -192,7 +193,8 @@ public sealed class EpubRenderer : DocumentRendererBase
             synth.AddChild(section);
 
             var chapterFile = $"{Slugify(section.Title)}.xhtml";
-            var html = ToXhtml(htmlRenderer.RenderToString(synth, htmlOptions));
+            var chapterRenderer = new EpubChapterRenderer(synth);
+            var html = chapterRenderer.RenderBody(synth.Children);
             var chapterAuthor = synth.Attributes.TryGetValue("author", out var bookAuth) && !string.IsNullOrWhiteSpace(bookAuth) ? bookAuth : null;
             chapters.Add(new Chapter(chapterFile, section.Title, html, chapterAuthor));
             tocEntries.Add(new TocEntry(chapterFile, id, entryTitle));
@@ -201,7 +203,8 @@ public sealed class EpubRenderer : DocumentRendererBase
         // Edge case: no top-level sections → emit a stub chapter so the EPUB has a spine entry.
         if (chapters.Count == 0)
         {
-            var html = ToXhtml(htmlRenderer.RenderToString(doc, htmlOptions));
+            var chapterRenderer = new EpubChapterRenderer(doc);
+            var html = chapterRenderer.RenderBody(doc.Children);
             var stubName = $"{Slugify(doc.Title ?? "content")}.xhtml";
             var chapterAuthor = doc.Attributes.TryGetValue("author", out var stubAuth) && !string.IsNullOrWhiteSpace(stubAuth) ? stubAuth : null;
             chapters.Add(new Chapter(stubName, doc.Title ?? "Content", html, chapterAuthor));
@@ -315,7 +318,6 @@ public sealed class EpubRenderer : DocumentRendererBase
         manifest.Append("    <item href=\"styles/epub3.css\" id=\"item_epub3\" media-type=\"text/css\"/>\n");
         manifest.Append("    <item href=\"styles/epub3-css3-only.css\" id=\"item_epub3-css3-only\" media-type=\"text/css\"/>\n");
         manifest.Append("    <item href=\"styles/epub3-fonts.css\" id=\"item_epub3-fonts\" media-type=\"text/css\"/>\n");
-        manifest.Append("    <item href=\"styles/adocnet-overrides.css\" id=\"item_adocnet-overrides\" media-type=\"text/css\"/>\n");
         manifest.Append("    <item href=\"fonts/notoserif-regular-latin.ttf\" id=\"item_notoserif-regular-latin\" media-type=\"application/vnd.ms-opentype\"/>\n");
         manifest.Append("    <item href=\"fonts/notoserif-italic-latin.ttf\" id=\"item_notoserif-italic-latin\" media-type=\"application/vnd.ms-opentype\"/>\n");
         manifest.Append("    <item href=\"fonts/notoserif-bold-latin.ttf\" id=\"item_notoserif-bold-latin\" media-type=\"application/vnd.ms-opentype\"/>\n");
@@ -478,7 +480,6 @@ public sealed class EpubRenderer : DocumentRendererBase
               <title>{titleHtml}</title>
               <link rel="stylesheet" type="text/css" href="styles/epub3.css"/>
               <link rel="stylesheet" type="text/css" href="styles/epub3-css3-only.css" media="(min-device-width: 0px)"/>
-              <link rel="stylesheet" type="text/css" href="styles/adocnet-overrides.css"/>
               {CalibreScript}
             </head>
             <body>
@@ -519,10 +520,6 @@ public sealed class EpubRenderer : DocumentRendererBase
             ("AdocNet.Converters.Epub.Resources.epub3.css",                       "EPUB/styles/epub3.css"),
             ("AdocNet.Converters.Epub.Resources.epub3-css3-only.css",             "EPUB/styles/epub3-css3-only.css"),
             ("AdocNet.Converters.Epub.Resources.epub3-fonts.css",                 "EPUB/styles/epub3-fonts.css"),
-            // AdocNet-specific overrides: styles HtmlRenderer's class structure
-            // (admonitionblock, listingblock, etc.) using asciidoctor's design
-            // language. Loaded AFTER epub3.css so the overrides cascade.
-            ("AdocNet.Converters.Epub.Resources.adocnet-overrides.css",           "EPUB/styles/adocnet-overrides.css"),
 
             // Noto Serif body-text fonts (Latin subset).
             ("AdocNet.Converters.Epub.Resources.notoserif-regular-latin.ttf",     "EPUB/fonts/notoserif-regular-latin.ttf"),

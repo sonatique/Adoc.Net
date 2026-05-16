@@ -85,6 +85,8 @@ public class EpubRendererTests
             "Expected fallback chapter name '_content.xhtml' for untitled document");
         using var reader = new StreamReader(content!.Open());
         var html = reader.ReadToEnd();
+        // EPUB chapter renderer uses semantic <strong>/<em> (matches
+        // asciidoctor-epub3 reference output).
         Assert.That(html, Does.Contain("<strong>bold</strong>"));
     }
 
