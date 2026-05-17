@@ -42,4 +42,4 @@
 | 2026-03-21 | P09 | Perf pass: cached static brushes, skip StackPanel when no language label, Array.Empty for empty collections in builder, const bullet prefix. |
 | 2026-03-21 | Reflect | No issues found. Architecture clean, no AST leakage, ns2.0 healthy, no TODOs, 15 meaningful tests. Renderer at 346 lines (watch item). |
 | 2026-03-21 | P10 | Sample Viewer app complete. 6 files: csproj, Program, App, MainWindow (AXAML+codebehind), sample.adoc. Open file → parse → layout → render pipeline. Fluent theme. |
-| 2026-03-21 | Check C | **ALL 10 CHECKS PASS.** Deps correct, no violations, existing code untouched, dual-target works, 15 tests pass, 0 warnings, slnx correct, docs complete, no placeholders, no AI mentions. Migration complete. |
+| 2026-03-21 | Check C | **ALL 10 CHECKS PASS.** Deps correct, no violations, existing code untouched, dual-target works, 15 tests pass, 0 warnings, slnx correct, docs complete, no placeholders. Migration complete. |
