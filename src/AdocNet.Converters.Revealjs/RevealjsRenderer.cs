@@ -673,7 +673,7 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
                 // render below.
                 if (!string.IsNullOrEmpty(block.Content))
                 {
-                    RenderTextAsInlines(sb, block.Content);
+                    RenderTextAsInlines(sb, block.Content!);
                     sb.Append('\n');
                 }
                 foreach (var child in block.Children)
