@@ -103,6 +103,9 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install Python dependencies
+        run: pip install Pillow beautifulsoup4
+
       - name: Run parity sweep over conformance corpus
         run: python tools/parity-sweep.py --glob 'spec/conformance/*.adoc'
 
