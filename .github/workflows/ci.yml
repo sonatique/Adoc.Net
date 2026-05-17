@@ -69,3 +69,80 @@ jobs:
           dotnet tool install -g AdocNet.Tool --add-source artifacts/ --version $(grep '<Version>' Directory.Build.props | sed 's/.*<Version>\(.*\)<\/Version>.*/\1/')
           echo '= Test' | adocnet /dev/stdin || true
           dotnet tool uninstall -g AdocNet.Tool
+
+  parity-sweep:
+    # Asciidoctor-output parity gate: runs the full conformance-corpus sweep
+    # (tools/parity-sweep.py) against asciidoctor / asciidoctor-revealjs /
+    # asciidoctor-epub3 references and fails the build if HTML, DocBook, or
+    # Reveal.js sums drift above 0 (v1.0 baseline) or if Man / EPUB-struct
+    # regress beyond their accepted thresholds.
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-quality: 'preview'
+
+      - name: Setup Ruby (for asciidoctor reference renderers)
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+
+      - name: Install asciidoctor toolchain
+        run: |
+          gem install asciidoctor --version '~> 2.0'
+          gem install asciidoctor-revealjs --version '~> 5.1'
+          gem install asciidoctor-epub3 --version '~> 2.1'
+
+      - name: Setup Python (for parity-sweep tooling)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run parity sweep over conformance corpus
+        run: python tools/parity-sweep.py --glob 'spec/conformance/*.adoc'
+
+      - name: Enforce parity baseline
+        # Hard gate on the three formats AdocNet 1.0 reached byte-identical
+        # (HTML / DocBook / Reveal.js): any regression fails the build.
+        # Man and EPUB-struct have soft thresholds reflecting v1.0 accepted
+        # residuals (stylistic roff, chapter XHTML cosmetic deltas) + a small
+        # cushion to avoid noise-driven failures.
+        run: |
+          python - <<'EOF'
+          import re, sys, pathlib
+          summary = pathlib.Path('parity-sweep-out/_summary.md').read_text()
+          rows = {}
+          for line in summary.splitlines():
+              m = re.match(r'\|\s*`(html|docbook|revealjs|man|epub-struct)`\s*\|\s*\d+\s*\|\s*[\d.—]+\s*\|\s*[\d.—]+\s*\|\s*[\d.—]+\s*\|\s*([\d.]+)\s*\|', line)
+              if m: rows[m.group(1)] = float(m.group(2))
+          print('Sums:', rows)
+          failures = []
+          for fmt in ('html', 'docbook', 'revealjs'):
+              if rows.get(fmt, 0) > 0:
+                  failures.append(f'{fmt}: expected 0, got {rows[fmt]} (regression vs v1.0)')
+          if rows.get('man', 0) > 6000:
+              failures.append(f'man: {rows["man"]} > 6000 (v1.0 baseline 5510 + cushion)')
+          if rows.get('epub-struct', 0) > 120:
+              failures.append(f'epub-struct: {rows["epub-struct"]} > 120 (v1.0 baseline 87 + cushion)')
+          if failures:
+              print('PARITY GATE FAILED:')
+              for f in failures: print(' -', f)
+              sys.exit(1)
+          print('parity gate OK')
+          EOF
+
+      - name: Upload sweep summary + diffs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-sweep-summary
+          path: |
+            parity-sweep-out/_summary.md
+            parity-sweep-out/*/*/dom.diff
+            parity-sweep-out/*/*/canonical.diff
+            parity-sweep-out/*/*/normalized.diff

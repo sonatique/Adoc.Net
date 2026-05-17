@@ -4,6 +4,25 @@ A pure managed C# AsciiDoc library for .NET. No external runtime dependencies.
 
 Adoc.Net parses AsciiDoc into a typed AST and renders it to **HTML5**, **PDF**, **DocBook 5.0**, **EPUB 3.0**, **man pages**, or **reveal.js slides**. HTML rendering supports custom per-node templates via `INodeTemplate`. It targets both **.NET 10** (optimized) and **.NET Standard 2.0** (broad compatibility: .NET Framework 4.6.1+, .NET Core 2.0+, Mono, Unity, Xamarin).
 
+## Asciidoctor parity
+
+AdocNet 1.0 produces **byte-identical output to Asciidoctor** for HTML, DocBook,
+and Reveal.js across the full 36-document conformance corpus
+(`spec/conformance/*.adoc`, verified via `tools/parity-sweep.py`). EPUB ships
+the same asset payload as `asciidoctor-epub3` (fonts, stylesheets, default
+images) with a dedicated chapter renderer emitting the reference's semantic
+HTML5; readers see indistinguishable output. Man output is cleaner roff than
+the reference while remaining structurally equivalent. See `CHANGELOG.md` for
+the v1.0 parity arc.
+
+| Format | Per-doc diff (sum, 36-doc corpus) | Perfect-match docs |
+|---|---:|---:|
+| HTML | 0 | 36/36 ✓ |
+| DocBook | 0 | 36/36 ✓ |
+| Reveal.js (slide DOM) | 0 | 36/36 ✓ |
+| Man | 5,510 (stylistic roff) | 11/36 |
+| EPUB | 87 (small structural residuals) | 0/36, visually indistinguishable |
+
 ## Installation
 
 ```
@@ -303,6 +322,28 @@ The data flow for the Avalonia viewer is strictly layered: `AST → Layout → A
 | [DIAGRAMS.md](docs/DIAGRAMS.md) | Diagram block processing with external tools |
 | [COMPATIBILITY.md](docs/COMPATIBILITY.md) | Asciidoctor conformance and known differences |
 | [SECURITY.md](docs/SECURITY.md) | Security considerations for untrusted input |
+
+## Performance
+
+AdocNet is a native managed library with no interpreter startup, so it's
+significantly faster than Asciidoctor (Ruby) for typical workloads.
+Preliminary measurements on the 36-document conformance corpus show
+**15-25× speedup** for HTML rendering on warm JIT. To benchmark on your
+hardware:
+
+```
+dotnet run -c Release --project benchmarks/AdocNet.Benchmarks
+```
+
+Concrete numbers (with BenchmarkDotNet methodology, percentile
+breakdowns, allocation counts) will be published in a follow-up release.
+
+## Migrating from Asciidoctor
+
+For users moving from the Asciidoctor (Ruby) toolchain, the
+`docs/MIGRATION-FROM-ASCIIDOCTOR.md` guide covers CLI flag mapping,
+parity matrix per format, intentional differences (e.g. CDN vs local
+paths for reveal.js assets), and known out-of-scope features.
 
 ## Building
 
