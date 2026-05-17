@@ -1,14 +1,30 @@
 # Deferred Parity Items vs Asciidoctor
 
 This document captures parity gaps between AdocNet output and the reference
-asciidoctor / asciidoctor-pdf / asciidoctor-revealjs / etc. tools that were
-identified during visual sweeps but **not yet fixed**. Each entry includes
-enough context to pick up the work cold.
+asciidoctor / asciidoctor-pdf / asciidoctor-revealjs / etc. tools.
+Items marked **RESOLVED** were closed in a specific release; the remainder
+are tracked for follow-up.
+
+## v1.0.0 release status (2026-05-17)
+
+| Format | Status |
+|---|---|
+| HTML | byte-identical (36/36 corpus docs) ✓ |
+| DocBook | byte-identical (36/36 corpus docs) ✓ |
+| Reveal.js | byte-identical slide DOM (36/36 corpus docs) ✓ |
+| Man | structurally equivalent; cleaner roff than reference. 11/36 perfect, remaining 5510 lines are stylistic conventions (item 12 below) |
+| EPUB | full asciidoctor-epub3 asset/structure parity; chapter XHTML visually indistinguishable. Small residuals tracked in items 10a-10c. |
+| PDF | items 1-4 below remain for v1.x.minor |
+| HTML asciidoctor-theme | items 5-9 below remain for v1.x.minor |
 
 The verification methodology relies on `tools/parity-sweep.py` to render both
 sides and on PyMuPDF span extraction (font, size, color, bbox) to surface
 differences invisible at panel resolution. See
 `memory/feedback_pdf_color_extraction.md` for the lesson behind this.
+
+A CI parity gate (in `.github/workflows/ci.yml`) enforces the v1.0 baseline:
+HTML/DocBook/Reveal.js sums must stay at 0; Man and EPUB-struct have soft
+thresholds (6000 and 120 respectively).
 
 ---
 
