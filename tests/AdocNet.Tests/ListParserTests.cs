@@ -313,4 +313,49 @@ public class ListParserTests
         Assert.That(result.Document.Children[1], Is.InstanceOf<ParagraphNode>());
         Assert.That(result.Document.Children[2], Is.InstanceOf<ListNode>());
     }
+
+    // ── Hyphen marker (alternative first-level unordered marker) ───────────────
+
+    [Test]
+    public void Hyphen_marker_parses_as_first_level_unordered_list()
+    {
+        var result = BlockParser.Parse("- first\n- second\n- third");
+
+        Assert.That(result.Document.Children, Has.Count.EqualTo(1));
+        var list = (ListNode)result.Document.Children[0];
+        Assert.Multiple(() =>
+        {
+            Assert.That(list.ListKind, Is.EqualTo(ListKind.Unordered));
+            Assert.That(list.Children, Has.Count.EqualTo(3));
+            Assert.That(((ListItemNode)list.Children[0]).Text, Is.EqualTo("first"));
+            Assert.That(((ListItemNode)list.Children[1]).Text, Is.EqualTo("second"));
+            Assert.That(((ListItemNode)list.Children[2]).Text, Is.EqualTo("third"));
+        });
+    }
+
+    [Test]
+    public void Hyphen_and_asterisk_markers_produce_equivalent_lists()
+    {
+        var hyphen = BlockParser.Parse("- a\n- b\n- c");
+        var asterisk = BlockParser.Parse("* a\n* b\n* c");
+
+        var hyphenList = (ListNode)hyphen.Document.Children[0];
+        var asteriskList = (ListNode)asterisk.Document.Children[0];
+
+        Assert.That(hyphenList.ListKind, Is.EqualTo(asteriskList.ListKind));
+        Assert.That(hyphenList.Children, Has.Count.EqualTo(asteriskList.Children.Count));
+        for (int i = 0; i < hyphenList.Children.Count; i++)
+        {
+            Assert.That(((ListItemNode)hyphenList.Children[i]).Text,
+                Is.EqualTo(((ListItemNode)asteriskList.Children[i]).Text));
+        }
+    }
+
+    [Test]
+    public void Double_hyphen_is_not_a_list_marker()
+    {
+        // "--" is the open-block delimiter, not a deeper list marker.
+        var result = BlockParser.Parse("-- not a list");
+        Assert.That(result.Document.Children.OfType<ListNode>(), Is.Empty);
+    }
 }
