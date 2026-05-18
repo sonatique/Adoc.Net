@@ -609,5 +609,115 @@ public class TableParserTests
         Assert.That(((TableCellNode)row1.Children[0]).Text, Is.EqualTo("Z"));
         Assert.That(((TableCellNode)row1.Children[1]).Text, Is.EqualTo("W"));
     }
+
+    // ── Empty cols entries (issue #2) ────────────────────────────────────────
+
+    [Test]
+    public void Empty_cols_entries_count_as_default_columns()
+    {
+        // 7 entries: <1,1,1,(default),1,(default),> → 7 columns
+        var adoc = "[cols=\"<1,1,1,,1,,>\"]\n|===\n| C1 | C2 | C3 | C4 | C5 | C6 | C7\n|===";
+        var result = BlockParser.Parse(adoc);
+        var table = result.Document.Children.OfType<TableNode>().First();
+
+        Assert.That(table.Columns, Is.Not.Null);
+        Assert.That(table.Columns!.Count, Is.EqualTo(7));
+        Assert.That(table.Columns[0].Alignment, Is.EqualTo(TableAlignment.Left));
+        Assert.That(table.Columns[3].Alignment, Is.EqualTo(TableAlignment.Left), "empty entry defaults to left");
+        Assert.That(table.Columns[5].Alignment, Is.EqualTo(TableAlignment.Left), "empty entry defaults to left");
+        Assert.That(table.Columns[6].Alignment, Is.EqualTo(TableAlignment.Right), "trailing > applies to last column");
+    }
+
+    [Test]
+    public void Empty_cols_entry_at_start()
+    {
+        var adoc = "[cols=\",,1,1\"]\n|===\n|a|b|c|d\n|===";
+        var result = BlockParser.Parse(adoc);
+        var table = result.Document.Children.OfType<TableNode>().First();
+
+        Assert.That(table.Columns!.Count, Is.EqualTo(4));
+    }
+
+    [Test]
+    public void Empty_cols_entry_at_end()
+    {
+        var adoc = "[cols=\"1,1,,\"]\n|===\n|a|b|c|d\n|===";
+        var result = BlockParser.Parse(adoc);
+        var table = result.Document.Children.OfType<TableNode>().First();
+
+        Assert.That(table.Columns!.Count, Is.EqualTo(4));
+    }
+
+    [Test]
+    public void Empty_cols_entries_preserve_row_column_mapping()
+    {
+        // Regression for issue #2: with 7 specified columns (3 explicit + 4 empty),
+        // a 7-column table must render 7 cells per row, not collapse to 5.
+        var adoc = "[cols=\"<1,1,1,,1,,>\"]\n|===\n| C1 | C2 | C3 | C4 | C5 | C6 | C7\n\n| a1 | a2 | a3 | a4 | a5 | a6 | a7\n|===";
+        var result = BlockParser.Parse(adoc);
+        var table = result.Document.Children.OfType<TableNode>().First();
+        var rows = table.Children.OfType<TableRowNode>().ToList();
+
+        Assert.That(rows, Has.Count.EqualTo(2));
+        Assert.That(rows[0].Children, Has.Count.EqualTo(7));
+        Assert.That(rows[1].Children, Has.Count.EqualTo(7));
+        Assert.That(((TableCellNode)rows[0].Children[6]).Text, Is.EqualTo("C7"));
+        Assert.That(((TableCellNode)rows[1].Children[6]).Text, Is.EqualTo("a7"));
+    }
+
+    // ── Multi-line cell content (issue #3) ───────────────────────────────────
+
+    [Test]
+    public void AsciiDoc_cell_with_multi_line_footnote_keeps_footnote()
+    {
+        // Regression for issue #3: the closing ']' of the footnote macro is on
+        // the next physical line. Without joining continuation lines, the macro
+        // body is dropped silently.
+        var adoc = "|===\n| H1 | H2\n\na| body footnote:[this body\ncontinues on the next line]\n| next\n|===";
+        var result = BlockParser.Parse(adoc);
+        var table = result.Document.Children.OfType<TableNode>().First();
+
+        var allCells = table.Children.OfType<TableRowNode>()
+            .SelectMany(r => r.Children.OfType<TableCellNode>())
+            .ToList();
+
+        // Find the AsciiDoc cell with the footnote.
+        var asciiDocCell = allCells.First(c => c.ContentStyle == TableCellStyle.AsciiDoc);
+
+        // Walk the cell's block children and inline descendants looking for the footnote.
+        bool hasFootnote = false;
+        foreach (var child in asciiDocCell.Children)
+        {
+            if (child is ParagraphNode para)
+            {
+                foreach (var inline in para.Inlines)
+                {
+                    if (inline is FootnoteInlineNode fn)
+                    {
+                        hasFootnote = true;
+                        Assert.That(fn.Text, Does.Contain("this body"));
+                        Assert.That(fn.Text, Does.Contain("continues on the next line"));
+                    }
+                }
+            }
+        }
+        Assert.That(hasFootnote, Is.True, "footnote macro spanning a newline inside an a| cell must be parsed");
+    }
+
+    [Test]
+    public void Cell_content_continues_across_physical_lines()
+    {
+        // A line that does not contain the cell separator is a continuation of
+        // the preceding cell's content. This matches Asciidoctor behaviour.
+        var adoc = "|===\n| line one\nline two\n| second cell\n|===";
+        var result = BlockParser.Parse(adoc);
+        var table = result.Document.Children.OfType<TableNode>().First();
+        var rows = table.Children.OfType<TableRowNode>().ToList();
+
+        Assert.That(rows, Has.Count.EqualTo(2));
+        var firstCell = (TableCellNode)rows[0].Children[0];
+        Assert.That(firstCell.Text, Does.Contain("line one"));
+        Assert.That(firstCell.Text, Does.Contain("line two"));
+    }
 }
 
