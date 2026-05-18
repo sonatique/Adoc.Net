@@ -35,10 +35,14 @@ internal static class ListEmitter
             if (item.Checked is bool checkedState)
                 ctx.Output.Append(checkedState ? "[x] " : "[ ] ");
 
-            if (item.Inlines.Count > 0)
-                InlineEmitter.EmitAll(item.Inlines, ctx);
-            else
+            // Prefer the raw Text over synthesised inlines for the same
+            // reason as ParagraphEmitter — the parser keeps literal source
+            // there (e.g. `--` vs the post-replacement em-dash) and using
+            // it directly gives a byte-faithful round-trip.
+            if (!string.IsNullOrEmpty(item.Text))
                 ctx.Output.Append(item.Text);
+            else if (item.Inlines.Count > 0)
+                InlineEmitter.EmitAll(item.Inlines, ctx);
             ctx.Output.Append('\n');
 
             // Nested content. Children of a ListItemNode may be:
@@ -117,20 +121,82 @@ internal static class ListEmitter
                 ctx.Output.Append('\n');
         }
 
-        // Description on the next line; empty descriptions still get the line
-        // terminator so the term:: marker is well-formed.
+        // Description goes on the next line; empty descriptions still get the
+        // line terminator so the term:: marker is well-formed.
         ctx.Output.Append('\n');
-        if (item.DescriptionInlines.Count > 0)
-            InlineEmitter.EmitAll(item.DescriptionInlines, ctx);
-        else if (!string.IsNullOrEmpty(item.Description))
+        // Same Text-vs-Inlines preference as ListItemNode/ParagraphNode.
+        bool hasDescription = !string.IsNullOrEmpty(item.Description);
+        if (hasDescription)
             ctx.Output.Append(item.Description);
-        ctx.Output.Append('\n');
-
-        // Any nested blocks attached to this dlist item.
-        foreach (var nested in item.Children)
+        else if (item.DescriptionInlines.Count > 0)
         {
-            ctx.Output.Append("+\n");
-            AsciidocEmitter.EmitNode(nested, ctx);
+            InlineEmitter.EmitAll(item.DescriptionInlines, ctx);
+            hasDescription = true;
+        }
+
+        // If there's no inline description and a nested block follows, omit
+        // the blank line — Asciidoctor requires the `+` continuation marker
+        // to be on the line immediately after the `Term::` line. A blank
+        // line between them breaks the dlist scope and the `+` becomes a
+        // paragraph of its own.
+        if (hasDescription || item.Children.Count == 0)
+            ctx.Output.Append('\n');
+
+        // Nested blocks attached to this dlist item.
+        //
+        // AsciiDoc supports two attachment styles:
+        //   1. **Indented** for nested lists (ulist/olist/dlist). Lines under
+        //      a dlist term may be indented by whitespace; the parser then
+        //      reads them as children of the dlist item.
+        //   2. **Continuation (`+`)** for other blocks (paragraphs, source,
+        //      example, sidebar, etc.). The `+` on its own line attaches the
+        //      next block to the preceding list item.
+        //
+        // We pick the style per child: nested lists use indentation,
+        // everything else uses `+`.
+        foreach (var child in item.Children)
+        {
+            if (child is ListNode or DescriptionListNode)
+            {
+                EmitIndentedChild(child, ctx, indent: "  ");
+            }
+            else
+            {
+                ctx.Output.Append("+\n");
+                AsciidocEmitter.EmitNode(child, ctx);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Emits <paramref name="child"/> as a nested-under-dlist block by
+    /// prefixing every emitted line with <paramref name="indent"/>. This is
+    /// how AsciiDoc represents lists nested inside a description list item.
+    /// </summary>
+    private static void EmitIndentedChild(AstNode child, EmitContext ctx, string indent)
+    {
+        int startMark = ctx.Output.Length;
+        AsciidocEmitter.EmitNode(child, ctx);
+        if (ctx.Output.Length == startMark) return;
+
+        // Pull out what was just emitted, indent it line-by-line, write back.
+        var emitted = ctx.Output.ToString(startMark, ctx.Output.Length - startMark);
+        ctx.Output.Length = startMark;
+        var lines = emitted.Split('\n');
+        for (int i = 0; i < lines.Length; i++)
+        {
+            // Empty trailing line after a final '\n' — skip indent so we
+            // don't dump a lone "  " onto the output.
+            if (i == lines.Length - 1 && lines[i].Length == 0)
+            {
+                ctx.Output.Append('\n');
+                break;
+            }
+            if (lines[i].Length > 0)
+                ctx.Output.Append(indent);
+            ctx.Output.Append(lines[i]);
+            if (i < lines.Length - 1)
+                ctx.Output.Append('\n');
         }
     }
 }

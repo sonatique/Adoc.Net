@@ -15,16 +15,19 @@ internal static class AdmonitionEmitter
 
         BlockAttributesEmitter.Emit(admon, ctx);
 
-        // Inline admonition form: TYPE: text-on-this-line
+        // Inline admonition form: TYPE: text-on-this-line. Prefer raw Text
+        // over synthesised inlines for the same reason as ParagraphEmitter —
+        // Text carries the literal source (e.g. an auto-detected mailto kept
+        // as `sales@example.com` rather than expanded to `link:mailto:…[]`).
         bool isInline = admon.Children.Count == 0 && (admon.Inlines.Count > 0 || admon.Text is not null);
         if (isInline)
         {
             ctx.Output.Append(admon.AdmonitionType);
             ctx.Output.Append(": ");
-            if (admon.Inlines.Count > 0)
-                InlineEmitter.EmitAll(admon.Inlines, ctx);
-            else if (admon.Text is not null)
+            if (!string.IsNullOrEmpty(admon.Text))
                 ctx.Output.Append(admon.Text);
+            else if (admon.Inlines.Count > 0)
+                InlineEmitter.EmitAll(admon.Inlines, ctx);
             ctx.Output.Append('\n');
             return;
         }

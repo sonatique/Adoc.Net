@@ -44,6 +44,22 @@ internal static class TableEmitter
 
     private static void EmitCell(TableCellNode cell, EmitContext ctx)
     {
+        bool hasPrefix = cell.ColSpan > 1 || cell.RowSpan > 1
+            || cell.Alignment is not null
+            || cell.ContentStyle != TableCellStyle.Default;
+
+        // The parser only recognises a span/style prefix when it's preceded
+        // by whitespace (or the start of the segment) — `aa|` parses as plain
+        // text, but `a a|` parses as style `a` + content `a`. So prepend a
+        // separator space when the previous character is part of cell
+        // content rather than a delimiter.
+        if (hasPrefix && ctx.Output.Length > 0)
+        {
+            char prev = ctx.Output[ctx.Output.Length - 1];
+            if (prev != ' ' && prev != '\n' && prev != '|' && prev != '\t')
+                ctx.Output.Append(' ');
+        }
+
         // Span / alignment / style prefix. Order matters for the parser:
         // colspan, [.rowspan], +, then optional alignment, then style letter,
         // then the | separator.
@@ -84,10 +100,12 @@ internal static class TableEmitter
 
         ctx.Output.Append('|');
 
-        if (cell.Inlines.Count > 0)
-            InlineEmitter.EmitAll(cell.Inlines, ctx);
-        else
+        // Prefer raw Text (literal source) over synthesised inlines, mirroring
+        // ParagraphEmitter / ListEmitter — keeps round-trip byte-faithful.
+        if (!string.IsNullOrEmpty(cell.Text))
             ctx.Output.Append(cell.Text);
+        else if (cell.Inlines.Count > 0)
+            InlineEmitter.EmitAll(cell.Inlines, ctx);
     }
 
     private static void EmitTableAttributesLine(TableNode table, EmitContext ctx)
