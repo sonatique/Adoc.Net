@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <!-- AvaloniaEdit triggers CS8632 on older TFMs in some package versions.
+         Suppress so the tests can compile under TreatWarningsAsErrors. -->
+    <NoWarn>$(NoWarn);CS8632</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="nunit" Version="4.*" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.*" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.*" />
+    <PackageReference Include="Avalonia" Version="11.3.12" />
+    <PackageReference Include="Avalonia.Headless" Version="11.3.12" />
+    <PackageReference Include="Avalonia.Headless.NUnit" Version="11.3.12" />
+    <PackageReference Include="Avalonia.AvaloniaEdit" Version="11.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\samples\AdocNet.Avalonia.Editor\AdocNet.Avalonia.Editor.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Ast\AdocNet.Ast.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Parser\AdocNet.Parser.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Core\AdocNet.Core.csproj" />
+  </ItemGroup>
+</Project>
