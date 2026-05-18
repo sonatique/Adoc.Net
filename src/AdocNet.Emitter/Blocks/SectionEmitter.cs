@@ -8,9 +8,18 @@ internal static class SectionEmitter
     {
         BlockAttributesEmitter.Emit(section, ctx);
 
-        // Discrete headings get a [discrete] style attribute on the line above.
+        // Style attribute line on the line above the heading. Examples:
+        // [discrete], [appendix], [glossary], [colophon], [dedication],
+        // [preface]. IsDiscrete is a separate boolean from the Style string
+        // on the AST, so handle both.
         if (section.IsDiscrete)
             ctx.Output.Append("[discrete]\n");
+        else if (!string.IsNullOrEmpty(section.Style))
+        {
+            ctx.Output.Append('[');
+            ctx.Output.Append(section.Style);
+            ctx.Output.Append("]\n");
+        }
 
         // Heading marker: '=' repeated Level+1 times (level 1 == '==', etc.).
         // SectionNode.Level uses 1 for top sections per Asciidoctor convention,
