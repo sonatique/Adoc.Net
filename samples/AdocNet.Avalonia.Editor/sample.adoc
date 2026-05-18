@@ -1,0 +1,57 @@
+= AdocNet Hybrid Editor — Sample Document
+:doctype: article
+
+Welcome to the AdocNet hybrid editor. This sample document exercises
+most of the toolbar features.
+
+== Inline formatting
+
+Text supports *bold*, _italic_, `monospace`, ~subscript~, and ^superscript^.
+You can also combine them — try *_bold italic_* or `_italic code_`.
+
+== Lists
+
+Bullet list:
+
+* first item
+* second item with a https://example.com[link]
+* third item
+
+Numbered list:
+
+. one
+. two
+. three
+
+== Code
+
+[source,csharp]
+----
+public sealed class HelloWorld
+{
+    public static void Main() => Console.WriteLine("Hello, world!");
+}
+----
+
+== Admonitions
+
+NOTE: Inline admonitions on a single line.
+
+[WARNING]
+====
+A block-style admonition can contain multiple paragraphs and other content.
+====
+
+== Table
+
+[cols="1,2,1", options="header"]
+|===
+| Column A | Column B | Column C
+| 1        | Lorem    | x
+| 2        | Ipsum    | y
+|===
+
+== Quote
+
+[quote, Werner Vogels]
+Everything fails all the time.
