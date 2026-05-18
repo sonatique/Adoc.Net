@@ -182,6 +182,22 @@ public partial class MainWindow : Window
     private void OnHrClick(object? sender, RoutedEventArgs e)
         => InsertCommands.ThematicBreak(SourceEditor);
 
+    /// <summary>
+    /// Full-WYSIWYG mode toggle. Hides the source pane + splitter so the
+    /// preview takes the full editor area. The Block-WYSIWYG interactions
+    /// from Phase 5 (double-click to edit, right-click for AST mutations)
+    /// keep working — the source pane is still there, just collapsed.
+    /// </summary>
+    private void OnWysiwygToggleClick(object? sender, RoutedEventArgs e)
+    {
+        bool hideSource = WysiwygToggle.IsChecked == true;
+        SourcePane.IsVisible = !hideSource;
+        SplitSplitter.IsVisible = !hideSource;
+        SplitGrid.ColumnDefinitions = hideSource
+            ? new global::Avalonia.Controls.ColumnDefinitions("0,0,*")
+            : new global::Avalonia.Controls.ColumnDefinitions("*,5,*");
+    }
+
     private bool _suppressHeadingHandler;
     private void OnHeadingChanged(object? sender, SelectionChangedEventArgs e)
     {

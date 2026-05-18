@@ -110,16 +110,63 @@ internal sealed class BlockEditController
         if (tag.BlockIndex < 0 || tag.BlockIndex >= _currentDocument.Children.Count) return;
 
         var node = _currentDocument.Children[tag.BlockIndex];
-        var menu = new ContextMenu
+        var items = new List<global::Avalonia.Controls.Control>
         {
-            ItemsSource = new[]
-            {
-                BuildMenuItem("Edit block", () => EnterEditMode(tag.BlockIndex, node)),
-                BuildMenuItem("Delete block", () => DeleteBlock(node)),
-            },
+            BuildMenuItem("Edit block (double-click)", () => EnterEditMode(tag.BlockIndex, node)),
+            BuildMenuItem("Duplicate block", () => DuplicateBlock(tag.BlockIndex)),
+            BuildMenuItem("Delete block", () => DeleteBlock(node)),
         };
+
+        // AST-mutation features (Full WYSIWYG): each command mutates the
+        // typed AST node, emits it fresh via AsciidocEmitter, and splices
+        // the new slice back into the source. The rest of the document
+        // stays byte-identical.
+        if (node is BlockNode)
+        {
+            items.Add(new Separator());
+            items.Add(BuildMenuItem("Toggle role: [.warning]",   () => ToggleRole(tag.BlockIndex, "warning")));
+            items.Add(BuildMenuItem("Toggle role: [.important]", () => ToggleRole(tag.BlockIndex, "important")));
+            items.Add(BuildMenuItem("Toggle role: [.lead]",      () => ToggleRole(tag.BlockIndex, "lead")));
+
+            if (node is ParagraphNode)
+            {
+                items.Add(new Separator());
+                items.Add(BuildMenuItem("Promote to heading H1", () => PromoteToHeading(tag.BlockIndex, 1)));
+                items.Add(BuildMenuItem("Promote to heading H2", () => PromoteToHeading(tag.BlockIndex, 2)));
+                items.Add(BuildMenuItem("Promote to heading H3", () => PromoteToHeading(tag.BlockIndex, 3)));
+            }
+        }
+
+        var menu = new ContextMenu { ItemsSource = items };
         menu.Open(control);
         e.Handled = true;
+    }
+
+    private void ToggleRole(int blockIndex, string role)
+    {
+        if (_currentDocument is null) return;
+        var newSource = AstMutationCommands.ToggleBlockRole(
+            _sourceEditor.Text, _currentDocument, blockIndex, role);
+        if (!string.Equals(newSource, _sourceEditor.Text, StringComparison.Ordinal))
+            _sourceEditor.Text = newSource;
+    }
+
+    private void DuplicateBlock(int blockIndex)
+    {
+        if (_currentDocument is null) return;
+        var newSource = AstMutationCommands.DuplicateBlock(
+            _sourceEditor.Text, _currentDocument, blockIndex);
+        if (!string.Equals(newSource, _sourceEditor.Text, StringComparison.Ordinal))
+            _sourceEditor.Text = newSource;
+    }
+
+    private void PromoteToHeading(int blockIndex, int level)
+    {
+        if (_currentDocument is null) return;
+        var newSource = AstMutationCommands.PromoteToHeading(
+            _sourceEditor.Text, _currentDocument, blockIndex, level);
+        if (!string.Equals(newSource, _sourceEditor.Text, StringComparison.Ordinal))
+            _sourceEditor.Text = newSource;
     }
 
     private static MenuItem BuildMenuItem(string header, Action action)
