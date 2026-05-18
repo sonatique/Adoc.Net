@@ -11,7 +11,7 @@ var repoRoot = FindRepoRoot(AppContext.BaseDirectory)
 var fixturesDir = Path.Combine(repoRoot, "spec", "fixtures");
 var conformanceDir = Path.Combine(repoRoot, "spec", "conformance");
 var outputDir = Path.Combine(repoRoot, "tools", "DifferentialTester", "output");
-var reportPath = Path.Combine(repoRoot, "docs", "V0_8_DIFF_REPORT.md");
+var reportPath = Path.Combine(outputDir, "diff-report.md");
 
 // ── Preflight ──────────────────────────────────────────────────────────
 Console.WriteLine("AdocNet Differential Tester v0.8");

@@ -94,7 +94,6 @@ tools/
 docs/
   DEFERRED-PARITY-ITEMS.md       canonical list of known parity gaps
   MIGRATION-FROM-ASCIIDOCTOR.md  v1.0 migration guide
-  V1.0.0-READINESS.md            historical pre-release assessment
 .github/workflows/
   ci.yml                         build/test on linux/mac/windows + parity-sweep gate
   release.yml                    NuGet publish on tag push
@@ -193,7 +192,6 @@ For PDF changes touching `src/AdocNet.Converters.Pdf/**`:
 1. Regenerate `C:\Workspace\Adoc2pdf\HOWTO.pdf` via `adoc2pdf.bat`
 2. Run `python tools/pdf-visual-diff.py <ref> <cand> pdf-diff-out`
 3. Read `pdf-diff-out/p1_*_sxs.png` files via the Read tool
-4. See `docs/PDF-VISUAL-VERIFICATION.md` for full procedure
 
 Coordinate-only inspection (regex on PDF `Td` positions) misses real
 visual bugs (footer padding, top-margin overlap, etc.).

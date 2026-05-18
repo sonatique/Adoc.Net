@@ -1,8 +1,5 @@
 # AdocNet Layout Model Design
 
-> Phase P02 — design document, no code.
-> Reference: `docs/CONTEXT-UI.md` for AST type names.
-
 ---
 
 ## 1. Design Principles
