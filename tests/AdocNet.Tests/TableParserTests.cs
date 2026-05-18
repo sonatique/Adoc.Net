@@ -719,5 +719,72 @@ public class TableParserTests
         Assert.That(firstCell.Text, Does.Contain("line one"));
         Assert.That(firstCell.Text, Does.Contain("line two"));
     }
+
+    // ── List items containing `|` inside `a|` cells (issue #6) ───────────────
+
+    [Test]
+    public void List_item_with_pipe_inside_asciidoc_cell_keeps_pre_pipe_item()
+    {
+        // Regression for issue #6: a `*` list item whose text contains a
+        // literal `|` inside an `a|` AsciiDoc-content cell. The `|` is a cell
+        // separator at the table-grammar level, so the pre-pipe portion stays
+        // in the AsciiDoc cell's list, the post-pipe portion forms a new
+        // cell. Before the fix the entire `* item beta` <li> was dropped.
+        var adoc =
+            "|===\n" +
+            "| Header A | Header B\n" +
+            "\n" +
+            "a| AsciiDoc cell with a bullet list:\n" +
+            "\n" +
+            "* item alpha\n" +
+            "* item beta | extra after pipe\n" +
+            "\n" +
+            "| plain cell\n" +
+            "|===";
+        var result = BlockParser.Parse(adoc);
+        var table = result.Document.Children.OfType<TableNode>().First();
+
+        var asciiDocCell = table.Children.OfType<TableRowNode>()
+            .SelectMany(r => r.Children.OfType<TableCellNode>())
+            .First(c => c.ContentStyle == TableCellStyle.AsciiDoc);
+
+        var list = asciiDocCell.Children.OfType<ListNode>().FirstOrDefault();
+        Assert.That(list, Is.Not.Null, "the AsciiDoc cell must contain a list");
+        Assert.That(list!.Children, Has.Count.EqualTo(2), "list must keep both pre-pipe items");
+        Assert.That(((ListItemNode)list.Children[0]).Text, Is.EqualTo("item alpha"));
+        Assert.That(((ListItemNode)list.Children[1]).Text, Is.EqualTo("item beta"));
+    }
+
+    // ── Leading blank line inside |=== block (issue #7) ──────────────────────
+
+    [Test]
+    public void Leading_blank_line_before_first_row_suppresses_implicit_header()
+    {
+        // Regression for issue #7. A blank line between |=== and the first
+        // row of cells means there is no implicit header — all rows render
+        // as body rows. Without the fix, the first content row was promoted
+        // to a header by the trailing blank line that follows it.
+        var adoc = "|===\n\n| A | B | C\n\n| 1 | 2 | 3\n|===";
+        var result = BlockParser.Parse(adoc);
+        var table = result.Document.Children.OfType<TableNode>().First();
+
+        Assert.That(table.HasHeader, Is.False);
+        var rows = table.Children.OfType<TableRowNode>().ToList();
+        Assert.That(rows, Has.Count.EqualTo(2));
+        Assert.That(((TableCellNode)rows[0].Children[0]).Text, Is.EqualTo("A"));
+        Assert.That(((TableCellNode)rows[1].Children[0]).Text, Is.EqualTo("1"));
+    }
+
+    [Test]
+    public void No_leading_blank_line_keeps_implicit_header_detection()
+    {
+        // Sanity check that the canonical case still works: first row
+        // immediately after |=== followed by a blank line → header.
+        var adoc = "|===\n| A | B | C\n\n| 1 | 2 | 3\n|===";
+        var result = BlockParser.Parse(adoc);
+        var table = result.Document.Children.OfType<TableNode>().First();
+
+        Assert.That(table.HasHeader, Is.True);
+    }
 }
 
