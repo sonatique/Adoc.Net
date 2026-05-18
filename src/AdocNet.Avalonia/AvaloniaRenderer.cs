@@ -80,6 +80,14 @@ public class AvaloniaRenderer
         };
     }
 
+    /// <summary>
+    /// Renders a single <see cref="BlockLayout"/> into an Avalonia control.
+    /// Public entry point used by the incremental renderer to rebuild
+    /// individual top-level blocks without re-rendering the whole document.
+    /// Returns null when the block kind is not recognised.
+    /// </summary>
+    public Control? Render(BlockLayout block) => RenderBlock(block);
+
     private Control? RenderBlock(BlockLayout block)
     {
         switch (block)

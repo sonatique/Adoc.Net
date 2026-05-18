@@ -40,8 +40,13 @@ internal sealed class EditorViewModel
     public event Action<EditorRenderResult>? Rendered;
 
     private CancellationTokenSource? _inflight;
-    private readonly LayoutBuilder _layoutBuilder = new();
-    private readonly global::AdocNet.Avalonia.AvaloniaRenderer _renderer = new();
+    private readonly global::AdocNet.Avalonia.IncrementalAvaloniaRenderer _renderer = new();
+
+    // The previously-rendered preview control + the AST it was rendered
+    // from. When both are present, the next render uses the incremental
+    // path; otherwise we full-render.
+    private Control? _previousPreview;
+    private DocumentNode? _previousDocument;
 
     /// <summary>Replace the entire text with the new value (e.g. file open).</summary>
     public void ResetText(string text)
@@ -80,15 +85,10 @@ internal sealed class EditorViewModel
 
                 var sw = Stopwatch.StartNew();
                 var result = AdocParser.Parse(snapshotForTask.Text);
-                var layout = _layoutBuilder.Build(result.Document);
-                var control = _renderer.Render(layout);
-                sw.Stop();
 
-                if (token.IsCancellationRequested) return;
-
-                // Snapshot now carries the parsed Document so subsequent edits
-                // can compare against it (used by Block-WYSIWYG / incremental
-                // rendering in later phases).
+                // Parse runs on the background thread; the actual incremental
+                // splice (or full re-render) has to touch Avalonia controls,
+                // which is UI-thread-only — so swap back before rendering.
                 var parsedSnapshot = new DocumentSnapshot(
                     snapshotForTask.Version,
                     snapshotForTask.Text,
@@ -98,6 +98,21 @@ internal sealed class EditorViewModel
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     if (token.IsCancellationRequested) return;
+
+                    Control control;
+                    if (_previousPreview is not null && _previousDocument is not null)
+                    {
+                        control = _renderer.RenderIncremental(
+                            _previousDocument, result.Document, _previousPreview);
+                    }
+                    else
+                    {
+                        control = _renderer.Render(result.Document);
+                    }
+                    sw.Stop();
+
+                    _previousPreview = control;
+                    _previousDocument = result.Document;
                     Snapshot = parsedSnapshot;
                     Rendered?.Invoke(new EditorRenderResult(
                         control, parsedSnapshot, sw.Elapsed));
