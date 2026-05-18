@@ -219,7 +219,6 @@ content because the snapshot tool renders Asciidoctor's local
 `reveal.js/dist/reveal.css` paths (missing in snapshot env, fallback to
 flow mode) while AdocNet uses CDN URLs (load successfully, slide-deck
 mode). Content is identical — only the asset-loading strategy differs.
-Documented in `docs/SESSION-HANDOFF-2026-05-11.md`.
 
 ---
 

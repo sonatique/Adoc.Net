@@ -107,9 +107,9 @@ reference while remaining structurally equivalent.
 - 90 new tests added across the parity-sweep arc (3048 pass / 0 fail)
 
 ### Documentation
-- `docs/V1.0.0-READINESS.md` — release readiness assessment
 - `docs/DEFERRED-PARITY-ITEMS.md` — known parity gaps tracked for follow-up
-- `docs/SESSION-HANDOFF-2026-05-11.md` — context handoff covering 35-commit parity arc
+- `docs/MIGRATION-FROM-ASCIIDOCTOR.md` — CLI/attribute migration guide
+- `NOTICES.md` — third-party attribution for bundled EPUB assets
 
 ## [1.0.0-beta.21] - 2026-04-13
 
