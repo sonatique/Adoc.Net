@@ -3,6 +3,27 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.1] - 2026-05-18
+
+Three asciidoctor-parity parser fixes reported against 1.0.0.
+
+### Fixed
+
+- **Unordered list `-` marker (#1).** `TryParseListItem` now accepts a single
+  `-` followed by a space as a depth-1 unordered marker, mirroring
+  Asciidoctor's alternative bullet marker. `--` remains the open-block
+  delimiter (the spec does not allow `-` to stack for nesting).
+- **Empty entries in `cols=` (#2).** `ParseColumnSpec` no longer drops empty
+  comma-separated entries, so `cols="<1,1,1,,1,,>"` yields 7 columns with the
+  blank slots defaulting to left/top/width=1. Body cells map to the correct
+  row/column slots instead of overflowing into extra rows.
+- **Multi-line content in `a|` AsciiDoc cells (#3).** `ParseTableContent`
+  joins continuation lines (lines that do not contain the cell separator)
+  into the preceding cell's text. Previously, the closing `]` of a
+  `footnote:[…]` macro on the next physical line inside an `a|` cell was
+  silently dropped — the cell text never reached `InlineParser` with a
+  balanced `]`, so the macro disappeared.
+
 ## [1.0.0] - 2026-05-17
 
 The 1.0.0 release. Headline achievement: **byte-identical output to
