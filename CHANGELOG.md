@@ -3,6 +3,33 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.2] - 2026-05-18
+
+Two asciidoctor-parity table-parser fixes reported against 1.0.1.
+
+### Fixed
+
+- **Pipe in list items inside `a|` cells (#6).** A `*`-marked list item
+  whose text contained a literal `|` inside an `a|` AsciiDoc-content
+  cell used to drop the entire `<li>` silently. The root cause was
+  over-eager row detection: any line containing `|` was treated as a
+  new row, so `* item beta | extra after pipe` became its own row and
+  the pre-pipe `* item beta` ended up as plain text in the wrong cell.
+  `ParseTableContent` now uses a new `IsCellLineStart` helper to
+  distinguish row-opening lines (the separator itself, or a valid
+  span/style prefix immediately before it) from continuation lines.
+  Lines that are not row-openers fold into the previous cell — even
+  their mid-line `|`s, which still act as cell separators *inside*
+  the row. The pre-pipe portion now stays in the AsciiDoc cell's list,
+  matching asciidoctor.js's "post-pipe consumed as new cell" semantics.
+- **Leading blank line inside `|===` block (#7).** A blank line
+  between the opening `|===` and the first row of cells no longer
+  promotes that first row to a header. Asciidoctor's rule is that the
+  implicit header exists only when row N is *immediately* the first
+  content of the table body; a leading blank means no header. The
+  header-by-blank-line scan now tracks a `sawLeadingBlank` flag and
+  bails out when it encounters content after a leading blank.
+
 ## [1.0.1] - 2026-05-18
 
 Three asciidoctor-parity parser fixes reported against 1.0.0.
