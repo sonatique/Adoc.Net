@@ -98,6 +98,33 @@ public sealed class AsciidocEmitter
             case PageBreakNode pageBreak:
                 PageBreakEmitter.Emit(pageBreak, ctx);
                 break;
+            case ListNode list:
+                ListEmitter.Emit(list, ctx);
+                break;
+            case DescriptionListNode dlist:
+                ListEmitter.EmitDescription(dlist, ctx);
+                break;
+            case DelimitedBlockNode delimited:
+                DelimitedBlockEmitter.Emit(delimited, ctx);
+                break;
+            case AdmonitionNode admon:
+                AdmonitionEmitter.Emit(admon, ctx);
+                break;
+            case TableNode table:
+                TableEmitter.Emit(table, ctx);
+                break;
+            case BlockImageNode image:
+                MediaBlockEmitter.EmitImage(image, ctx);
+                break;
+            case AudioNode audio:
+                MediaBlockEmitter.EmitAudio(audio, ctx);
+                break;
+            case VideoNode video:
+                MediaBlockEmitter.EmitVideo(video, ctx);
+                break;
+            case StemBlockNode stem:
+                MediaBlockEmitter.EmitStem(stem, ctx);
+                break;
             default:
                 // TODO: extend with the remaining node kinds. For now,
                 // unhandled nodes are emitted as a single-line marker so
