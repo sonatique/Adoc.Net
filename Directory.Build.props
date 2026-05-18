@@ -16,7 +16,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) Sylvain Fasel</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -25,7 +25,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.0: Byte-identical output to Asciidoctor for HTML, DocBook, and Reveal.js across the 36-doc conformance corpus. EPUB ships full asciidoctor-epub3 asset payload (fonts, CSS, images) with a dedicated chapter renderer that emits the same semantic HTML5 as the reference. Man output cleaner and Asciidoctor-aligned. See CHANGELOG.md for the full beta.22-1.0 arc.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.1: Three asciidoctor-parity parser fixes. Recognise `-` as a first-level unordered list marker (alongside `*`). Treat empty entries in table `cols="..."` specs as default-spec columns instead of dropping them, preserving the row/column mapping. Join continuation lines into the preceding cell so multi-line content — including a `footnote:[…]` macro whose closing `]` lands on the next physical line inside an `a|` AsciiDoc cell — is parsed correctly. See CHANGELOG.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->
