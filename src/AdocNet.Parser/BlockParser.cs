@@ -4005,38 +4005,62 @@ internal static class BlockParser
         // Parse column specifications if provided.
         var columns = colSpec is not null ? ParseColumnSpec(colSpec) : null;
 
-        // Join continuation lines (lines that contain no cell separator) into the
-        // preceding non-blank line so multi-line cell content survives. Without
-        // this, the trailing portion of a cell whose content spans a physical
-        // newline (e.g. a footnote macro whose closing `]` is on the next line
-        // inside an `a|` AsciiDoc cell) is silently dropped.
+        // Join continuation lines into the preceding cell-starting line so
+        // multi-line cell content survives. A "cell-starting" line is one
+        // whose first non-whitespace characters form a valid cell-opener
+        // (the separator itself, or a span/style prefix immediately before
+        // the separator). Any other line is continuation of the previous
+        // cell — even if it contains a `|` mid-line, because Asciidoctor's
+        // grammar treats such a `|` as a separator inside the same row.
+        // Intermediate blank lines are folded into the joined content so
+        // an `a|` AsciiDoc cell can hold paragraphs and lists separated by
+        // blank lines.
         var effectiveLines = new List<string>();
         for (int i = startIdx; i < endIdx; i++)
         {
             var line = lines[i];
-            if (string.IsNullOrWhiteSpace(line) || line.Contains(cellSeparator))
+            bool isBlank = string.IsNullOrWhiteSpace(line);
+            bool isCellLineStart = !isBlank && IsCellLineStart(line, cellSeparator);
+
+            if (isBlank || isCellLineStart)
             {
                 effectiveLines.Add(line);
                 continue;
             }
-            // Continuation line: append to the most recent non-blank line that
-            // already opened a cell. If no such line exists, keep it as-is so
-            // existing skip-paths behave unchanged.
+
+            // Continuation: find the most recent cell-starting entry.
             int last = effectiveLines.Count - 1;
-            while (last >= 0 && (string.IsNullOrWhiteSpace(effectiveLines[last]) || !effectiveLines[last].Contains(cellSeparator)))
+            while (last >= 0 && string.IsNullOrWhiteSpace(effectiveLines[last]))
                 last--;
+
             if (last >= 0)
-                effectiveLines[last] = effectiveLines[last] + "\n" + line;
+            {
+                // Fold any intermediate (blank) entries into the cell content so
+                // the resulting cell text preserves paragraph breaks for a|
+                // AsciiDoc cells whose body spans a blank line.
+                var sb = new System.Text.StringBuilder(effectiveLines[last]);
+                for (int j = last + 1; j < effectiveLines.Count; j++)
+                    sb.Append('\n').Append(effectiveLines[j]);
+                sb.Append('\n').Append(line);
+                effectiveLines[last] = sb.ToString();
+                if (effectiveLines.Count > last + 1)
+                    effectiveLines.RemoveRange(last + 1, effectiveLines.Count - last - 1);
+            }
             else
+            {
                 effectiveLines.Add(line);
+            }
         }
 
-        // Detect header-by-blank-line: if the first non-blank row is followed by a blank line
-        // before any other content row, treat first row as header.
+        // Detect header-by-blank-line: an implicit header exists only when the
+        // very first content of the table body is a row (no leading blanks)
+        // immediately followed by a blank line. A blank line *before* the first
+        // row means there is no implicit header — Asciidoctor's rule.
         bool headerByBlankLine = false;
         if (!hasHeader)
         {
             bool foundFirstRow = false;
+            bool sawLeadingBlank = false;
             for (int i = 0; i < effectiveLines.Count; i++)
             {
                 var line = effectiveLines[i];
@@ -4047,9 +4071,12 @@ internal static class BlockParser
                         headerByBlankLine = true;
                         break;
                     }
+                    sawLeadingBlank = true;
                     continue;
                 }
                 if (!line.Contains(cellSeparator)) continue;
+                if (sawLeadingBlank)
+                    break; // leading blank → no implicit header
                 if (foundFirstRow)
                     break; // second content row before blank line — no header
                 foundFirstRow = true;
@@ -4841,6 +4868,43 @@ internal static class BlockParser
 
         // Must have at least colspan or rowspan
         return hasColDigits || hasDot;
+    }
+
+    /// <summary>
+    /// Returns true when <paramref name="line"/> opens a new table row — i.e.
+    /// its first non-whitespace characters are the cell separator itself or a
+    /// valid span/style prefix (e.g. <c>|</c>, <c>a|</c>, <c>2+|</c>, <c>.3+|</c>,
+    /// <c>2.3+a|</c>) immediately followed by the separator. Continuation lines
+    /// (whose first non-whitespace content is anything else) start with body
+    /// content of the previous cell — any <c>|</c> later on the same line is
+    /// still treated as a cell separator inside the row.
+    /// </summary>
+    private static bool IsCellLineStart(string line, char separator)
+    {
+        int sepIdx = line.IndexOf(separator);
+        if (sepIdx < 0) return false;
+
+        // Leading whitespace before the prefix is allowed (the trim mirrors
+        // the existing first-pipe prefix logic in ParseTableCellsWithSpans).
+        var prefix = line.AsSpan(0, sepIdx).Trim();
+        if (prefix.Length == 0) return true;
+
+        // Single style letter (e.g. "a|").
+        if (prefix.Length == 1 && CellStyleLetters.ContainsKey(prefix[0]))
+            return true;
+
+        var prefixStr = prefix.ToString();
+
+        // Span prefix only (e.g. "2+|", ".3+|", "2.3+|").
+        if (IsValidSpanPrefix(prefixStr))
+            return true;
+
+        // Span prefix followed by a style letter (e.g. "2+a|", ".3+a|").
+        if (prefix.Length >= 2 && CellStyleLetters.ContainsKey(prefix[^1])
+            && IsValidSpanPrefix(prefixStr[..^1]))
+            return true;
+
+        return false;
     }
 
     /// <summary>
