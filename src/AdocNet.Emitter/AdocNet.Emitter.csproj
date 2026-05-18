@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework />
+    <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>AdocNet.Emitter</RootNamespace>
+    <Description>Round-trip AsciiDoc emitter for Adoc.Net: serialises an AST back to AsciiDoc source, with an optional source-anchored fast path that preserves byte-identical formatting for unchanged subtrees.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AdocNet.Ast\AdocNet.Ast.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AdocNet.Emitter.Tests" />
+  </ItemGroup>
+</Project>
