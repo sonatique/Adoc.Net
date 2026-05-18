@@ -27,12 +27,15 @@ public class Diagnostics
     public void Dump_failing_fixtures()
     {
         var root = FindRepoRoot();
+        // Update this list as the punch list shrinks. Each remaining fixture
+        // is a long-tail edge case in the from-AST synthesis path — see the
+        // commit history for which surface forms have been covered.
         var fixtures = new[]
         {
-            "spec/conformance/user-manual.adoc",
             "spec/conformance/spring-security-auth.adoc",
-            "spec/conformance/quarkus-getting-started.adoc",
             "spec/conformance/api-reference.adoc",
+            "spec/conformance/user-manual.adoc",
+            "spec/conformance/quarkus-getting-started.adoc",
         };
         foreach (var rel in fixtures)
         {
