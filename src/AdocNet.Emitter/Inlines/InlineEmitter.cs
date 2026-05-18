@@ -151,6 +151,13 @@ internal static class InlineEmitter
                 ctx.Output.Append("]]");
                 break;
 
+            case StemInlineNode stem:
+                ctx.Output.Append(stem.StemType);
+                ctx.Output.Append(":[");
+                ctx.Output.Append(stem.Content);
+                ctx.Output.Append(']');
+                break;
+
             default:
                 // Unknown inline type: emit a sentinel that round-trip tests
                 // will surface as a structural diff.
