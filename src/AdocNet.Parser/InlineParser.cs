@@ -164,7 +164,7 @@ internal static class InlineParser
                 int stemClose = text.IndexOf("$$", stemStart, endIndex - stemStart, StringComparison.Ordinal);
                 if (stemClose > stemStart || (stemClose == stemStart)) // allow empty $$$$
                 {
-                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                     var content = text[stemStart..stemClose];
                     nodes.Add(new StemInlineNode { Content = content, StemType = "latexmath" });
                     i = stemClose + 2;
@@ -182,7 +182,7 @@ internal static class InlineParser
                     var inner = text[(i + 2)..closeIdx];
                     if (inner.Length > 0)
                     {
-                        FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                        FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                         int commaIdx = inner.IndexOf(',');
                         var target = commaIdx > 0 ? inner[..commaIdx].Trim() : inner.Trim();
                         var label = commaIdx > 0 ? inner[(commaIdx + 1)..].Trim() : null;
@@ -225,7 +225,7 @@ internal static class InlineParser
                     var content = text[(i + 2)..closeIdx];
                     if (content.Length > 0)
                     {
-                        FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                        FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                         var commaIdx = content.IndexOf(',');
                         string id;
                         string? reftext = null;
@@ -251,7 +251,7 @@ internal static class InlineParser
                 int close = text.IndexOf("+++", i + 3, StringComparison.Ordinal);
                 if (close >= i + 3 && close + 3 <= endIndex)
                 {
-                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                     nodes.Add(new PassthroughInlineNode { Content = text[(i + 3)..close] });
                     i = close + 3;
                     continue;
@@ -264,7 +264,7 @@ internal static class InlineParser
                 int close = IndexOf(text, '+', i + 1, endIndex);
                 if (close > i + 1)
                 {
-                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                     nodes.Add(new PassthroughInlineNode { Content = text[(i + 1)..close] });
                     i = close + 1;
                     continue;
@@ -288,7 +288,7 @@ internal static class InlineParser
                             var content = text[(openBracket + 1)..closeBracket];
                             var subs = ParseSubstitutionNames(subsText);
 
-                            FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                            FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
 
                             if (subs != SubstitutionKind.None)
                             {
@@ -318,7 +318,7 @@ internal static class InlineParser
             {
                 if (TryParseInlineMacro(text, i, endIndex, linkAttributes, out var macroNode, out var macroEnd))
                 {
-                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                     nodes.Add(macroNode);
                     i = macroEnd;
                     continue;
@@ -330,7 +330,7 @@ internal static class InlineParser
             {
                 if (TryParseFootnoteMacro(text, i, endIndex, doFormatting, doMacros, doReplacements, doPostReplacements, out var footnoteNode, out var fnEnd))
                 {
-                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                     nodes.Add(footnoteNode);
                     i = fnEnd;
                     continue;
@@ -342,7 +342,7 @@ internal static class InlineParser
             {
                 if (TryParseXrefMacro(text, i, endIndex, out var xrefNode, out var xrefEnd))
                 {
-                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                     nodes.Add(xrefNode);
                     i = xrefEnd;
                     continue;
@@ -360,7 +360,7 @@ internal static class InlineParser
                 {
                     if (TryParseGenericMacro(text, i, endIndex, out var genericMacro, out var gmEnd))
                     {
-                        FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                        FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                         nodes.Add(genericMacro);
                         i = gmEnd;
                         continue;
@@ -385,7 +385,7 @@ internal static class InlineParser
                         continue;
                     }
 
-                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                     int start = i;
                     while (i < endIndex && !char.IsWhiteSpace(text[i]) && text[i] != '[') i++;
                     var url = text[start..i].TrimEnd('.', ',', ';', ':', '!', ')', '?');
@@ -459,7 +459,7 @@ internal static class InlineParser
                         var localPart = text[localStart..i];
                         if (plain.Length >= localPart.Length)
                             plain.Length -= localPart.Length;
-                        FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                        FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                         nodes.Add(new InlineLinkMacroNode { Url = "mailto:" + email, Label = email });
                         i = domainEnd;
                         continue;
@@ -478,7 +478,7 @@ internal static class InlineParser
                     {
                         var inner = text[(i + 3)..closeIdx];
                         var terms = inner.Split(',').Select(t => t.Trim()).ToArray();
-                        FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                        FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                         nodes.Add(new IndexTermHiddenNode { Terms = terms });
                         i = closeIdx + 3;
                         continue;
@@ -496,7 +496,7 @@ internal static class InlineParser
                         {
                             var inner = text[(i + 2)..closeIdx];
                             var terms = inner.Split(',').Select(t => t.Trim()).ToArray();
-                            FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                            FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                             nodes.Add(new IndexTermNode { Terms = terms });
                             i = closeIdx + 2;
                             continue;
@@ -512,7 +512,7 @@ internal static class InlineParser
                 int close = text.IndexOf("**", i + 2, StringComparison.Ordinal);
                 if (close > i + 2 && close + 2 <= endIndex)
                 {
-                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                     var children = ParseInlines(text, i + 2, close,
                         activeMarkers | ActiveMarkers.Strong, doFormatting, doMacros, doReplacements, doPostReplacements);
                     nodes.Add(new StrongInlineNode { Children = children });
@@ -528,7 +528,7 @@ internal static class InlineParser
                 int close = FindConstrainedClose(text, '*', i + 1, endIndex);
                 if (close > i + 1)
                 {
-                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                     var children = ParseInlines(text, i + 1, close,
                         activeMarkers | ActiveMarkers.Strong, doFormatting, doMacros, doReplacements, doPostReplacements);
                     nodes.Add(new StrongInlineNode { Children = children });
@@ -545,7 +545,7 @@ internal static class InlineParser
                 int close = text.IndexOf("__", i + 2, StringComparison.Ordinal);
                 if (close > i + 2 && close + 2 <= endIndex)
                 {
-                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                     var children = ParseInlines(text, i + 2, close,
                         activeMarkers | ActiveMarkers.Emphasis, doFormatting, doMacros, doReplacements, doPostReplacements);
                     nodes.Add(new EmphasisInlineNode { Children = children });
@@ -562,7 +562,7 @@ internal static class InlineParser
                 int close = FindConstrainedClose(text, '_', i + 1, endIndex);
                 if (close > i + 1)
                 {
-                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                     var children = ParseInlines(text, i + 1, close,
                         activeMarkers | ActiveMarkers.Emphasis, doFormatting, doMacros, doReplacements, doPostReplacements);
                     nodes.Add(new EmphasisInlineNode { Children = children });
@@ -580,7 +580,7 @@ internal static class InlineParser
                 {
                     if (text[scan] == '`' && text[scan + 1] == '"')
                     {
-                        FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                        FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                         plain.Append('\u201c');
                         var inner = text[(i + 2)..scan];
                         plain.Append(inner);
@@ -600,7 +600,7 @@ internal static class InlineParser
                 {
                     if (text[scan] == '`' && text[scan + 1] == '\'')
                     {
-                        FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                        FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                         plain.Append('\u2018');
                         var inner = text[(i + 2)..scan];
                         plain.Append(inner);
@@ -619,7 +619,7 @@ internal static class InlineParser
                 int close = text.IndexOf("``", i + 2, StringComparison.Ordinal);
                 if (close > i + 2 && close + 2 <= endIndex)
                 {
-                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                     var children = ParseInlines(text, i + 2, close,
                         activeMarkers | ActiveMarkers.Monospace, doFormatting, doMacros, doReplacements, doPostReplacements);
                     nodes.Add(new MonospaceInlineNode { Children = children });
@@ -635,7 +635,7 @@ internal static class InlineParser
                 int close = FindConstrainedClose(text, '`', i + 1, endIndex);
                 if (close > i + 1)
                 {
-                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                     var children = ParseInlines(text, i + 1, close,
                         activeMarkers | ActiveMarkers.Monospace, doFormatting, doMacros, doReplacements, doPostReplacements);
                     nodes.Add(new MonospaceInlineNode { Children = children });
@@ -650,7 +650,7 @@ internal static class InlineParser
                 int close = IndexOf(text, '^', i + 1, endIndex);
                 if (close > i + 1)
                 {
-                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                     nodes.Add(new SuperscriptInlineNode { Content = text[(i + 1)..close] });
                     i = close + 1;
                     continue;
@@ -663,7 +663,7 @@ internal static class InlineParser
                 int close = IndexOf(text, '~', i + 1, endIndex);
                 if (close > i + 1)
                 {
-                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                     nodes.Add(new SubscriptInlineNode { Content = text[(i + 1)..close] });
                     i = close + 1;
                     continue;
@@ -714,7 +714,7 @@ internal static class InlineParser
                                 close = text.IndexOf("##", contentStart, StringComparison.Ordinal);
                                 if (close > contentStart && close + 2 <= endIndex)
                                 {
-                                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                                     var children = ParseInlines(text, contentStart, close,
                                         activeMarkers | ActiveMarkers.Highlight, doFormatting, doMacros, doReplacements, doPostReplacements);
                                     nodes.Add(new HighlightInlineNode { Children = children, Roles = roles, Id = spanId });
@@ -729,7 +729,7 @@ internal static class InlineParser
                                 close = IndexOf(text, '#', contentStart, endIndex);
                                 if (close > contentStart)
                                 {
-                                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                                     var children = ParseInlines(text, contentStart, close,
                                         activeMarkers | ActiveMarkers.Highlight, doFormatting, doMacros, doReplacements, doPostReplacements);
                                     nodes.Add(new HighlightInlineNode { Children = children, Roles = roles, Id = spanId });
@@ -752,7 +752,7 @@ internal static class InlineParser
                                 int close = text.IndexOf("**", contentStart, StringComparison.Ordinal);
                                 if (close > contentStart && close + 2 <= endIndex)
                                 {
-                                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                                     var children = ParseInlines(text, contentStart, close,
                                         activeMarkers | ActiveMarkers.Strong, doFormatting, doMacros, doReplacements, doPostReplacements);
                                     nodes.Add(new StrongInlineNode { Children = children, Roles = roles });
@@ -766,7 +766,7 @@ internal static class InlineParser
                                 int close = IndexOf(text, '*', contentStart, endIndex);
                                 if (close > contentStart)
                                 {
-                                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                                     var children = ParseInlines(text, contentStart, close,
                                         activeMarkers | ActiveMarkers.Strong, doFormatting, doMacros, doReplacements, doPostReplacements);
                                     nodes.Add(new StrongInlineNode { Children = children, Roles = roles });
@@ -790,7 +790,7 @@ internal static class InlineParser
                                 int close = text.IndexOf("__", contentStart, StringComparison.Ordinal);
                                 if (close > contentStart && close + 2 <= endIndex)
                                 {
-                                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                                     var children = ParseInlines(text, contentStart, close,
                                         activeMarkers | ActiveMarkers.Emphasis, doFormatting, doMacros, doReplacements, doPostReplacements);
                                     nodes.Add(new EmphasisInlineNode { Children = children, Roles = roles });
@@ -804,7 +804,7 @@ internal static class InlineParser
                                 int close = IndexOf(text, '_', contentStart, endIndex);
                                 if (close > contentStart)
                                 {
-                                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                                     var children = ParseInlines(text, contentStart, close,
                                         activeMarkers | ActiveMarkers.Emphasis, doFormatting, doMacros, doReplacements, doPostReplacements);
                                     nodes.Add(new EmphasisInlineNode { Children = children, Roles = roles });
@@ -827,7 +827,7 @@ internal static class InlineParser
                                 int close = text.IndexOf("``", contentStart, StringComparison.Ordinal);
                                 if (close > contentStart && close + 2 <= endIndex)
                                 {
-                                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                                     var children = ParseInlines(text, contentStart, close,
                                         activeMarkers | ActiveMarkers.Monospace, doFormatting, doMacros, doReplacements, doPostReplacements);
                                     nodes.Add(new MonospaceInlineNode { Children = children, Roles = roles });
@@ -841,7 +841,7 @@ internal static class InlineParser
                                 int close = IndexOf(text, '`', contentStart, endIndex);
                                 if (close > contentStart)
                                 {
-                                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                                     var children = ParseInlines(text, contentStart, close,
                                         activeMarkers | ActiveMarkers.Monospace, doFormatting, doMacros, doReplacements, doPostReplacements);
                                     nodes.Add(new MonospaceInlineNode { Children = children, Roles = roles });
@@ -861,7 +861,7 @@ internal static class InlineParser
                 int close = text.IndexOf("##", i + 2, StringComparison.Ordinal);
                 if (close > i + 2 && close + 2 <= endIndex)
                 {
-                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                     var children = ParseInlines(text, i + 2, close,
                         activeMarkers | ActiveMarkers.Highlight, doFormatting, doMacros, doReplacements, doPostReplacements);
                     nodes.Add(new HighlightInlineNode { Children = children });
@@ -881,7 +881,7 @@ internal static class InlineParser
                 int close = FindConstrainedClose(text, '#', i + 1, endIndex);
                 if (close > i + 1)
                 {
-                    FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+                    FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
                     var children = ParseInlines(text, i + 1, close,
                         activeMarkers | ActiveMarkers.Highlight, doFormatting, doMacros, doReplacements, doPostReplacements);
                     nodes.Add(new HighlightInlineNode { Children = children });
@@ -895,7 +895,7 @@ internal static class InlineParser
             nextChar:;
         }
 
-        FlushPlain(nodes, plain, doReplacements, doPostReplacements);
+        FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
         return nodes;
     }
 
@@ -1499,6 +1499,24 @@ internal static class InlineParser
     }
 
     private static void FlushPlain(List<InlineNode> nodes, StringBuilder sb, bool doReplacements, bool doPostReplacements)
+        => FlushPlain(nodes, sb, doReplacements, doPostReplacements, SourceRange.None);
+
+    private static void FlushPlain(
+        List<InlineNode> nodes, StringBuilder sb, bool doReplacements, bool doPostReplacements,
+        string sourceText, int currentIndex)
+    {
+        // `sb.Length` is the length of the run of plain text accumulated so
+        // far. The run started at `currentIndex - sb.Length` in `sourceText`.
+        // This is approximate when an escape or attribute substitution made
+        // the buffer length diverge from the input length, but for typical
+        // paragraph content it is correct.
+        int startIdx = currentIndex - sb.Length;
+        if (startIdx < 0) startIdx = 0;
+        var range = RangeWithin(sourceText, startIdx, currentIndex);
+        FlushPlain(nodes, sb, doReplacements, doPostReplacements, range);
+    }
+
+    private static void FlushPlain(List<InlineNode> nodes, StringBuilder sb, bool doReplacements, bool doPostReplacements, SourceRange range)
     {
         if (sb.Length == 0) return;
         var text = sb.ToString();
@@ -1506,7 +1524,41 @@ internal static class InlineParser
             text = ReplacementsProcessor.Apply(text);
         if (doPostReplacements)
             text = SmartPunctuationProcessor.Apply(text);
-        nodes.Add(new TextInlineNode { Value = text });
+        nodes.Add(new TextInlineNode { Value = text, Source = range });
         sb.Clear();
+    }
+
+    /// <summary>
+    /// Converts a 0-based character offset into <paramref name="text"/> into a
+    /// 1-based <see cref="SourcePosition"/>. The returned position is RELATIVE
+    /// to <paramref name="text"/> (line 1, col 1 at the start of the buffer);
+    /// the block parser that owns the surrounding context can shift these
+    /// into document coordinates if it wants document-absolute ranges.
+    /// </summary>
+    internal static SourcePosition PositionWithin(string text, int charOffset)
+    {
+        int line = 1, col = 1;
+        int limit = Math.Min(charOffset, text.Length);
+        for (int i = 0; i < limit; i++)
+        {
+            if (text[i] == '\n') { line++; col = 1; }
+            else col++;
+        }
+        return new SourcePosition(line, col);
+    }
+
+    /// <summary>
+    /// Builds a slice-relative <see cref="SourceRange"/> covering character
+    /// offsets <c>[startIdx, endIdxExclusive)</c> in <paramref name="text"/>.
+    /// Returns <see cref="SourceRange.None"/> for empty or invalid spans.
+    /// </summary>
+    internal static SourceRange RangeWithin(string text, int startIdx, int endIdxExclusive)
+    {
+        if (string.IsNullOrEmpty(text) || endIdxExclusive <= startIdx) return SourceRange.None;
+        var start = PositionWithin(text, startIdx);
+        // SourceRange end is INCLUSIVE in the AdocNet model, so we point at the
+        // last character of the range, not one past it.
+        var end = PositionWithin(text, endIdxExclusive - 1);
+        return new SourceRange(start, end);
     }
 }
