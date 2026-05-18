@@ -7,8 +7,14 @@ internal static class DelimitedBlockEmitter
     public static void Emit(DelimitedBlockNode block, EmitContext ctx)
     {
         EmitTitle(block.Title, ctx);
-        EmitAttributesLine(block, ctx);
+
+        // Two attribute lines, in the order that survives a `+` continuation
+        // attachment under a dlist item: id/role line first, then the style
+        // line. When the style line comes first and the role line second,
+        // the parser only consumes the style line and treats the role line
+        // as paragraph text — observed on the spring-security-auth fixture.
         BlockAttributesEmitter.Emit(block, ctx);
+        EmitAttributesLine(block, ctx);
 
         // Paragraph-style quote/verse: `[quote, attr, cite]\nshort body\n`
         // with no `____` fences. The parser only treats it this way when the
