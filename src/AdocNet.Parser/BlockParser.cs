@@ -2098,7 +2098,7 @@ internal static class BlockParser
                     // Stop if the next line is a structural element
                     if (nextLine.StartsWith("= ") || nextLine.StartsWith("== ") || nextLine.StartsWith("=== ")
                         || nextLine.StartsWith("==== ") || nextLine.StartsWith("===== ")
-                        || nextLine.StartsWith("* ") || nextLine.StartsWith(". ")
+                        || nextLine.StartsWith("* ") || nextLine.StartsWith(". ") || nextLine.StartsWith("- ")
                         || nextLine.StartsWith("----") || nextLine.StartsWith("....", StringComparison.Ordinal)
                         || nextLine.StartsWith("|===")
                         || TryParseInlineAdmonition(nextLine, out _, out _))
@@ -3597,6 +3597,23 @@ internal static class BlockParser
         }
 
         char marker = line[0];
+
+        // Hyphen marker is only valid for first-level unordered lists. Per the
+        // AsciiDoc spec it is not stackable: only a single '-' followed by a
+        // space starts a list item; '--' is the open-block delimiter.
+        if (marker == '-')
+        {
+            if (line[1] != ' ')
+            {
+                kind = default; depth = 0; text = string.Empty;
+                return false;
+            }
+            kind = ListKind.Unordered;
+            depth = 1;
+            text = line[2..].Trim();
+            return true;
+        }
+
         if (marker != '*' && marker != '.')
         {
             kind = default; depth = 0; text = string.Empty;
@@ -3988,15 +4005,41 @@ internal static class BlockParser
         // Parse column specifications if provided.
         var columns = colSpec is not null ? ParseColumnSpec(colSpec) : null;
 
+        // Join continuation lines (lines that contain no cell separator) into the
+        // preceding non-blank line so multi-line cell content survives. Without
+        // this, the trailing portion of a cell whose content spans a physical
+        // newline (e.g. a footnote macro whose closing `]` is on the next line
+        // inside an `a|` AsciiDoc cell) is silently dropped.
+        var effectiveLines = new List<string>();
+        for (int i = startIdx; i < endIdx; i++)
+        {
+            var line = lines[i];
+            if (string.IsNullOrWhiteSpace(line) || line.Contains(cellSeparator))
+            {
+                effectiveLines.Add(line);
+                continue;
+            }
+            // Continuation line: append to the most recent non-blank line that
+            // already opened a cell. If no such line exists, keep it as-is so
+            // existing skip-paths behave unchanged.
+            int last = effectiveLines.Count - 1;
+            while (last >= 0 && (string.IsNullOrWhiteSpace(effectiveLines[last]) || !effectiveLines[last].Contains(cellSeparator)))
+                last--;
+            if (last >= 0)
+                effectiveLines[last] = effectiveLines[last] + "\n" + line;
+            else
+                effectiveLines.Add(line);
+        }
+
         // Detect header-by-blank-line: if the first non-blank row is followed by a blank line
         // before any other content row, treat first row as header.
         bool headerByBlankLine = false;
         if (!hasHeader)
         {
             bool foundFirstRow = false;
-            for (int i = startIdx; i < endIdx; i++)
+            for (int i = 0; i < effectiveLines.Count; i++)
             {
-                var line = lines[i];
+                var line = effectiveLines[i];
                 if (string.IsNullOrWhiteSpace(line))
                 {
                     if (foundFirstRow)
@@ -4022,9 +4065,9 @@ internal static class BlockParser
 
         // Collect all cells from all lines.
         var allCells = new List<CellInfo>();
-        for (int i = startIdx; i < endIdx; i++)
+        for (int i = 0; i < effectiveLines.Count; i++)
         {
-            var line = lines[i];
+            var line = effectiveLines[i];
             if (string.IsNullOrWhiteSpace(line)) continue;
             if (!line.Contains(cellSeparator)) continue;
 
@@ -4039,9 +4082,9 @@ internal static class BlockParser
         {
             // Find how many cells are on the first content line (the header).
             int firstLineCount = 0;
-            for (int i = startIdx; i < endIdx; i++)
+            for (int i = 0; i < effectiveLines.Count; i++)
             {
-                var line = lines[i];
+                var line = effectiveLines[i];
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 if (!line.Contains(cellSeparator)) continue;
                 firstLineCount = ParseTableCellsWithSpans(line, cellSeparator).Count;
@@ -4130,9 +4173,9 @@ internal static class BlockParser
         else
         {
             // Original behavior: each line is a row.
-            for (int i = startIdx; i < endIdx; i++)
+            for (int i = 0; i < effectiveLines.Count; i++)
             {
-                var line = lines[i];
+                var line = effectiveLines[i];
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 if (!line.Contains(cellSeparator)) continue;
 
@@ -4198,6 +4241,9 @@ internal static class BlockParser
     {
         var columns = new List<TableColumnSpec>();
 
+        if (string.IsNullOrWhiteSpace(spec))
+            return columns;
+
         // "N*" form: N equal columns
         if (spec.EndsWith('*'))
         {
@@ -4210,12 +4256,13 @@ internal static class BlockParser
             }
         }
 
-        // Comma-separated: each entry is optional-alignment + optional-width
+        // Comma-separated: each entry is optional-alignment + optional-width.
+        // An empty entry (e.g. "1,,1") represents one column with the default
+        // spec, matching Asciidoctor's behaviour.
         var parts = spec.Split(',');
         foreach (var part in parts)
         {
             var p = part.Trim();
-            if (p.Length == 0) continue;
 
             var horizAlign = TableAlignment.Left;
             var vertAlign = TableVerticalAlignment.Top;
