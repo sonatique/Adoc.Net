@@ -13,11 +13,17 @@ namespace AdocNet.Avalonia.Editor;
 public partial class MainWindow : Window
 {
     private readonly EditorViewModel _vm = new();
+    private BlockEditController? _blockEdit;
     private string? _currentFilePath;
 
     public MainWindow()
     {
         InitializeComponent();
+
+        // Block-WYSIWYG controller: hooks pointer events on each rendered
+        // preview block, supports double-click-to-edit (in-place
+        // AvaloniaEdit) and right-click context menu for delete-block etc.
+        _blockEdit = new BlockEditController(SourceEditor, _vm, PreviewHost);
 
         // Wire VM → view: every time a parse+render completes we get a
         // fresh Avalonia control tree for the preview pane plus updated
@@ -119,6 +125,8 @@ public partial class MainWindow : Window
         VersionLabel.Text   = $"v{r.Snapshot.Version}";
         ParseTimeLabel.Text = $"parsed in {r.ParseAndRender.TotalMilliseconds:F1} ms";
         DiagsLabel.Text     = $"{r.Snapshot.Diagnostics.Count} diagnostics";
+        if (r.Snapshot.Document is not null)
+            _blockEdit?.OnRendered(r.Preview, r.Snapshot.Document);
         UpdateCaretContext();
     }
 
