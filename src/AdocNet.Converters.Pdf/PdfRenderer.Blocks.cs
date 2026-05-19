@@ -71,14 +71,20 @@ public sealed partial class PdfRenderer
         }
         else
         {
-            // Auto-size columns using two metrics per column:
-            // 1. minWidth: the longest single word (column can't be narrower)
-            // 2. totalChars: total character count across all rows (text volume)
-            // Columns get their minWidth first, then remaining space is distributed
-            // proportionally to text volume.
+            // Auto-size columns: weight each column by its natural unwrapped
+            // content width (max over all cells), then scale to fit the page
+            // width. Per-column "longest word" widths act as floors so a single
+            // word never overflows its column. Columns with prose ask for —
+            // and get — far more space than columns with short identifiers.
+            //
+            // The previous algorithm pinned each column to its longest-word
+            // width up front and distributed only the leftover by character
+            // count. When a wide table mixed long identifiers with prose, the
+            // identifier columns soaked up the budget and prose columns
+            // collapsed to one-word-per-line (see issue #17).
 
+            float[] naturalWidths = new float[colCount];
             float[] minWidths = new float[colCount];
-            float[] totalChars = new float[colCount];
             float cellPad = 4f;
 
             foreach (var child in table.Children)
@@ -91,51 +97,81 @@ public sealed partial class PdfRenderer
                         if (cell is TableCellNode c && ci < colCount)
                         {
                             string text = GetPlainText(c.Inlines, c.Text);
-                            totalChars[ci] += text.Length;
+                            float fullWidth = w.MeasureText(text, _fontRegular, _bodyFontSize) + 2 * cellPad;
 
-                            // Minimum width = longest word + padding
+                            // Spanning cells contribute natural width spread
+                            // evenly across the columns they cover; no single
+                            // column gets the whole span's natural width.
+                            int span = c.ColSpan > 0 ? c.ColSpan : 1;
+                            float perColNatural = fullWidth / span;
+                            for (int s = 0; s < span && ci + s < colCount; s++)
+                            {
+                                if (perColNatural > naturalWidths[ci + s])
+                                    naturalWidths[ci + s] = perColNatural;
+                            }
+
+                            // Min width = longest single word + padding, attributed
+                            // to the cell's starting column. Spanning cells with
+                            // long unbreakable words still pin only the first col.
                             foreach (var word in text.Split(' '))
                             {
                                 float ww = w.MeasureText(word, _fontRegular, _bodyFontSize) + 2 * cellPad;
                                 if (ww > minWidths[ci])
                                     minWidths[ci] = ww;
                             }
-                            ci += c.ColSpan;
+                            ci += span;
                         }
                     }
                 }
             }
 
-            // Start each column at its minimum width
-            float usedWidth = 0;
-            for (int c = 0; c < colCount; c++)
-            {
-                colWidths[c] = minWidths[c];
-                usedWidth += minWidths[c];
-            }
+            float totalNatural = naturalWidths.Sum();
+            float totalMin = minWidths.Sum();
 
-            // Distribute remaining space proportionally to text volume
-            float remaining = w.ContentWidth - usedWidth;
-            if (remaining > 0)
+            if (totalNatural <= 0)
             {
-                float totalVol = totalChars.Sum();
-                if (totalVol > 0)
-                {
-                    for (int c = 0; c < colCount; c++)
-                        colWidths[c] += remaining * totalChars[c] / totalVol;
-                }
-                else
-                {
-                    for (int c = 0; c < colCount; c++)
-                        colWidths[c] += remaining / colCount;
-                }
+                // Empty table — fall back to equal split.
+                for (int c = 0; c < colCount; c++)
+                    colWidths[c] = w.ContentWidth / colCount;
+            }
+            else if (totalMin >= w.ContentWidth)
+            {
+                // Even minimum word widths don't fit on the page. Scale natural
+                // widths to ContentWidth and accept some single-word overflow —
+                // there's no better placement available.
+                for (int c = 0; c < colCount; c++)
+                    colWidths[c] = naturalWidths[c] * w.ContentWidth / totalNatural;
+            }
+            else if (totalNatural <= w.ContentWidth)
+            {
+                // Whole table fits naturally. Scale natural widths up so the
+                // table fills ContentWidth, preserving proportions.
+                for (int c = 0; c < colCount; c++)
+                    colWidths[c] = naturalWidths[c] * w.ContentWidth / totalNatural;
             }
             else
             {
-                // Content doesn't fit — normalize proportionally
-                float total = colWidths.Sum();
+                // Need to compress. Give each column its longest-word minimum,
+                // then distribute the remainder proportional to "excess" content
+                // (naturalWidth − minWidth). Columns with long prose ask for the
+                // most excess and get the largest share of the slack.
+                float remaining = w.ContentWidth - totalMin;
+                float[] excess = new float[colCount];
+                float totalExcess = 0;
                 for (int c = 0; c < colCount; c++)
-                    colWidths[c] = colWidths[c] * w.ContentWidth / total;
+                {
+                    excess[c] = naturalWidths[c] - minWidths[c];
+                    if (excess[c] < 0) excess[c] = 0;
+                    totalExcess += excess[c];
+                }
+                for (int c = 0; c < colCount; c++)
+                {
+                    colWidths[c] = minWidths[c];
+                    if (totalExcess > 0)
+                        colWidths[c] += remaining * excess[c] / totalExcess;
+                    else
+                        colWidths[c] += remaining / colCount;
+                }
             }
         }
 
