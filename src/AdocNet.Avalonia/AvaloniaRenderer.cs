@@ -303,39 +303,15 @@ public class AvaloniaRenderer
         if (colCount == 0)
             return wrapper;
 
-        // Weight star columns by per-column natural content length (max plain-
-        // text length across cells in that column). A uniform Star split sized
-        // every column equally regardless of content, so wide tables that mix
-        // short identifiers with one prose column gave the prose column the
-        // same narrow share and the table extended past its container instead
-        // of compressing the prose into multiple wrapped lines. See issue #16.
-        var columnWeights = new double[colCount];
-        foreach (var row in table.Rows)
-        {
-            int col = 0;
-            foreach (var cell in row.Cells)
-            {
-                if (col >= colCount) break;
-                int span = cell.ColSpan > 0 ? cell.ColSpan : 1;
-                double cellLen = GetPlainText(cell.Inlines).Length;
-                double perCol = cellLen / span;
-                for (int s = 0; s < span && col + s < colCount; s++)
-                {
-                    if (perCol > columnWeights[col + s])
-                        columnWeights[col + s] = perCol;
-                }
-                col += span;
-            }
-        }
+        // Star weights are content-proportional (longest plain-text cell length
+        // per column) and capped at 3× the median so a single prose cell can't
+        // squeeze the rest of the table to one-letter-per-line. See issues
+        // #16 (introduced content weighting) and #26 (added the cap).
+        var columnWeights = TableColumnWeights.Compute(table, colCount);
 
         var grid = new Grid();
         for (int c = 0; c < colCount; c++)
-        {
-            // Floor each weight at 1 so empty columns still claim a baseline
-            // share and Grid never sees Star(0).
-            double weight = columnWeights[c] < 1 ? 1 : columnWeights[c];
-            grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(weight, GridUnitType.Star)));
-        }
+            grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(columnWeights[c], GridUnitType.Star)));
 
         int gridRow = 0;
         // Track row-span occupancy: occupied[col] = how many more rows that col is spanned
