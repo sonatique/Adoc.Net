@@ -40,12 +40,16 @@
         <Button x:Name="AdmonitionButton" Content="Note"    Click="OnAdmonitionClick" ToolTip.Tip="Insert NOTE admonition" />
         <Button x:Name="CodeBlockButton" Content="Code"     Click="OnCodeBlockClick" ToolTip.Tip="Insert source code block" />
         <Button x:Name="HrButton"        Content="HR"       Click="OnHrClick"       ToolTip.Tip="Insert thematic break" />
+        <Separator Width="8" />
+        <ToggleButton x:Name="WysiwygToggle" Content="WYSIWYG mode"
+                      Click="OnWysiwygToggleClick"
+                      ToolTip.Tip="Hide the source pane and work in preview-only mode" />
       </StackPanel>
     </Border>
 
     <!-- ┌─ Source pane │ preview pane ──────────────────────────────────────┐ -->
-    <Grid Grid.Row="1" ColumnDefinitions="*,5,*">
-      <Border Grid.Column="0" BorderBrush="#cfcfcf" BorderThickness="0,0,1,0">
+    <Grid x:Name="SplitGrid" Grid.Row="1" ColumnDefinitions="*,5,*">
+      <Border x:Name="SourcePane" Grid.Column="0" BorderBrush="#cfcfcf" BorderThickness="0,0,1,0">
         <ae:TextEditor x:Name="SourceEditor"
                        FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
                        FontSize="13"
@@ -53,7 +57,7 @@
                        WordWrap="False" />
       </Border>
 
-      <GridSplitter Grid.Column="1" Background="#cfcfcf" ResizeDirection="Columns" />
+      <GridSplitter x:Name="SplitSplitter" Grid.Column="1" Background="#cfcfcf" ResizeDirection="Columns" />
 
       <ScrollViewer Grid.Column="2" Padding="8">
         <ContentControl x:Name="PreviewHost" />
