@@ -3,6 +3,36 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.5] - 2026-05-19
+
+Root-cause fix for Avalonia table-column collapse with row-spans (#26),
+which v1.0.4's median cap alone did not resolve.
+
+### Fixed
+
+- **`TableColumnWeights.Compute` now tracks row-span occupancy when
+  placing cells into columns (#26).** Previous versions walked
+  `row.Cells` and incremented `col += span` for each cell without
+  checking columns held by row-spans from prior rows, so continuation
+  cells were attributed to the wrong column index. In tables where a
+  long-prose cell sat in a continuation row, the weight landed on the
+  wrong column entirely. The algorithm now mirrors the renderer's
+  `occupied[]` placement logic; weights line up with what's actually
+  on screen. For the Ellisys-style 8-column repro the long-prose
+  column's share went from ~3% (~34 px on a 1200-px viewport) to ~22%
+  (~266 px).
+
+### Added
+
+- **`TableColumnWeights.ComputeMinWidthsPixels`** returns a per-column
+  pixel floor based on the longest single word in the column. Even
+  with correct content-weighted star shares, a header-only column
+  flanked by prose columns can compute to a tiny star share. The
+  Avalonia renderer now wires this into `ColumnDefinition.MinWidth`
+  so narrow columns render their longest word on one line. Tunable
+  via the `pixelsPerChar` and `horizontalPaddingPixels` parameters
+  for downstream consumers using different font metrics.
+
 ## [1.0.4] - 2026-05-19
 
 Follow-up to the v1.0.3 Avalonia table-column work.

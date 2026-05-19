@@ -16,7 +16,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.4</Version>
+    <Version>1.0.5</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) Sylvain Fasel</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -25,7 +25,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.4: Follow-up to the v1.0.3 Avalonia table-column work. v1.0.3 weighted star columns by per-column natural content length so wide tables fit their viewport; in tables with one cell of long prose that cell's column took ~half the viewport and the other columns collapsed to one letter per line (#26). Each column's star weight is now capped at 3× the median, taming the outlier without affecting tables where columns are similarly sized. The weight computation moved into `AdocNet.Layout.TableColumnWeights` for direct unit-testing. See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.5: Root-cause fix for Avalonia table-column collapse with row-spans (#26). The v1.0.4 cap alone was not enough: weight computation didn't track row-span occupancy, so cells in continuation rows were attributed to the wrong columns, and long-prose content's weight landed on the wrong column entirely. `TableColumnWeights.Compute` now mirrors the renderer's `occupied[]` placement logic. A new `ComputeMinWidthsPixels` adds a per-column min-width floor (longest single word × ~7.5 px) wired into `ColumnDefinition.MinWidth`, so narrow header-only columns no longer collapse to one letter per line when sharing a viewport with prose columns. See CHANGELOG.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->
