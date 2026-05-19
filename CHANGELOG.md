@@ -3,6 +3,57 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.3] - 2026-05-19
+
+Five fixes against 1.0.2: four touching the Avalonia / Layout side of
+the library (driven by live-preview editor consumers) and one in the
+PDF table layout.
+
+### Added
+
+- **`BlockLayout.Source` carries originating AST source range (#19).**
+  Every emitted block — `HeadingLayout`, `ParagraphLayout`,
+  `ListLayout`, `TableLayout`, `CodeBlockLayout`, `AdmonitionLayout`,
+  `DescriptionListLayout`, `ThematicBreakLayout` — now exposes the
+  `SourceRange` of the AST node it came from, populated by
+  `LayoutBuilder`. Consumers building editor sync-scroll can map a
+  layout block back to its source line directly instead of walking the
+  AST in parallel and pairing by index. Blocks constructed without an
+  originating AST node default to `SourceRange.None`.
+- **`AvaloniaRenderer.WrapInScrollViewer` opt-out (#18).** Set to
+  `false` to receive the bare content `StackPanel` from `Render(...)`
+  instead of a wrapping `ScrollViewer`. The natural choice when the
+  consumer already hosts the result inside its own scrolling container
+  (editor preview pane, uniform chrome, sync-scroll). Default `true`
+  preserves the previous behaviour.
+
+### Fixed
+
+- **AvaloniaRenderer emits the document title (#15).** `Render`
+  iterated over `DocumentLayout.Children` but silently dropped
+  `DocumentLayout.Title`. The title now renders as a bold 28pt
+  `TextBlock` at the top of the panel, matching `HtmlRenderer`'s
+  `<h1>` for the document title.
+- **Avalonia table columns weighted by content (#16).** Tables built
+  every column as `GridLength.Star` with equal weight, so a wide table
+  with one prose column and several short-identifier columns gave the
+  prose column the same narrow slice as the identifiers. The prose's
+  longest unbreakable words then forced their column to natural width,
+  pushing the whole Grid past its parent `ScrollViewer`'s viewport.
+  Star columns are now weighted by the longest plain-text cell length
+  in each column. `TextWrapping = Wrap` was also added to the inner
+  `TextBlock` used by `LinkRun`, the one inline cell `TextBlock` that
+  was missing it.
+- **PDF auto-sized table column widths (#17).** The renderer pinned
+  each auto-sized column to its longest-word minimum, then distributed
+  the remainder by total character count. In wide tables that mixed
+  short identifiers with one prose column, the minimum-word
+  allocations soaked up the budget and prose collapsed to
+  one-word-per-line. Columns are now weighted by max unwrapped cell
+  width with the longest-word floor honoured whenever possible.
+  Explicit user-set `cols=` widths still go through the explicit-weight
+  path unchanged.
+
 ## [1.0.2] - 2026-05-18
 
 Two asciidoctor-parity table-parser fixes reported against 1.0.1.
