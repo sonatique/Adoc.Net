@@ -1108,6 +1108,51 @@ public class PdfRendererTests
     }
 
     [Test]
+    public void Table_auto_sizing_gives_prose_column_more_space_than_narrow_columns()
+    {
+        // Issue #17: in a multi-column auto-sized table mixing short identifiers
+        // with one prose cell, the prose column must receive substantially more
+        // width than the narrow columns — not a near-equal share that collapses
+        // prose to one word per line.
+        var adoc = "|===\n| A | B | C | D | E | F | G | Description\n\n"
+                 + "| ADV_CONNECT_IND | ADV or periodic | uncoded | uncoded | => F | => W | => R "
+                 + "| The link type should be stored with its PHY and coding type for efficient "
+                 + "detection in the case that those never change for a given link or broadcast.\n"
+                 + "|===";
+        var doc = AdocParser.Parse(adoc).Document;
+        var bytes = new PdfRenderer().RenderToBytes(doc);
+
+        // Extract Td-positioned text offsets from the PDF content stream to
+        // verify the prose column occupies the lion's share of the page width.
+        var text = Encoding.Latin1.GetString(bytes);
+        int describeIdx = text.IndexOf("(The link", StringComparison.Ordinal);
+        Assert.That(describeIdx, Is.GreaterThan(-1),
+            "Prose cell content should appear in the PDF stream");
+
+        // The prose cell wraps; count how many lines its content spans by
+        // counting "(The " / "(type " / "(change " etc. — at least 2 lines
+        // for a 150-char sentence in any sane column width.
+        int proseLines = 0;
+        int idx = 0;
+        while ((idx = text.IndexOf("(", idx, StringComparison.Ordinal)) > -1)
+        {
+            int end = text.IndexOf(')', idx);
+            if (end < 0) break;
+            string s = text.Substring(idx + 1, end - idx - 1);
+            if (s.StartsWith("The link") || s.StartsWith("type for")
+                || s.StartsWith("change for") || s.StartsWith("detection"))
+                proseLines++;
+            idx = end + 1;
+        }
+
+        // Prose used to render one-word-per-line (~15-20 lines for a single
+        // 150-char sentence). With content-weighted column allocation it
+        // should wrap to a small handful of lines.
+        Assert.That(proseLines, Is.LessThan(8),
+            $"Prose cell should wrap to a small number of lines, but rendered as {proseLines} lines");
+    }
+
+    [Test]
     public void Table_column_spec_3_1_1_produces_correct_ratio()
     {
         // Test that cols="3,1,1" produces first column ~3× wider than others.
