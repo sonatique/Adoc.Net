@@ -36,6 +36,18 @@ public class AvaloniaRenderer
     {
         var panel = new StackPanel { Margin = new Thickness(16) };
 
+        if (!string.IsNullOrEmpty(document.Title))
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = document.Title,
+                FontSize = 28,
+                FontWeight = FontWeight.Bold,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 12),
+            });
+        }
+
         foreach (var block in document.Children)
         {
             var control = RenderBlock(block);
