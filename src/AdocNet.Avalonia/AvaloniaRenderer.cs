@@ -28,10 +28,23 @@ public class AvaloniaRenderer
     private const string BulletPrefix = "\u2022 ";
 
     /// <summary>
+    /// When true (the default), <see cref="Render"/> wraps the produced
+    /// content panel in a <see cref="ScrollViewer"/> with horizontal scrolling
+    /// disabled. Set to false to receive the bare content control instead —
+    /// the natural choice when the consumer already hosts the result inside
+    /// its own scrolling container (e.g. an editor preview pane).
+    /// </summary>
+    public bool WrapInScrollViewer { get; set; } = true;
+
+    /// <summary>
     /// Renders a document layout into an Avalonia control tree.
     /// </summary>
     /// <param name="document">The layout tree to render.</param>
-    /// <returns>A scrollable control containing the rendered document.</returns>
+    /// <returns>
+    /// When <see cref="WrapInScrollViewer"/> is true, a <see cref="ScrollViewer"/>
+    /// containing the rendered document. When false, the bare content panel
+    /// itself, leaving scroll handling to the caller.
+    /// </returns>
     public Control Render(DocumentLayout document)
     {
         var panel = new StackPanel { Margin = new Thickness(16) };
@@ -44,6 +57,9 @@ public class AvaloniaRenderer
                 panel.Children.Add(control);
             }
         }
+
+        if (!WrapInScrollViewer)
+            return panel;
 
         return new ScrollViewer
         {
