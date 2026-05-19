@@ -435,4 +435,103 @@ public class LayoutBuilderTests
         foreach (var w in capped)
             Assert.That(w, Is.EqualTo(1));
     }
+
+    [Test]
+    public void TableColumnWeights_tracks_rowspans_when_assigning_to_columns()
+    {
+        // Issue #26 re-opened: a continuation row whose cells follow a
+        // row-spanned cell from the prior row was being placed at the
+        // wrong column index. Here the long cell is the 3rd in row 2 of
+        // the AST, but it must land in column 3 of the visual grid
+        // because column 0 is held by the row-spanned cell from row 1.
+        //
+        //   row 1:  [A rowspan=2] [B] [C] [D]
+        //   row 2:               [E] [F] [LONG]
+        //
+        // Visual grid columns: 0=A, 1=B/E, 2=C/F, 3=D/LONG.
+        // Therefore column 3 must carry the LONG weight, not column 2.
+        var source = """
+            |===
+            | A | B | C | D
+
+            .2+| A
+            | B
+            | C
+            | D
+
+            | E
+            | F
+            | This is a long prose cell that the algorithm must attribute to column 3 because column 0 is held by the row-spanned cell A.
+            |===
+            """;
+        var layout = Build(source);
+        var table = layout.Children.OfType<TableLayout>().Single();
+        int colCount = table.Rows.Max(r => r.Cells.Sum(c => c.ColSpan));
+
+        var weights = TableColumnWeights.Compute(table, colCount);
+
+        // Column 3 should have the largest weight — that's where the
+        // long prose lands once row-spans are honoured. With the v1.0.4
+        // algorithm (no row-span tracking) the long cell was attributed
+        // to column 2 instead.
+        int widestCol = -1;
+        double widest = -1;
+        for (int c = 0; c < colCount; c++)
+        {
+            if (weights[c] > widest) { widest = weights[c]; widestCol = c; }
+        }
+        Assert.That(widestCol, Is.EqualTo(3),
+            $"Long prose cell must be attributed to column 3 (visual grid), not column {widestCol}. Weights: [{string.Join(", ", weights.Select(w => w.ToString("F1")))}]");
+    }
+
+    [Test]
+    public void TableColumnWeights_ComputeMinWidthsPixels_floors_at_longest_word()
+    {
+        // Each column's MinWidth in pixels must accommodate its longest
+        // single (unbreakable) word — otherwise the cell renders with
+        // one letter per line on a narrow star allocation.
+        var source = """
+            |===
+            | Short | Description
+
+            | Identifier_With_Long_Name
+            | normal prose with several words
+            |===
+            """;
+        var layout = Build(source);
+        var table = layout.Children.OfType<TableLayout>().Single();
+        int colCount = 2;
+
+        var minWidths = TableColumnWeights.ComputeMinWidthsPixels(table, colCount);
+
+        Assert.That(minWidths, Has.Length.EqualTo(2));
+        // Column 0's longest word is "Identifier_With_Long_Name" (25 chars).
+        // 25 × 7.5 + 16 = 203.5
+        Assert.That(minWidths[0], Is.GreaterThan(150),
+            "Col 0 min must fit 'Identifier_With_Long_Name' (25 chars)");
+        // Column 1's longest word is "Description" (11) or "several" (7);
+        // "Description" wins: 11 × 7.5 + 16 = 98.5
+        Assert.That(minWidths[1], Is.GreaterThan(70).And.LessThan(150),
+            "Col 1 min must fit 'Description' but not the whole sentence");
+    }
+
+    [Test]
+    public void TableColumnWeights_ComputeMinWidthsPixels_assigns_one_char_floor_to_empty_cols()
+    {
+        // Edge case: a column whose every cell is empty must still get a
+        // small minimum so the Grid doesn't collapse it to zero width.
+        var source = """
+            |===
+            | First | | Third
+
+            | a |  | b
+            |===
+            """;
+        var layout = Build(source);
+        var table = layout.Children.OfType<TableLayout>().Single();
+
+        var minWidths = TableColumnWeights.ComputeMinWidthsPixels(table, columnCount: 3);
+        Assert.That(minWidths[1], Is.GreaterThan(0),
+            "Empty column must have a non-zero minimum width");
+    }
 }
