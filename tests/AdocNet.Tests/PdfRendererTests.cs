@@ -1108,6 +1108,46 @@ public class PdfRendererTests
     }
 
     [Test]
+    public void Table_auto_sizing_gives_prose_column_more_space_than_narrow_columns()
+    {
+        // Issue #17: in a multi-column auto-sized table mixing short identifiers
+        // with one prose cell, the prose column must receive substantially more
+        // width than the narrow columns — not a near-equal share that collapses
+        // prose to one word per line.
+        var adoc = "|===\n| A | B | C | D | E | F | G | Description\n\n"
+                 + "| EXAMPLE_LONG_IDENTIFIER | alpha or beta | enabled | enabled | => X | => Y | => Z "
+                 + "| One column holds prose long enough to overflow the available row width, "
+                 + "and must wrap across several lines instead of collapsing to one word per line.\n"
+                 + "|===";
+        var doc = AdocParser.Parse(adoc).Document;
+        var bytes = new PdfRenderer().RenderToBytes(doc);
+
+        // Count how many lines the prose cell wraps to by scanning the PDF
+        // content stream for the opening text of each wrapped line. With the
+        // previous algorithm the prose column collapsed to ~one word per line
+        // (~15–20 lines); the fix wraps it to a small handful.
+        var text = Encoding.Latin1.GetString(bytes);
+        int proseLines = 0;
+        int idx = 0;
+        while ((idx = text.IndexOf("(", idx, StringComparison.Ordinal)) > -1)
+        {
+            int end = text.IndexOf(')', idx);
+            if (end < 0) break;
+            string s = text.Substring(idx + 1, end - idx - 1);
+            if (s.StartsWith("One column") || s.StartsWith("and must")
+                || s.StartsWith("wrap across") || s.StartsWith("instead of")
+                || s.StartsWith("collapsing") || s.StartsWith("long enough"))
+                proseLines++;
+            idx = end + 1;
+        }
+
+        Assert.That(proseLines, Is.GreaterThan(0),
+            "Prose cell content should appear in the PDF stream");
+        Assert.That(proseLines, Is.LessThan(8),
+            $"Prose cell should wrap to a small number of lines, but rendered as {proseLines} lines");
+    }
+
+    [Test]
     public void Table_column_spec_3_1_1_produces_correct_ratio()
     {
         // Test that cols="3,1,1" produces first column ~3× wider than others.
