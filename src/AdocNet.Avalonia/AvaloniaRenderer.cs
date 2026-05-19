@@ -287,9 +287,39 @@ public class AvaloniaRenderer
         if (colCount == 0)
             return wrapper;
 
+        // Weight star columns by per-column natural content length (max plain-
+        // text length across cells in that column). A uniform Star split sized
+        // every column equally regardless of content, so wide tables that mix
+        // short identifiers with one prose column gave the prose column the
+        // same narrow share and the table extended past its container instead
+        // of compressing the prose into multiple wrapped lines. See issue #16.
+        var columnWeights = new double[colCount];
+        foreach (var row in table.Rows)
+        {
+            int col = 0;
+            foreach (var cell in row.Cells)
+            {
+                if (col >= colCount) break;
+                int span = cell.ColSpan > 0 ? cell.ColSpan : 1;
+                double cellLen = GetPlainText(cell.Inlines).Length;
+                double perCol = cellLen / span;
+                for (int s = 0; s < span && col + s < colCount; s++)
+                {
+                    if (perCol > columnWeights[col + s])
+                        columnWeights[col + s] = perCol;
+                }
+                col += span;
+            }
+        }
+
         var grid = new Grid();
         for (int c = 0; c < colCount; c++)
-            grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+        {
+            // Floor each weight at 1 so empty columns still claim a baseline
+            // share and Grid never sees Star(0).
+            double weight = columnWeights[c] < 1 ? 1 : columnWeights[c];
+            grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(weight, GridUnitType.Star)));
+        }
 
         int gridRow = 0;
         // Track row-span occupancy: occupied[col] = how many more rows that col is spanned
@@ -472,6 +502,7 @@ public class AvaloniaRenderer
                     Foreground = LinkBrush,
                     TextDecorations = global::Avalonia.Media.TextDecorations.Underline,
                     Cursor = new Cursor(StandardCursorType.Hand),
+                    TextWrapping = TextWrapping.Wrap,
                 };
                 AddInlines(linkText.Inlines!, link.Children);
                 linkText.PointerPressed += (_, _) => OpenUrl(link.Href);
