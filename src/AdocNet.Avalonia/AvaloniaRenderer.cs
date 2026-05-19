@@ -304,14 +304,22 @@ public class AvaloniaRenderer
             return wrapper;
 
         // Star weights are content-proportional (longest plain-text cell length
-        // per column) and capped at 3× the median so a single prose cell can't
-        // squeeze the rest of the table to one-letter-per-line. See issues
-        // #16 (introduced content weighting) and #26 (added the cap).
+        // per column, honouring row-spans) and capped at 3× the median so a
+        // single prose cell can't squeeze the rest of the table to one-letter-
+        // per-line. Each column also gets a MinWidth equal to its longest
+        // single word, so narrow columns never collapse below their content.
+        // See issues #16, #26.
         var columnWeights = TableColumnWeights.Compute(table, colCount);
+        var columnMinWidths = TableColumnWeights.ComputeMinWidthsPixels(table, colCount);
 
         var grid = new Grid();
         for (int c = 0; c < colCount; c++)
-            grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(columnWeights[c], GridUnitType.Star)));
+        {
+            grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(columnWeights[c], GridUnitType.Star))
+            {
+                MinWidth = columnMinWidths[c],
+            });
+        }
 
         int gridRow = 0;
         // Track row-span occupancy: occupied[col] = how many more rows that col is spanned
