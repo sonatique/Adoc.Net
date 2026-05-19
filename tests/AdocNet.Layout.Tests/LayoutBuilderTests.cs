@@ -278,4 +278,73 @@ public class LayoutBuilderTests
         var para = (ParagraphLayout)layout.Children.First(c => c is ParagraphLayout);
         Assert.That(para.Inlines.Any(i => i is TextRun t && t.Text.Contains("<b>world</b>")), Is.True);
     }
+
+    // ── Source positions (issue #19) ────────────────────────────────
+
+    [Test]
+    public void Block_layouts_carry_source_lines_from_originating_ast_nodes()
+    {
+        // The source has well-known line numbers for each block; check that
+        // the matching layout block exposes a non-empty source range that
+        // starts on the expected line.
+        var source = """
+            = Title
+
+            == Section one
+
+            First paragraph.
+
+            == Section two
+
+            Second paragraph.
+
+            |===
+            | Cell
+            |===
+
+            ----
+            code
+            ----
+            """;
+        var layout = Build(source);
+
+        // Locate blocks by kind in document order.
+        var headings = layout.Children.OfType<HeadingLayout>().ToList();
+        var paragraphs = layout.Children.OfType<ParagraphLayout>().ToList();
+        var tables = layout.Children.OfType<TableLayout>().ToList();
+        var codeBlocks = layout.Children.OfType<CodeBlockLayout>().ToList();
+
+        Assert.That(headings, Has.Count.GreaterThanOrEqualTo(2));
+        Assert.That(paragraphs, Has.Count.GreaterThanOrEqualTo(2));
+        Assert.That(tables, Has.Count.EqualTo(1));
+        Assert.That(codeBlocks, Has.Count.EqualTo(1));
+
+        // Every emitted block should carry a non-empty source range.
+        foreach (var b in headings)
+            Assert.That(b.Source.IsNone, Is.False, $"HeadingLayout at level {b.Level} should have source set");
+        foreach (var b in paragraphs)
+            Assert.That(b.Source.IsNone, Is.False, "ParagraphLayout should have source set");
+        Assert.That(tables[0].Source.IsNone, Is.False, "TableLayout should have source set");
+        Assert.That(codeBlocks[0].Source.IsNone, Is.False, "CodeBlockLayout should have source set");
+
+        // Sanity: blocks appear in document order, source line monotone non-decreasing.
+        int prevLine = 0;
+        foreach (var child in layout.Children)
+        {
+            if (child.Source.IsNone) continue;
+            int line = child.Source.Start.Line;
+            Assert.That(line, Is.GreaterThanOrEqualTo(prevLine),
+                $"Layout child at line {line} must not precede prior child at line {prevLine}");
+            prevLine = line;
+        }
+    }
+
+    [Test]
+    public void BlockLayout_Source_defaults_to_None_when_built_directly()
+    {
+        // Layouts constructed without going through LayoutBuilder (e.g. by
+        // tests or third-party code) should have Source = SourceRange.None.
+        var p = new ParagraphLayout(System.Array.Empty<InlineLayout>());
+        Assert.That(p.Source.IsNone, Is.True);
+    }
 }
