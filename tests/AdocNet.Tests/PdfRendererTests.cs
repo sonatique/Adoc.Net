@@ -1115,23 +1115,18 @@ public class PdfRendererTests
         // width than the narrow columns — not a near-equal share that collapses
         // prose to one word per line.
         var adoc = "|===\n| A | B | C | D | E | F | G | Description\n\n"
-                 + "| ADV_CONNECT_IND | ADV or periodic | uncoded | uncoded | => F | => W | => R "
-                 + "| The link type should be stored with its PHY and coding type for efficient "
-                 + "detection in the case that those never change for a given link or broadcast.\n"
+                 + "| EXAMPLE_LONG_IDENTIFIER | alpha or beta | enabled | enabled | => X | => Y | => Z "
+                 + "| One column holds prose long enough to overflow the available row width, "
+                 + "and must wrap across several lines instead of collapsing to one word per line.\n"
                  + "|===";
         var doc = AdocParser.Parse(adoc).Document;
         var bytes = new PdfRenderer().RenderToBytes(doc);
 
-        // Extract Td-positioned text offsets from the PDF content stream to
-        // verify the prose column occupies the lion's share of the page width.
+        // Count how many lines the prose cell wraps to by scanning the PDF
+        // content stream for the opening text of each wrapped line. With the
+        // previous algorithm the prose column collapsed to ~one word per line
+        // (~15–20 lines); the fix wraps it to a small handful.
         var text = Encoding.Latin1.GetString(bytes);
-        int describeIdx = text.IndexOf("(The link", StringComparison.Ordinal);
-        Assert.That(describeIdx, Is.GreaterThan(-1),
-            "Prose cell content should appear in the PDF stream");
-
-        // The prose cell wraps; count how many lines its content spans by
-        // counting "(The " / "(type " / "(change " etc. — at least 2 lines
-        // for a 150-char sentence in any sane column width.
         int proseLines = 0;
         int idx = 0;
         while ((idx = text.IndexOf("(", idx, StringComparison.Ordinal)) > -1)
@@ -1139,15 +1134,15 @@ public class PdfRendererTests
             int end = text.IndexOf(')', idx);
             if (end < 0) break;
             string s = text.Substring(idx + 1, end - idx - 1);
-            if (s.StartsWith("The link") || s.StartsWith("type for")
-                || s.StartsWith("change for") || s.StartsWith("detection"))
+            if (s.StartsWith("One column") || s.StartsWith("and must")
+                || s.StartsWith("wrap across") || s.StartsWith("instead of")
+                || s.StartsWith("collapsing") || s.StartsWith("long enough"))
                 proseLines++;
             idx = end + 1;
         }
 
-        // Prose used to render one-word-per-line (~15-20 lines for a single
-        // 150-char sentence). With content-weighted column allocation it
-        // should wrap to a small handful of lines.
+        Assert.That(proseLines, Is.GreaterThan(0),
+            "Prose cell content should appear in the PDF stream");
         Assert.That(proseLines, Is.LessThan(8),
             $"Prose cell should wrap to a small number of lines, but rendered as {proseLines} lines");
     }
