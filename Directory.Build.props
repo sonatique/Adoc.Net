@@ -16,7 +16,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.2</Version>
+    <Version>1.0.3</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) Sylvain Fasel</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -25,7 +25,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.2: Two asciidoctor-parity table-parser fixes. List items containing `|` inside an `a|` AsciiDoc-content cell no longer drop the entire `&lt;li&gt;`; the pre-pipe portion stays in the cell's list and the post-pipe portion is consumed as a new cell at the table-grammar level, matching the reference engine. A leading blank line between `|===` and the first row no longer triggers spurious implicit-header detection — an implicit header exists only when the first content row is immediately followed by a blank line. See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.3: Five fixes targeting live-preview consumers of the Avalonia renderer and the PDF table layout. AvaloniaRenderer now emits `DocumentLayout.Title` (#15), weights table star columns by content so wide tables fit their viewport instead of overflowing horizontally (#16), and accepts a `WrapInScrollViewer` opt-out so hosts that already provide a scroll container don't have to unwrap the result (#18). `BlockLayout` now carries the originating AST node's `SourceRange`, enabling editor sync-scroll without walking the AST in parallel (#19). The PDF renderer allocates auto-sized table column widths by natural content width instead of the longest-word minimum, so prose columns no longer collapse to one-word-per-line (#17). See CHANGELOG.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->
