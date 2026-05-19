@@ -15,5 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AdocNet.Layout\AdocNet.Layout.csproj" />
+    <ProjectReference Include="..\AdocNet.Ast\AdocNet.Ast.csproj" />
+    <ProjectReference Include="..\AdocNet.Core\AdocNet.Core.csproj" />
   </ItemGroup>
 </Project>
