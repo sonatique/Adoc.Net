@@ -15,4 +15,8 @@
   <ItemGroup>
     <ProjectReference Include="..\AdocNet.Ast\AdocNet.Ast.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AdocNet.Layout.Tests" />
+  </ItemGroup>
 </Project>
