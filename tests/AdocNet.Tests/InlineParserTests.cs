@@ -161,11 +161,13 @@ public class InlineParserTests
     }
 
     [Test]
-    public void Inline_nodes_have_no_source_range()
+    public void Inline_nodes_carry_a_source_range()
     {
-        // Source ranges are not computed for inline nodes in M5.
+        // As of the WYSIWYG-roadmap Phase 2, inline nodes coming out of
+        // InlineParser are tagged with their slice-relative SourceRange.
+        // See tests/AdocNet.Tests/InlineSourceRangeTests.cs for full coverage.
         var inlines = InlineParser.Parse("*bold*");
-        Assert.That(inlines[0].Source.IsNone, Is.True);
+        Assert.That(inlines[0].Source.IsNone, Is.False);
     }
 
     // ── BlockParser integration tests ────────────────────────────────────────────
