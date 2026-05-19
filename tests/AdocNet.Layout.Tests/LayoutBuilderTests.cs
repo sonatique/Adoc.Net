@@ -347,4 +347,92 @@ public class LayoutBuilderTests
         var p = new ParagraphLayout(System.Array.Empty<InlineLayout>());
         Assert.That(p.Source.IsNone, Is.True);
     }
+
+    // ── Table column weights (issue #26) ────────────────────────────
+
+    [Test]
+    public void TableColumnWeights_caps_outlier_column_at_three_times_median()
+    {
+        // Issue #26 repro: 8-column table with one cell of long prose.
+        // Without the cap, the prose column's raw weight (~150 chars)
+        // dwarfs the other columns (~4–15 chars), takes ~half the
+        // viewport, and squeezes everything else to one-letter-per-line.
+        var source = """
+            |===
+            | LL Packet | Link Type | Content | Result | FPGA | Writer | Reader | Description
+
+            | EXAMPLE_LONG_IDENTIFIER
+            | alpha or beta
+            | enabled
+            | enabled
+            | => X
+            | => Y
+            | => Z
+            | One column holds prose long enough to overflow the available row width, and must wrap across several lines instead of collapsing to one word per line.
+            |===
+            """;
+        var layout = Build(source);
+        var table = layout.Children.OfType<TableLayout>().Single();
+
+        int colCount = table.Rows[0].Cells.Sum(c => c.ColSpan);
+        var weights = TableColumnWeights.Compute(table, colCount);
+
+        Assert.That(weights, Has.Length.EqualTo(8));
+
+        double max = weights.Max();
+        double median = weights.OrderBy(w => w).ElementAt(weights.Length / 2);
+        Assert.That(max, Is.LessThanOrEqualTo(median * 3 + 0.01),
+            "The longest column's weight must not exceed 3× the median.");
+
+        // The prose column (last column) must not exceed ~⅓ of total
+        // weight — otherwise the rest of the table loses too much room.
+        double total = weights.Sum();
+        double proseShare = weights[7] / total;
+        Assert.That(proseShare, Is.LessThan(0.35),
+            $"Prose column took {proseShare:P0} of total weight; expected < 35%.");
+    }
+
+    [Test]
+    public void TableColumnWeights_leaves_uniform_tables_unchanged()
+    {
+        // A table where every column has similar content should keep its
+        // raw weights — the cap only fires for outliers.
+        var source = """
+            |===
+            | aaaa | bbbb | cccc | dddd
+            | eeee | ffff | gggg | hhhh
+            |===
+            """;
+        var layout = Build(source);
+        var table = layout.Children.OfType<TableLayout>().Single();
+        int colCount = table.Rows[0].Cells.Sum(c => c.ColSpan);
+
+        var weights = TableColumnWeights.Compute(table, colCount);
+
+        // Every cell is 4 chars long; median is 4 → cap is 12. No weight
+        // exceeds the cap, so all four weights stay at the raw value of 4
+        // and the table renders with equal column shares.
+        Assert.That(weights, Is.EquivalentTo(new[] { 4.0, 4.0, 4.0, 4.0 }));
+    }
+
+    [Test]
+    public void TableColumnWeights_empty_table_returns_empty()
+    {
+        // Pathological: zero columns → empty result.
+        var table = new TableLayout(title: null, hasHeader: false, hasFooter: false,
+            rows: System.Array.Empty<TableRowLayout>());
+        var weights = TableColumnWeights.Compute(table, columnCount: 0);
+        Assert.That(weights, Is.Empty);
+    }
+
+    [Test]
+    public void TableColumnWeights_caps_at_one_when_median_is_zero()
+    {
+        // All-zero raw weights (empty cells) must not produce Star(0) —
+        // weights are floored at 1 so the Grid sizes columns equally.
+        var raw = new double[] { 0, 0, 0, 0 };
+        var capped = TableColumnWeights.CapAtMedianMultiple(raw, multiple: 3);
+        foreach (var w in capped)
+            Assert.That(w, Is.EqualTo(1));
+    }
 }
