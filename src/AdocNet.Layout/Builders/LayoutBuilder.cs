@@ -59,8 +59,8 @@ public class LayoutBuilder
             case DescriptionListNode descList:
                 output.Add(BuildDescriptionList(descList));
                 break;
-            case ThematicBreakNode:
-                output.Add(new ThematicBreakLayout());
+            case ThematicBreakNode thematic:
+                output.Add(new ThematicBreakLayout { Source = thematic.Source });
                 break;
             case TocNode toc:
                 BuildToc(toc, output);
@@ -72,7 +72,7 @@ public class LayoutBuilder
     private static void BuildSection(SectionNode section, List<BlockLayout> output)
     {
         var inlines = BuildInlines(section.TitleInlines);
-        output.Add(new HeadingLayout(section.Level, inlines));
+        output.Add(new HeadingLayout(section.Level, inlines) { Source = section.Source });
 
         foreach (var child in section.Children)
         {
@@ -83,7 +83,7 @@ public class LayoutBuilder
     private static ParagraphLayout BuildParagraph(ParagraphNode paragraph)
     {
         var inlines = BuildInlines(paragraph.Inlines);
-        return new ParagraphLayout(inlines);
+        return new ParagraphLayout(inlines) { Source = paragraph.Source };
     }
 
     private static ListLayout BuildList(ListNode list)
@@ -97,7 +97,7 @@ public class LayoutBuilder
                 items.Add(BuildListItem(item));
             }
         }
-        return new ListLayout(ordered, items);
+        return new ListLayout(ordered, items) { Source = list.Source };
     }
 
     private static ListItemLayout BuildListItem(ListItemNode item)
@@ -114,7 +114,10 @@ public class LayoutBuilder
             case DelimitedBlockKind.Literal:
             case DelimitedBlockKind.Listing:
             case DelimitedBlockKind.Source:
-                output.Add(new CodeBlockLayout(delimited.Content ?? string.Empty, delimited.Language));
+                output.Add(new CodeBlockLayout(delimited.Content ?? string.Empty, delimited.Language)
+                {
+                    Source = delimited.Source,
+                });
                 break;
             case DelimitedBlockKind.Example:
             case DelimitedBlockKind.Quote:
@@ -136,7 +139,7 @@ public class LayoutBuilder
         if (admonition.Inlines.Count > 0)
         {
             var inlines = BuildInlines(admonition.Inlines);
-            blocks.Add(new ParagraphLayout(inlines));
+            blocks.Add(new ParagraphLayout(inlines) { Source = admonition.Source });
         }
         else
         {
@@ -146,7 +149,7 @@ public class LayoutBuilder
             }
         }
 
-        return new AdmonitionLayout(kind, blocks);
+        return new AdmonitionLayout(kind, blocks) { Source = admonition.Source };
     }
 
     private static TableLayout BuildTable(TableNode table)
@@ -160,7 +163,7 @@ public class LayoutBuilder
                 rows.Add(BuildTableRow(rowNode, isHeaderRow));
             }
         }
-        return new TableLayout(table.Title, table.HasHeader, table.HasFooter, rows);
+        return new TableLayout(table.Title, table.HasHeader, table.HasFooter, rows) { Source = table.Source };
     }
 
     private static TableRowLayout BuildTableRow(TableRowNode rowNode, bool isHeaderRow)
@@ -200,7 +203,7 @@ public class LayoutBuilder
                 items.Add(new DescriptionItemLayout(term, desc));
             }
         }
-        return new DescriptionListLayout(items);
+        return new DescriptionListLayout(items) { Source = descList.Source };
     }
 
     private static void BuildToc(TocNode toc, List<BlockLayout> output)
@@ -213,8 +216,11 @@ public class LayoutBuilder
         {
             BuildTocEntry(entry, items);
         }
-        output.Add(new HeadingLayout(2, new InlineLayout[] { new TextRun("Table of Contents") }));
-        output.Add(new ListLayout(false, items));
+        output.Add(new HeadingLayout(2, new InlineLayout[] { new TextRun("Table of Contents") })
+        {
+            Source = toc.Source,
+        });
+        output.Add(new ListLayout(false, items) { Source = toc.Source });
     }
 
     private static void BuildTocEntry(TocEntry entry, List<ListItemLayout> items)
