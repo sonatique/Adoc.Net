@@ -3,6 +3,34 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.4] - 2026-05-19
+
+Follow-up to the v1.0.3 Avalonia table-column work.
+
+### Fixed
+
+- **Avalonia table star columns: cap outliers at 3× the median (#26).**
+  v1.0.3 weighted star columns by per-column natural content length so
+  wide tables fit their host viewport (#16). In tables with one cell of
+  long prose, that cell's raw weight (~150 chars) was an order of
+  magnitude greater than the other columns' (~4–15 chars), so the prose
+  column took ~half the viewport and every other column collapsed to
+  one letter per line — even short headers like "Trace writer parser"
+  rendered as a vertical stack of letters. Each column's star weight is
+  now capped at `max(1, 3 × median(weights))`. The cap only fires when
+  one column is an outlier; uniformly-sized tables keep their raw
+  weights unchanged. For the issue's repro the prose column's share
+  drops from ~57% to ~26%, leaving the other columns enough room to
+  render naturally.
+
+### Changed
+
+- The Avalonia column-weight algorithm moved into
+  `AdocNet.Layout.TableColumnWeights` (public static helper). The
+  algorithm is layout-shape-aware, not Avalonia-specific, so this also
+  lets downstream consumers — custom renderers, alternative preview
+  panes — reuse the same heuristic.
+
 ## [1.0.3] - 2026-05-19
 
 Five fixes against 1.0.2: four touching the Avalonia / Layout side of
