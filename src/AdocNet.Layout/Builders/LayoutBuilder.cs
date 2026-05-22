@@ -179,10 +179,13 @@ public class LayoutBuilder
                     inlines = new InlineLayout[] { new TextRun(cellNode.Text) };
                 }
                 bool isHeader = isHeaderRow || cellNode.ContentStyle == TableCellStyle.Header;
-                cells.Add(new TableCellLayout(inlines, cellNode.ColSpan, cellNode.RowSpan, isHeader));
+                cells.Add(new TableCellLayout(inlines, cellNode.ColSpan, cellNode.RowSpan, isHeader)
+                {
+                    Source = cellNode.Source,
+                });
             }
         }
-        return new TableRowLayout(cells);
+        return new TableRowLayout(cells) { Source = rowNode.Source };
     }
 
     private static DescriptionListLayout BuildDescriptionList(DescriptionListNode descList)
