@@ -16,7 +16,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.7</Version>
+    <Version>1.0.8</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) Sylvain Fasel</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -25,7 +25,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.7: First release shipping the AdocNet.Emitter NuGet package — the round-trip AsciiDoc emitter that was merged in v1.0.3 but never added to the build solution, so previous releases silently omitted it from the artifact set. The Emitter offers two modes: from-AST synthesis (walks the typed AST and produces AsciiDoc source) and a source-anchored fast path that emits unchanged subtrees byte-identical when the original source is supplied — the format-preservation mechanism for WYSIWYG / live-preview consumers. Also fixes a netstandard2.0 build error in DelimitedBlockEmitter that was latent until the project was actually compiled by CI. See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.8: Lands Phases 3–6 of the WYSIWYG roadmap that PRs #11–#14 nominally merged in May but never actually reached main — the four stacked PRs each used the previous stacked branch as base, so the merge commits sat on the chained branches instead of propagating to main. PR #35 cherry-picked them onto main; this release packages the result. New public `AdocNet.Avalonia.IncrementalAvaloniaRenderer` performs section-level diff-and-splice updates against an existing control tree, mirroring `IncrementalHtmlRenderer`. A new `samples/AdocNet.Avalonia.Editor` runnable demonstrates the full stack: source pane + live preview + toolbar + double-click-into-block editing + right-click context menu with AST-mutation actions that round-trip through the AdocNet.Emitter source-anchored path. See CHANGELOG.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->
