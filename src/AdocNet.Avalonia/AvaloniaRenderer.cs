@@ -28,11 +28,12 @@ public class AvaloniaRenderer
     private const string BulletPrefix = "\u2022 ";
 
     /// <summary>
-    /// When true (the default), <see cref="Render"/> wraps the produced
-    /// content panel in a <see cref="ScrollViewer"/> with horizontal scrolling
-    /// disabled. Set to false to receive the bare content control instead —
-    /// the natural choice when the consumer already hosts the result inside
-    /// its own scrolling container (e.g. an editor preview pane).
+    /// When true (the default), <see cref="Render(DocumentLayout)"/> wraps
+    /// the produced content panel in a <see cref="ScrollViewer"/> with
+    /// horizontal scrolling disabled. Set to false to receive the bare
+    /// content control instead — the natural choice when the consumer
+    /// already hosts the result inside its own scrolling container
+    /// (e.g. an editor preview pane).
     /// </summary>
     public bool WrapInScrollViewer { get; set; } = true;
 
@@ -79,6 +80,14 @@ public class AvaloniaRenderer
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
     }
+
+    /// <summary>
+    /// Renders a single <see cref="BlockLayout"/> into an Avalonia control.
+    /// Public entry point used by the incremental renderer to rebuild
+    /// individual top-level blocks without re-rendering the whole document.
+    /// Returns null when the block kind is not recognised.
+    /// </summary>
+    public Control? Render(BlockLayout block) => RenderBlock(block);
 
     private Control? RenderBlock(BlockLayout block)
     {

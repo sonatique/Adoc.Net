@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <IsPackable>false</IsPackable>
+    <!-- AvaloniaEdit pulls a couple of compiler warnings in older .NET — silence
+         them so TreatWarningsAsErrors (set in Directory.Build.props) doesn't
+         fail the sample build. -->
+    <NoWarn>$(NoWarn);CS8632</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.12" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.12" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.12" />
+    <PackageReference Include="Avalonia.AvaloniaEdit" Version="11.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AdocNet.Ast\AdocNet.Ast.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Parser\AdocNet.Parser.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Layout\AdocNet.Layout.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Avalonia\AdocNet.Avalonia.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Core\AdocNet.Core.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Emitter\AdocNet.Emitter.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="sample.adoc">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AdocNet.Avalonia.Editor.Tests" />
+  </ItemGroup>
+</Project>
