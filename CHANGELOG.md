@@ -3,6 +3,97 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.8] - 2026-05-22
+
+Lands the rest of the WYSIWYG roadmap (Phases 3–6) onto `main`.
+
+PRs #11–#14 each report as MERGED on GitHub but their base branch
+was the previous stacked PR's branch rather than `main` — a
+stacked-PR gotcha — so the merge commits actually sat on
+`origin/claude/{hybrid-editor,incremental-render,block-wysiwyg,full-wysiwyg}`
+and never propagated. v1.0.3 through v1.0.7 silently shipped without
+the hybrid editor sample, the incremental Avalonia renderer, the
+Block-WYSIWYG controller, or the AST-mutation commands. PR #35
+cherry-picked the four phase commits onto current main; this
+release packages the result.
+
+### Added
+
+- **`AdocNet.Avalonia.IncrementalAvaloniaRenderer`** (new public
+  class in the existing `AdocNet.Avalonia` NuGet package). Mirrors
+  `AdocNet.Editor.IncrementalHtmlRenderer`: after an initial full
+  render, subsequent renders use `AstDiffer.DiffSections` to find
+  the top-level blocks that changed and splice fresh Avalonia
+  control subtrees into the existing visual tree in place,
+  preserving scroll position and avoiding a full re-render. Added/
+  Removed sections and document-metadata changes fall back to a
+  full re-render automatically. Each top-level child carries a
+  `SectionTag(Index, StructuralHash)` via `Control.Tag` so the diff
+  can identify it positionally.
+
+- **`AdocNet.Avalonia.AvaloniaRenderer.Render(BlockLayout)` overload.**
+  Renders a single layout block to a control without the wrapping
+  `ScrollViewer`. Used by `IncrementalAvaloniaRenderer` to rebuild
+  individual sections, also useful to any consumer composing their
+  own preview surface from per-block controls.
+
+- **`samples/AdocNet.Avalonia.Editor`** (runnable Avalonia sample).
+  Full demonstration of the hybrid + Block-WYSIWYG + Full-WYSIWYG
+  flow on top of the AdocNet.Parser / AdocNet.Layout /
+  AdocNet.Avalonia / AdocNet.Emitter stack:
+
+  - Source pane (AvaloniaEdit) on the left, live Avalonia preview
+    on the right, toolbar of common formatting actions (Bold /
+    Italic / Monospace / Heading / Bullet list / Numbered list /
+    Link / Image / Table / Quote / Admonition / Code / HR),
+    status bar showing version + char count + parse timing +
+    diagnostic count + AST node at the caret.
+  - Debounced parse-render loop (`EditorViewModel`, 120 ms)
+    feeding the incremental renderer above. Cancels in-flight
+    parses when newer changes arrive; marshals back to the UI
+    thread for the splice.
+  - Block-WYSIWYG `BlockEditController`: double-click any rendered
+    block in the preview to swap it for an in-place AvaloniaEdit
+    prefilled with that block's source slice (resolved via the new
+    `SourceRangeOffsets` helper that maps an AST `SourceRange` to
+    a `(start, length)` pair of source-string offsets). Commit
+    splices back into the source editor; the incremental renderer
+    refreshes just that block.
+  - Right-click context menu with `Edit block`, `Duplicate block`,
+    `Delete block`, and `Toggle role: [.warning] / [.important]
+    / [.lead]`. On paragraphs, also `Promote to heading H1 / H2
+    / H3`.
+  - `WYSIWYG mode` toolbar toggle: collapses the source pane and
+    splitter so the preview takes the full editor area.
+  - `AstMutationCommands`: AST mutations (toggle role, duplicate
+    block, promote to heading) round-trip through
+    `AsciidocEmitter` — the typed AST node is mutated, emitted
+    fresh, and the resulting slice is spliced back into the
+    source. The splice range extends backward over any preceding
+    `[…]` attribute / `.Title` lines so role changes overwrite
+    existing attribute lines instead of leaving them stale.
+
+- **`tests/AdocNet.Avalonia.Editor.Tests`** (new test project,
+  46 cases). Uses `Avalonia.Headless.NUnit` to instantiate
+  `TextEditor` instances without a real window. Covers the
+  toolbar command primitives (17), the caret-context resolver
+  built on the inline source ranges added in v1.0.3 (7), the
+  source-range-to-offset helper (6), the incremental renderer's
+  diff dispatch (6), and the AST-mutation commands (9).
+
+- **`AdocNet.slnx`** entries for `samples/AdocNet.Avalonia.Editor`
+  and `tests/AdocNet.Avalonia.Editor.Tests` — both will now be
+  built and the test project's 46 tests run in CI on every push.
+
+### Fixed
+
+- **Doc-comment cref ambiguity in `AvaloniaRenderer.cs`.** Once
+  `Render(BlockLayout)` joined `Render(DocumentLayout)`, the
+  `<see cref="Render"/>` reference on `WrapInScrollViewer`'s
+  XML doc became ambiguous and broke the build. Pinned to
+  `Render(DocumentLayout)`, which is the overload the property
+  actually affects.
+
 ## [1.0.7] - 2026-05-22
 
 First release that actually ships the `AdocNet.Emitter` NuGet package.
