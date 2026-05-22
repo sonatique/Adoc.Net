@@ -28,11 +28,12 @@ public class AvaloniaRenderer
     private const string BulletPrefix = "\u2022 ";
 
     /// <summary>
-    /// When true (the default), <see cref="Render"/> wraps the produced
-    /// content panel in a <see cref="ScrollViewer"/> with horizontal scrolling
-    /// disabled. Set to false to receive the bare content control instead —
-    /// the natural choice when the consumer already hosts the result inside
-    /// its own scrolling container (e.g. an editor preview pane).
+    /// When true (the default), <see cref="Render(DocumentLayout)"/> wraps
+    /// the produced content panel in a <see cref="ScrollViewer"/> with
+    /// horizontal scrolling disabled. Set to false to receive the bare
+    /// content control instead — the natural choice when the consumer
+    /// already hosts the result inside its own scrolling container
+    /// (e.g. an editor preview pane).
     /// </summary>
     public bool WrapInScrollViewer { get; set; } = true;
 
