@@ -28,6 +28,14 @@ public sealed class TableCellLayout
     public bool IsHeader { get; }
 
     /// <summary>
+    /// Source range of the originating <c>TableCellNode</c>. Populated by
+    /// <see cref="Builders.LayoutBuilder"/>; defaults to
+    /// <see cref="SourceRange.None"/> when the cell was constructed
+    /// directly. Enables hover-to-source and per-cell diagnostics.
+    /// </summary>
+    public SourceRange Source { get; init; } = SourceRange.None;
+
+    /// <summary>
     /// Creates a new table cell layout.
     /// </summary>
     public TableCellLayout(IReadOnlyList<InlineLayout> inlines, int colSpan, int rowSpan, bool isHeader)
