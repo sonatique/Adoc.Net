@@ -3,6 +3,60 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.7] - 2026-05-22
+
+First release that actually ships the `AdocNet.Emitter` NuGet package.
+
+The emitter library was merged in v1.0.3 (PR #10, the round-trip
+AsciiDoc emitter) but the project was never added to `AdocNet.slnx`.
+The release workflow uses `dotnet pack` against the solution, so
+v1.0.3..v1.0.6 silently omitted `AdocNet.Emitter` from the artifact
+set even though the source was on `main`. This release fixes that
+oversight and also lights up CI test coverage for the emitter and
+its test project.
+
+### Added
+
+- **`AdocNet.Emitter` NuGet package.** The round-trip emitter is now
+  in the build solution and ships as `AdocNet.Emitter.1.0.7.nupkg`.
+  Two emit modes:
+  - From-AST synthesis: walks the typed AST and produces AsciiDoc
+    source from each node's properties. Foundation for AST-mutation
+    features (e.g. toggling a `[.role]` and round-tripping the
+    edit back to source).
+  - Source-anchored fast path
+    (`EmitOptions.PreserveOriginalWhenAvailable = true` +
+    `OriginalSource`): for any node carrying a populated
+    `SourceRange`, the emitter copies the original source slice
+    verbatim. Unchanged subtrees round-trip byte-identical;
+    only freshly synthesised nodes (those with `SourceRange.None`)
+    pay the synthesis cost. The format-preservation mechanism
+    for WYSIWYG and live-preview consumers.
+- **`tests/AdocNet.Emitter.Tests` is now part of the solution**, so
+  CI runs the emitter's 82 tests on every build — including the
+  round-trip property test across the full conformance corpus.
+
+### Fixed
+
+- **netstandard2.0 build error in `DelimitedBlockEmitter` (latent
+  since v1.0.3).** The verbatim-content emitter used
+  `ReadOnlySpan<char>` without a `#if NET10_0_OR_GREATER` gate or a
+  `System.Memory` package reference, so the netstandard2.0 TFM
+  failed to compile. This had been undetected because the project
+  was never in the build solution. Refactored the helper to operate
+  on `(string, int start, int end)` indices instead, which compiles
+  cleanly on both TFMs without a new package dependency.
+
+### Notes for downstream consumers
+
+If you were referencing the emitter source via a local checkout, no
+code changes are required — the public API is unchanged from v1.0.3.
+You can now switch to the published NuGet package:
+
+```xml
+<PackageReference Include="AdocNet.Emitter" Version="1.0.7" />
+```
+
 ## [1.0.6] - 2026-05-22
 
 Per-row and per-cell source positions on tables (#31). Completes the
