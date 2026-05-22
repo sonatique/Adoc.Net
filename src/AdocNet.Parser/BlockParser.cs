@@ -3975,13 +3975,16 @@ internal static class BlockParser
 
             if (cellTexts.Count == 0) continue;
 
-            var row = new TableRowNode();
+            int srcLine = i + 1;
+            var lineSource = new SourceRange(new SourcePosition(srcLine, 1), new SourcePosition(srcLine, line.Length));
+            var row = new TableRowNode { Source = lineSource };
             foreach (var cellText in cellTexts)
             {
                 var cell = new TableCellNode
                 {
                     Text = cellText,
                     Inlines = InlineParser.Parse(cellText, EffectiveNormalSubs(attributes), attributes),
+                    Source = lineSource,
                 };
                 row.AddChild(cell);
             }
@@ -4015,22 +4018,27 @@ internal static class BlockParser
         // Intermediate blank lines are folded into the joined content so
         // an `a|` AsciiDoc cell can hold paragraphs and lists separated by
         // blank lines.
-        var effectiveLines = new List<string>();
+        //
+        // Each effective line tracks the 1-based source-line range it spans
+        // so cells (and rows) can carry SourceRange metadata for downstream
+        // consumers — e.g. editor sync-scroll, hover-to-source — see #31.
+        var effectiveLines = new List<EffectiveTableLine>();
         for (int i = startIdx; i < endIdx; i++)
         {
             var line = lines[i];
+            int srcLine = i + 1;
             bool isBlank = string.IsNullOrWhiteSpace(line);
             bool isCellLineStart = !isBlank && IsCellLineStart(line, cellSeparator);
 
             if (isBlank || isCellLineStart)
             {
-                effectiveLines.Add(line);
+                effectiveLines.Add(new EffectiveTableLine(line, srcLine, srcLine));
                 continue;
             }
 
             // Continuation: find the most recent cell-starting entry.
             int last = effectiveLines.Count - 1;
-            while (last >= 0 && string.IsNullOrWhiteSpace(effectiveLines[last]))
+            while (last >= 0 && string.IsNullOrWhiteSpace(effectiveLines[last].Content))
                 last--;
 
             if (last >= 0)
@@ -4038,17 +4046,17 @@ internal static class BlockParser
                 // Fold any intermediate (blank) entries into the cell content so
                 // the resulting cell text preserves paragraph breaks for a|
                 // AsciiDoc cells whose body spans a blank line.
-                var sb = new System.Text.StringBuilder(effectiveLines[last]);
+                var sb = new System.Text.StringBuilder(effectiveLines[last].Content);
                 for (int j = last + 1; j < effectiveLines.Count; j++)
-                    sb.Append('\n').Append(effectiveLines[j]);
+                    sb.Append('\n').Append(effectiveLines[j].Content);
                 sb.Append('\n').Append(line);
-                effectiveLines[last] = sb.ToString();
+                effectiveLines[last] = new EffectiveTableLine(sb.ToString(), effectiveLines[last].StartLine, srcLine);
                 if (effectiveLines.Count > last + 1)
                     effectiveLines.RemoveRange(last + 1, effectiveLines.Count - last - 1);
             }
             else
             {
-                effectiveLines.Add(line);
+                effectiveLines.Add(new EffectiveTableLine(line, srcLine, srcLine));
             }
         }
 
@@ -4063,7 +4071,7 @@ internal static class BlockParser
             bool sawLeadingBlank = false;
             for (int i = 0; i < effectiveLines.Count; i++)
             {
-                var line = effectiveLines[i];
+                var line = effectiveLines[i].Content;
                 if (string.IsNullOrWhiteSpace(line))
                 {
                     if (foundFirstRow)
@@ -4090,15 +4098,19 @@ internal static class BlockParser
         // Determine column count from colSpec if available.
         int colCount = columns?.Count ?? 0;
 
-        // Collect all cells from all lines.
+        // Collect all cells from all lines, tagged with the source range of
+        // the effective line they came from.
         var allCells = new List<CellInfo>();
         for (int i = 0; i < effectiveLines.Count; i++)
         {
-            var line = effectiveLines[i];
-            if (string.IsNullOrWhiteSpace(line)) continue;
-            if (!line.Contains(cellSeparator)) continue;
+            var eff = effectiveLines[i];
+            if (string.IsNullOrWhiteSpace(eff.Content)) continue;
+            if (!eff.Content.Contains(cellSeparator)) continue;
 
-            var cellInfos = ParseTableCellsWithSpans(line, cellSeparator);
+            var cellInfos = ParseTableCellsWithSpans(eff.Content, cellSeparator);
+            var cellSource = MakeRowSource(eff, lines);
+            for (int j = 0; j < cellInfos.Count; j++)
+                cellInfos[j] = cellInfos[j] with { Source = cellSource };
             allCells.AddRange(cellInfos);
         }
 
@@ -4111,7 +4123,7 @@ internal static class BlockParser
             int firstLineCount = 0;
             for (int i = 0; i < effectiveLines.Count; i++)
             {
-                var line = effectiveLines[i];
+                var line = effectiveLines[i].Content;
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 if (!line.Contains(cellSeparator)) continue;
                 firstLineCount = ParseTableCellsWithSpans(line, cellSeparator).Count;
@@ -4159,6 +4171,7 @@ internal static class BlockParser
                 colsUsed += info.ColSpan;
                 if (colsUsed >= colCount)
                 {
+                    FinaliseRowSource(currentRow);
                     table.AddChild(currentRow);
                     currentRow = new TableRowNode();
                     // Decrement active rowspans for the next row.
@@ -4194,7 +4207,10 @@ internal static class BlockParser
                         actualCells += tc.ColSpan;
                 }
                 if (actualCells >= availableSlots)
+                {
+                    FinaliseRowSource(currentRow);
                     table.AddChild(currentRow);
+                }
             }
         }
         else
@@ -4202,18 +4218,21 @@ internal static class BlockParser
             // Original behavior: each line is a row.
             for (int i = 0; i < effectiveLines.Count; i++)
             {
-                var line = effectiveLines[i];
-                if (string.IsNullOrWhiteSpace(line)) continue;
-                if (!line.Contains(cellSeparator)) continue;
+                var eff = effectiveLines[i];
+                if (string.IsNullOrWhiteSpace(eff.Content)) continue;
+                if (!eff.Content.Contains(cellSeparator)) continue;
 
-                var cellInfos = ParseTableCellsWithSpans(line, cellSeparator);
+                var cellInfos = ParseTableCellsWithSpans(eff.Content, cellSeparator);
                 if (cellInfos.Count == 0) continue;
 
+                var cellSource = MakeRowSource(eff, lines);
                 var row = new TableRowNode();
                 foreach (var info in cellInfos)
                 {
-                    row.AddChild(CreateTableCell(info, attributes));
+                    var tagged = info with { Source = cellSource };
+                    row.AddChild(CreateTableCell(tagged, attributes));
                 }
+                row.Source = cellSource;
                 table.AddChild(row);
             }
         }
@@ -4243,6 +4262,7 @@ internal static class BlockParser
                 RowSpan = info.RowSpan,
                 Alignment = info.Alignment,
                 ContentStyle = TableCellStyle.AsciiDoc,
+                Source = info.Source,
             };
             foreach (var child in innerResult.Document.Children)
                 cellNode.AddChild(child);
@@ -4257,7 +4277,59 @@ internal static class BlockParser
             RowSpan = info.RowSpan,
             Alignment = info.Alignment,
             ContentStyle = info.ContentStyle,
+            Source  = info.Source,
         };
+    }
+
+    /// <summary>
+    /// One entry in the table-content "effective lines" buffer:
+    /// the joined string (after folding continuation lines) plus the
+    /// 1-based source-line range from which it was built.
+    /// </summary>
+    private readonly record struct EffectiveTableLine(string Content, int StartLine, int EndLine);
+
+    /// <summary>
+    /// Builds a <see cref="SourceRange"/> spanning the given effective line's
+    /// source-line range. Columns 1..lastLineLength so the range covers the
+    /// full content of the original lines.
+    /// </summary>
+    private static SourceRange MakeRowSource(EffectiveTableLine eff, string[] lines)
+    {
+        int endCol = eff.EndLine - 1 < lines.Length && eff.EndLine - 1 >= 0
+            ? lines[eff.EndLine - 1].Length
+            : 1;
+        return new SourceRange(new SourcePosition(eff.StartLine, 1), new SourcePosition(eff.EndLine, endCol));
+    }
+
+    /// <summary>
+    /// After all cells have been added to a row, set the row's
+    /// <see cref="AstNode.Source"/> to the union of its cells' sources.
+    /// </summary>
+    private static void FinaliseRowSource(TableRowNode row)
+    {
+        int minStartLine = int.MaxValue;
+        int minStartCol = int.MaxValue;
+        int maxEndLine = int.MinValue;
+        int maxEndCol = int.MinValue;
+        foreach (var child in row.Children)
+        {
+            if (child is not TableCellNode cell) continue;
+            if (cell.Source.IsNone) continue;
+            if (cell.Source.Start.Line < minStartLine
+                || (cell.Source.Start.Line == minStartLine && cell.Source.Start.Column < minStartCol))
+            {
+                minStartLine = cell.Source.Start.Line;
+                minStartCol = cell.Source.Start.Column;
+            }
+            if (cell.Source.End.Line > maxEndLine
+                || (cell.Source.End.Line == maxEndLine && cell.Source.End.Column > maxEndCol))
+            {
+                maxEndLine = cell.Source.End.Line;
+                maxEndCol = cell.Source.End.Column;
+            }
+        }
+        if (minStartLine != int.MaxValue)
+            row.Source = new SourceRange(new SourcePosition(minStartLine, minStartCol), new SourcePosition(maxEndLine, maxEndCol));
     }
 
     /// <summary>
@@ -4636,8 +4708,11 @@ internal static class BlockParser
 
     /// <summary>
     /// Holds parsed cell info including span and alignment metadata.
+    /// <see cref="Source"/> is the source range of the lines that contributed
+    /// the cell's text (defaults to <see cref="SourceRange.None"/> for callers
+    /// that don't track line numbers).
     /// </summary>
-    private readonly record struct CellInfo(string Text, int ColSpan, int RowSpan, TableAlignment? Alignment, TableCellStyle ContentStyle = TableCellStyle.Default);
+    private readonly record struct CellInfo(string Text, int ColSpan, int RowSpan, TableAlignment? Alignment, TableCellStyle ContentStyle = TableCellStyle.Default, SourceRange Source = default);
 
     private static readonly Dictionary<char, TableCellStyle> CellStyleLetters = new()
     {
