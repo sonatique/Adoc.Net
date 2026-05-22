@@ -3,6 +3,34 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.6] - 2026-05-22
+
+Per-row and per-cell source positions on tables (#31). Completes the
+sync-scroll story started in #19 (block-level source positions in
+v1.0.3) down to table-cell granularity.
+
+### Fixed
+
+- **`TableRowNode.Source` and `TableCellNode.Source` are now populated
+  by the parser (#31).** Previously both reported `Source.IsNone == true`
+  on every row and cell, so consumers building a live-preview editor
+  could map "source line N falls inside table T" but not "source line N
+  falls in row R of T" — forcing dead-zones in editor sync-scroll while
+  the cursor traversed long tables. The parser now tracks an effective-
+  line buffer where each entry knows its source-line range, tags every
+  cell with the range, and unions the cell sources to set the row's
+  source on finalisation. Multi-line cells (an `a|` AsciiDoc cell whose
+  content spans several physical lines) get a range whose `End` line is
+  after `Start`. Works for the column-aware grouping path, the line-as-
+  row fallback, and the CSV / DSV / TSV path.
+
+### Added
+
+- **`TableRowLayout.Source` and `TableCellLayout.Source`.** Init-only
+  `SourceRange` properties, populated by `LayoutBuilder` from the AST
+  nodes. Defaults to `SourceRange.None` for layouts constructed
+  directly. Mirrors the `BlockLayout.Source` API added in v1.0.3.
+
 ## [1.0.5] - 2026-05-19
 
 Root-cause fix for Avalonia table-column collapse with row-spans (#26),
