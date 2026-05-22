@@ -177,11 +177,10 @@ internal static class DelimitedBlockEmitter
             // Find end of line.
             int eol = content.IndexOf('\n', i);
             int lineEnd = eol < 0 ? content.Length : eol;
-            var line = content.AsSpan(i, lineEnd - i);
 
-            if (LineStartsWithConditionalOrInclude(line))
+            if (LineStartsWithConditionalOrInclude(content, i, lineEnd))
                 ctx.Output.Append('\\');
-            ctx.Output.Append(line.ToString());
+            ctx.Output.Append(content, i, lineEnd - i);
             if (eol >= 0)
                 ctx.Output.Append('\n');
 
@@ -189,12 +188,28 @@ internal static class DelimitedBlockEmitter
         }
     }
 
-    private static bool LineStartsWithConditionalOrInclude(ReadOnlySpan<char> line)
+    /// <summary>
+    /// Returns true when the substring of <paramref name="content"/> from
+    /// <paramref name="start"/> to <paramref name="end"/> (exclusive) starts
+    /// with one of the conditional-/include-directive prefixes. Implemented
+    /// against a string + indices rather than <c>ReadOnlySpan&lt;char&gt;</c>
+    /// so the helper compiles cleanly on netstandard2.0 without an extra
+    /// <c>System.Memory</c> reference.
+    /// </summary>
+    private static bool LineStartsWithConditionalOrInclude(string content, int start, int end)
     {
-        return line.StartsWith("ifdef::".AsSpan(), StringComparison.Ordinal)
-            || line.StartsWith("ifndef::".AsSpan(), StringComparison.Ordinal)
-            || line.StartsWith("ifeval::".AsSpan(), StringComparison.Ordinal)
-            || line.StartsWith("endif::".AsSpan(), StringComparison.Ordinal)
-            || line.StartsWith("include::".AsSpan(), StringComparison.Ordinal);
+        return StartsWithAt(content, start, end, "ifdef::")
+            || StartsWithAt(content, start, end, "ifndef::")
+            || StartsWithAt(content, start, end, "ifeval::")
+            || StartsWithAt(content, start, end, "endif::")
+            || StartsWithAt(content, start, end, "include::");
+    }
+
+    private static bool StartsWithAt(string source, int start, int end, string prefix)
+    {
+        if (end - start < prefix.Length) return false;
+        for (int i = 0; i < prefix.Length; i++)
+            if (source[start + i] != prefix[i]) return false;
+        return true;
     }
 }

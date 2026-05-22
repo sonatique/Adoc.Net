@@ -16,7 +16,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.6</Version>
+    <Version>1.0.7</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) Sylvain Fasel</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -25,7 +25,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.6: Per-row and per-cell source positions on tables (#31). `TableRowNode.Source` and `TableCellNode.Source` are now populated by the parser, and the matching `TableRowLayout.Source` / `TableCellLayout.Source` are propagated by `LayoutBuilder`. Live-preview consumers can now map editor scroll position to table rows authoritatively instead of estimating, and hover-to-source / per-cell diagnostics work cell-granular. Multi-line cells (an `a|` cell whose content spans several physical lines) get a source range that covers the full span. See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.7: First release shipping the AdocNet.Emitter NuGet package — the round-trip AsciiDoc emitter that was merged in v1.0.3 but never added to the build solution, so previous releases silently omitted it from the artifact set. The Emitter offers two modes: from-AST synthesis (walks the typed AST and produces AsciiDoc source) and a source-anchored fast path that emits unchanged subtrees byte-identical when the original source is supplied — the format-preservation mechanism for WYSIWYG / live-preview consumers. Also fixes a netstandard2.0 build error in DelimitedBlockEmitter that was latent until the project was actually compiled by CI. See CHANGELOG.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->
