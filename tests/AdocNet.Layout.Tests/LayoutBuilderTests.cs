@@ -534,4 +534,105 @@ public class LayoutBuilderTests
         Assert.That(minWidths[1], Is.GreaterThan(0),
             "Empty column must have a non-zero minimum width");
     }
+
+    // ── Per-row source positions (issue #31) ────────────────────────
+
+    [Test]
+    public void TableRowLayout_carries_source_lines_from_originating_row_nodes()
+    {
+        // Each row's Source must be populated from the originating
+        // TableRowNode, and the start lines must advance row-by-row in
+        // the source — otherwise sync-scroll consumers can't map editor
+        // scroll position to preview row.
+        var source = """
+            = Doc
+
+            |===
+            | H1 | H2
+
+            | a1 | a2
+            | b1 | b2
+            | c1 | c2
+            |===
+            """;
+        var layout = Build(source);
+        var table = layout.Children.OfType<TableLayout>().Single();
+
+        Assert.That(table.Rows, Has.Count.EqualTo(4));
+        foreach (var row in table.Rows)
+            Assert.That(row.Source.IsNone, Is.False,
+                "Every TableRowLayout must have a non-None Source");
+
+        // Each row's source line is strictly later than the previous
+        // (there are no rowspans here that would compress multiple rows
+        // into one source span).
+        int prevLine = 0;
+        foreach (var row in table.Rows)
+        {
+            Assert.That(row.Source.Start.Line, Is.GreaterThan(prevLine),
+                $"Row source line {row.Source.Start.Line} must be after prior row at line {prevLine}");
+            prevLine = row.Source.Start.Line;
+        }
+    }
+
+    [Test]
+    public void TableCellLayout_carries_source_lines_from_originating_cell_nodes()
+    {
+        // Cell-level source ranges power hover-to-source and per-cell
+        // diagnostics. Each cell must end up tagged with the line it
+        // was parsed from.
+        var source = """
+            |===
+            | Cell A
+            | Cell B
+            | Cell C
+            |===
+            """;
+        var layout = Build(source);
+        var table = layout.Children.OfType<TableLayout>().Single();
+
+        // Flatten all cells (this table is 1 column × 3 rows).
+        var cells = table.Rows.SelectMany(r => r.Cells).ToList();
+        Assert.That(cells, Has.Count.EqualTo(3));
+        foreach (var cell in cells)
+            Assert.That(cell.Source.IsNone, Is.False, "Every cell must have a non-None Source");
+
+        // Cells should be in source-line order.
+        int prev = 0;
+        foreach (var cell in cells)
+        {
+            Assert.That(cell.Source.Start.Line, Is.GreaterThan(prev));
+            prev = cell.Source.Start.Line;
+        }
+    }
+
+    [Test]
+    public void TableRowLayout_source_spans_multi_line_cells()
+    {
+        // When a cell's content spans multiple source lines (because the
+        // continuation-joining folded subsequent lines into it), the row's
+        // Source range must cover the full span — Start at the first line,
+        // End at the last.
+        var source = """
+            [cols="1,1"]
+            |===
+            | first cell
+              continuation line for first cell
+            | second cell
+
+            | other row first
+            | other row second
+            |===
+            """;
+        var layout = Build(source);
+        var table = layout.Children.OfType<TableLayout>().Single();
+
+        Assert.That(table.Rows.Count, Is.GreaterThanOrEqualTo(1));
+        var firstRow = table.Rows[0];
+        Assert.That(firstRow.Source.IsNone, Is.False);
+        // First cell starts on line 3, but its content runs through line 4
+        // (the continuation). Row's End line must be ≥ Start line + 1.
+        Assert.That(firstRow.Source.End.Line, Is.GreaterThan(firstRow.Source.Start.Line),
+            "Multi-line cell content must extend the row's Source.End past Source.Start");
+    }
 }
