@@ -192,7 +192,7 @@ public sealed partial class HtmlRenderer
                 sb.Append("<span class=\"image\"><img src=\"");
                 AppendImageSrc(sb, inlineImage.Target, state);
                 sb.Append("\" alt=\"");
-                EscapeTo(sb, inlineImage.Alt);
+                EscapeAttributeTo(sb, inlineImage.Alt);
                 sb.Append('"');
                 if (inlineImage.Width is not null)
                 {
