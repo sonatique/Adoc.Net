@@ -120,8 +120,13 @@ public static class SyntaxTokenizer
         };
     }
 
+    // Anchor every rule at the scan position with \G. Without it the patterns
+    // are unanchored, so Match(source, pos) scans forward to end-of-input before
+    // the caller discards a match whose Index != pos — O(n) wasted work per
+    // position per rule. \G forces the match to begin exactly at pos, so a
+    // non-match is rejected immediately.
     private static Regex R(string pattern) =>
-        new(pattern, RegexOptions.Compiled);
+        new(@"\G(?:" + pattern + ")", RegexOptions.Compiled);
 
     private static List<(Regex, TokenKind)> BuildCSharp() =>
     [
