@@ -33,6 +33,41 @@ public class HtmlRendererTests
         Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(""));
     }
 
+    // ── menu: macro ──────────────────────────────────────────────────────
+
+    [Test]
+    public void Menu_macro_with_submenu_path_matches_asciidoctor()
+    {
+        var doc = AdocParser.Parse(":experimental:\n\nmenu:File[Save > As]").Document;
+        var html = new HtmlRenderer().RenderToString(doc);
+
+        Assert.That(html, Does.Contain(
+            "<span class=\"menuseq\"><b class=\"menu\">File</b>" +
+            "&#160;<b class=\"caret\">&#8250;</b> <b class=\"submenu\">Save</b>" +
+            "&#160;<b class=\"caret\">&#8250;</b> <b class=\"menuitem\">As</b></span>"));
+    }
+
+    [Test]
+    public void Menu_macro_single_item_is_a_menuitem()
+    {
+        var doc = AdocParser.Parse(":experimental:\n\nmenu:File[Open]").Document;
+        var html = new HtmlRenderer().RenderToString(doc);
+
+        Assert.That(html, Does.Contain(
+            "<span class=\"menuseq\"><b class=\"menu\">File</b>" +
+            "&#160;<b class=\"caret\">&#8250;</b> <b class=\"menuitem\">Open</b></span>"));
+    }
+
+    [Test]
+    public void Menu_macro_empty_content_renders_menuref()
+    {
+        var doc = AdocParser.Parse(":experimental:\n\nmenu:View[]").Document;
+        var html = new HtmlRenderer().RenderToString(doc);
+
+        Assert.That(html, Does.Contain("<b class=\"menuref\">View</b>"));
+        Assert.That(html, Does.Not.Contain("menuseq"));
+    }
+
     // ── Attribute escaping ───────────────────────────────────────────────
 
     [Test]

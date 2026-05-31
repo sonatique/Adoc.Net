@@ -416,12 +416,34 @@ public sealed partial class HtmlRenderer
                 break;
 
             case "menu":
-                sb.Append("<span class=\"menuseq\"><span class=\"menu\">");
-                EscapeTo(sb, macro.Target);
-                sb.Append("</span>&#160;&#9656; <span class=\"submenu\">");
-                EscapeTo(sb, macro.Content);
-                sb.Append("</span></span>");
+            {
+                // Asciidoctor markup: empty content renders a single menuref;
+                // otherwise the content path is split on '>' into submenu items
+                // (the final item is the menuitem), separated by a caret.
+                if (string.IsNullOrWhiteSpace(macro.Content))
+                {
+                    sb.Append("<b class=\"menuref\">");
+                    EscapeTo(sb, macro.Target);
+                    sb.Append("</b>");
+                }
+                else
+                {
+                    var path = macro.Content.Split('>');
+                    sb.Append("<span class=\"menuseq\"><b class=\"menu\">");
+                    EscapeTo(sb, macro.Target);
+                    sb.Append("</b>");
+                    for (int k = 0; k < path.Length; k++)
+                    {
+                        sb.Append("&#160;<b class=\"caret\">&#8250;</b> <b class=\"");
+                        sb.Append(k == path.Length - 1 ? "menuitem" : "submenu");
+                        sb.Append("\">");
+                        EscapeTo(sb, path[k].Trim());
+                        sb.Append("</b>");
+                    }
+                    sb.Append("</span>");
+                }
                 break;
+            }
 
             case "icon":
                 RenderIconMacro(sb, macro, state);
