@@ -68,6 +68,31 @@ public class HtmlRendererTests
         Assert.That(html, Does.Not.Contain("menuseq"));
     }
 
+    // ── Table column widths ──────────────────────────────────────────────
+
+    [Test]
+    public void Table_last_column_width_carries_the_remainder()
+    {
+        // 7 equal columns: the last carries the remainder, 14.2858 (not 14.2857
+        // — binary FP would truncate the remainder one digit short).
+        var doc = AdocParser.Parse("[cols=\"1,1,1,1,1,1,1\"]\n|===\n|a|b|c|d|e|f|g\n|===").Document;
+        var html = new HtmlRenderer().RenderToString(doc);
+
+        Assert.That(html, Does.Contain("<col style=\"width: 14.2858%;\">"));
+    }
+
+    [Test]
+    public void Table_column_width_strips_trailing_zeros()
+    {
+        // 11 equal columns: the remainder formats as 9.091, not 9.0910.
+        var doc = AdocParser.Parse(
+            "[cols=\"1,1,1,1,1,1,1,1,1,1,1\"]\n|===\n|a|b|c|d|e|f|g|h|i|j|k\n|===").Document;
+        var html = new HtmlRenderer().RenderToString(doc);
+
+        Assert.That(html, Does.Contain("<col style=\"width: 9.091%;\">"));
+        Assert.That(html, Does.Not.Contain("9.0910"));
+    }
+
     // ── Attribute escaping ───────────────────────────────────────────────
 
     [Test]
