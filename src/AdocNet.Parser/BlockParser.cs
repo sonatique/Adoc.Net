@@ -4366,63 +4366,73 @@ internal static class BlockParser
         if (string.IsNullOrWhiteSpace(spec))
             return columns;
 
-        // "N*" form: N equal columns
-        if (spec.EndsWith('*'))
-        {
-            var countStr = spec[..^1];
-            if (int.TryParse(countStr, out int count) && count > 0)
-            {
-                for (int i = 0; i < count; i++)
-                    columns.Add(new TableColumnSpec { Width = 1 });
-                return columns;
-            }
-        }
-
-        // Comma-separated: each entry is optional-alignment + optional-width.
-        // An empty entry (e.g. "1,,1") represents one column with the default
-        // spec, matching Asciidoctor's behaviour.
+        // Comma-separated: each entry is an optional repeat-multiplier (N*)
+        // followed by an optional alignment + optional width. "N*<spec>" expands
+        // to N copies of <spec> (the default spec when <spec> is omitted):
+        // "3*" -> three default columns, "2*2" -> two width-2 columns,
+        // "2*^1" -> two centre-aligned width-1 columns. An empty entry
+        // (e.g. "1,,1") is one column with the default spec.
         var parts = spec.Split(',');
         foreach (var part in parts)
         {
             var p = part.Trim();
 
-            var horizAlign = TableAlignment.Left;
-            var vertAlign = TableVerticalAlignment.Top;
-            int parseIdx = 0;
-
-            // Horizontal alignment prefix
-            if (parseIdx < p.Length && p[parseIdx] is '<' or '>' or '^')
+            int repeat = 1;
+            int star = p.IndexOf('*');
+            if (star > 0 && int.TryParse(p.Substring(0, star), out int rep) && rep > 0)
             {
-                horizAlign = p[parseIdx] switch
-                {
-                    '>' => TableAlignment.Right,
-                    '^' => TableAlignment.Center,
-                    _ => TableAlignment.Left,
-                };
-                parseIdx++;
+                repeat = rep;
+                p = p.Substring(star + 1);
             }
 
-            // Vertical alignment prefix: .< .> .^
-            if (parseIdx + 1 < p.Length && p[parseIdx] == '.' && p[parseIdx + 1] is '<' or '>' or '^')
-            {
-                vertAlign = p[parseIdx + 1] switch
-                {
-                    '>' => TableVerticalAlignment.Bottom,
-                    '^' => TableVerticalAlignment.Middle,
-                    _ => TableVerticalAlignment.Top,
-                };
-                parseIdx += 2;
-            }
-
-            var widthStr = p[parseIdx..];
-            int width = 1;
-            if (widthStr.Length > 0 && int.TryParse(widthStr, out int parsed) && parsed > 0)
-                width = parsed;
-
-            columns.Add(new TableColumnSpec { Width = width, Alignment = horizAlign, VerticalAlignment = vertAlign });
+            for (int r = 0; r < repeat; r++)
+                columns.Add(ParseSingleColumnSpec(p));
         }
 
         return columns;
+    }
+
+    /// <summary>
+    /// Parses a single column spec part ("optional-alignment + optional-width",
+    /// e.g. "^2", ".&gt;1", "3") into a <see cref="TableColumnSpec"/>. An empty or
+    /// width-less part yields the default width of 1.
+    /// </summary>
+    private static TableColumnSpec ParseSingleColumnSpec(string p)
+    {
+        var horizAlign = TableAlignment.Left;
+        var vertAlign = TableVerticalAlignment.Top;
+        int parseIdx = 0;
+
+        // Horizontal alignment prefix
+        if (parseIdx < p.Length && p[parseIdx] is '<' or '>' or '^')
+        {
+            horizAlign = p[parseIdx] switch
+            {
+                '>' => TableAlignment.Right,
+                '^' => TableAlignment.Center,
+                _ => TableAlignment.Left,
+            };
+            parseIdx++;
+        }
+
+        // Vertical alignment prefix: .< .> .^
+        if (parseIdx + 1 < p.Length && p[parseIdx] == '.' && p[parseIdx + 1] is '<' or '>' or '^')
+        {
+            vertAlign = p[parseIdx + 1] switch
+            {
+                '>' => TableVerticalAlignment.Bottom,
+                '^' => TableVerticalAlignment.Middle,
+                _ => TableVerticalAlignment.Top,
+            };
+            parseIdx += 2;
+        }
+
+        var widthStr = p.Substring(parseIdx);
+        int width = 1;
+        if (widthStr.Length > 0 && int.TryParse(widthStr, out int parsed) && parsed > 0)
+            width = parsed;
+
+        return new TableColumnSpec { Width = width, Alignment = horizAlign, VerticalAlignment = vertAlign };
     }
 
     /// <summary>
