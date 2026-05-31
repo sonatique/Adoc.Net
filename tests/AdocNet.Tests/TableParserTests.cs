@@ -788,6 +788,33 @@ public class TableParserTests
     }
 
     [Test]
+    public void Cols_repeat_multiplier_expands_to_n_columns()
+    {
+        // 2* -> two default columns, then ,1 -> a third; 2*2 -> two width-2 cols.
+        var twoStarOne = ParseColumns("2*,1");
+        Assert.That(twoStarOne, Has.Count.EqualTo(3));
+        Assert.That(twoStarOne.Select(c => c.Width), Is.EqualTo(new[] { 1, 1, 1 }));
+
+        var twoStarTwo = ParseColumns("2*2,1");
+        Assert.That(twoStarTwo, Has.Count.EqualTo(3));
+        Assert.That(twoStarTwo.Select(c => c.Width), Is.EqualTo(new[] { 2, 2, 1 }));
+
+        // 2*^1 -> two centre-aligned width-1 columns.
+        var twoStarCentre = ParseColumns("2*^1");
+        Assert.That(twoStarCentre, Has.Count.EqualTo(2));
+        Assert.That(twoStarCentre.All(c => c.Alignment == TableAlignment.Center), Is.True);
+
+        // Whole-spec form still works.
+        Assert.That(ParseColumns("3*"), Has.Count.EqualTo(3));
+    }
+
+    private static IReadOnlyList<TableColumnSpec> ParseColumns(string cols)
+    {
+        var result = BlockParser.Parse($"[cols=\"{cols}\"]\n|===\n|a|b|c\n|===");
+        return result.Document.Children.OfType<TableNode>().First().Columns!;
+    }
+
+    [Test]
     public void Escaped_pipe_is_literal_content_not_a_cell_boundary()
     {
         // Asciidoctor: `| a \| b | c` -> two cells, "a | b" and "c".
