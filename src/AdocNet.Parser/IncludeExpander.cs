@@ -823,7 +823,10 @@ internal static class IncludeExpander
     internal static List<(int Start, int End)> ParseLineRanges(string value)
     {
         var ranges = new List<(int Start, int End)>();
-        foreach (var segment in value.Split(';'))
+        // A quoted lines= value may separate ranges with ';' or ',' (AsciiDoc
+        // requires the quotes precisely so a ',' isn't read as an attribute
+        // separator), e.g. lines="1..2,5..6" or lines="1;3..4".
+        foreach (var segment in value.Split(';', ','))
         {
             var trimmed = segment.Trim();
             if (trimmed.Length == 0) continue;
