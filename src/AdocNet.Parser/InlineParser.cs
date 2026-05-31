@@ -264,10 +264,15 @@ internal static class InlineParser
                 }
             }
 
-            // ── Inline passthrough: +content+ ───────────────────────────────
-            if (doFormatting && c == '+')
+            // ── Inline passthrough: +content+ (constrained) ─────────────────
+            // The single-plus passthrough is a *constrained* mark: the opening
+            // `+` must sit on a word boundary and not be followed by space, and
+            // the closing `+` must not be preceded by space. This keeps ordinary
+            // prose/maths like `a + b + c`, `1+1`, and `C++` literal instead of
+            // silently swallowing the `+` markers.
+            if (doFormatting && c == '+' && IsConstrainedOpenValid(text, i, endIndex))
             {
-                int close = IndexOf(text, '+', i + 1, endIndex);
+                int close = FindConstrainedClose(text, '+', i + 1, endIndex);
                 if (close > i + 1)
                 {
                     int nodeStart = i;
@@ -565,9 +570,12 @@ internal static class InlineParser
             }
 
             // ── Unconstrained emphasis: __content__ ─────────────────────────
+            // Emphasis nests legitimately inside monospace (`` `_x_` `` →
+            // <code><em>x</em></code> in Asciidoctor); snake_case inside code
+            // is already protected by the constrained word-boundary rule, so
+            // no Monospace guard is needed here.
             if (doFormatting && c == '_' && i + 1 < endIndex && text[i + 1] == '_'
-                && !activeMarkers.HasFlag(ActiveMarkers.Emphasis)
-                && !activeMarkers.HasFlag(ActiveMarkers.Monospace))
+                && !activeMarkers.HasFlag(ActiveMarkers.Emphasis))
             {
                 int close = text.IndexOf("__", i + 2, StringComparison.Ordinal);
                 if (close > i + 2 && close + 2 <= endIndex)
@@ -583,8 +591,8 @@ internal static class InlineParser
             }
 
             // ── Constrained emphasis: _content_ ─────────────────────────────
+            // (No Monospace guard — see the unconstrained branch above.)
             if (doFormatting && c == '_' && !activeMarkers.HasFlag(ActiveMarkers.Emphasis)
-                && !activeMarkers.HasFlag(ActiveMarkers.Monospace)
                 && IsConstrainedOpenValid(text, i, endIndex))
             {
                 int close = FindConstrainedClose(text, '_', i + 1, endIndex);

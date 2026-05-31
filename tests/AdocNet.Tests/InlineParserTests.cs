@@ -660,4 +660,81 @@ public class InlineParserTests
         Assert.That(indexNode.Entries[0].SubTerms[0], Is.EqualTo("apple"));
         Assert.That(indexNode.Entries[0].SubTerms[1], Is.EqualTo("red"));
     }
+
+    // ── Emphasis nested inside monospace ─────────────────────────────────
+    // Asciidoctor renders `_italic_` as <code><em>italic</em></code>; emphasis
+    // is NOT suppressed inside monospace. The constrained word-boundary rule
+    // alone protects snake_case identifiers from being italicized.
+
+    [Test]
+    public void Constrained_emphasis_inside_monospace_is_parsed()
+    {
+        var inlines = InlineParser.Parse("`_italic_`");
+
+        Assert.That(inlines, Has.Count.EqualTo(1));
+        Assert.That(inlines[0], Is.InstanceOf<MonospaceInlineNode>());
+        var mono = (MonospaceInlineNode)inlines[0];
+        Assert.That(mono.Children, Has.Count.EqualTo(1));
+        Assert.That(mono.Children[0], Is.InstanceOf<EmphasisInlineNode>());
+        Assert.That(((EmphasisInlineNode)mono.Children[0]).Content, Is.EqualTo("italic"));
+    }
+
+    [Test]
+    public void Unconstrained_emphasis_inside_monospace_is_parsed()
+    {
+        var inlines = InlineParser.Parse("`__x__`");
+
+        Assert.That(inlines, Has.Count.EqualTo(1));
+        var mono = (MonospaceInlineNode)inlines[0];
+        Assert.That(mono.Children[0], Is.InstanceOf<EmphasisInlineNode>());
+    }
+
+    [Test]
+    public void Snake_case_inside_monospace_is_left_literal()
+    {
+        // `my_var` must stay literal — the underscore follows a word char so
+        // it cannot open a constrained emphasis span.
+        var inlines = InlineParser.Parse("`my_var`");
+
+        Assert.That(inlines, Has.Count.EqualTo(1));
+        var mono = (MonospaceInlineNode)inlines[0];
+        Assert.That(mono.Content, Is.EqualTo("my_var"));
+        Assert.That(mono.Children.Any(c => c is EmphasisInlineNode), Is.False);
+    }
+
+    // ── Single-plus inline passthrough is constrained ─────────────────────
+    // The single `+...+` passthrough requires word boundaries, so ordinary
+    // prose/maths must stay literal rather than have its `+` markers swallowed.
+
+    [Test]
+    public void Plus_surrounded_by_spaces_is_not_a_passthrough()
+    {
+        var inlines = InlineParser.Parse("a + b + c");
+
+        Assert.That(inlines.Any(n => n is PassthroughInlineNode), Is.False);
+        var text = string.Concat(inlines.OfType<TextInlineNode>().Select(t => t.Value));
+        Assert.That(text, Is.EqualTo("a + b + c"));
+    }
+
+    [Test]
+    public void Plus_adjacent_to_word_chars_is_not_a_passthrough()
+    {
+        // 1+1 and C++ must stay literal.
+        foreach (var src in new[] { "1+1", "C++", "note+s+" })
+        {
+            var inlines = InlineParser.Parse(src);
+            Assert.That(inlines.Any(n => n is PassthroughInlineNode), Is.False, $"'{src}' should not pass through");
+            var text = string.Concat(inlines.OfType<TextInlineNode>().Select(t => t.Value));
+            Assert.That(text, Is.EqualTo(src));
+        }
+    }
+
+    [Test]
+    public void Constrained_plus_passthrough_is_still_recognized()
+    {
+        // `a +b+ c` -> passthrough around "b".
+        var inlines = InlineParser.Parse("a +b+ c");
+
+        Assert.That(inlines.Any(n => n is PassthroughInlineNode p && p.Content == "b"), Is.True);
+    }
 }
