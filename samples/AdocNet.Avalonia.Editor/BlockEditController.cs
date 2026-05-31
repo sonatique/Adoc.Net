@@ -254,6 +254,7 @@ internal sealed class BlockEditController
         var newSlice = _active.Editor.Text;
         var start = _active.SourceStart;
         var length = _active.SourceLength;
+        var originalSlice = _active.OriginalSlice;
 
         // Detach handlers before clearing _active so a follow-up event
         // doesn't re-fire on the dying editor.
@@ -261,20 +262,53 @@ internal sealed class BlockEditController
         _active.Editor.LostFocus -= OnInPlaceLostFocus;
         _active = null;
 
-        if (start < 0 || start > _sourceEditor.Text.Length) return;
-        if (start + length > _sourceEditor.Text.Length) length = _sourceEditor.Text.Length - start;
-        if (string.Equals(newSlice, _sourceEditor.Document.GetText(start, length), StringComparison.Ordinal))
+        var (action, s, len) = DecideCommit(_sourceEditor.Text, start, length, originalSlice, newSlice);
+        switch (action)
         {
-            // No change — just request a re-render so the rendered view
-            // replaces the in-place editor.
-            _viewModel.ResetText(_sourceEditor.Text);
-            return;
+            case CommitAction.Replace:
+                _sourceEditor.Document.Replace(s, len, newSlice);
+                // The source TextEditor's TextChanged handler tells the VM to
+                // re-parse; the incremental renderer splices the freshly
+                // rendered block back into the panel.
+                break;
+            default:
+                // No change, or stale offsets — just re-render so the rendered
+                // view replaces the in-place editor without touching the source.
+                _viewModel.ResetText(_sourceEditor.Text);
+                break;
         }
+    }
 
-        _sourceEditor.Document.Replace(start, length, newSlice);
-        // The source TextEditor's TextChanged handler will tell the VM
-        // to re-parse; the incremental renderer will splice the freshly
-        // rendered block back into the panel.
+    internal enum CommitAction { Replace, NoChange, Abort }
+
+    /// <summary>
+    /// Pure decision for committing an in-place edit. Clamps the range to the
+    /// document, then:
+    /// <list type="bullet">
+    ///   <item><description><see cref="CommitAction.Abort"/> when the range is
+    ///     out of bounds, or the current source there no longer equals the slice
+    ///     that was opened for editing (the document shifted under us) — splicing
+    ///     would corrupt unrelated text.</description></item>
+    ///   <item><description><see cref="CommitAction.NoChange"/> when the edited
+    ///     text equals the current source.</description></item>
+    ///   <item><description><see cref="CommitAction.Replace"/> otherwise, with
+    ///     the clamped (start, length) to splice.</description></item>
+    /// </list>
+    /// </summary>
+    internal static (CommitAction Action, int Start, int Length) DecideCommit(
+        string sourceText, int start, int length, string originalSlice, string newSlice)
+    {
+        if (start < 0 || start > sourceText.Length)
+            return (CommitAction.Abort, start, length);
+        if (start + length > sourceText.Length)
+            length = sourceText.Length - start;
+
+        var currentSlice = sourceText.Substring(start, length);
+        if (!string.Equals(currentSlice, originalSlice, StringComparison.Ordinal))
+            return (CommitAction.Abort, start, length);
+        if (string.Equals(newSlice, currentSlice, StringComparison.Ordinal))
+            return (CommitAction.NoChange, start, length);
+        return (CommitAction.Replace, start, length);
     }
 
     private void Cancel()
