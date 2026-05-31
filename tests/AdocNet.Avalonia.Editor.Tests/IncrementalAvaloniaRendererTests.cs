@@ -277,6 +277,26 @@ public class IncrementalAvaloniaRendererTests
         Assert.That(text, Does.Contain("para two"));
     }
 
+    // ── Inline source-range mapping (E3) ──────────────────────────────────
+
+    [AvaloniaTest]
+    public void Rendered_inlines_carry_source_ranges_for_hit_testing()
+    {
+        var doc = Parse("Hello *bold* world");
+        var layout = new AdocNet.Layout.Builders.LayoutBuilder().Build(doc);
+        var control = new AvaloniaRenderer { WrapInScrollViewer = false }.Render(layout);
+
+        var panel = (StackPanel)control;
+        var paragraph = (TextBlock)panel.Children[0];
+
+        // Every rendered inline should expose a non-None source range so an
+        // editor can map it (and a click into it) back to a source offset.
+        Assert.That(paragraph.Inlines, Is.Not.Null.And.Not.Empty);
+        foreach (var inline in paragraph.Inlines!)
+            Assert.That(AvaloniaRenderer.GetSourceRange(inline).IsNone, Is.False,
+                $"rendered inline {inline.GetType().Name} should carry a source range");
+    }
+
     // ── Text-extraction helpers for assertions ────────────────────────────
 
     private static StackPanel? FindTaggedContainer(StackPanel panel, int astIndex)
