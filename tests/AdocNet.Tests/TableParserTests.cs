@@ -786,5 +786,19 @@ public class TableParserTests
 
         Assert.That(table.HasHeader, Is.True);
     }
+
+    [Test]
+    public void Escaped_pipe_is_literal_content_not_a_cell_boundary()
+    {
+        // Asciidoctor: `| a \| b | c` -> two cells, "a | b" and "c".
+        var result = BlockParser.Parse("|===\n| a \\| b | c\n|===");
+        var table = result.Document.Children.OfType<TableNode>().First();
+        var row = table.Children.OfType<TableRowNode>().First();
+        var cells = row.Children.OfType<TableCellNode>().ToList();
+
+        Assert.That(cells, Has.Count.EqualTo(2));
+        Assert.That(cells[0].Text, Is.EqualTo("a | b"));
+        Assert.That(cells[1].Text, Is.EqualTo("c"));
+    }
 }
 
