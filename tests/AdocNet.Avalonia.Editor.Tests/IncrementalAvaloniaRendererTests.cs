@@ -297,6 +297,47 @@ public class IncrementalAvaloniaRendererTests
                 $"rendered inline {inline.GetType().Name} should carry a source range");
     }
 
+    // ── Theming / extensibility (E4) ──────────────────────────────────────
+
+    [AvaloniaTest]
+    public void Theme_customizes_heading_font_size()
+    {
+        var theme = new AvaloniaRenderTheme { HeadingFontSizes = new double[] { 99 } };
+        var renderer = new AvaloniaRenderer { Theme = theme, WrapInScrollViewer = false };
+        var layout = new AdocNet.Layout.Builders.LayoutBuilder().Build(Parse("== Heading"));
+
+        var panel = (StackPanel)renderer.Render(layout);
+        var heading = panel.Children.OfType<TextBlock>().First();
+
+        Assert.That(heading.FontSize, Is.EqualTo(99));
+    }
+
+    [AvaloniaTest]
+    public void Theme_customizes_link_brush()
+    {
+        var theme = new AvaloniaRenderTheme { LinkBrush = global::Avalonia.Media.Brushes.Red };
+        var renderer = new AvaloniaRenderer { Theme = theme, WrapInScrollViewer = false };
+        var layout = new AdocNet.Layout.Builders.LayoutBuilder().Build(Parse("link:https://example.com[label]"));
+
+        var panel = (StackPanel)renderer.Render(layout);
+        var paragraph = (TextBlock)panel.Children[0];
+        var container = paragraph.Inlines!.OfType<InlineUIContainer>().First();
+        var linkText = (TextBlock)container.Child!;
+
+        Assert.That(linkText.Foreground, Is.SameAs(global::Avalonia.Media.Brushes.Red));
+    }
+
+    [AvaloniaTest]
+    public void Default_theme_is_per_instance_not_shared()
+    {
+        var a = new AvaloniaRenderer();
+        var b = new AvaloniaRenderer();
+        a.Theme.LinkBrush = global::Avalonia.Media.Brushes.Magenta;
+
+        // Mutating one renderer's theme must not bleed into another's.
+        Assert.That(b.Theme.LinkBrush, Is.Not.SameAs(a.Theme.LinkBrush));
+    }
+
     // ── Text-extraction helpers for assertions ────────────────────────────
 
     private static StackPanel? FindTaggedContainer(StackPanel panel, int astIndex)
