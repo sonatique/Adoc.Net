@@ -105,8 +105,14 @@ internal static class ConditionalPreprocessor
             var line = lines[i];
             int lineNumber = i + 1;
 
+            // Conditional directives sit at column 0 and begin with 'e' (endif)
+            // or 'i' (ifdef / ifndef / ifeval). The vast majority of lines are
+            // neither, so this guard avoids three compiled-regex probes per line.
+            char c0 = line.Length > 0 ? line[0] : '\0';
+            bool maybeDirective = c0 == 'e' || c0 == 'i';
+
             // ── endif ────────────────────────────────────────────────────
-            var endifMatch = EndifRegex().Match(line);
+            var endifMatch = maybeDirective ? EndifRegex().Match(line) : Match.Empty;
             if (endifMatch.Success)
             {
                 if (condStack.Count == 0)
@@ -125,7 +131,7 @@ internal static class ConditionalPreprocessor
             }
 
             // ── ifeval ───────────────────────────────────────────────────
-            var ievalMatch = IfevalRegex().Match(line);
+            var ievalMatch = maybeDirective ? IfevalRegex().Match(line) : Match.Empty;
             if (ievalMatch.Success)
             {
                 if (condStack.Count >= MaxConditionalDepth)
@@ -146,7 +152,7 @@ internal static class ConditionalPreprocessor
             }
 
             // ── ifdef / ifndef ───────────────────────────────────────────
-            var condMatch = ConditionalDirectiveRegex().Match(line);
+            var condMatch = maybeDirective ? ConditionalDirectiveRegex().Match(line) : Match.Empty;
             if (condMatch.Success)
             {
                 var directive = condMatch.Groups[1].Value;   // "ifdef" or "ifndef"
