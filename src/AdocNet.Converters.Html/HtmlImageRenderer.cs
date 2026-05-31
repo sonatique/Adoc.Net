@@ -37,7 +37,7 @@ public sealed partial class HtmlRenderer
         sb.Append("<img src=\"");
         AppendImageSrc(sb, image.Target, state);
         sb.Append("\" alt=\"");
-        EscapeTo(sb, image.Alt);
+        EscapeAttributeTo(sb, image.Alt);
         sb.Append('"');
         if (image.Width is not null)
         {

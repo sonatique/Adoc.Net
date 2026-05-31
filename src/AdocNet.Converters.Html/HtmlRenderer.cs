@@ -584,19 +584,31 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
     /// </summary>
     private static double TruncateTo4(double value) => Math.Truncate(value * 10000) / 10000;
 
-    private static void EscapeTo(StringBuilder sb, string value)
+    private static void EscapeTo(StringBuilder sb, string value) => EscapeCore(sb, value, escapeQuotes: false);
+
+    /// <summary>
+    /// Escapes a value destined for a double-quoted HTML attribute. Identical
+    /// to <see cref="EscapeTo"/> but additionally encodes the double-quote as
+    /// <c>&amp;quot;</c> so it cannot terminate the attribute early. Matches
+    /// Asciidoctor's handling of e.g. image <c>alt</c> text.
+    /// </summary>
+    private static void EscapeAttributeTo(StringBuilder sb, string value) => EscapeCore(sb, value, escapeQuotes: true);
+
+    private static void EscapeCore(StringBuilder sb, string value, bool escapeQuotes)
     {
         int segmentStart = 0;
         for (int i = 0; i < value.Length; i++)
         {
             // Escape &, <, > and smart-punctuation Unicode characters.
             // Asciidoctor outputs all typographic characters as HTML numeric entities
-            // rather than raw UTF-8, so we match that behavior.
+            // rather than raw UTF-8, so we match that behavior. In attribute
+            // contexts the double-quote is also escaped (escapeQuotes).
             string? entity = value[i] switch
             {
                 '&'    => "&amp;",
                 '<'    => "&lt;",
                 '>'    => "&gt;",
+                '"' when escapeQuotes => "&quot;",
                 '\u2018' => "&#8216;", // left single quotation mark
                 '\u2019' => "&#8217;", // right single quotation mark / apostrophe
                 '\u201C' => "&#8220;", // left double quotation mark

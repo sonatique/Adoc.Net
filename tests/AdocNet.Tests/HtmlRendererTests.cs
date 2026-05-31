@@ -33,6 +33,30 @@ public class HtmlRendererTests
         Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(""));
     }
 
+    // ── Attribute escaping ───────────────────────────────────────────────
+
+    [Test]
+    public void Block_image_alt_escapes_double_quotes()
+    {
+        // Asciidoctor: <img src="foo.png" alt="A &quot;quoted&quot; alt">
+        // A raw double-quote in alt would terminate the attribute early and
+        // produce malformed HTML.
+        var doc = AdocParser.Parse("image::foo.png[A \"quoted\" alt]").Document;
+        var html = new HtmlRenderer().RenderToString(doc);
+
+        Assert.That(html, Does.Contain("alt=\"A &quot;quoted&quot; alt\""));
+        Assert.That(html, Does.Not.Contain("alt=\"A \"quoted\" alt\""));
+    }
+
+    [Test]
+    public void Inline_image_alt_escapes_double_quotes()
+    {
+        var doc = AdocParser.Parse("Text image:foo.png[A \"q\" alt] more").Document;
+        var html = new HtmlRenderer().RenderToString(doc);
+
+        Assert.That(html, Does.Contain("alt=\"A &quot;q&quot; alt\""));
+    }
+
     // ── Sections ─────────────────────────────────────────────────────────
 
     [Test]
