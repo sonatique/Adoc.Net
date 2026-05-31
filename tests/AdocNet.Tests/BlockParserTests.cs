@@ -424,6 +424,17 @@ public class BlockParserTests
     }
 
     [Test]
+    public void Revision_line_without_v_prefix_still_extracts_revnumber()
+    {
+        // The 'v' prefix is optional: the part before the first comma is the
+        // revnumber, matching Asciidoctor (verified via docbook5 output).
+        var doc = BlockParser.Parse("= Title\nJohn Doe\n1.0, 2024-01-15: first\n\nContent").Document;
+        Assert.That(doc.Attributes["revnumber"], Is.EqualTo("1.0"));
+        Assert.That(doc.Attributes["revdate"], Is.EqualTo("2024-01-15"));
+        Assert.That(doc.Attributes["revremark"], Is.EqualTo("first"));
+    }
+
+    [Test]
     public void No_author_when_first_line_after_title_is_attribute()
     {
         var doc = BlockParser.Parse("= Title\n:key: value\n\nContent").Document;

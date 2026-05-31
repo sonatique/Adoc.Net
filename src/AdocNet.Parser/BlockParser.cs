@@ -5797,19 +5797,30 @@ internal static class BlockParser
     {
         var remaining = line.AsSpan().Trim();
 
-        // Extract revnumber: starts with 'v' or 'V' followed by digits/dots.
-        if (remaining.Length > 0 && (remaining[0] == 'v' || remaining[0] == 'V'))
+        // Extract revnumber. When a comma is present, the part before the first
+        // comma is the revision number — the leading 'v' is OPTIONAL, so both
+        // "v1.0, <date>" and "1.0, <date>" yield revnumber 1.0. Without a comma,
+        // only a leading 'v<number>' is treated as a revnumber (a bare number or
+        // date with no comma is the revdate, matching Asciidoctor).
+        int commaIdx = remaining.IndexOf(',');
+        if (commaIdx >= 0)
+        {
+            var revNumber = remaining[..commaIdx].Trim();
+            if (revNumber.Length > 0 && (revNumber[0] == 'v' || revNumber[0] == 'V'))
+                revNumber = revNumber[1..].Trim();
+            if (revNumber.Length > 0)
+                document.SetAttribute("revnumber", revNumber.ToString());
+            remaining = remaining[(commaIdx + 1)..].Trim();
+        }
+        else if (remaining.Length > 0 && (remaining[0] == 'v' || remaining[0] == 'V'))
         {
             int end = 1;
-            while (end < remaining.Length && remaining[end] != ',' && remaining[end] != ':')
+            while (end < remaining.Length && remaining[end] != ':')
                 end++;
             var revNumber = remaining[1..end].Trim();
             if (revNumber.Length > 0)
                 document.SetAttribute("revnumber", revNumber.ToString());
             remaining = remaining[end..];
-            // Skip comma separator if present.
-            if (remaining.Length > 0 && remaining[0] == ',')
-                remaining = remaining[1..].Trim();
         }
 
         // Extract revdate: everything up to ':' or end of line.
