@@ -347,4 +347,48 @@ public class DelimitedBlockParserTests
         Assert.That(html, Does.Contain("<strong>be</strong>"));
         Assert.That(html, Does.Contain("<em>not</em>"));
     }
+
+    // ── Closing-delimiter length matching ──────────────────────────────────
+    // Per the AsciiDoc spec, a delimited block's closer must match the opener's
+    // length. A differently-sized run of the same char is content, which is
+    // what lets a longer rule sit inside a verbatim block and same-type blocks
+    // nest. Verified against Asciidoctor 2.0.26.
+
+    [Test]
+    public void Longer_rule_inside_listing_is_content_not_a_closer()
+    {
+        var result = BlockParser.Parse("----\nline1\n------\nline2\n----");
+
+        Assert.That(result.Document.Children, Has.Count.EqualTo(1));
+        var block = (DelimitedBlockNode)result.Document.Children[0];
+        Assert.That(block.BlockKind, Is.EqualTo(DelimitedBlockKind.Listing));
+        Assert.That(block.Content, Is.EqualTo("line1\n------\nline2"));
+    }
+
+    [Test]
+    public void Same_type_example_blocks_nest_when_delimiter_lengths_differ()
+    {
+        var result = BlockParser.Parse("====\nouter\n=====\ninner\n=====\n====");
+        var html = new HtmlRenderer().RenderToString(result.Document);
+
+        // Two example blocks => nesting (inner =====, outer ====).
+        var count = System.Text.RegularExpressions.Regex.Matches(html, "class=\"exampleblock\"").Count;
+        Assert.That(count, Is.EqualTo(2));
+        Assert.That(html, Does.Contain("outer"));
+        Assert.That(html, Does.Contain("inner"));
+    }
+
+    [Test]
+    public void Comment_block_spans_to_same_length_closer()
+    {
+        // The 5-slash line in the middle does not close the 4-slash comment;
+        // everything through the final //// is comment (no 'a'/'b' in output).
+        var result = BlockParser.Parse("before\n////\na\n/////\nb\n////\nafter");
+        var html = new HtmlRenderer().RenderToString(result.Document);
+
+        Assert.That(html, Does.Contain("before"));
+        Assert.That(html, Does.Contain("after"));
+        Assert.That(html, Does.Not.Contain(">a<"));
+        Assert.That(html, Does.Not.Contain(">b<"));
+    }
 }
