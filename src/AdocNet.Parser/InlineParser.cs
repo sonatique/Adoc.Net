@@ -1581,6 +1581,15 @@ internal static class InlineParser
         sb.Clear();
     }
 
+    // Memoized newline-offset index for the most recently queried text. Every
+    // inline node calls PositionWithin twice (range start + end), and the whole
+    // block shares one `text` instance, so caching the newline offsets turns the
+    // per-node O(offset) rescan into an O(log n) binary search — i.e. the inline
+    // source-range pass drops from O(n·k) to O(n + k·log n). ThreadStatic keeps
+    // concurrent parses isolated; the cache is pure (read-only) memoization.
+    [ThreadStatic] private static string? _lineIndexText;
+    [ThreadStatic] private static int[]? _lineIndexNewlines;
+
     /// <summary>
     /// Converts a 0-based character offset into <paramref name="text"/> into a
     /// 1-based <see cref="SourcePosition"/>. The returned position is RELATIVE
@@ -1590,14 +1599,42 @@ internal static class InlineParser
     /// </summary>
     internal static SourcePosition PositionWithin(string text, int charOffset)
     {
-        int line = 1, col = 1;
         int limit = Math.Min(charOffset, text.Length);
-        for (int i = 0; i < limit; i++)
+
+        if (!ReferenceEquals(_lineIndexText, text))
         {
-            if (text[i] == '\n') { line++; col = 1; }
-            else col++;
+            _lineIndexText = text;
+            _lineIndexNewlines = BuildNewlineIndex(text);
         }
+        var newlines = _lineIndexNewlines!;
+
+        // lower_bound: number of newline offsets strictly less than `limit` is
+        // both the count of line breaks before the offset and the 0-based line.
+        int lo = 0, hi = newlines.Length;
+        while (lo < hi)
+        {
+            int mid = (lo + hi) >> 1;
+            if (newlines[mid] < limit) lo = mid + 1;
+            else hi = mid;
+        }
+        int line = lo + 1;
+        int lineStart = lo == 0 ? 0 : newlines[lo - 1] + 1;
+        int col = limit - lineStart + 1;
         return new SourcePosition(line, col);
+    }
+
+    private static int[] BuildNewlineIndex(string text)
+    {
+        int count = 0;
+        for (int i = 0; i < text.Length; i++)
+            if (text[i] == '\n') count++;
+        if (count == 0) return Array.Empty<int>();
+
+        var offsets = new int[count];
+        int k = 0;
+        for (int i = 0; i < text.Length; i++)
+            if (text[i] == '\n') offsets[k++] = i;
+        return offsets;
     }
 
     /// <summary>
