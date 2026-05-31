@@ -518,6 +518,10 @@ public sealed partial class HtmlRenderer
                 content = ExpandAttributes(content, state.DocumentAttributes);
 
             bool escape = !subs.HasValue || subs.Value.HasFlag(SubstitutionKind.SpecialCharacters);
+            // With :icons: font, Asciidoctor renders conums as an icon span
+            // plus a bold marker; otherwise as a bold marker only.
+            bool iconsFont = state.DocumentAttributes.TryGetValue("icons", out var iconsVal)
+                && string.Equals(iconsVal, "font", StringComparison.Ordinal);
             var lines = content.Split('\n');
             for (int i = 0; i < lines.Length; i++)
             {
@@ -529,7 +533,9 @@ public sealed partial class HtmlRenderer
                 if (conumMap.TryGetValue(i, out var calloutNums))
                 {
                     foreach (var num in calloutNums)
-                        sb.Append($" <b class=\"conum\">({num})</b>");
+                        sb.Append(iconsFont
+                            ? $" <i class=\"conum\" data-value=\"{num}\"></i><b>({num})</b>"
+                            : $" <b class=\"conum\">({num})</b>");
                 }
 
                 if (i < lines.Length - 1)

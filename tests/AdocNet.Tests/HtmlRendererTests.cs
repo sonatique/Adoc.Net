@@ -805,6 +805,16 @@ public class HtmlRendererTests
         Assert.That(html, Does.Not.Contain("# &lt;1&gt;"));
     }
 
+    [Test]
+    public void Source_block_conum_uses_icon_font_form_when_icons_font()
+    {
+        // :icons: font -> <i class="conum" data-value="N"></i><b>(N)</b> (Asciidoctor).
+        var doc = AdocParser.Parse(":icons: font\n\n----\nputs 1 <1>\n----\n<1> one").Document;
+        var html = new HtmlRenderer().RenderToString(doc);
+        Assert.That(html, Does.Contain("<i class=\"conum\" data-value=\"1\"></i><b>(1)</b>"));
+        Assert.That(html, Does.Not.Contain("<b class=\"conum\">(1)</b>"));
+    }
+
     // ── Custom Captions ──────────────────────────────────────────────────
 
     [Test]
