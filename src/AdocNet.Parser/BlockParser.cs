@@ -4758,11 +4758,12 @@ internal static class BlockParser
     {
         var cells = new List<CellInfo>();
 
-        // Find all separator positions
+        // Find all separator positions. A backslash-escaped separator (\|) is
+        // literal cell content, not a cell boundary.
         var pipePositions = new List<int>();
         for (int i = 0; i < line.Length; i++)
         {
-            if (line[i] == separator)
+            if (line[i] == separator && !(i > 0 && line[i - 1] == '\\'))
                 pipePositions.Add(i);
         }
 
@@ -4844,7 +4845,11 @@ internal static class BlockParser
                 contentEnd = contentStart;
 
             var content = line.AsSpan(contentStart, contentEnd - contentStart).Trim();
-            cells.Add(new CellInfo(content.ToString(), colSpan, rowSpan, alignment, cellStyle));
+            var contentStr = content.ToString();
+            // Unescape literal separators (\| -> |) now that splitting is done.
+            if (contentStr.IndexOf('\\') >= 0)
+                contentStr = contentStr.Replace("\\" + separator, separator.ToString());
+            cells.Add(new CellInfo(contentStr, colSpan, rowSpan, alignment, cellStyle));
         }
 
         return cells;
