@@ -7,6 +7,7 @@ using global::Avalonia.Controls.Primitives;
 using global::Avalonia.Input;
 using global::Avalonia.Layout;
 using global::Avalonia.Media;
+using AdocNet;
 using AdocNet.Layout;
 using AvInline = global::Avalonia.Controls.Documents.Inline;
 
@@ -26,6 +27,22 @@ public class AvaloniaRenderer
     private static readonly IBrush ThematicBreakBrush = new SolidColorBrush(Color.FromRgb(200, 200, 200));
     private static readonly IBrush DescTermForeground = new SolidColorBrush(Color.FromRgb(60, 60, 60));
     private const string BulletPrefix = "\u2022 ";
+
+    /// <summary>
+    /// Attached property recording the AsciiDoc <see cref="SourceRange"/> of the
+    /// inline that produced each rendered <see cref="AvInline"/>. An editor can
+    /// read it from the inline under the pointer (e.g. via a hit-test) to map a
+    /// click to a source offset at inline granularity.
+    /// </summary>
+    public static readonly AttachedProperty<SourceRange> SourceRangeProperty =
+        AvaloniaProperty.RegisterAttached<AvaloniaRenderer, AvInline, SourceRange>(
+            "SourceRange", SourceRange.None);
+
+    /// <summary>Reads the <see cref="SourceRangeProperty"/> of a rendered inline.</summary>
+    public static SourceRange GetSourceRange(AvInline inline) => inline.GetValue(SourceRangeProperty);
+
+    /// <summary>Sets the <see cref="SourceRangeProperty"/> of a rendered inline.</summary>
+    public static void SetSourceRange(AvInline inline, SourceRange value) => inline.SetValue(SourceRangeProperty, value);
 
     /// <summary>
     /// When true (the default), <see cref="Render(DocumentLayout)"/> wraps
@@ -477,6 +494,16 @@ public class AvaloniaRenderer
     }
 
     private AvInline? RenderInline(InlineLayout inline)
+    {
+        // Stamp every rendered inline with its source range so a click in the
+        // preview can be hit-tested back to a source offset (see E3).
+        var rendered = RenderInlineCore(inline);
+        if (rendered is not null && !inline.Source.IsNone)
+            rendered.SetValue(SourceRangeProperty, inline.Source);
+        return rendered;
+    }
+
+    private AvInline? RenderInlineCore(InlineLayout inline)
     {
         switch (inline)
         {

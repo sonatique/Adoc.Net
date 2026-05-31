@@ -272,6 +272,17 @@ public class LayoutBuilder
 
     private static InlineLayout? BuildInline(InlineNode node)
     {
+        // Stamp the source range once here so every inline layout node carries
+        // it (for editor caret/selection ↔ source mapping) without repeating the
+        // assignment in each switch arm below.
+        var layout = BuildInlineCore(node);
+        if (layout is not null)
+            layout.Source = node.Source;
+        return layout;
+    }
+
+    private static InlineLayout? BuildInlineCore(InlineNode node)
+    {
         switch (node)
         {
             case TextInlineNode text:
