@@ -1345,11 +1345,12 @@ internal static class BlockParser
                 listFrames.Clear();
                 dlFrames.Clear();
 
-                // Scan forward for the matching closing delimiter.
+                // Scan forward for the matching closing delimiter (same length).
+                int commentOpenLen = TextUtility.TrimmedEndLength(line);
                 int closingIdx = -1;
                 for (int j = i + 1; j < lines.Length; j++)
                 {
-                    if (IsDelimiterLine(lines[j], '/'))
+                    if (IsClosingDelimiterLine(lines[j], '/', commentOpenLen))
                     {
                         closingIdx = j;
                         break;
@@ -1826,11 +1827,14 @@ internal static class BlockParser
                 listFrames.Clear();
                 dlFrames.Clear();
 
-                // Scan forward for the matching closing delimiter.
+                // Scan forward for the matching closing delimiter. The closer
+                // must be the same length as the opener (AsciiDoc nesting rule),
+                // so a longer rule stays content and same-type blocks can nest.
+                int openLen = TextUtility.TrimmedEndLength(line);
                 int closingIdx = -1;
                 for (int j = i + 1; j < lines.Length; j++)
                 {
-                    if (IsDelimiterLine(lines[j], delimChar))
+                    if (IsClosingDelimiterLine(lines[j], delimChar, openLen))
                     {
                         closingIdx = j;
                         break;
@@ -2470,10 +2474,11 @@ internal static class BlockParser
                     // Check if it's a delimited block
                     if (TryGetDelimiterKind(nextLine, out var contDelimChar, out var contDelimKind))
                     {
+                        int contOpenLen = TextUtility.TrimmedEndLength(nextLine);
                         int contClosingIdx = -1;
                         for (int k = j + 1; k < lines.Length; k++)
                         {
-                            if (IsDelimiterLine(lines[k], contDelimChar))
+                            if (IsClosingDelimiterLine(lines[k], contDelimChar, contOpenLen))
                             {
                                 contClosingIdx = k;
                                 break;
@@ -2680,10 +2685,11 @@ internal static class BlockParser
                     // Check if it's a delimited block
                     if (TryGetDelimiterKind(nextLine, out var contDelimChar, out var contDelimKind))
                     {
+                        int contOpenLen = TextUtility.TrimmedEndLength(nextLine);
                         int contClosingIdx = -1;
                         for (int k = j + 1; k < lines.Length; k++)
                         {
-                            if (IsDelimiterLine(lines[k], contDelimChar))
+                            if (IsClosingDelimiterLine(lines[k], contDelimChar, contOpenLen))
                             {
                                 contClosingIdx = k;
                                 break;
@@ -3305,6 +3311,23 @@ internal static class BlockParser
     {
         int len = TextUtility.TrimmedEndLength(line);
         if (len < 4) return false;
+        for (int i = 0; i < len; i++)
+            if (line[i] != ch) return false;
+        return true;
+    }
+
+    /// <summary>
+    /// Returns true when <paramref name="line"/> is a run of <paramref name="ch"/>
+    /// of exactly <paramref name="openLen"/> characters (ignoring trailing
+    /// whitespace). Per the AsciiDoc spec the closing delimiter of a delimited
+    /// block must match the opening delimiter's length; this is what allows a
+    /// longer rule to appear inside a verbatim block and same-type delimited
+    /// blocks to nest (the inner block uses a different delimiter length).
+    /// </summary>
+    private static bool IsClosingDelimiterLine(string line, char ch, int openLen)
+    {
+        int len = TextUtility.TrimmedEndLength(line);
+        if (len != openLen) return false;
         for (int i = 0; i < len; i++)
             if (line[i] != ch) return false;
         return true;
