@@ -33,6 +33,90 @@ public class HtmlRendererTests
         Assert.That(new HtmlRenderer().RenderToString(doc), Is.EqualTo(""));
     }
 
+    // ── menu: macro ──────────────────────────────────────────────────────
+
+    [Test]
+    public void Menu_macro_with_submenu_path_matches_asciidoctor()
+    {
+        var doc = AdocParser.Parse(":experimental:\n\nmenu:File[Save > As]").Document;
+        var html = new HtmlRenderer().RenderToString(doc);
+
+        Assert.That(html, Does.Contain(
+            "<span class=\"menuseq\"><b class=\"menu\">File</b>" +
+            "&#160;<b class=\"caret\">&#8250;</b> <b class=\"submenu\">Save</b>" +
+            "&#160;<b class=\"caret\">&#8250;</b> <b class=\"menuitem\">As</b></span>"));
+    }
+
+    [Test]
+    public void Menu_macro_single_item_is_a_menuitem()
+    {
+        var doc = AdocParser.Parse(":experimental:\n\nmenu:File[Open]").Document;
+        var html = new HtmlRenderer().RenderToString(doc);
+
+        Assert.That(html, Does.Contain(
+            "<span class=\"menuseq\"><b class=\"menu\">File</b>" +
+            "&#160;<b class=\"caret\">&#8250;</b> <b class=\"menuitem\">Open</b></span>"));
+    }
+
+    [Test]
+    public void Menu_macro_empty_content_renders_menuref()
+    {
+        var doc = AdocParser.Parse(":experimental:\n\nmenu:View[]").Document;
+        var html = new HtmlRenderer().RenderToString(doc);
+
+        Assert.That(html, Does.Contain("<b class=\"menuref\">View</b>"));
+        Assert.That(html, Does.Not.Contain("menuseq"));
+    }
+
+    // ── Table column widths ──────────────────────────────────────────────
+
+    [Test]
+    public void Table_last_column_width_carries_the_remainder()
+    {
+        // 7 equal columns: the last carries the remainder, 14.2858 (not 14.2857
+        // — binary FP would truncate the remainder one digit short).
+        var doc = AdocParser.Parse("[cols=\"1,1,1,1,1,1,1\"]\n|===\n|a|b|c|d|e|f|g\n|===").Document;
+        var html = new HtmlRenderer().RenderToString(doc);
+
+        Assert.That(html, Does.Contain("<col style=\"width: 14.2858%;\">"));
+    }
+
+    [Test]
+    public void Table_column_width_strips_trailing_zeros()
+    {
+        // 11 equal columns: the remainder formats as 9.091, not 9.0910.
+        var doc = AdocParser.Parse(
+            "[cols=\"1,1,1,1,1,1,1,1,1,1,1\"]\n|===\n|a|b|c|d|e|f|g|h|i|j|k\n|===").Document;
+        var html = new HtmlRenderer().RenderToString(doc);
+
+        Assert.That(html, Does.Contain("<col style=\"width: 9.091%;\">"));
+        Assert.That(html, Does.Not.Contain("9.0910"));
+    }
+
+    // ── Attribute escaping ───────────────────────────────────────────────
+
+    [Test]
+    public void Block_image_alt_escapes_double_quotes()
+    {
+        // Asciidoctor: <img src="foo.png" alt="A &quot;quoted&quot; alt">
+        // A raw double-quote in alt would terminate the attribute early and
+        // produce malformed HTML.
+        var doc = AdocParser.Parse("image::foo.png[A \"quoted\" alt]").Document;
+        var html = new HtmlRenderer().RenderToString(doc);
+
+        Assert.That(html, Does.Contain("alt=\"A &quot;quoted&quot; alt\""));
+        Assert.That(html, Does.Not.Contain("alt=\"A \"quoted\" alt\""));
+    }
+
+    [Test]
+    public void Inline_image_alt_escapes_double_quotes()
+    {
+        var doc = AdocParser.Parse("Text image:foo.png[A \"q\" alt] more").Document;
+        var html = new HtmlRenderer().RenderToString(doc);
+
+        Assert.That(html, Does.Contain("alt=\"A &quot;q&quot; alt\""));
+    }
+
     // ── Sections ─────────────────────────────────────────────────────────
 
     [Test]
@@ -744,6 +828,16 @@ public class HtmlRendererTests
         var html = new HtmlRenderer().RenderToString(doc.Document);
         Assert.That(html, Does.Contain("<b class=\"conum\">(1)</b>"));
         Assert.That(html, Does.Not.Contain("# &lt;1&gt;"));
+    }
+
+    [Test]
+    public void Source_block_conum_uses_icon_font_form_when_icons_font()
+    {
+        // :icons: font -> <i class="conum" data-value="N"></i><b>(N)</b> (Asciidoctor).
+        var doc = AdocParser.Parse(":icons: font\n\n----\nputs 1 <1>\n----\n<1> one").Document;
+        var html = new HtmlRenderer().RenderToString(doc);
+        Assert.That(html, Does.Contain("<i class=\"conum\" data-value=\"1\"></i><b>(1)</b>"));
+        Assert.That(html, Does.Not.Contain("<b class=\"conum\">(1)</b>"));
     }
 
     // ── Custom Captions ──────────────────────────────────────────────────

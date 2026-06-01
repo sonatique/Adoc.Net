@@ -518,6 +518,10 @@ public sealed partial class HtmlRenderer
                 content = ExpandAttributes(content, state.DocumentAttributes);
 
             bool escape = !subs.HasValue || subs.Value.HasFlag(SubstitutionKind.SpecialCharacters);
+            // With :icons: font, Asciidoctor renders conums as an icon span
+            // plus a bold marker; otherwise as a bold marker only.
+            bool iconsFont = state.DocumentAttributes.TryGetValue("icons", out var iconsVal)
+                && string.Equals(iconsVal, "font", StringComparison.Ordinal);
             var lines = content.Split('\n');
             for (int i = 0; i < lines.Length; i++)
             {
@@ -529,7 +533,9 @@ public sealed partial class HtmlRenderer
                 if (conumMap.TryGetValue(i, out var calloutNums))
                 {
                     foreach (var num in calloutNums)
-                        sb.Append($" <b class=\"conum\">({num})</b>");
+                        sb.Append(iconsFont
+                            ? $" <i class=\"conum\" data-value=\"{num}\"></i><b>({num})</b>"
+                            : $" <b class=\"conum\">({num})</b>");
                 }
 
                 if (i < lines.Length - 1)
@@ -559,11 +565,15 @@ public sealed partial class HtmlRenderer
     /// Expands <c>{name}</c> attribute references in the given text.
     /// Unknown references are left as-is.
     /// </summary>
+    // Cached, compiled once. The previous static Regex.Replace(text, pattern, …)
+    // re-parsed the pattern on every verbatim block that requested attribute subs.
+    private static readonly Regex s_attributeRefRegex = new(@"\{(\w[\w-]*)\}", RegexOptions.Compiled);
+
     private static string ExpandAttributes(string text, IReadOnlyDictionary<string, string> attributes)
     {
         if (!text.Contains('{')) return text;
 
-        return Regex.Replace(text, @"\{(\w[\w-]*)\}", match =>
+        return s_attributeRefRegex.Replace(text, match =>
         {
             var name = match.Groups[1].Value;
             return attributes.TryGetValue(name, out var value) ? value : match.Value;

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using AdocNet;
@@ -8,6 +9,18 @@ namespace AdocNet.Converters.Html;
 
 public sealed partial class HtmlRenderer
 {
+    /// <summary>
+    /// Appends a <c>&lt;col style="width: N%;"&gt;</c> entry. Asciidoctor formats
+    /// the width with up to 4 decimal places and strips trailing zeros
+    /// (e.g. 9.0910 → 9.091, 50 → 50), which "0.####" reproduces.
+    /// </summary>
+    private static void AppendColWidth(StringBuilder sb, double colPct)
+    {
+        sb.Append("<col style=\"width: ");
+        sb.Append(colPct.ToString("0.####", CultureInfo.InvariantCulture));
+        sb.Append("%;\">\n");
+    }
+
     private void RenderTable(StringBuilder sb, TableNode table, bool useIconFont, FootnoteState footnotes, SectionNumberingContext secCtx, HtmlRenderState state)
     {
         sb.Append("<table");
@@ -82,15 +95,13 @@ public sealed partial class HtmlRenderer
                     // accumulates truncated values, and gives the remainder to the last column.
                     double colPct;
                     if (ci == table.Columns.Count - 1)
-                        colPct = TruncateTo4(100.0 - emittedTruncated);
+                        // Nudge past binary-FP rounding error (e.g. 100-85.7142
+                        // == 14.285799999…) so the remainder truncates to its
+                        // true 4-decimal value (14.2858), matching Asciidoctor.
+                        colPct = TruncateTo4(100.0 - emittedTruncated + 5e-9);
                     else
                         colPct = TruncateTo4(rawPct);
-                    sb.Append("<col style=\"width: ");
-                    if (Math.Abs(colPct - Math.Truncate(colPct)) < 0.00005)
-                        sb.Append((int)colPct);
-                    else
-                        sb.AppendFormat("{0:F4}", colPct);
-                    sb.Append("%;\">\n");
+                    AppendColWidth(sb, colPct);
                     emittedTruncated += colPct;
                 }
                 sb.Append("</colgroup>\n");
@@ -114,15 +125,13 @@ public sealed partial class HtmlRenderer
                     {
                         double colPct;
                         if (ci == colCount - 1)
-                            colPct = TruncateTo4(100.0 - emittedTruncated);
+                            // Nudge past binary-FP rounding error (e.g. 100-85.7142
+                        // == 14.285799999…) so the remainder truncates to its
+                        // true 4-decimal value (14.2858), matching Asciidoctor.
+                        colPct = TruncateTo4(100.0 - emittedTruncated + 5e-9);
                         else
                             colPct = TruncateTo4(rawPct);
-                        sb.Append("<col style=\"width: ");
-                        if (Math.Abs(colPct - Math.Truncate(colPct)) < 0.00005)
-                            sb.Append((int)colPct);
-                        else
-                            sb.AppendFormat("{0:F4}", colPct);
-                        sb.Append("%;\">\n");
+                        AppendColWidth(sb, colPct);
                         emittedTruncated += colPct;
                     }
                     sb.Append("</colgroup>\n");

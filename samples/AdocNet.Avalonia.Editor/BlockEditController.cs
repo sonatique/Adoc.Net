@@ -59,16 +59,21 @@ internal sealed class BlockEditController
         var panel = ExtractTopPanel(preview);
         if (panel is null) return;
 
-        int n = Math.Min(panel.Children.Count, document.Children.Count);
-        for (int i = 0; i < n; i++)
+        // Each top-level AST child is rendered as exactly one container
+        // tagged with a SectionTag carrying that child's AST index (see
+        // IncrementalAvaloniaRenderer). Attach the click handler to those
+        // containers and resolve the AST node via the tag's index — never
+        // via the raw panel position, which an optional leading document-
+        // title block would shift, and which section flattening used to
+        // misalign. The SectionTag is left intact so the incremental
+        // renderer can still locate containers on the next update.
+        foreach (var c in panel.Children)
         {
-            if (panel.Children[i] is not Control child) continue;
+            if (c is not Control child) continue;
+            if (child.Tag is not IncrementalAvaloniaRenderer.SectionTag) continue;
 
-            // Capture by value so the closure sees the right index.
-            int blockIndex = i;
             child.PointerPressed -= OnAnyBlockPointerPressed; // safe even when not previously attached
             child.PointerPressed += OnAnyBlockPointerPressed;
-            child.Tag = new BlockClickTag(blockIndex, child.Tag);
         }
 
         _currentDocument = document;
@@ -91,29 +96,30 @@ internal sealed class BlockEditController
         if (e.ClickCount < 2) return;
 
         if (sender is not Control control) return;
-        if (control.Tag is not BlockClickTag tag) return;
+        if (control.Tag is not IncrementalAvaloniaRenderer.SectionTag tag) return;
         if (_currentDocument is null) return;
-        if (tag.BlockIndex < 0 || tag.BlockIndex >= _currentDocument.Children.Count) return;
+        if (tag.Index < 0 || tag.Index >= _currentDocument.Children.Count) return;
 
-        var node = _currentDocument.Children[tag.BlockIndex];
+        var node = _currentDocument.Children[tag.Index];
         if (node.Source.IsNone) return;
 
-        EnterEditMode(tag.BlockIndex, node);
+        EnterEditMode(control, node);
         e.Handled = true;
     }
 
     private void ShowContextMenu(Control? control, PointerPressedEventArgs e)
     {
         if (control is null) return;
-        if (control.Tag is not BlockClickTag tag) return;
+        if (control.Tag is not IncrementalAvaloniaRenderer.SectionTag tag) return;
         if (_currentDocument is null) return;
-        if (tag.BlockIndex < 0 || tag.BlockIndex >= _currentDocument.Children.Count) return;
+        if (tag.Index < 0 || tag.Index >= _currentDocument.Children.Count) return;
 
-        var node = _currentDocument.Children[tag.BlockIndex];
+        int astIndex = tag.Index;
+        var node = _currentDocument.Children[astIndex];
         var items = new List<global::Avalonia.Controls.Control>
         {
-            BuildMenuItem("Edit block (double-click)", () => EnterEditMode(tag.BlockIndex, node)),
-            BuildMenuItem("Duplicate block", () => DuplicateBlock(tag.BlockIndex)),
+            BuildMenuItem("Edit block (double-click)", () => EnterEditMode(control, node)),
+            BuildMenuItem("Duplicate block", () => DuplicateBlock(astIndex)),
             BuildMenuItem("Delete block", () => DeleteBlock(node)),
         };
 
@@ -124,16 +130,16 @@ internal sealed class BlockEditController
         if (node is BlockNode)
         {
             items.Add(new Separator());
-            items.Add(BuildMenuItem("Toggle role: [.warning]",   () => ToggleRole(tag.BlockIndex, "warning")));
-            items.Add(BuildMenuItem("Toggle role: [.important]", () => ToggleRole(tag.BlockIndex, "important")));
-            items.Add(BuildMenuItem("Toggle role: [.lead]",      () => ToggleRole(tag.BlockIndex, "lead")));
+            items.Add(BuildMenuItem("Toggle role: [.warning]",   () => ToggleRole(astIndex, "warning")));
+            items.Add(BuildMenuItem("Toggle role: [.important]", () => ToggleRole(astIndex, "important")));
+            items.Add(BuildMenuItem("Toggle role: [.lead]",      () => ToggleRole(astIndex, "lead")));
 
             if (node is ParagraphNode)
             {
                 items.Add(new Separator());
-                items.Add(BuildMenuItem("Promote to heading H1", () => PromoteToHeading(tag.BlockIndex, 1)));
-                items.Add(BuildMenuItem("Promote to heading H2", () => PromoteToHeading(tag.BlockIndex, 2)));
-                items.Add(BuildMenuItem("Promote to heading H3", () => PromoteToHeading(tag.BlockIndex, 3)));
+                items.Add(BuildMenuItem("Promote to heading H1", () => PromoteToHeading(astIndex, 1)));
+                items.Add(BuildMenuItem("Promote to heading H2", () => PromoteToHeading(astIndex, 2)));
+                items.Add(BuildMenuItem("Promote to heading H3", () => PromoteToHeading(astIndex, 3)));
             }
         }
 
@@ -178,10 +184,18 @@ internal sealed class BlockEditController
 
     // ── In-place edit ─────────────────────────────────────────────────────
 
-    private void EnterEditMode(int blockIndex, AstNode node)
+    private void EnterEditMode(Control blockControl, AstNode node)
     {
         var (start, length) = SourceRangeOffsets.Resolve(_sourceEditor.Text, node.Source);
         if (length <= 0) return;
+
+        // Replace the clicked container directly (located by reference) so
+        // the swap is correct regardless of the container's absolute panel
+        // position — i.e. independent of a leading document-title block.
+        var panel = ExtractTopPanel((Control)_previewHost.Content!);
+        if (panel is null) return;
+        int index = panel.Children.IndexOf(blockControl);
+        if (index < 0) return;
 
         var slice = _sourceEditor.Text.Substring(start, length);
 
@@ -196,17 +210,11 @@ internal sealed class BlockEditController
             Padding = new Thickness(8),
         };
 
-        var panel = ExtractTopPanel((Control)_previewHost.Content!);
-        if (panel is null) return;
-        if (blockIndex < 0 || blockIndex >= panel.Children.Count) return;
-
-        var replacedControl = (Control)panel.Children[blockIndex];
-        panel.Children[blockIndex] = inplace;
+        panel.Children[index] = inplace;
 
         _active = new InPlaceEditState
         {
             Editor = inplace,
-            BlockIndex = blockIndex,
             SourceStart = start,
             SourceLength = length,
             OriginalSlice = slice,
@@ -246,6 +254,7 @@ internal sealed class BlockEditController
         var newSlice = _active.Editor.Text;
         var start = _active.SourceStart;
         var length = _active.SourceLength;
+        var originalSlice = _active.OriginalSlice;
 
         // Detach handlers before clearing _active so a follow-up event
         // doesn't re-fire on the dying editor.
@@ -253,20 +262,53 @@ internal sealed class BlockEditController
         _active.Editor.LostFocus -= OnInPlaceLostFocus;
         _active = null;
 
-        if (start < 0 || start > _sourceEditor.Text.Length) return;
-        if (start + length > _sourceEditor.Text.Length) length = _sourceEditor.Text.Length - start;
-        if (string.Equals(newSlice, _sourceEditor.Document.GetText(start, length), StringComparison.Ordinal))
+        var (action, s, len) = DecideCommit(_sourceEditor.Text, start, length, originalSlice, newSlice);
+        switch (action)
         {
-            // No change — just request a re-render so the rendered view
-            // replaces the in-place editor.
-            _viewModel.ResetText(_sourceEditor.Text);
-            return;
+            case CommitAction.Replace:
+                _sourceEditor.Document.Replace(s, len, newSlice);
+                // The source TextEditor's TextChanged handler tells the VM to
+                // re-parse; the incremental renderer splices the freshly
+                // rendered block back into the panel.
+                break;
+            default:
+                // No change, or stale offsets — just re-render so the rendered
+                // view replaces the in-place editor without touching the source.
+                _viewModel.ResetText(_sourceEditor.Text);
+                break;
         }
+    }
 
-        _sourceEditor.Document.Replace(start, length, newSlice);
-        // The source TextEditor's TextChanged handler will tell the VM
-        // to re-parse; the incremental renderer will splice the freshly
-        // rendered block back into the panel.
+    internal enum CommitAction { Replace, NoChange, Abort }
+
+    /// <summary>
+    /// Pure decision for committing an in-place edit. Clamps the range to the
+    /// document, then:
+    /// <list type="bullet">
+    ///   <item><description><see cref="CommitAction.Abort"/> when the range is
+    ///     out of bounds, or the current source there no longer equals the slice
+    ///     that was opened for editing (the document shifted under us) — splicing
+    ///     would corrupt unrelated text.</description></item>
+    ///   <item><description><see cref="CommitAction.NoChange"/> when the edited
+    ///     text equals the current source.</description></item>
+    ///   <item><description><see cref="CommitAction.Replace"/> otherwise, with
+    ///     the clamped (start, length) to splice.</description></item>
+    /// </list>
+    /// </summary>
+    internal static (CommitAction Action, int Start, int Length) DecideCommit(
+        string sourceText, int start, int length, string originalSlice, string newSlice)
+    {
+        if (start < 0 || start > sourceText.Length)
+            return (CommitAction.Abort, start, length);
+        if (start + length > sourceText.Length)
+            length = sourceText.Length - start;
+
+        var currentSlice = sourceText.Substring(start, length);
+        if (!string.Equals(currentSlice, originalSlice, StringComparison.Ordinal))
+            return (CommitAction.Abort, start, length);
+        if (string.Equals(newSlice, currentSlice, StringComparison.Ordinal))
+            return (CommitAction.NoChange, start, length);
+        return (CommitAction.Replace, start, length);
     }
 
     private void Cancel()
@@ -305,17 +347,9 @@ internal sealed class BlockEditController
         _ => null,
     };
 
-    /// <summary>
-    /// Tag we attach to each clickable preview block. Wraps the original
-    /// renderer tag (so the incremental renderer's <c>SectionTag</c> is
-    /// still accessible) plus the block's positional index.
-    /// </summary>
-    private readonly record struct BlockClickTag(int BlockIndex, object? InnerTag);
-
     private sealed class InPlaceEditState
     {
         public required TextEditor Editor { get; init; }
-        public required int BlockIndex { get; init; }
         public required int SourceStart { get; init; }
         public required int SourceLength { get; init; }
         public required string OriginalSlice { get; init; }

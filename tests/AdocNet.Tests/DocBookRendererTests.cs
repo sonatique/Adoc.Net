@@ -125,11 +125,24 @@ public class DocBookRendererTests
     }
 
     [Test]
+    public void Single_inline_element_paragraph_is_not_indented()
+    {
+        // Asciidoctor keeps inline content on one line; XmlWriter would otherwise
+        // pretty-print a lone child element onto its own indented line.
+        var result = BlockParser.Parse("https://example.com[Click]");
+        var xml = new DocBookRenderer().RenderToString(result.Document);
+        Assert.That(xml, Does.Contain(
+            "<simpara><link xl:href=\"https://example.com\">Click</link></simpara>"));
+    }
+
+    [Test]
     public void Link_rendered_with_xlink()
     {
+        // Asciidoctor binds the XLink namespace to the "xl" prefix.
         var result = BlockParser.Parse("Visit https://example.com for info");
         var xml = new DocBookRenderer().RenderToString(result.Document);
-        Assert.That(xml, Does.Contain("xlink:href=\"https://example.com\""));
+        Assert.That(xml, Does.Contain("xl:href=\"https://example.com\""));
+        Assert.That(xml, Does.Contain("xmlns:xl=\"http://www.w3.org/1999/xlink\""));
     }
 
     [Test]
@@ -167,9 +180,10 @@ public class DocBookRendererTests
     [Test]
     public void Xlink_namespace_declared()
     {
+        // Asciidoctor binds the XLink namespace to the "xl" prefix.
         var doc = new DocumentNode();
         var xml = new DocBookRenderer().RenderToString(doc);
-        Assert.That(xml, Does.Contain("xmlns:xlink=\"http://www.w3.org/1999/xlink\""));
+        Assert.That(xml, Does.Contain("xmlns:xl=\"http://www.w3.org/1999/xlink\""));
     }
 
     [Test]
