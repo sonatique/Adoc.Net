@@ -7,6 +7,7 @@ using global::Avalonia.Controls.Primitives;
 using global::Avalonia.Input;
 using global::Avalonia.Layout;
 using global::Avalonia.Media;
+using AdocNet;
 using AdocNet.Layout;
 using AvInline = global::Avalonia.Controls.Documents.Inline;
 
@@ -17,15 +18,38 @@ namespace AdocNet.Avalonia;
 /// </summary>
 public class AvaloniaRenderer
 {
-    private static readonly FontFamily MonospaceFont = new("Cascadia Mono, Consolas, Courier New, monospace");
-    private static readonly IBrush LinkBrush = new SolidColorBrush(Color.FromRgb(0, 102, 204));
-    private static readonly IBrush CodeBlockBackground = new SolidColorBrush(Color.FromRgb(245, 245, 245));
-    private static readonly IBrush CodeLangForeground = new SolidColorBrush(Color.FromRgb(136, 136, 136));
-    private static readonly IBrush TableBorderBrush = new SolidColorBrush(Color.FromRgb(200, 200, 200));
-    private static readonly IBrush TableHeaderBackground = new SolidColorBrush(Color.FromRgb(240, 240, 240));
-    private static readonly IBrush ThematicBreakBrush = new SolidColorBrush(Color.FromRgb(200, 200, 200));
-    private static readonly IBrush DescTermForeground = new SolidColorBrush(Color.FromRgb(60, 60, 60));
     private const string BulletPrefix = "\u2022 ";
+
+    /// <summary>
+    /// Visual styling (brushes, fonts, sizes). Defaults to a fresh
+    /// <see cref="AvaloniaRenderTheme"/>; assign a new one or mutate its
+    /// properties to re-theme the preview (e.g. dark mode, host palette).
+    /// </summary>
+    public AvaloniaRenderTheme Theme { get; set; } = new();
+
+    /// <summary>
+    /// Raised when a rendered hyperlink is clicked. Handle it to intercept
+    /// navigation (route <c>xref:</c> internally, sandbox external URLs, \u2026);
+    /// if no handler sets <see cref="LinkClickedEventArgs.Handled"/>, the
+    /// renderer opens the URL with the OS shell.
+    /// </summary>
+    public event EventHandler<LinkClickedEventArgs>? LinkClicked;
+
+    /// <summary>
+    /// Attached property recording the AsciiDoc <see cref="SourceRange"/> of the
+    /// inline that produced each rendered <see cref="AvInline"/>. An editor can
+    /// read it from the inline under the pointer (e.g. via a hit-test) to map a
+    /// click to a source offset at inline granularity.
+    /// </summary>
+    public static readonly AttachedProperty<SourceRange> SourceRangeProperty =
+        AvaloniaProperty.RegisterAttached<AvaloniaRenderer, AvInline, SourceRange>(
+            "SourceRange", SourceRange.None);
+
+    /// <summary>Reads the <see cref="SourceRangeProperty"/> of a rendered inline.</summary>
+    public static SourceRange GetSourceRange(AvInline inline) => inline.GetValue(SourceRangeProperty);
+
+    /// <summary>Sets the <see cref="SourceRangeProperty"/> of a rendered inline.</summary>
+    public static void SetSourceRange(AvInline inline, SourceRange value) => inline.SetValue(SourceRangeProperty, value);
 
     /// <summary>
     /// When true (the default), <see cref="Render(DocumentLayout)"/> wraps
@@ -55,7 +79,7 @@ public class AvaloniaRenderer
             panel.Children.Add(new TextBlock
             {
                 Text = document.Title,
-                FontSize = 28,
+                FontSize = Theme.DocumentTitleFontSize,
                 FontWeight = FontWeight.Bold,
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 12),
@@ -89,7 +113,12 @@ public class AvaloniaRenderer
     /// </summary>
     public Control? Render(BlockLayout block) => RenderBlock(block);
 
-    private Control? RenderBlock(BlockLayout block)
+    /// <summary>
+    /// Dispatches a block layout to its renderer. Override to render custom
+    /// block kinds: handle your own and call <c>base.RenderBlock</c> for the
+    /// rest. Returning null drops the block.
+    /// </summary>
+    protected virtual Control? RenderBlock(BlockLayout block)
     {
         switch (block)
         {
@@ -129,19 +158,9 @@ public class AvaloniaRenderer
 
     private TextBlock RenderHeading(HeadingLayout heading)
     {
-        double fontSize = heading.Level switch
-        {
-            1 => 24,
-            2 => 20,
-            3 => 18,
-            4 => 16,
-            5 => 14,
-            _ => 13,
-        };
-
         var textBlock = new TextBlock
         {
-            FontSize = fontSize,
+            FontSize = Theme.HeadingFontSize(heading.Level),
             FontWeight = FontWeight.Bold,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 12, 0, 4),
@@ -198,7 +217,7 @@ public class AvaloniaRenderer
         var codeText = new TextBlock
         {
             Text = codeBlock.Text,
-            FontFamily = MonospaceFont,
+            FontFamily = Theme.MonospaceFont,
             TextWrapping = TextWrapping.NoWrap,
         };
 
@@ -210,7 +229,7 @@ public class AvaloniaRenderer
             {
                 Text = codeBlock.Language,
                 FontSize = 11,
-                Foreground = CodeLangForeground,
+                Foreground = Theme.CodeLanguageForeground,
                 Margin = new Thickness(0, 0, 0, 4),
             });
             panel.Children.Add(codeText);
@@ -223,7 +242,7 @@ public class AvaloniaRenderer
 
         return new Border
         {
-            Background = CodeBlockBackground,
+            Background = Theme.CodeBlockBackground,
             Padding = new Thickness(12),
             Margin = new Thickness(0, 0, 0, 8),
             CornerRadius = new CornerRadius(4),
@@ -393,7 +412,7 @@ public class AvaloniaRenderer
 
         var tableBorder = new Border
         {
-            BorderBrush = TableBorderBrush,
+            BorderBrush = Theme.TableBorderBrush,
             BorderThickness = new Thickness(1),
             Child = grid,
         };
@@ -413,10 +432,10 @@ public class AvaloniaRenderer
 
         return new Border
         {
-            BorderBrush = TableBorderBrush,
+            BorderBrush = Theme.TableBorderBrush,
             BorderThickness = new Thickness(0, 0, 1, 1),
             Padding = new Thickness(6, 4),
-            Background = cell.IsHeader ? TableHeaderBackground : null,
+            Background = cell.IsHeader ? Theme.TableHeaderBackground : null,
             Child = textBlock,
         };
     }
@@ -432,7 +451,7 @@ public class AvaloniaRenderer
             var termBlock = new TextBlock
             {
                 FontWeight = FontWeight.Bold,
-                Foreground = DescTermForeground,
+                Foreground = Theme.DescriptionTermForeground,
                 TextWrapping = TextWrapping.Wrap,
             };
             AddInlines(termBlock.Inlines!, item.Term);
@@ -452,12 +471,12 @@ public class AvaloniaRenderer
 
     // ── Thematic break rendering ────────────────────────────────────
 
-    private static Border RenderThematicBreak()
+    private Border RenderThematicBreak()
     {
         return new Border
         {
             Height = 1,
-            Background = ThematicBreakBrush,
+            Background = Theme.ThematicBreakBrush,
             Margin = new Thickness(0, 8, 0, 8),
         };
     }
@@ -476,7 +495,27 @@ public class AvaloniaRenderer
         }
     }
 
-    private AvInline? RenderInline(InlineLayout inline)
+    /// <summary>
+    /// Renders an inline layout node, stamping it with its
+    /// <see cref="SourceRangeProperty"/>. Override <see cref="RenderInlineCore"/>
+    /// to handle custom inline kinds.
+    /// </summary>
+    protected AvInline? RenderInline(InlineLayout inline)
+    {
+        // Stamp every rendered inline with its source range so a click in the
+        // preview can be hit-tested back to a source offset (see E3).
+        var rendered = RenderInlineCore(inline);
+        if (rendered is not null && !inline.Source.IsNone)
+            rendered.SetValue(SourceRangeProperty, inline.Source);
+        return rendered;
+    }
+
+    /// <summary>
+    /// Dispatches an inline layout to its renderer. Override to render custom
+    /// inline kinds: handle your own and call <c>base.RenderInlineCore</c> for
+    /// the rest.
+    /// </summary>
+    protected virtual AvInline? RenderInlineCore(InlineLayout inline)
     {
         switch (inline)
         {
@@ -499,7 +538,7 @@ public class AvaloniaRenderer
 
             case MonoRun mono:
             {
-                var span = new Span { FontFamily = MonospaceFont };
+                var span = new Span { FontFamily = Theme.MonospaceFont };
                 AddInlines(span.Inlines, mono.Children);
                 return span;
             }
@@ -508,13 +547,14 @@ public class AvaloniaRenderer
             {
                 var linkText = new TextBlock
                 {
-                    Foreground = LinkBrush,
+                    Foreground = Theme.LinkBrush,
                     TextDecorations = global::Avalonia.Media.TextDecorations.Underline,
                     Cursor = new Cursor(StandardCursorType.Hand),
                     TextWrapping = TextWrapping.Wrap,
                 };
                 AddInlines(linkText.Inlines!, link.Children);
-                linkText.PointerPressed += (_, _) => OpenUrl(link.Href);
+                var href = link.Href;
+                linkText.PointerPressed += (_, _) => OnLinkClicked(href);
                 return new InlineUIContainer { Child = linkText };
             }
 
@@ -562,6 +602,18 @@ public class AvaloniaRenderer
                     break;
             }
         }
+    }
+
+    /// <summary>
+    /// Raises <see cref="LinkClicked"/> and, unless a handler marks it handled,
+    /// opens the URL with the OS shell.
+    /// </summary>
+    private void OnLinkClicked(string url)
+    {
+        var args = new LinkClickedEventArgs(url);
+        LinkClicked?.Invoke(this, args);
+        if (!args.Handled)
+            OpenUrl(url);
     }
 
     private static void OpenUrl(string url)

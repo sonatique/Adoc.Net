@@ -348,6 +348,34 @@ public class LayoutBuilderTests
         Assert.That(p.Source.IsNone, Is.True);
     }
 
+    [Test]
+    public void Inline_layouts_carry_source_ranges_from_originating_ast_nodes()
+    {
+        // Each rendered inline run must expose a non-None source range so an
+        // editor can map a run back to (and hit-test a click into) its source
+        // span at inline — not just block — granularity.
+        var layout = Build("Hello *bold* and _italic_ world");
+        var para = layout.Children.OfType<ParagraphLayout>().First();
+
+        Assert.That(para.Inlines, Is.Not.Empty);
+        foreach (var inline in para.Inlines)
+            Assert.That(inline.Source.IsNone, Is.False,
+                $"{inline.GetType().Name} should carry a source range");
+
+        // The bold run, and its nested children, must also be mapped.
+        var bold = para.Inlines.OfType<BoldRun>().First();
+        Assert.That(bold.Source.IsNone, Is.False);
+        foreach (var child in bold.Children)
+            Assert.That(child.Source.IsNone, Is.False, "nested inline run should carry a source range");
+    }
+
+    [Test]
+    public void InlineLayout_Source_defaults_to_None_when_built_directly()
+    {
+        var run = new TextRun("x");
+        Assert.That(run.Source.IsNone, Is.True);
+    }
+
     // ── Table column weights (issue #26) ────────────────────────────
 
     [Test]

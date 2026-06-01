@@ -1345,11 +1345,12 @@ internal static class BlockParser
                 listFrames.Clear();
                 dlFrames.Clear();
 
-                // Scan forward for the matching closing delimiter.
+                // Scan forward for the matching closing delimiter (same length).
+                int commentOpenLen = TextUtility.TrimmedEndLength(line);
                 int closingIdx = -1;
                 for (int j = i + 1; j < lines.Length; j++)
                 {
-                    if (IsDelimiterLine(lines[j], '/'))
+                    if (IsClosingDelimiterLine(lines[j], '/', commentOpenLen))
                     {
                         closingIdx = j;
                         break;
@@ -1826,11 +1827,14 @@ internal static class BlockParser
                 listFrames.Clear();
                 dlFrames.Clear();
 
-                // Scan forward for the matching closing delimiter.
+                // Scan forward for the matching closing delimiter. The closer
+                // must be the same length as the opener (AsciiDoc nesting rule),
+                // so a longer rule stays content and same-type blocks can nest.
+                int openLen = TextUtility.TrimmedEndLength(line);
                 int closingIdx = -1;
                 for (int j = i + 1; j < lines.Length; j++)
                 {
-                    if (IsDelimiterLine(lines[j], delimChar))
+                    if (IsClosingDelimiterLine(lines[j], delimChar, openLen))
                     {
                         closingIdx = j;
                         break;
@@ -2470,10 +2474,11 @@ internal static class BlockParser
                     // Check if it's a delimited block
                     if (TryGetDelimiterKind(nextLine, out var contDelimChar, out var contDelimKind))
                     {
+                        int contOpenLen = TextUtility.TrimmedEndLength(nextLine);
                         int contClosingIdx = -1;
                         for (int k = j + 1; k < lines.Length; k++)
                         {
-                            if (IsDelimiterLine(lines[k], contDelimChar))
+                            if (IsClosingDelimiterLine(lines[k], contDelimChar, contOpenLen))
                             {
                                 contClosingIdx = k;
                                 break;
@@ -2680,10 +2685,11 @@ internal static class BlockParser
                     // Check if it's a delimited block
                     if (TryGetDelimiterKind(nextLine, out var contDelimChar, out var contDelimKind))
                     {
+                        int contOpenLen = TextUtility.TrimmedEndLength(nextLine);
                         int contClosingIdx = -1;
                         for (int k = j + 1; k < lines.Length; k++)
                         {
-                            if (IsDelimiterLine(lines[k], contDelimChar))
+                            if (IsClosingDelimiterLine(lines[k], contDelimChar, contOpenLen))
                             {
                                 contClosingIdx = k;
                                 break;
@@ -3305,6 +3311,23 @@ internal static class BlockParser
     {
         int len = TextUtility.TrimmedEndLength(line);
         if (len < 4) return false;
+        for (int i = 0; i < len; i++)
+            if (line[i] != ch) return false;
+        return true;
+    }
+
+    /// <summary>
+    /// Returns true when <paramref name="line"/> is a run of <paramref name="ch"/>
+    /// of exactly <paramref name="openLen"/> characters (ignoring trailing
+    /// whitespace). Per the AsciiDoc spec the closing delimiter of a delimited
+    /// block must match the opening delimiter's length; this is what allows a
+    /// longer rule to appear inside a verbatim block and same-type delimited
+    /// blocks to nest (the inner block uses a different delimiter length).
+    /// </summary>
+    private static bool IsClosingDelimiterLine(string line, char ch, int openLen)
+    {
+        int len = TextUtility.TrimmedEndLength(line);
+        if (len != openLen) return false;
         for (int i = 0; i < len; i++)
             if (line[i] != ch) return false;
         return true;
@@ -4343,63 +4366,73 @@ internal static class BlockParser
         if (string.IsNullOrWhiteSpace(spec))
             return columns;
 
-        // "N*" form: N equal columns
-        if (spec.EndsWith('*'))
-        {
-            var countStr = spec[..^1];
-            if (int.TryParse(countStr, out int count) && count > 0)
-            {
-                for (int i = 0; i < count; i++)
-                    columns.Add(new TableColumnSpec { Width = 1 });
-                return columns;
-            }
-        }
-
-        // Comma-separated: each entry is optional-alignment + optional-width.
-        // An empty entry (e.g. "1,,1") represents one column with the default
-        // spec, matching Asciidoctor's behaviour.
+        // Comma-separated: each entry is an optional repeat-multiplier (N*)
+        // followed by an optional alignment + optional width. "N*<spec>" expands
+        // to N copies of <spec> (the default spec when <spec> is omitted):
+        // "3*" -> three default columns, "2*2" -> two width-2 columns,
+        // "2*^1" -> two centre-aligned width-1 columns. An empty entry
+        // (e.g. "1,,1") is one column with the default spec.
         var parts = spec.Split(',');
         foreach (var part in parts)
         {
             var p = part.Trim();
 
-            var horizAlign = TableAlignment.Left;
-            var vertAlign = TableVerticalAlignment.Top;
-            int parseIdx = 0;
-
-            // Horizontal alignment prefix
-            if (parseIdx < p.Length && p[parseIdx] is '<' or '>' or '^')
+            int repeat = 1;
+            int star = p.IndexOf('*');
+            if (star > 0 && int.TryParse(p.Substring(0, star), out int rep) && rep > 0)
             {
-                horizAlign = p[parseIdx] switch
-                {
-                    '>' => TableAlignment.Right,
-                    '^' => TableAlignment.Center,
-                    _ => TableAlignment.Left,
-                };
-                parseIdx++;
+                repeat = rep;
+                p = p.Substring(star + 1);
             }
 
-            // Vertical alignment prefix: .< .> .^
-            if (parseIdx + 1 < p.Length && p[parseIdx] == '.' && p[parseIdx + 1] is '<' or '>' or '^')
-            {
-                vertAlign = p[parseIdx + 1] switch
-                {
-                    '>' => TableVerticalAlignment.Bottom,
-                    '^' => TableVerticalAlignment.Middle,
-                    _ => TableVerticalAlignment.Top,
-                };
-                parseIdx += 2;
-            }
-
-            var widthStr = p[parseIdx..];
-            int width = 1;
-            if (widthStr.Length > 0 && int.TryParse(widthStr, out int parsed) && parsed > 0)
-                width = parsed;
-
-            columns.Add(new TableColumnSpec { Width = width, Alignment = horizAlign, VerticalAlignment = vertAlign });
+            for (int r = 0; r < repeat; r++)
+                columns.Add(ParseSingleColumnSpec(p));
         }
 
         return columns;
+    }
+
+    /// <summary>
+    /// Parses a single column spec part ("optional-alignment + optional-width",
+    /// e.g. "^2", ".&gt;1", "3") into a <see cref="TableColumnSpec"/>. An empty or
+    /// width-less part yields the default width of 1.
+    /// </summary>
+    private static TableColumnSpec ParseSingleColumnSpec(string p)
+    {
+        var horizAlign = TableAlignment.Left;
+        var vertAlign = TableVerticalAlignment.Top;
+        int parseIdx = 0;
+
+        // Horizontal alignment prefix
+        if (parseIdx < p.Length && p[parseIdx] is '<' or '>' or '^')
+        {
+            horizAlign = p[parseIdx] switch
+            {
+                '>' => TableAlignment.Right,
+                '^' => TableAlignment.Center,
+                _ => TableAlignment.Left,
+            };
+            parseIdx++;
+        }
+
+        // Vertical alignment prefix: .< .> .^
+        if (parseIdx + 1 < p.Length && p[parseIdx] == '.' && p[parseIdx + 1] is '<' or '>' or '^')
+        {
+            vertAlign = p[parseIdx + 1] switch
+            {
+                '>' => TableVerticalAlignment.Bottom,
+                '^' => TableVerticalAlignment.Middle,
+                _ => TableVerticalAlignment.Top,
+            };
+            parseIdx += 2;
+        }
+
+        var widthStr = p.Substring(parseIdx);
+        int width = 1;
+        if (widthStr.Length > 0 && int.TryParse(widthStr, out int parsed) && parsed > 0)
+            width = parsed;
+
+        return new TableColumnSpec { Width = width, Alignment = horizAlign, VerticalAlignment = vertAlign };
     }
 
     /// <summary>
@@ -4735,11 +4768,12 @@ internal static class BlockParser
     {
         var cells = new List<CellInfo>();
 
-        // Find all separator positions
+        // Find all separator positions. A backslash-escaped separator (\|) is
+        // literal cell content, not a cell boundary.
         var pipePositions = new List<int>();
         for (int i = 0; i < line.Length; i++)
         {
-            if (line[i] == separator)
+            if (line[i] == separator && !(i > 0 && line[i - 1] == '\\'))
                 pipePositions.Add(i);
         }
 
@@ -4821,7 +4855,11 @@ internal static class BlockParser
                 contentEnd = contentStart;
 
             var content = line.AsSpan(contentStart, contentEnd - contentStart).Trim();
-            cells.Add(new CellInfo(content.ToString(), colSpan, rowSpan, alignment, cellStyle));
+            var contentStr = content.ToString();
+            // Unescape literal separators (\| -> |) now that splitting is done.
+            if (contentStr.IndexOf('\\') >= 0)
+                contentStr = contentStr.Replace("\\" + separator, separator.ToString());
+            cells.Add(new CellInfo(contentStr, colSpan, rowSpan, alignment, cellStyle));
         }
 
         return cells;
@@ -5759,19 +5797,30 @@ internal static class BlockParser
     {
         var remaining = line.AsSpan().Trim();
 
-        // Extract revnumber: starts with 'v' or 'V' followed by digits/dots.
-        if (remaining.Length > 0 && (remaining[0] == 'v' || remaining[0] == 'V'))
+        // Extract revnumber. When a comma is present, the part before the first
+        // comma is the revision number — the leading 'v' is OPTIONAL, so both
+        // "v1.0, <date>" and "1.0, <date>" yield revnumber 1.0. Without a comma,
+        // only a leading 'v<number>' is treated as a revnumber (a bare number or
+        // date with no comma is the revdate, matching Asciidoctor).
+        int commaIdx = remaining.IndexOf(',');
+        if (commaIdx >= 0)
+        {
+            var revNumber = remaining[..commaIdx].Trim();
+            if (revNumber.Length > 0 && (revNumber[0] == 'v' || revNumber[0] == 'V'))
+                revNumber = revNumber[1..].Trim();
+            if (revNumber.Length > 0)
+                document.SetAttribute("revnumber", revNumber.ToString());
+            remaining = remaining[(commaIdx + 1)..].Trim();
+        }
+        else if (remaining.Length > 0 && (remaining[0] == 'v' || remaining[0] == 'V'))
         {
             int end = 1;
-            while (end < remaining.Length && remaining[end] != ',' && remaining[end] != ':')
+            while (end < remaining.Length && remaining[end] != ':')
                 end++;
             var revNumber = remaining[1..end].Trim();
             if (revNumber.Length > 0)
                 document.SetAttribute("revnumber", revNumber.ToString());
             remaining = remaining[end..];
-            // Skip comma separator if present.
-            if (remaining.Length > 0 && remaining[0] == ',')
-                remaining = remaining[1..].Trim();
         }
 
         // Extract revdate: everything up to ':' or end of line.

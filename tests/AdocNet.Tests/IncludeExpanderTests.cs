@@ -602,6 +602,18 @@ public class IncludeExpanderTests
         Assert.That(html, Does.Contain("Included content."));
     }
 
+    [Test]
+    public void ParseLineRanges_accepts_comma_and_semicolon_separators()
+    {
+        // A quoted lines= value may use ',' or ';' to separate ranges.
+        Assert.That(IncludeExpander.ParseLineRanges("1..2,5..6"),
+            Is.EqualTo(new[] { (1, 2), (5, 6) }));
+        Assert.That(IncludeExpander.ParseLineRanges("1..2;5..6"),
+            Is.EqualTo(new[] { (1, 2), (5, 6) }));
+        Assert.That(IncludeExpander.ParseLineRanges("1,3..4,8"),
+            Is.EqualTo(new[] { (1, 1), (3, 4), (8, 8) }));
+    }
+
     /// <summary>Reader that throws IOException on Read to simulate I/O failures.</summary>
     private sealed class ThrowingReader : IIncludeReader
     {

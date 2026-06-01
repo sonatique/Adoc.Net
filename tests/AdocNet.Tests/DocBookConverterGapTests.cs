@@ -35,7 +35,7 @@ public class DocBookConverterGapTests
     public void Backtick_inside_link_label_renders_as_literal()
     {
         var xml = Render("See link:http://example.com[the `Foo` class] for more.");
-        // Asciidoctor: <link xlink:href="..."><phrase>the </phrase><literal>Foo</literal>...
+        // Asciidoctor: <link xl:href="..."><phrase>the </phrase><literal>Foo</literal>...
         Assert.That(xml, Does.Contain("<literal"));
         Assert.That(xml, Does.Contain("Foo"));
         // Backtick characters must NOT appear in the rendered output.

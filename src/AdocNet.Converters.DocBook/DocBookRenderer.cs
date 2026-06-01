@@ -42,7 +42,8 @@ public sealed class DocBookRenderer : DocumentRendererBase
         var rootElement = isBook ? "book" : "article";
         writer.WriteStartElement(rootElement, DocBookNs);
         writer.WriteAttributeString("version", "5.0");
-        writer.WriteAttributeString("xmlns", "xlink", null, XLinkNs);
+        // Asciidoctor binds the XLink namespace to the "xl" prefix.
+        writer.WriteAttributeString("xmlns", "xl", null, XLinkNs);
         // [[anchor]] before the document title is captured as the "id" attribute and
         // becomes xml:id on the root element (Asciidoctor parity).
         if (context.Document.Attributes.TryGetValue("id", out var docId) && !string.IsNullOrWhiteSpace(docId))
@@ -1092,8 +1093,22 @@ public sealed class DocBookRenderer : DocumentRendererBase
 
     private void RenderInlines(XmlWriter writer, IEnumerable<InlineNode> nodes, RenderContext context)
     {
+        bool first = true;
         foreach (var node in nodes)
+        {
+            if (first)
+            {
+                // Force the parent element into mixed-content mode so XmlWriter
+                // stops pretty-printing (indenting) inline child elements.
+                // Asciidoctor keeps inline content on a single line — e.g. a lone
+                // <link> in a <simpara> stays <simpara><link…>…</link></simpara>,
+                // not split across indented lines. Guarded by `first` so an empty
+                // inline list leaves the element self-closing.
+                writer.WriteRaw("");
+                first = false;
+            }
             RenderInline(writer, node, context);
+        }
     }
 
     private void RenderInline(XmlWriter writer, InlineNode node, RenderContext context)
@@ -1127,14 +1142,14 @@ public sealed class DocBookRenderer : DocumentRendererBase
 
             case LinkInlineNode n:
                 writer.WriteStartElement("link", DocBookNs);
-                writer.WriteAttributeString("xlink", "href", XLinkNs, n.Url);
+                writer.WriteAttributeString("xl", "href", XLinkNs, n.Url);
                 writer.WriteString(MaybeHideUriScheme(n.Url, context));
                 writer.WriteEndElement();
                 break;
 
             case InlineLinkMacroNode n:
                 writer.WriteStartElement("link", DocBookNs);
-                writer.WriteAttributeString("xlink", "href", XLinkNs, n.Url);
+                writer.WriteAttributeString("xl", "href", XLinkNs, n.Url);
                 if (n.Label.Length > 0)
                     RenderLabelInlines(writer, n.Label, context);
                 else
@@ -1200,7 +1215,7 @@ public sealed class DocBookRenderer : DocumentRendererBase
                 break;
 
             case InterDocumentXrefNode n:
-                // Asciidoctor renders inter-document xrefs as <link xlink:href="...">
+                // Asciidoctor renders inter-document xrefs as <link xl:href="...">
                 // (NOT <olink>), with the .adoc extension replaced by .xml. olink is
                 // a less-portable DocBook construct that requires a target database.
                 // When no explicit label is given, the label defaults to the .xml
@@ -1208,7 +1223,7 @@ public sealed class DocBookRenderer : DocumentRendererBase
                 writer.WriteStartElement("link", DocBookNs);
                 var xmlPath = ConvertAdocExtensionToXml(n.Path);
                 var href = n.Id is not null ? xmlPath + "#" + n.Id : xmlPath;
-                writer.WriteAttributeString("xlink", "href", XLinkNs, href);
+                writer.WriteAttributeString("xl", "href", XLinkNs, href);
                 // Parse the label as inlines so backticks become <literal>, etc.
                 // RenderLabelInlines includes the smart-punctuation/replacement passes.
                 if (n.Label is not null)
