@@ -3,15 +3,92 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.9] - 2026-06-01
+
+A correctness, parity, performance, and editor-foundation release from a
+full code review. Every parser and converter fix was verified
+byte-for-byte against Asciidoctor 2.0.26; the full test suite stays green
+(no regressions). All new public API is additive.
+
+### Added
+
+- **Inline-level source ranges.** `AdocNet.Layout.InlineLayout` now carries
+  a `Source` range (populated by `LayoutBuilder` from each inline AST node),
+  and `AdocNet.Avalonia.AvaloniaRenderer` stamps every rendered inline with a
+  new `SourceRangeProperty` attached property (`GetSourceRange`/
+  `SetSourceRange`). An editor can hit-test the inline under the pointer to
+  map a click — or a selection — back to a source offset at inline (not just
+  block) granularity.
+- **Themeable Avalonia renderer.** New `AdocNet.Avalonia.AvaloniaRenderTheme`
+  (brushes, monospace font, document-title and per-level heading sizes)
+  exposed via `AvaloniaRenderer.Theme`; each renderer starts with its own
+  defaults, so re-theming the preview (dark mode, host palette) no longer
+  requires forking the renderer.
+- **`AvaloniaRenderer.LinkClicked` event** (`LinkClickedEventArgs` with a
+  `Handled` flag). The host can intercept link navigation — route `xref:`
+  internally, sandbox external URLs — with the OS-shell open as the fallback.
+- **Overridable render dispatch.** `AvaloniaRenderer.RenderBlock` and
+  `RenderInlineCore` are now `protected virtual`, so a subclass can render
+  custom block/inline kinds and defer the rest to `base`.
+
+### Fixed
+
+- **Parser — inline formatting.** Emphasis nested inside monospace
+  (`` `_x_` `` → `<code><em>x</em></code>`) is no longer suppressed; the
+  single-`+` passthrough now honours the constrained word-boundary rule, so
+  ordinary prose/maths (`a + b + c`, `C++`, `1+1`) stays literal instead of
+  having its `+` markers swallowed.
+- **Parser — delimited blocks.** The closing delimiter must now match the
+  opener's length, so a longer rule stays content inside a verbatim block and
+  same-type blocks nest correctly. Applied to listing/example/quote/etc.,
+  comment blocks, and list-continuation blocks.
+- **Parser — tables.** Backslash-escaped pipes (`\|`) are treated as literal
+  cell content; the `cols` repeat multiplier (`N*`, including `N*spec` and
+  alignment) is honoured inside comma-separated specs.
+- **Parser — includes & header.** `include::[lines=...]` accepts
+  comma-separated ranges (`"1..2,5..6"`), and a revision line without a `v`
+  prefix (`1.0, 2024-01-15: ...`) now extracts the revision number.
+- **HTML converter.** Double quotes in image `alt` text are escaped
+  (`&quot;`), preventing malformed markup; the `menu:` macro emits
+  Asciidoctor's `menu`/`submenu`/`menuitem`/`caret` structure; verbatim-block
+  callout numbers use the icon-font form under `:icons: font`; and table
+  column widths carry the remainder to the last column and strip trailing
+  zeros (e.g. `14.2858`, `9.091`).
+- **DocBook converter.** Inline-only content (e.g. a lone `<link>` in a
+  `<simpara>`) is emitted on a single line rather than indented, and the
+  XLink namespace uses Asciidoctor's `xl:` prefix.
+- **Avalonia incremental renderer.** Fixed incorrect element mapping on any
+  document containing a section: `LayoutBuilder` flattens a section into a
+  heading plus its body blocks, so the previous 1:1 panel-child ↔ AST-child
+  assumption mis-targeted incremental edits and dropped section bodies from
+  the preview. Each top-level AST child is now rendered as one tagged
+  container holding all its blocks, located by tag (robust to a leading
+  document-title block). The editor sample's block controller was updated to
+  match.
+- **Editor in-place edit.** Committing an in-place block edit now verifies the
+  captured source slice still matches before splicing, aborting (and
+  re-rendering) instead of corrupting unrelated text when the document shifted
+  underneath the edit.
+
+### Changed
+
+- **Performance.** Inline source-range computation is now `O(n + k·log n)`
+  instead of `O(n·k)` (newline-indexed position lookup); the syntax-highlight
+  tokenizer anchors its rules with `\G` to avoid forward rescans; the
+  conditional preprocessor skips its three directive regexes for lines that
+  can't be directives; and the verbatim-block attribute-reference regex is
+  compiled once. All output is unchanged.
+
 ## [1.0.8] - 2026-05-22
 
 Lands the rest of the WYSIWYG roadmap (Phases 3–6) onto `main`.
 
 PRs #11–#14 each report as MERGED on GitHub but their base branch
 was the previous stacked PR's branch rather than `main` — a
-stacked-PR gotcha — so the merge commits actually sat on
-`origin/claude/{hybrid-editor,incremental-render,block-wysiwyg,full-wysiwyg}`
-and never propagated. v1.0.3 through v1.0.7 silently shipped without
+stacked-PR gotcha — so the merge commits actually sat on the stacked
+feature branches (`hybrid-editor`, `incremental-render`,
+`block-wysiwyg`, `full-wysiwyg`) and never propagated. v1.0.3 through
+v1.0.7 silently shipped without
 the hybrid editor sample, the incremental Avalonia renderer, the
 Block-WYSIWYG controller, or the AST-mutation commands. PR #35
 cherry-picked the four phase commits onto current main; this

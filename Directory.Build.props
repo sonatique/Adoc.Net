@@ -16,7 +16,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.8</Version>
+    <Version>1.0.9</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) Sylvain Fasel</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
