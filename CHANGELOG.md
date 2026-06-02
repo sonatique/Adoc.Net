@@ -3,6 +3,39 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.10] - 2026-06-02
+
+A focused follow-up to the 1.0.9 editor-foundation work: inline source
+ranges are now usable for click-to-source.
+
+### Fixed
+
+- **Inline source ranges are now absolute document positions (#38).**
+  1.0.9 added `InlineLayout.Source` (and the Avalonia
+  `SourceRangeProperty` that mirrors it) so an editor could map a
+  rendered inline run back to its source span. But the ranges were
+  block-RELATIVE — `InlineParser` produces positions relative to each
+  block's inline-text buffer (line 1, col 1 at the buffer start), and
+  `LayoutBuilder` stamped them onto the layout verbatim. Every inline
+  therefore reported line 1, so a live-preview editor hit-testing the
+  inline under the pointer resolved every click to the document's first
+  line — defeating the feature. `LayoutBuilder` now promotes each
+  inline's range to absolute coordinates using the owning block's
+  content origin:
+  - Lines are absolute for every inline-bearing block kind (heading,
+    paragraph, list item, table cell, admonition, description item).
+  - Columns are exact for paragraphs and headings (heading origins skip
+    the `== ` marker, so a title on line 3 reports its true `3:4`
+    start). For list items, table cells, and description items — whose
+    content column the AST does not expose — columns are exact when the
+    content begins at the block's start column; lines are always exact.
+
+  The Avalonia `SourceRangeProperty` inherits the fix automatically (the
+  renderer stamps it from the now-absolute layout inline `Source`).
+  `InlineParser`'s ranges remain deliberately slice-relative (its
+  contract and unit tests are unchanged); promotion happens in the
+  `LayoutBuilder` consumer.
+
 ## [1.0.9] - 2026-06-01
 
 A correctness, parity, performance, and editor-foundation release from a
