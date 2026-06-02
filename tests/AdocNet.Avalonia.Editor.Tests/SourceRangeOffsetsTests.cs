@@ -1,6 +1,9 @@
+using System.Linq;
 using AdocNet;
 using AdocNet.Avalonia.Editor;
 using AdocNet.Ast;
+using AdocNet.Layout;
+using AdocNet.Layout.Builders;
 using AdocNet.Parser;
 
 namespace AdocNet.Avalonia.Editor.Tests;
@@ -77,5 +80,30 @@ public class SourceRangeOffsetsTests
         var (start, length) = SourceRangeOffsets.Resolve(src, range);
         Assert.That(start, Is.EqualTo(0));
         Assert.That(start + length, Is.LessThanOrEqualTo(src.Length));
+    }
+
+    // ── Inline click-to-source round trip (issue #38) ─────────────────────
+
+    [Test]
+    public void Resolve_maps_inline_layout_range_to_correct_source_slice()
+    {
+        // The documented use case: an editor hit-tests the inline under the
+        // pointer, reads its (now absolute) Source, and resolves it to a
+        // source slice. Before #38 was fixed, inline ranges were block-
+        // relative — every inline resolved to a slice on line 1.
+        var src = "= Document Title\n\n== Section At Line 3\n\nA paragraph that starts at line 5 with *bold* text.\n";
+        var layout = new LayoutBuilder().Build(AdocParser.Parse(src).Document);
+
+        // Heading title text → "Section At Line 3" (on document line 3).
+        var headingText = layout.Children.OfType<HeadingLayout>().First()
+            .Inlines.OfType<TextRun>().First();
+        var (hStart, hLen) = SourceRangeOffsets.Resolve(src, headingText.Source);
+        Assert.That(src.Substring(hStart, hLen), Is.EqualTo("Section At Line 3"));
+
+        // The bold run in the paragraph → "*bold*" (on document line 5).
+        var bold = layout.Children.OfType<ParagraphLayout>().First()
+            .Inlines.OfType<BoldRun>().First();
+        var (bStart, bLen) = SourceRangeOffsets.Resolve(src, bold.Source);
+        Assert.That(src.Substring(bStart, bLen), Is.EqualTo("*bold*"));
     }
 }
