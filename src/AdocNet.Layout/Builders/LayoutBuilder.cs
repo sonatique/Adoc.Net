@@ -71,7 +71,7 @@ public class LayoutBuilder
 
     private static void BuildSection(SectionNode section, List<BlockLayout> output)
     {
-        var inlines = BuildInlines(section.TitleInlines);
+        var inlines = BuildInlines(section.TitleInlines, HeadingContentOrigin(section));
         output.Add(new HeadingLayout(section.Level, inlines) { Source = section.Source });
 
         foreach (var child in section.Children)
@@ -82,7 +82,9 @@ public class LayoutBuilder
 
     private static ParagraphLayout BuildParagraph(ParagraphNode paragraph)
     {
-        var inlines = BuildInlines(paragraph.Inlines);
+        // A paragraph's inline buffer begins exactly at its source start
+        // (col 1, no marker), so the block start is the content origin.
+        var inlines = BuildInlines(paragraph.Inlines, paragraph.Source.Start);
         return new ParagraphLayout(inlines) { Source = paragraph.Source };
     }
 
@@ -102,7 +104,11 @@ public class LayoutBuilder
 
     private static ListItemLayout BuildListItem(ListItemNode item)
     {
-        var inlines = BuildInlines(item.Inlines);
+        // The item's source range starts at the list marker; the inline text
+        // begins after it. We don't have the marker width on the AST, so use
+        // the item start as origin: line numbers are exact, and columns are
+        // exact for items whose content begins at the marker column.
+        var inlines = BuildInlines(item.Inlines, item.Source.Start);
         var blocks = BuildBlocks(item.Children);
         return new ListItemLayout(inlines, blocks);
     }
@@ -138,7 +144,7 @@ public class LayoutBuilder
         var blocks = new List<BlockLayout>();
         if (admonition.Inlines.Count > 0)
         {
-            var inlines = BuildInlines(admonition.Inlines);
+            var inlines = BuildInlines(admonition.Inlines, admonition.Source.Start);
             blocks.Add(new ParagraphLayout(inlines) { Source = admonition.Source });
         }
         else
@@ -173,7 +179,7 @@ public class LayoutBuilder
         {
             if (child is TableCellNode cellNode)
             {
-                var inlines = BuildInlines(cellNode.Inlines);
+                var inlines = BuildInlines(cellNode.Inlines, cellNode.Source.Start);
                 if (inlines.Count == 0 && !string.IsNullOrEmpty(cellNode.Text))
                 {
                     inlines = new InlineLayout[] { new TextRun(cellNode.Text) };
@@ -195,11 +201,16 @@ public class LayoutBuilder
         {
             if (child is DescriptionItemNode item)
             {
-                var term = BuildInlines(item.TermInlines);
+                // The term begins at the item's source start; the description
+                // follows the `::` delimiter. We only have the item start, so
+                // both use it as origin — exact lines, exact term column, and
+                // best-effort description column.
+                var origin = item.Source.Start;
+                var term = BuildInlines(item.TermInlines, origin);
                 if (term.Count == 0 && item.Terms.Count > 0 && !string.IsNullOrEmpty(item.Terms[0]))
                     term = new InlineLayout[] { new TextRun(item.Terms[0]) };
 
-                var desc = BuildInlines(item.DescriptionInlines);
+                var desc = BuildInlines(item.DescriptionInlines, origin);
                 if (desc.Count == 0 && !string.IsNullOrEmpty(item.Description))
                     desc = new InlineLayout[] { new TextRun(item.Description) };
 
@@ -253,7 +264,7 @@ public class LayoutBuilder
         }
     }
 
-    private static IReadOnlyList<InlineLayout> BuildInlines(IReadOnlyList<InlineNode> nodes)
+    private static IReadOnlyList<InlineLayout> BuildInlines(IReadOnlyList<InlineNode> nodes, SourcePosition contentOrigin)
     {
         if (nodes.Count == 0)
             return Array.Empty<InlineLayout>();
@@ -261,7 +272,7 @@ public class LayoutBuilder
         var result = new List<InlineLayout>();
         foreach (var node in nodes)
         {
-            var inline = BuildInline(node);
+            var inline = BuildInline(node, contentOrigin);
             if (inline != null)
             {
                 result.Add(inline);
@@ -270,18 +281,71 @@ public class LayoutBuilder
         return result;
     }
 
-    private static InlineLayout? BuildInline(InlineNode node)
+    private static InlineLayout? BuildInline(InlineNode node, SourcePosition contentOrigin)
     {
         // Stamp the source range once here so every inline layout node carries
         // it (for editor caret/selection ↔ source mapping) without repeating the
         // assignment in each switch arm below.
-        var layout = BuildInlineCore(node);
+        //
+        // InlineParser produces ranges that are RELATIVE to the block's inline
+        // text buffer (line 1, col 1 at the start of that buffer). Promote them
+        // to absolute document coordinates here using the owning block's
+        // content origin — otherwise every inline would report line 1 and an
+        // editor doing click-to-source would resolve every click to the first
+        // line of the document (issue #38).
+        var layout = BuildInlineCore(node, contentOrigin);
         if (layout is not null)
-            layout.Source = node.Source;
+            layout.Source = ToAbsolute(node.Source, contentOrigin);
         return layout;
     }
 
-    private static InlineLayout? BuildInlineCore(InlineNode node)
+    /// <summary>
+    /// Promotes a block-relative inline <see cref="SourceRange"/> to absolute
+    /// document coordinates given the absolute position of relative
+    /// <c>(line 1, col 1)</c> of the owning block's inline text buffer.
+    /// </summary>
+    /// <remarks>
+    /// The line component composes for every line of the buffer. The column
+    /// composes with the origin only on the buffer's first line; on a
+    /// continuation line the relative column already equals the source column,
+    /// because the buffer preserves the source's own line breaks. If either the
+    /// range or the origin is <see cref="SourceRange.None"/> / unknown, the
+    /// range is returned unchanged so callers without a reliable origin keep
+    /// the previous (relative) value rather than a corrupted one.
+    /// </remarks>
+    internal static SourceRange ToAbsolute(SourceRange relative, SourcePosition contentOrigin)
+    {
+        if (relative.IsNone || contentOrigin.IsNone)
+            return relative;
+        return new SourceRange(
+            OffsetPosition(relative.Start, contentOrigin),
+            OffsetPosition(relative.End, contentOrigin));
+    }
+
+    private static SourcePosition OffsetPosition(SourcePosition p, SourcePosition origin)
+    {
+        if (p.IsNone)
+            return p;
+        int line = origin.Line + (p.Line - 1);
+        int column = p.Line == 1 ? origin.Column + (p.Column - 1) : p.Column;
+        return new SourcePosition(line, column);
+    }
+
+    /// <summary>
+    /// Absolute source position of the first character of a section heading's
+    /// title text — i.e. just past the <c>== </c> marker. The ATX marker is
+    /// <c>(Level + 1)</c> equals signs followed by one space.
+    /// </summary>
+    private static SourcePosition HeadingContentOrigin(SectionNode section)
+    {
+        var start = section.Source.Start;
+        if (start.IsNone)
+            return SourcePosition.None;
+        int markerWidth = section.Level + 2; // (Level + 1) '=' + 1 space
+        return new SourcePosition(start.Line, start.Column + markerWidth);
+    }
+
+    private static InlineLayout? BuildInlineCore(InlineNode node, SourcePosition contentOrigin)
     {
         switch (node)
         {
@@ -289,16 +353,16 @@ public class LayoutBuilder
                 return new TextRun(text.Value);
 
             case StrongInlineNode strong:
-                return new BoldRun(BuildInlines(strong.Children));
+                return new BoldRun(BuildInlines(strong.Children, contentOrigin));
 
             case EmphasisInlineNode emphasis:
-                return new ItalicRun(BuildInlines(emphasis.Children));
+                return new ItalicRun(BuildInlines(emphasis.Children, contentOrigin));
 
             case MonospaceInlineNode mono:
-                return new MonoRun(BuildInlines(mono.Children));
+                return new MonoRun(BuildInlines(mono.Children, contentOrigin));
 
             case HighlightInlineNode highlight:
-                return new BoldRun(BuildInlines(highlight.Children));
+                return new BoldRun(BuildInlines(highlight.Children, contentOrigin));
 
             case LinkInlineNode link:
                 return new LinkRun(link.Url, new InlineLayout[] { new TextRun(link.Url) });
