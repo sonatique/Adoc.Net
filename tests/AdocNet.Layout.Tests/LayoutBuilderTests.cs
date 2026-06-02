@@ -376,6 +376,130 @@ public class LayoutBuilderTests
         Assert.That(run.Source.IsNone, Is.True);
     }
 
+    // ── Inline source ranges are absolute, not block-relative (issue #38) ──
+
+    [Test]
+    public void Inline_source_ranges_are_absolute_document_positions()
+    {
+        // Exact repro from issue #38. Inline ranges must be absolute document
+        // positions (consistent with BlockLayout.Source), NOT relative to the
+        // owning block (which made every inline report line 1).
+        var src = "= Document Title\n\n== Section At Line 3\n\nA paragraph that starts at line 5 with *bold* text.\n";
+        var layout = Build(src);
+
+        var heading = layout.Children.OfType<HeadingLayout>().First();
+        var headingText = heading.Inlines.OfType<TextRun>().First();
+        // "Section At Line 3" begins at line 3, column 4 (past "== ").
+        Assert.That(headingText.Source.Start, Is.EqualTo(new SourcePosition(3, 4)));
+        Assert.That(headingText.Source.End, Is.EqualTo(new SourcePosition(3, 20)));
+
+        var para = layout.Children.OfType<ParagraphLayout>().First();
+        var firstText = para.Inlines.OfType<TextRun>().First();
+        Assert.That(firstText.Source.Start, Is.EqualTo(new SourcePosition(5, 1)));
+        Assert.That(firstText.Source.End, Is.EqualTo(new SourcePosition(5, 39)));
+
+        var bold = para.Inlines.OfType<BoldRun>().First();
+        Assert.That(bold.Source.Start, Is.EqualTo(new SourcePosition(5, 40)));
+        Assert.That(bold.Source.End, Is.EqualTo(new SourcePosition(5, 45)));
+        // The nested text inside the bold run is also absolute.
+        var boldInner = bold.Children.OfType<TextRun>().First();
+        Assert.That(boldInner.Source.Start.Line, Is.EqualTo(5));
+        Assert.That(boldInner.Source.Start.Column, Is.EqualTo(41));
+    }
+
+    [Test]
+    public void Inline_source_line_matches_owning_block_not_line_one()
+    {
+        // The headline symptom of #38: every inline resolved to line 1, so a
+        // click-to-source editor sent every click to the document's first
+        // line. Inlines deep in the document must carry their true line.
+        var src = "para one\n\npara two\n\npara three with *emphasis* near the end\n";
+        var layout = Build(src);
+
+        var paras = layout.Children.OfType<ParagraphLayout>().ToList();
+        Assert.That(paras, Has.Count.EqualTo(3));
+
+        Assert.That(paras[0].Inlines.OfType<TextRun>().First().Source.Start.Line, Is.EqualTo(1));
+        Assert.That(paras[1].Inlines.OfType<TextRun>().First().Source.Start.Line, Is.EqualTo(3));
+
+        var third = paras[2];
+        Assert.That(third.Inlines.OfType<TextRun>().First().Source.Start.Line, Is.EqualTo(5));
+        var emph = third.Inlines.OfType<BoldRun>().FirstOrDefault();   // highlight maps to BoldRun; emphasis to ItalicRun
+        var italic = third.Inlines.OfType<ItalicRun>().FirstOrDefault();
+        var formatted = (InlineLayout?)emph ?? italic;
+        Assert.That(formatted, Is.Not.Null);
+        Assert.That(formatted!.Source.Start.Line, Is.EqualTo(5),
+            "Formatted inline on document line 5 must report line 5, not 1");
+    }
+
+    [Test]
+    public void Inline_source_lines_are_absolute_across_all_block_kinds()
+    {
+        // Lines must be absolute for every inline-bearing block kind, not just
+        // paragraphs and headings.
+        var src =
+            "== H\n\n" +          // heading on line 1
+            "Para.\n\n" +         // paragraph on line 3
+            "* item *x*\n\n" +    // list item on line 5
+            "|===\n| cell *y*\n|===\n";  // table cell on line 8
+        var layout = Build(src);
+
+        var heading = layout.Children.OfType<HeadingLayout>().First();
+        Assert.That(heading.Inlines.OfType<TextRun>().First().Source.Start.Line, Is.EqualTo(1));
+
+        var para = layout.Children.OfType<ParagraphLayout>().First();
+        Assert.That(para.Inlines.OfType<TextRun>().First().Source.Start.Line, Is.EqualTo(3));
+
+        var list = layout.Children.OfType<ListLayout>().First();
+        Assert.That(list.Items[0].Inlines.OfType<TextRun>().First().Source.Start.Line, Is.EqualTo(5));
+
+        var table = layout.Children.OfType<TableLayout>().First();
+        var cellInlines = table.Rows[0].Cells[0].Inlines;
+        Assert.That(cellInlines.OfType<TextRun>().First().Source.Start.Line, Is.EqualTo(8));
+    }
+
+    [Test]
+    public void Inline_source_range_on_continuation_line_uses_absolute_line()
+    {
+        // A paragraph that spans two source lines: an inline on the second
+        // physical line must report the absolute line, with its column taken
+        // from that line (not offset by the block's first-line column).
+        var src = "intro\n\nfirst line of para\nsecond *bold* line\n";
+        var layout = Build(src);
+
+        var para = layout.Children.OfType<ParagraphLayout>().Last();
+        var bold = para.Inlines.OfType<BoldRun>().First();
+        // "second *bold*" is on document line 4; the bold opens at column 8.
+        Assert.That(bold.Source.Start.Line, Is.EqualTo(4));
+        Assert.That(bold.Source.Start.Column, Is.EqualTo(8));
+    }
+
+    [Test]
+    public void ToAbsolute_offsets_first_line_column_but_not_continuation_lines()
+    {
+        // Unit-level check of the promotion math. Origin is the absolute
+        // position of relative (1,1).
+        var origin = new SourcePosition(10, 4);
+
+        // First-line relative position: both line and column compose.
+        var firstLine = LayoutBuilder.ToAbsolute(
+            new SourceRange(new SourcePosition(1, 1), new SourcePosition(1, 5)), origin);
+        Assert.That(firstLine.Start, Is.EqualTo(new SourcePosition(10, 4)));
+        Assert.That(firstLine.End, Is.EqualTo(new SourcePosition(10, 8)));
+
+        // Continuation-line relative position: line composes, column is taken
+        // as-is (the buffer preserves the source's own line breaks).
+        var secondLine = LayoutBuilder.ToAbsolute(
+            new SourceRange(new SourcePosition(2, 3), new SourcePosition(2, 9)), origin);
+        Assert.That(secondLine.Start, Is.EqualTo(new SourcePosition(11, 3)));
+        Assert.That(secondLine.End, Is.EqualTo(new SourcePosition(11, 9)));
+
+        // None range / None origin are passed through unchanged.
+        Assert.That(LayoutBuilder.ToAbsolute(SourceRange.None, origin).IsNone, Is.True);
+        var rel = new SourceRange(new SourcePosition(1, 1), new SourcePosition(1, 2));
+        Assert.That(LayoutBuilder.ToAbsolute(rel, SourcePosition.None), Is.EqualTo(rel));
+    }
+
     // ── Table column weights (issue #26) ────────────────────────────
 
     [Test]
