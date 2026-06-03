@@ -827,5 +827,82 @@ public class TableParserTests
         Assert.That(cells[0].Text, Is.EqualTo("a | b"));
         Assert.That(cells[1].Text, Is.EqualTo("c"));
     }
+
+    // ── Row-span column reservation (issue #41) ──────────────────────────
+
+    private static List<List<string>> Grid(TableNode table) =>
+        table.Children.OfType<TableRowNode>()
+            .Select(r => r.Children.OfType<TableCellNode>()
+                .Select(c => (c.Text ?? string.Empty).Trim()).ToList())
+            .ToList();
+
+    [Test]
+    public void Rowspan_in_non_left_column_reserves_its_column_in_following_rows()
+    {
+        // Issue #41: `.3+|` in column 2 of a 2-column table must reserve
+        // column 2 for the next two rows, so b1 and c1 land in separate
+        // rows (each with one free cell, column 1) — not packed together.
+        var src = "[cols=2]\n|===\n| H1 | H2\n\n| a1 .3+| TALL\n| b1\n| c1\n|===";
+        var table = BlockParser.Parse(src).Document.Children.OfType<TableNode>().First();
+        var grid = Grid(table);
+
+        Assert.That(grid, Has.Count.EqualTo(4), "header + 3 body rows");
+        Assert.That(grid[0], Is.EqualTo(new[] { "H1", "H2" }));
+        Assert.That(grid[1], Is.EqualTo(new[] { "a1", "TALL" }));
+        Assert.That(grid[2], Is.EqualTo(new[] { "b1" }), "b1 alone — column 2 held by TALL's rowspan");
+        Assert.That(grid[3], Is.EqualTo(new[] { "c1" }), "c1 alone — column 2 still held by TALL's rowspan");
+
+        var tall = table.Children.OfType<TableRowNode>().ElementAt(1)
+            .Children.OfType<TableCellNode>().Single(c => (c.Text ?? "").Trim() == "TALL");
+        Assert.That(tall.RowSpan, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void Rowspan_in_left_column_still_parses_correctly()
+    {
+        // Regression guard: the left-column rowspan case worked before #41
+        // and must keep working.
+        var src = "[cols=2]\n|===\n| H1 | H2\n\n.2+| A | b1\n| b2\n| c1 | c2\n|===";
+        var table = BlockParser.Parse(src).Document.Children.OfType<TableNode>().First();
+        var grid = Grid(table);
+
+        Assert.That(grid, Has.Count.EqualTo(4));
+        Assert.That(grid[0], Is.EqualTo(new[] { "H1", "H2" }));
+        Assert.That(grid[1], Is.EqualTo(new[] { "A", "b1" }));
+        Assert.That(grid[2], Is.EqualTo(new[] { "b2" }));
+        Assert.That(grid[3], Is.EqualTo(new[] { "c1", "c2" }));
+    }
+
+    [Test]
+    public void Overlapping_rowspans_across_columns_do_not_drop_trailing_cells()
+    {
+        // Issue #41 larger consequence: with overlapping rowspans the old
+        // algorithm collapsed rows and dropped `f3`. Expect 7 rows, all
+        // cells present and correctly placed.
+        var src =
+            "[cols=4]\n|===\n| H1 | H2 | H3 | H4\n\n" +
+            ".2+| A1 .2+| A2 | a3 .6+| TALL\n" +
+            "| b3\n" +
+            ".4+| C1 .4+| C2 | c3\n" +
+            "| d3\n" +
+            "| e3\n" +
+            "| f3\n|===";
+        var table = BlockParser.Parse(src).Document.Children.OfType<TableNode>().First();
+        var grid = Grid(table);
+
+        Assert.That(grid, Has.Count.EqualTo(7), "header + 6 body rows");
+        Assert.That(grid[0], Is.EqualTo(new[] { "H1", "H2", "H3", "H4" }));
+        Assert.That(grid[1], Is.EqualTo(new[] { "A1", "A2", "a3", "TALL" }));
+        Assert.That(grid[2], Is.EqualTo(new[] { "b3" }));
+        Assert.That(grid[3], Is.EqualTo(new[] { "C1", "C2", "c3" }));
+        Assert.That(grid[4], Is.EqualTo(new[] { "d3" }));
+        Assert.That(grid[5], Is.EqualTo(new[] { "e3" }));
+        Assert.That(grid[6], Is.EqualTo(new[] { "f3" }), "f3 must not be dropped");
+
+        // Every source cell survives somewhere in the grid.
+        var all = grid.SelectMany(r => r).ToList();
+        foreach (var expected in new[] { "A1", "A2", "a3", "TALL", "b3", "C1", "C2", "c3", "d3", "e3", "f3" })
+            Assert.That(all, Does.Contain(expected), $"cell '{expected}' must be present");
+    }
 }
 

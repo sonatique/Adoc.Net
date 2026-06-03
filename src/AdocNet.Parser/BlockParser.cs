@@ -4192,6 +4192,17 @@ internal static class BlockParser
                 }
 
                 colsUsed += info.ColSpan;
+
+                // Skip any trailing columns held by active rowspans from earlier
+                // rows: those slots are already filled for this row, so the row
+                // is complete once they are the only thing left. Without this, a
+                // rowspan in a non-last column (e.g. `.3+|` in column 2 of a
+                // 2-column table) leaves `colsUsed < colCount`, the row is never
+                // closed, and the next source row's cells get packed into it —
+                // collapsing rows and dropping trailing cells (issue #41).
+                while (colsUsed < colCount && activeRowSpans[colsUsed] > 0)
+                    colsUsed++;
+
                 if (colsUsed >= colCount)
                 {
                     FinaliseRowSource(currentRow);
