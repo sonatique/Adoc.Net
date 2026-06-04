@@ -3,6 +3,28 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.11] - 2026-06-04
+
+A table-parser correctness fix.
+
+### Fixed
+
+- **Rowspan cells now reserve their column in the rows they span (#41).**
+  When a cell had a rowspan (`.N+|`) in a column other than the
+  last-filled one, the row-grouping algorithm advanced past *leading*
+  columns held by an active rowspan but never skipped *trailing* ones
+  before deciding a row was complete. A rowspan in a non-last column
+  therefore left the row looking unfilled, so the next source row's
+  cells were packed into it — collapsing several source rows into fewer
+  AST rows and, with overlapping rowspans across multiple columns,
+  dropping trailing cells entirely. The loop now skips trailing columns
+  held by active rowspans before closing a row, so each source row
+  consumes exactly `numCols − occupiedByActiveSpans − colspansInRow`
+  cells, matching Asciidoctor's table-fill behaviour. A rowspan in the
+  left column already worked and is unaffected. Because the bug was at
+  the AST level (`TableNode.Children`), every backend (HTML, Avalonia,
+  PDF) inherits the corrected row structure.
+
 ## [1.0.10] - 2026-06-02
 
 A focused follow-up to the 1.0.9 editor-foundation work: inline source
