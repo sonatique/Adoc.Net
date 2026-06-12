@@ -137,6 +137,23 @@ public class QandaAndIndentTests
         Assert.That(System.Text.RegularExpressions.Regex.Matches(html, "<li>").Count, Is.EqualTo(3));
     }
 
+    [Test]
+    public void Styled_dlist_after_another_dlist_is_not_merged()
+    {
+        // Regression: a [qanda] block-attribute line after a [horizontal] list must start a
+        // separate, differently-styled list rather than appending to the horizontal one.
+        var result = BlockParser.Parse("[horizontal]\nCPU:: compute\n\n[qanda]\nWhat?:: Answer.");
+        var html = new HtmlRenderer().RenderToString(result.Document);
+
+        Assert.That(html, Does.Contain("<div class=\"hdlist\">"));
+        Assert.That(html, Does.Contain("<div class=\"qlist qanda\">"));
+
+        var lists = result.Document.Children.OfType<DescriptionListNode>().ToList();
+        Assert.That(lists, Has.Count.EqualTo(2));
+        Assert.That(lists[0].Style, Is.EqualTo("horizontal"));
+        Assert.That(lists[1].Style, Is.EqualTo("qanda"));
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     // Step 6 — Include indent= tests
     // ══════════════════════════════════════════════════════════════════════════
