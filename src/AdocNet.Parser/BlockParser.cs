@@ -2257,8 +2257,13 @@ internal static class BlockParser
                 }
                 else
                 {
-                    // Fresh start (no frames or going back to root)
-                    if (currentContainer.Children.Count > 0 &&
+                    // Fresh start (no frames or going back to root).
+                    // Reattach to the immediately-preceding description list so a list can continue
+                    // across a blank line — but NOT when a new style is pending (e.g. a [qanda]
+                    // block-attribute line after a [horizontal] list), which must start a separate,
+                    // differently-styled list rather than merging into the previous one.
+                    if (pendingDlStyle is null &&
+                        currentContainer.Children.Count > 0 &&
                         currentContainer.Children[^1] is DescriptionListNode existingDl)
                     {
                         dl = existingDl;
