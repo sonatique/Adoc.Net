@@ -384,8 +384,7 @@ internal static class IncludeExpander
             // ── Safe mode: restrict to base directory ──
             if (safeMode >= SafeMode.Safe)
             {
-                var normalizedBase = Path.GetFullPath(baseDirectory);
-                if (!resolvedPath.StartsWith(normalizedBase, StringComparison.OrdinalIgnoreCase))
+                if (!IsWithinBaseDirectory(resolvedPath, baseDirectory))
                 {
                     diagnostics.Add(new Diagnostic(
                         DiagnosticSeverity.Warning,
@@ -542,6 +541,25 @@ internal static class IncludeExpander
         }
 
         return result.ToString();
+    }
+
+    /// <summary>
+    /// Returns true when <paramref name="resolvedPath"/> is the base directory itself or a
+    /// path strictly beneath it. Uses a directory-separator boundary so that a sibling whose
+    /// name merely shares the base as a string prefix (e.g. base <c>/wiki/docs</c> vs.
+    /// <c>/wiki/docs-private/secret.adoc</c>) is correctly rejected — a naive
+    /// <see cref="string.StartsWith(string, StringComparison)"/> check would let it through.
+    /// </summary>
+    private static bool IsWithinBaseDirectory(string resolvedPath, string baseDirectory)
+    {
+        var normalizedBase = Path.GetFullPath(baseDirectory);
+        if (resolvedPath.Equals(normalizedBase, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var baseWithSeparator = normalizedBase.Length > 0 && normalizedBase[^1] == Path.DirectorySeparatorChar
+            ? normalizedBase
+            : normalizedBase + Path.DirectorySeparatorChar;
+        return resolvedPath.StartsWith(baseWithSeparator, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

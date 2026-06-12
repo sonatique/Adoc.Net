@@ -206,8 +206,14 @@ internal sealed class PreviewServer(string rootDir, int port) : IDisposable
         var decoded = Uri.UnescapeDataString(urlPath).TrimStart('/');
         var fullPath = Path.GetFullPath(Path.Combine(_rootDir, decoded));
 
-        // Prevent directory traversal
-        if (!fullPath.StartsWith(_rootDir, StringComparison.OrdinalIgnoreCase))
+        // Prevent directory traversal. Compare against the root with a trailing separator so a
+        // sibling directory that merely shares the root as a string prefix (e.g. root
+        // "/srv/site" vs. "/srv/site-secret/...") is rejected, not just "../" escapes.
+        var normalizedRoot = Path.GetFullPath(_rootDir);
+        var rootWithSeparator = normalizedRoot.Length > 0 && normalizedRoot[^1] == Path.DirectorySeparatorChar
+            ? normalizedRoot
+            : normalizedRoot + Path.DirectorySeparatorChar;
+        if (!fullPath.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase))
         {
             response.StatusCode = 403;
             response.Close();
