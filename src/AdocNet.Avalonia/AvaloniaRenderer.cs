@@ -618,6 +618,13 @@ public class AvaloniaRenderer
 
     private static void OpenUrl(string url)
     {
+        // Only auto-open links with a safe, well-known scheme. A document-controlled link must not
+        // be able to shell-execute a local executable (e.g. link:file:///C:/Windows/System32/calc.exe[])
+        // or leak NTLM credentials over SMB (UNC path) on a single click. Other schemes are left to
+        // the host, which can subscribe to LinkClicked and decide how to handle them.
+        if (!IsSafeAutoOpenUrl(url))
+            return;
+
         try
         {
             Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
@@ -626,5 +633,19 @@ public class AvaloniaRenderer
         {
             // Silently ignore failures to open URLs
         }
+    }
+
+    /// <summary>
+    /// True only for absolute URLs whose scheme is safe to hand to the OS shell without
+    /// confirmation (<c>http</c>, <c>https</c>, <c>mailto</c>). Relative links, <c>file:</c>,
+    /// UNC paths, <c>javascript:</c>, and custom protocols are rejected.
+    /// </summary>
+    internal static bool IsSafeAutoOpenUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return false;
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            return false;
+        return uri.Scheme is "http" or "https" or "mailto";
     }
 }
