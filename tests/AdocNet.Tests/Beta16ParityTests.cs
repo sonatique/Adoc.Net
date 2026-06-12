@@ -309,6 +309,70 @@ public class Beta16ParityTests
     }
 
     [Test]
+    public void SafeMode_Safe_blocks_sibling_directory_with_shared_prefix()
+    {
+        // Regression: a sibling directory whose name shares the base directory as a
+        // string prefix (base ".../docs" vs. ".../docs-private") must be blocked. A naive
+        // StartsWith check on the resolved path let this through.
+        var tempDir = Path.Combine(Path.GetTempPath(), "adocnet-safe-" + Guid.NewGuid().ToString("N")[..8]);
+        var baseDir = Path.Combine(tempDir, "docs");
+        var siblingDir = Path.Combine(tempDir, "docs-private");
+        Directory.CreateDirectory(baseDir);
+        Directory.CreateDirectory(siblingDir);
+        try
+        {
+            File.WriteAllText(Path.Combine(siblingDir, "secret.adoc"), "Sibling secret.");
+            var input = "include::../docs-private/secret.adoc[]";
+
+            var options = new ParseOptions
+            {
+                BaseDirectory = baseDir,
+                SafeMode = SafeMode.Safe,
+            };
+
+            var result = AdocParser.Parse(input, options);
+            var html = new HtmlRenderer().RenderToString(result.Document);
+
+            Assert.That(html, Does.Not.Contain("Sibling secret"));
+            Assert.That(result.Diagnostics, Has.Some.Property("Message").Contains("outside base directory"));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
+    public void SafeMode_Safe_allows_includes_within_base_directory()
+    {
+        // The boundary fix must not break legitimate in-tree includes.
+        var tempDir = Path.Combine(Path.GetTempPath(), "adocnet-safe-" + Guid.NewGuid().ToString("N")[..8]);
+        var baseDir = Path.Combine(tempDir, "docs");
+        var nested = Path.Combine(baseDir, "chapters");
+        Directory.CreateDirectory(nested);
+        try
+        {
+            File.WriteAllText(Path.Combine(nested, "intro.adoc"), "Legitimate include.");
+            var input = "include::chapters/intro.adoc[]";
+
+            var options = new ParseOptions
+            {
+                BaseDirectory = baseDir,
+                SafeMode = SafeMode.Safe,
+            };
+
+            var result = AdocParser.Parse(input, options);
+            var html = new HtmlRenderer().RenderToString(result.Document);
+
+            Assert.That(html, Does.Contain("Legitimate include"));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
     public void SafeMode_Secure_blocks_all_includes()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "adocnet-safe-" + Guid.NewGuid().ToString("N")[..8]);
