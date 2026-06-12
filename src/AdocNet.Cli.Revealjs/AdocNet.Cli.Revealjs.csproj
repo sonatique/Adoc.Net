@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <InvariantGlobalization>true</InvariantGlobalization>
     <AssemblyName>adocnet-revealjs</AssemblyName>
     <RootNamespace>AdocNet.Cli.Revealjs</RootNamespace>
     <Description>AsciiDoc to reveal.js slides converter. Equivalent to: adocnet -b revealjs</Description>
