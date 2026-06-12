@@ -16,11 +16,24 @@ public sealed class DocBookRenderer : DocumentRendererBase
 
     private int _calloutGroupCounter;
 
+    // Serializes concurrent renders on the same instance: per-render state
+    // (_calloutGroupCounter) would otherwise be clobbered. Use an instance per
+    // render for parallelism.
+    private readonly object _renderLock = new();
+
     /// <inheritdoc />
     public override string Format => "docbook";
 
     /// <inheritdoc />
     protected override void RenderDocument(RenderContext context, Stream output)
+    {
+        lock (_renderLock)
+        {
+            RenderDocumentCore(context, output);
+        }
+    }
+
+    private void RenderDocumentCore(RenderContext context, Stream output)
     {
         var settings = new XmlWriterSettings
         {
