@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using AdocNet.Ast;
 using AdocNet.Parser;
 
@@ -5,16 +6,32 @@ namespace AdocNet.LanguageServer;
 
 internal sealed class DocumentManager
 {
-    private readonly Dictionary<string, ParseResult> _documents = [];
-    private readonly Dictionary<string, string> _sourceTexts = [];
+    // Keyed by the LSP document URI. ConcurrentDictionary because didChange (Parse) can run while
+    // hover/completion/definition handlers read on other threads.
+    private readonly ConcurrentDictionary<string, ParseResult> _documents = new();
+    private readonly ConcurrentDictionary<string, string> _sourceTexts = new();
 
     public ParseResult Parse(string uri, string text)
     {
-        var options = new ParseOptions { SourceFilePath = uri };
+        // The LSP gives a document URI (e.g. "file:///c%3A/docs/book.adoc"). Pass the decoded
+        // filesystem path — not the raw URI string — as SourceFilePath so include:: resolves
+        // against the document's directory instead of a bogus "<cwd>/file:/..." path. For
+        // non-file documents (e.g. untitled:), skip include resolution entirely.
+        var filePath = ToFileSystemPath(uri);
+        var options = filePath is not null
+            ? new ParseOptions { SourceFilePath = filePath }
+            : ParseOptions.Default;
         var result = AdocParser.Parse(text, options);
         _documents[uri] = result;
         _sourceTexts[uri] = text;
         return result;
+    }
+
+    private static string? ToFileSystemPath(string uri)
+    {
+        if (Uri.TryCreate(uri, UriKind.Absolute, out var parsed) && parsed.IsFile)
+            return parsed.LocalPath;
+        return null;
     }
 
     public ParseResult? Get(string uri) =>
@@ -25,8 +42,8 @@ internal sealed class DocumentManager
 
     public void Remove(string uri)
     {
-        _documents.Remove(uri);
-        _sourceTexts.Remove(uri);
+        _documents.TryRemove(uri, out _);
+        _sourceTexts.TryRemove(uri, out _);
     }
 
     public IReadOnlyList<string> GetAnchors(string uri)
