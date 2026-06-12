@@ -7,8 +7,13 @@ namespace AdocNet;
 
 /// <summary>
 /// High-level facade that combines parsing and rendering of AsciiDoc source text.
+/// <para>
+/// Implements <see cref="IDisposable"/>: an engine that registers extensions owns file watchers
+/// and (on .NET 6+) collectible <c>AssemblyLoadContext</c>s, so dispose it (or use a <c>using</c>)
+/// when done. <see cref="Shutdown"/> remains as an explicit alias.
+/// </para>
 /// </summary>
-public sealed partial class AdocEngine
+public sealed partial class AdocEngine : IDisposable
 {
     /// <summary>
     /// The extension API version supported by this build.
@@ -550,6 +555,19 @@ public sealed partial class AdocEngine
         StopAllWatchers();
         UnloadAllExtensionContexts();
 #endif
+    }
+
+    private bool _disposed;
+
+    /// <summary>
+    /// Releases resources owned by the engine (extension lifecycles, file watchers, and
+    /// collectible assembly load contexts) by calling <see cref="Shutdown"/>. Idempotent.
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        Shutdown();
     }
 
 #if NET6_0_OR_GREATER

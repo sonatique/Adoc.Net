@@ -284,6 +284,25 @@ public class CachingTests
         });
     }
 
+    [Test]
+    public void Engine_is_disposable_and_dispose_is_idempotent()
+    {
+        var engine = new AdocEngine(new HtmlRenderer(), s => AdocParser.Parse(s).Document);
+        Assert.That(engine, Is.InstanceOf<IDisposable>());
+        Assert.DoesNotThrow(() =>
+        {
+            engine.Dispose();
+            engine.Dispose(); // idempotent
+        });
+
+        // The using pattern works.
+        Assert.DoesNotThrow(() =>
+        {
+            using var scoped = new AdocEngine(new HtmlRenderer(), s => AdocParser.Parse(s).Document);
+            RenderToBytes(scoped, SimpleDoc);
+        });
+    }
+
     // ── MaxCacheEntries validation ──────────────────────────────────────
 
     [Test]
