@@ -5651,9 +5651,13 @@ internal static class BlockParser
             number = -1; // auto-numbering sentinel
             return true;
         }
+        // Restrict to ASCII digits: char.IsDigit accepts Unicode digits (e.g. Arabic-Indic or
+        // fullwidth) that int.Parse rejects with FormatException, and a long run of ASCII digits
+        // overflows int. Use a range check plus TryParse so neither can throw out of the parser.
         for (int i = 0; i < inner.Length; i++)
-            if (!char.IsDigit(inner[i])) return false;
-        number = int.Parse(inner);
+            if (inner[i] is < '0' or > '9') return false;
+        if (!int.TryParse(inner, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out number))
+            return false;
         return true;
     }
 
