@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <InvariantGlobalization>true</InvariantGlobalization>
     <AssemblyName>adocnet-epub</AssemblyName>
     <RootNamespace>AdocNet.Cli.Epub</RootNamespace>
     <Description>AsciiDoc to EPUB 3.0 converter. Equivalent to: adocnet -b epub</Description>

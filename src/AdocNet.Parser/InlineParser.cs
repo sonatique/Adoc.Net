@@ -383,7 +383,7 @@ internal static class InlineParser
                 bool isExperimentalMacro = c is 'k' or 'b' or 'm';
                 if (!isExperimentalMacro || doExperimental)
                 {
-                    if (TryParseGenericMacro(text, i, endIndex, out var genericMacro, out var gmEnd))
+                    if (TryParseGenericMacro(text, i, endIndex, linkAttributes, out var genericMacro, out var gmEnd))
                     {
                         int nodeStart = i;
                         FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
@@ -1022,7 +1022,10 @@ internal static class InlineParser
     /// using the provided <paramref name="attributes"/> dictionary.
     /// Unknown references are left as-is.
     /// </summary>
-    internal static string ExpandAttributes(string text, IReadOnlyDictionary<string, string> attributes)
+    // When incrementCounters is false, {counter:name} references expand to their next value but
+    // the counter state is NOT mutated. Used by callers that expand a line speculatively (e.g. to
+    // test whether it is a block macro) and would otherwise double-increment counters.
+    internal static string ExpandAttributes(string text, IReadOnlyDictionary<string, string> attributes, bool incrementCounters = true)
     {
         // Fast path: if no '{' exists, nothing to expand.
         if (!text.Contains('{')) return text;
@@ -1079,8 +1082,8 @@ internal static class InlineParser
                         newVal = currentVal;
                     }
 
-                    // Store back via mutable dictionary
-                    if (attributes is IDictionary<string, string> mutable)
+                    // Store back via mutable dictionary (unless this is a non-mutating probe).
+                    if (incrementCounters && attributes is IDictionary<string, string> mutable)
                         mutable[counterName] = newVal;
 
                     // Flush preceding plain text
@@ -1174,7 +1177,7 @@ internal static class InlineParser
         endPos = pos;
 
         // Try "link:" (5), "image:" (6), or "anchor:" (7).
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
         ReadOnlySpan<char> span = text.AsSpan(pos, Math.Min(8, endIndex - pos));
 #else
         string span = text.AsSpan(pos, Math.Min(8, endIndex - pos));
@@ -1433,6 +1436,7 @@ internal static class InlineParser
     /// Forms: <c>name:[content]</c> or <c>name:target[content]</c>.
     /// </summary>
     private static bool TryParseGenericMacro(string text, int pos, int endIndex,
+        IReadOnlyDictionary<string, string>? attributes,
         out InlineNode node, out int endPos)
     {
         node = null!;
@@ -1478,7 +1482,12 @@ internal static class InlineParser
 
         if (StemMacroNames.Contains(name))
         {
-            var stemType = name == "stem" ? "latexmath" : name;
+            // stem:[...] resolves to the document's :stem: interpreter (default asciimath, matching
+            // Asciidoctor); latexmath:[...] / asciimath:[...] are explicit.
+            var stemType = name == "stem"
+                ? (attributes is not null && attributes.TryGetValue("stem", out var s) && s.Length > 0
+                    ? s.ToLowerInvariant() : "asciimath")
+                : name;
             node = new StemInlineNode { Content = content, StemType = stemType };
         }
         else if (name == "indexterm")

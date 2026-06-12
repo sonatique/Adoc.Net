@@ -5,9 +5,11 @@ namespace AdocNet;
 public sealed partial class AdocEngine
 {
     private bool _enableHotReload;
+    // Serializes extension execution against hot-reload swaps. Declared unconditionally (it is a
+    // plain monitor) because RunExtensions uses it on every target, not just NET6+.
+    private readonly object _reloadLock = new();
 #if NET6_0_OR_GREATER
     private readonly List<ExtensionHotReloader> _hotReloaders = new();
-    private readonly object _reloadLock = new();
 #endif
 
     /// <summary>

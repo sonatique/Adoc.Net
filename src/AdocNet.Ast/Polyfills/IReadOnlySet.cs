@@ -1,7 +1,9 @@
 // Polyfill for .NET Standard 2.0: IReadOnlySet<T> was added in .NET 5.
 // This minimal polyfill preserves the public API of ParseOptions.LockedAttributes.
-// On NS2.0, HashSet<T> does not implement this interface. Callers must wrap
-// their set in a ReadOnlySetAdapter<T> or use a type that implements this interface.
+// On NS2.0, HashSet<T> does not implement this interface, so wrap your set in the
+// shipped AdocNet.Ast.ReadOnlySetAdapter<T> (e.g. new ReadOnlySetAdapter<string>(mySet)).
+// Consumers on .NET 5+ (including the net8.0 and net10.0 builds of this package) use the
+// BCL IReadOnlySet<T> directly and never see this polyfill.
 
 #if NETSTANDARD2_0
 

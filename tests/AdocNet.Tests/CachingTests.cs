@@ -259,6 +259,79 @@ public class CachingTests
         });
     }
 
+    [Test]
+    public void ConcurrentConvert_WithExtensions_DoesNotThrowOrCorrupt()
+    {
+        // Regression: with a processor registered, concurrent Convert calls raced the freeze/
+        // failure-tracking state and shared a parse-cached AST with the mutating pipeline.
+        var engine = new AdocEngine(new HtmlRenderer(), s => AdocParser.Parse(s).Document)
+        {
+            EnableCaching = true
+        };
+        engine.RegisterDocumentProcessor(new DocumentMetadataProcessor("test-meta"));
+
+        var inputs = Enumerable.Range(0, 50)
+            .Select(i => $"= Doc {i}\n\nContent {i}.\n")
+            .ToArray();
+
+        Assert.DoesNotThrow(() =>
+        {
+            Parallel.For(0, 200, k =>
+            {
+                var input = inputs[k % inputs.Length];
+                RenderToBytes(engine, input);
+            });
+        });
+    }
+
+    private sealed class FixedParagraphTemplate : INodeTemplate
+    {
+        private readonly string _marker;
+        public FixedParagraphTemplate(string marker) => _marker = marker;
+        public bool CanRender(AstNode node) => node is ParagraphNode;
+        public string Render(AstNode node, RenderContext context) => $"<p data-tmpl=\"{_marker}\">x</p>\n";
+    }
+
+    [Test]
+    public void RenderCache_distinguishes_options_with_different_templates()
+    {
+        // Regression: the render-cache key hashed collection-valued options via ToString(), which
+        // for a template list is just the type name — so a second render with different templates
+        // returned the first render's cached (stale) output.
+        var engine = new AdocEngine(new HtmlRenderer(), s => AdocParser.Parse(s).Document)
+        {
+            EnableCaching = true
+        };
+
+        var optsA = new HtmlRenderOptions { Templates = new INodeTemplate[] { new FixedParagraphTemplate("A") } };
+        var optsB = new HtmlRenderOptions { Templates = new INodeTemplate[] { new FixedParagraphTemplate("B") } };
+
+        var a = System.Text.Encoding.UTF8.GetString(RenderToBytes(engine, SimpleDoc, optsA));
+        var b = System.Text.Encoding.UTF8.GetString(RenderToBytes(engine, SimpleDoc, optsB));
+
+        Assert.That(a, Does.Contain("data-tmpl=\"A\""));
+        Assert.That(b, Does.Contain("data-tmpl=\"B\""), "second render must not serve the first render's cached output");
+    }
+
+    [Test]
+    public void Engine_is_disposable_and_dispose_is_idempotent()
+    {
+        var engine = new AdocEngine(new HtmlRenderer(), s => AdocParser.Parse(s).Document);
+        Assert.That(engine, Is.InstanceOf<IDisposable>());
+        Assert.DoesNotThrow(() =>
+        {
+            engine.Dispose();
+            engine.Dispose(); // idempotent
+        });
+
+        // The using pattern works.
+        Assert.DoesNotThrow(() =>
+        {
+            using var scoped = new AdocEngine(new HtmlRenderer(), s => AdocParser.Parse(s).Document);
+            RenderToBytes(scoped, SimpleDoc);
+        });
+    }
+
     // ── MaxCacheEntries validation ──────────────────────────────────────
 
     [Test]

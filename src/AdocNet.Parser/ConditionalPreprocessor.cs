@@ -8,7 +8,7 @@ namespace AdocNet.Parser;
 /// Conditional directives are resolved and removed from the output text;
 /// they do not appear in the AST.
 /// </summary>
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
 internal static partial class ConditionalPreprocessor
 #else
 internal static class ConditionalPreprocessor
@@ -18,7 +18,7 @@ internal static class ConditionalPreprocessor
 
     // ifdef::name[inline content]  or  ifdef::name[]  (block form opener)
     // ifndef::name[inline content] or  ifndef::name[]  (block form opener)
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
     [GeneratedRegex(@"^(ifdef|ifndef)::([^\[]+)\[(.*)\]\s*$")]
     private static partial Regex ConditionalDirectiveRegex();
 #else
@@ -27,7 +27,7 @@ internal static class ConditionalPreprocessor
 #endif
 
     // endif::[]  or  endif::name[]
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
     [GeneratedRegex(@"^endif::([^\[]*)\[\]\s*$")]
     private static partial Regex EndifRegex();
 #else
@@ -36,7 +36,7 @@ internal static class ConditionalPreprocessor
 #endif
 
     // ifeval::[expression]
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
     [GeneratedRegex(@"^ifeval::\[(.+)\]\s*$")]
     private static partial Regex IfevalRegex();
 #else
@@ -45,7 +45,7 @@ internal static class ConditionalPreprocessor
 #endif
 
     // Attribute entry: :name: value
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
     [GeneratedRegex(@"^:([A-Za-z0-9_][\w-]*):(.*)$")]
     private static partial Regex AttributeEntryRegex();
 #else
@@ -54,7 +54,7 @@ internal static class ConditionalPreprocessor
 #endif
 
     // Attribute unset: :!name: or :name!:
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
     [GeneratedRegex(@"^:!([A-Za-z0-9_][\w-]*):")]
     private static partial Regex AttributeUnsetBangPrefixRegex();
 #else
@@ -62,7 +62,7 @@ internal static class ConditionalPreprocessor
     private static Regex AttributeUnsetBangPrefixRegex() => s_attributeUnsetBangPrefixRegex;
 #endif
 
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
     [GeneratedRegex(@"^:([A-Za-z0-9_][\w-]*)!:")]
     private static partial Regex AttributeUnsetBangSuffixRegex();
 #else
@@ -360,7 +360,7 @@ internal static class ConditionalPreprocessor
             };
         }
 
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
         if (double.TryParse(lhs, System.Globalization.CultureInfo.InvariantCulture, out var lhsDbl)
             && double.TryParse(rhs, System.Globalization.CultureInfo.InvariantCulture, out var rhsDbl))
 #else
@@ -389,7 +389,7 @@ internal static class ConditionalPreprocessor
         };
     }
 
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
     [GeneratedRegex(@"^(.+?)\s*(==|!=|<=|>=|<|>)\s*(.+)$")]
     private static partial Regex IfevalComparisonRegex();
 #else

@@ -7,8 +7,8 @@ expect and where the boundaries are.
 ## TL;DR
 
 For HTML, DocBook, and Reveal.js output, swapping `asciidoctor` for
-`adocnet` produces **byte-identical results** on every doc in the 36-doc
-conformance corpus (`spec/conformance/*.adoc`).
+`adocnet` produces **structurally identical results** (zero DOM diff) on every
+doc in the 36-doc conformance corpus (`spec/conformance/*.adoc`).
 
 ```bash
 # Before
@@ -17,12 +17,17 @@ asciidoctor              -b docbook5 doc.adoc -o doc.xml
 asciidoctor-revealjs                 doc.adoc -o doc.html
 
 # After
-adocnet                  -b html5    doc.adoc -o doc.html
+adocnet               -e -b html5    doc.adoc -o doc.html   # -e = standalone HTML document
 adocnet                  -b docbook5 doc.adoc -o doc.xml
 adocnet                  -b revealjs doc.adoc -o doc.html
 ```
 
-Output diff: 0 lines across the corpus.
+> **Note:** AdocNet's default HTML output is an embeddable **fragment**, whereas
+> Asciidoctor's default is a standalone document. Pass `-e` to AdocNet to get a
+> full HTML document (header/footer/CSS) that matches Asciidoctor's default — see
+> the `-e` row below. Parity is measured structurally by `tools/parity-sweep.py`
+> (which renders AdocNet with `-e` and compares the DOM, ignoring presentational
+> CSS): 0 DOM-diff lines across the corpus.
 
 ## CLI flag mapping
 
@@ -43,7 +48,8 @@ semantics. Differences noted below.
 | `-r <ext>` | `-r <ext>` (ignored, accepted) | AdocNet uses native extensions only |
 | `-n` (sectnums) | `-n` | identical |
 | `-S <safe>` | `-S <safe>` | identical safe-mode handling |
-| `--theme <name>` | `--theme <name>` | for HTML: `default`, `asciidoctor`, `clean`; for PDF: theme YAML |
+| `-e` / `--embedded` (emit fragment) | `-e` / `--embedded` (emit **full document**) | **Inverted!** AdocNet's default is the fragment; `-e` wraps it in a standalone document with CSS. Asciidoctor is the opposite. |
+| `--theme <name>` | `--theme <name>` | for HTML: `default`, `asciidoctor`, `clean`, `github`; for PDF: theme YAML |
 
 ## Output format parity matrix
 

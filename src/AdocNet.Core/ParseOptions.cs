@@ -64,9 +64,15 @@ public sealed class ParseOptions
     /// <summary>
     /// The safe mode for document processing.
     /// Controls restrictions on includes, file I/O, and attribute overrides.
-    /// Default: <see cref="SafeMode.Unsafe"/> (no restrictions).
+    /// <para>
+    /// Default: <see cref="SafeMode.Safe"/>. This confines <c>include::</c> resolution to the
+    /// document's base directory, blocking parent-directory (<c>..</c>), absolute, and UNC paths
+    /// so that processing untrusted documents cannot disclose arbitrary local files. Legitimate
+    /// in-tree includes continue to work. Set this to <see cref="SafeMode.Unsafe"/> only when the
+    /// document source is trusted (e.g. a local CLI invocation on your own files).
+    /// </para>
     /// </summary>
-    public SafeMode SafeMode { get; init; } = SafeMode.Unsafe;
+    public SafeMode SafeMode { get; init; } = SafeMode.Safe;
 
     /// <summary>A shared default instance with no options set.</summary>
     public static ParseOptions Default { get; } = new();

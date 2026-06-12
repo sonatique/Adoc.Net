@@ -119,6 +119,40 @@ public class Beta16ParityTests
     }
 
     [Test]
+    public void DataUri_out_of_base_image_blocked_by_default_but_allowed_when_Unsafe()
+    {
+        // Security: :data-uri: must not let a document embed arbitrary local files via an
+        // absolute / out-of-base image path when rendering with the default (Safe) mode.
+        var rootDir = Path.Combine(Path.GetTempPath(), "adocnet-datauri-" + Guid.NewGuid().ToString("N")[..8]);
+        var baseDir = Path.Combine(rootDir, "docs");
+        var outsideDir = Path.Combine(rootDir, "secret");
+        Directory.CreateDirectory(baseDir);
+        Directory.CreateDirectory(outsideDir);
+        try
+        {
+            var secretImg = Path.Combine(outsideDir, "secret.png");
+            File.WriteAllBytes(secretImg, new byte[] { 0x89, 0x50, 0x4E, 0x47 });
+
+            var doc = new DocumentNode();
+            doc.SetAttribute("data-uri", "");
+            doc.AddChild(new BlockImageNode { Target = secretImg, Alt = "x" }); // absolute path
+
+            // Default (Safe): refused — falls back to the literal path, no embedding.
+            var safeHtml = new HtmlRenderer().RenderToString(doc, new HtmlRenderOptions { BaseDirectory = baseDir });
+            Assert.That(safeHtml, Does.Not.Contain("data:image/png;base64,"));
+
+            // Unsafe: explicit opt-in allows out-of-tree embedding.
+            var unsafeHtml = new HtmlRenderer().RenderToString(doc,
+                new HtmlRenderOptions { BaseDirectory = baseDir, SafeMode = SafeMode.Unsafe });
+            Assert.That(unsafeHtml, Does.Contain("data:image/png;base64,"));
+        }
+        finally
+        {
+            Directory.Delete(rootDir, true);
+        }
+    }
+
+    [Test]
     public void DataUri_disabled_renders_plain_path()
     {
         var doc = new DocumentNode();
@@ -309,6 +343,99 @@ public class Beta16ParityTests
     }
 
     [Test]
+    public void SafeMode_default_is_Safe_and_blocks_parent_directory_includes()
+    {
+        // Blocker regression: the default (no explicit SafeMode) must confine includes to the
+        // base directory so processing an untrusted document cannot disclose arbitrary files.
+        var tempDir = Path.Combine(Path.GetTempPath(), "adocnet-safe-" + Guid.NewGuid().ToString("N")[..8]);
+        var subDir = Path.Combine(tempDir, "sub");
+        Directory.CreateDirectory(subDir);
+        try
+        {
+            File.WriteAllText(Path.Combine(tempDir, "secret.adoc"), "Secret content.");
+            var input = "include::../secret.adoc[]";
+
+            // Note: no SafeMode set — relying on the default.
+            var options = new ParseOptions { BaseDirectory = subDir };
+            Assert.That(options.SafeMode, Is.EqualTo(SafeMode.Safe));
+
+            var result = AdocParser.Parse(input, options);
+            var html = new HtmlRenderer().RenderToString(result.Document);
+
+            Assert.That(html, Does.Not.Contain("Secret content"));
+            Assert.That(result.Diagnostics, Has.Some.Property("Message").Contains("outside base directory"));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
+    public void SafeMode_Safe_blocks_sibling_directory_with_shared_prefix()
+    {
+        // Regression: a sibling directory whose name shares the base directory as a
+        // string prefix (base ".../docs" vs. ".../docs-private") must be blocked. A naive
+        // StartsWith check on the resolved path let this through.
+        var tempDir = Path.Combine(Path.GetTempPath(), "adocnet-safe-" + Guid.NewGuid().ToString("N")[..8]);
+        var baseDir = Path.Combine(tempDir, "docs");
+        var siblingDir = Path.Combine(tempDir, "docs-private");
+        Directory.CreateDirectory(baseDir);
+        Directory.CreateDirectory(siblingDir);
+        try
+        {
+            File.WriteAllText(Path.Combine(siblingDir, "secret.adoc"), "Sibling secret.");
+            var input = "include::../docs-private/secret.adoc[]";
+
+            var options = new ParseOptions
+            {
+                BaseDirectory = baseDir,
+                SafeMode = SafeMode.Safe,
+            };
+
+            var result = AdocParser.Parse(input, options);
+            var html = new HtmlRenderer().RenderToString(result.Document);
+
+            Assert.That(html, Does.Not.Contain("Sibling secret"));
+            Assert.That(result.Diagnostics, Has.Some.Property("Message").Contains("outside base directory"));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
+    public void SafeMode_Safe_allows_includes_within_base_directory()
+    {
+        // The boundary fix must not break legitimate in-tree includes.
+        var tempDir = Path.Combine(Path.GetTempPath(), "adocnet-safe-" + Guid.NewGuid().ToString("N")[..8]);
+        var baseDir = Path.Combine(tempDir, "docs");
+        var nested = Path.Combine(baseDir, "chapters");
+        Directory.CreateDirectory(nested);
+        try
+        {
+            File.WriteAllText(Path.Combine(nested, "intro.adoc"), "Legitimate include.");
+            var input = "include::chapters/intro.adoc[]";
+
+            var options = new ParseOptions
+            {
+                BaseDirectory = baseDir,
+                SafeMode = SafeMode.Safe,
+            };
+
+            var result = AdocParser.Parse(input, options);
+            var html = new HtmlRenderer().RenderToString(result.Document);
+
+            Assert.That(html, Does.Contain("Legitimate include"));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
     public void SafeMode_Secure_blocks_all_includes()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "adocnet-safe-" + Guid.NewGuid().ToString("N")[..8]);
@@ -402,13 +529,42 @@ public class Beta16ParityTests
     }
 
     [Test]
-    public void Stem_inline_macro_renders_inline_math()
+    public void Stem_inline_macro_defaults_to_asciimath()
     {
+        // Asciidoctor's default stem interpreter is asciimath, so stem:[...] without an explicit
+        // :stem: type emits AsciiMath dollar delimiters, not LaTeX \(...\).
         var input = "The formula stem:[x^2+y^2] is a circle.";
         var doc = AdocParser.Parse(input).Document;
         var html = new HtmlRenderer().RenderToString(doc);
 
+        Assert.That(html, Does.Contain("\\$x^2+y^2\\$"));
+    }
+
+    [Test]
+    public void Stem_inline_macro_honors_latexmath_stem_attribute()
+    {
+        var input = ":stem: latexmath\n\nThe formula stem:[x^2+y^2] is a circle.";
+        var doc = AdocParser.Parse(input).Document;
+        var html = new HtmlRenderer().RenderToString(doc);
+
         Assert.That(html, Does.Contain("\\(x^2+y^2\\)"));
+    }
+
+    [Test]
+    public void Stem_block_over_passthrough_delimiter_is_recognized()
+    {
+        // Canonical Asciidoctor form: [stem] over a ++++ passthrough block (not just open --).
+        var input = ":stem: asciimath\n\n[stem]\n++++\nsqrt(4) = 2\n++++";
+        var doc = AdocParser.Parse(input).Document;
+
+        var stemBlock = doc.Children.OfType<StemBlockNode>().FirstOrDefault();
+        Assert.That(stemBlock, Is.Not.Null);
+        Assert.That(stemBlock!.StemType, Is.EqualTo("asciimath"));
+        Assert.That(stemBlock.Content, Does.Contain("sqrt(4) = 2"));
+
+        var html = new HtmlRenderer().RenderToString(doc);
+        Assert.That(html, Does.Contain("<div class=\"stemblock\">"));
+        Assert.That(html, Does.Contain("\\$sqrt(4) = 2\\$"));
     }
 
     [Test]
@@ -466,7 +622,8 @@ public class Beta16ParityTests
 
         var stemBlock = doc.Children.OfType<StemBlockNode>().FirstOrDefault();
         Assert.That(stemBlock, Is.Not.Null);
-        Assert.That(stemBlock!.StemType, Is.EqualTo("latexmath"));
+        // Empty :stem: defaults to asciimath (Asciidoctor parity), not latexmath.
+        Assert.That(stemBlock!.StemType, Is.EqualTo("asciimath"));
         Assert.That(stemBlock.Content, Does.Contain("x^2"));
     }
 

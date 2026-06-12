@@ -255,11 +255,13 @@ internal static class IncludeExpander
                     continue;
                 }
 
-                // Fetch remote content
+                // Fetch remote content. This parse path is synchronous, so the async fetch is
+                // offloaded with Task.Run: it detaches from any captured SynchronizationContext,
+                // avoiding the classic sync-over-async deadlock on UI / classic-ASP.NET callers.
                 string? urlContent = null;
                 try
                 {
-                    urlContent = SharedHttpClient.GetStringAsync(rawPath).GetAwaiter().GetResult();
+                    urlContent = Task.Run(() => SharedHttpClient.GetStringAsync(rawPath)).GetAwaiter().GetResult();
                 }
                 catch (Exception ex)
                 {
@@ -384,8 +386,7 @@ internal static class IncludeExpander
             // ── Safe mode: restrict to base directory ──
             if (safeMode >= SafeMode.Safe)
             {
-                var normalizedBase = Path.GetFullPath(baseDirectory);
-                if (!resolvedPath.StartsWith(normalizedBase, StringComparison.OrdinalIgnoreCase))
+                if (!IsWithinBaseDirectory(resolvedPath, baseDirectory))
                 {
                     diagnostics.Add(new Diagnostic(
                         DiagnosticSeverity.Warning,
@@ -545,6 +546,25 @@ internal static class IncludeExpander
     }
 
     /// <summary>
+    /// Returns true when <paramref name="resolvedPath"/> is the base directory itself or a
+    /// path strictly beneath it. Uses a directory-separator boundary so that a sibling whose
+    /// name merely shares the base as a string prefix (e.g. base <c>/wiki/docs</c> vs.
+    /// <c>/wiki/docs-private/secret.adoc</c>) is correctly rejected — a naive
+    /// <see cref="string.StartsWith(string, StringComparison)"/> check would let it through.
+    /// </summary>
+    private static bool IsWithinBaseDirectory(string resolvedPath, string baseDirectory)
+    {
+        var normalizedBase = Path.GetFullPath(baseDirectory);
+        if (resolvedPath.Equals(normalizedBase, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var baseWithSeparator = normalizedBase.Length > 0 && normalizedBase[^1] == Path.DirectorySeparatorChar
+            ? normalizedBase
+            : normalizedBase + Path.DirectorySeparatorChar;
+        return resolvedPath.StartsWith(baseWithSeparator, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Lightweight conditional tracking for include expansion.
     /// Recognizes ifdef/ifndef/endif/ifeval directives to determine whether
     /// include directives should be expanded. The conditional lines themselves
@@ -608,19 +628,34 @@ internal static class IncludeExpander
     internal static string ApplyIndent(string text, int indent)
     {
         var lines = TextUtility.SplitLines(text);
+
+        // Asciidoctor semantics: remove the block's COMMON (minimum) leading indentation across
+        // non-blank lines, then re-indent every non-blank line by `indent` spaces. This preserves
+        // the relative indentation of nested constructs (Python/YAML/etc.); a per-line TrimStart
+        // would flatten them and corrupt the code. Tabs and spaces are counted as one column each.
+        int common = int.MaxValue;
+        foreach (var line in lines)
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            int leading = 0;
+            while (leading < line.Length && (line[leading] == ' ' || line[leading] == '\t'))
+                leading++;
+            if (leading < common) common = leading;
+        }
+        if (common == int.MaxValue) common = 0; // no non-blank lines
+
         var sb = new System.Text.StringBuilder();
         for (int i = 0; i < lines.Length; i++)
         {
             if (i > 0) sb.Append('\n');
-            if (indent == 0)
-            {
-                sb.Append(lines[i].TrimStart());
-            }
-            else
-            {
+            var line = lines[i];
+            if (string.IsNullOrWhiteSpace(line))
+                continue; // blank lines stay blank (no trailing indentation)
+
+            var stripped = common <= line.Length ? line.Substring(common) : line.TrimStart();
+            if (indent > 0)
                 sb.Append(' ', indent);
-                sb.Append(lines[i]);
-            }
+            sb.Append(stripped);
         }
         return sb.ToString();
     }
@@ -645,7 +680,7 @@ internal static class IncludeExpander
             // A section heading requires at least one '=' followed by a space
             if (eqCount >= 1 && eqCount < line.Length && line[eqCount] == ' ')
             {
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
                 int newCount = Math.Clamp(eqCount + offset, 1, 6);
 #else
                 int newCount = MathCompat.Clamp(eqCount + offset, 1, 6);

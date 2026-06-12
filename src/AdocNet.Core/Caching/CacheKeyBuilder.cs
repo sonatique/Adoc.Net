@@ -52,14 +52,55 @@ internal static class CacheKeyBuilder
             sb.Append('|');
             sb.Append(prop.Name);
             sb.Append('=');
-            if (value is IFormattable formattable)
-                sb.Append(formattable.ToString(null, CultureInfo.InvariantCulture));
-            else
-                sb.Append(value?.ToString() ?? "null");
+            AppendValueHash(sb, value);
         }
 
         var bytes = Encoding.UTF8.GetBytes(sb.ToString());
         return ComputeSha256Hex(bytes);
+    }
+
+    /// <summary>
+    /// Appends a content-derived representation of <paramref name="value"/>. For collections,
+    /// <c>ToString()</c> is just the type name — so two different template/colour lists would hash
+    /// identically and serve stale cached output. Hash the element count and each element (by value
+    /// where formattable, otherwise by identity) so different collections produce different keys.
+    /// </summary>
+    private static void AppendValueHash(StringBuilder sb, object? value)
+    {
+        switch (value)
+        {
+            case null:
+                sb.Append("null");
+                break;
+            case string s:
+                sb.Append(s);
+                break;
+            case IFormattable formattable:
+                sb.Append(formattable.ToString(null, CultureInfo.InvariantCulture));
+                break;
+            case System.Collections.IEnumerable enumerable:
+                sb.Append('[');
+                int count = 0;
+                foreach (var item in enumerable)
+                {
+                    if (count++ > 0) sb.Append(',');
+                    if (item is null)
+                        sb.Append("null");
+                    else if (item is string si)
+                        sb.Append(si);
+                    else if (item is IFormattable f)
+                        sb.Append(f.ToString(null, CultureInfo.InvariantCulture));
+                    else
+                        // GetHashCode distinguishes by content when overridden, by identity
+                        // otherwise — either way different elements yield different keys.
+                        sb.Append(item.GetHashCode().ToString(CultureInfo.InvariantCulture));
+                }
+                sb.Append('#').Append(count).Append(']');
+                break;
+            default:
+                sb.Append(value.ToString() ?? "null");
+                break;
+        }
     }
 
     private static string ComputeSha256Hex(byte[] data)

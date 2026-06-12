@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework />
-    <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;net8.0;net10.0</TargetFrameworks>
     <LangVersion>latest</LangVersion>
     <RootNamespace>AdocNet.Converters.Pdf</RootNamespace>
     <Description>PDF renderer for the Adoc.Net library. Pure managed code, no external dependencies.</Description>
@@ -14,11 +14,14 @@
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
     <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+    <!-- This package embeds Font Awesome fonts; ship their attribution. -->
+    <None Include="..\..\NOTICES.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- FontAwesome 5 Solid + Regular embedded for asciidoctor-pdf admonition
-         and inline icon parity. Licensed under the SIL Open Font License 1.1. -->
+         and inline icon parity. Font under SIL Open Font License 1.1; icon
+         designs under CC BY 4.0. See NOTICES.md. -->
     <EmbeddedResource Include="Resources\fa-solid.ttf" />
     <EmbeddedResource Include="Resources\fa-regular.ttf" />
   </ItemGroup>

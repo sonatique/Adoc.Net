@@ -35,10 +35,75 @@ internal static class BlockParser
     public static ParseResult Parse(string text, IReadOnlyDictionary<string, string>? externalAttributes)
         => Parse(text, externalAttributes, lockedAttributes: null);
 
+    /// <summary>
+    /// Maximum nesting depth for recursively-parsed blocks (delimited blocks, AsciiDoc table
+    /// cells, markdown blockquotes). Block parsing is recursive descent and each level consumes a
+    /// large stack frame, so an adversarial document of deeply nested blocks could otherwise drive
+    /// the process to an uncatchable <see cref="StackOverflowException"/> in a few hundred bytes.
+    /// Real documents nest only a handful of levels; this limit is far above any legitimate use.
+    /// </summary>
+    private const int MaxBlockNestingDepth = 32;
+
+    /// <summary>
+    /// Per-thread recursion depth for <see cref="Parse(string, IReadOnlyDictionary{string, string}?, IReadOnlySet{string}?)"/>.
+    /// Thread-static so concurrent parses on different threads are independent (the parser is
+    /// otherwise stateless). Maintained with a try/finally so it self-heals on pooled threads.
+    /// </summary>
+    [ThreadStatic]
+    private static int _parseDepth;
+
     public static ParseResult Parse(string text, IReadOnlyDictionary<string, string>? externalAttributes, IReadOnlySet<string>? lockedAttributes)
     {
         Guard.NotNull(text);
 
+        // ── Recursion depth guard ──
+        // Every nested-block parse re-enters this method, so a single guard here covers all
+        // recursion sites (delimited blocks, open blocks, quotes, admonitions, AsciiDoc table
+        // cells). Past the limit, emit a diagnostic and keep the over-deep content as a literal
+        // paragraph instead of recursing into an uncatchable stack overflow.
+        if (_parseDepth >= MaxBlockNestingDepth)
+            return DepthExceededResult(text);
+
+        _parseDepth++;
+        try
+        {
+            return ParseCore(text, externalAttributes, lockedAttributes);
+        }
+        finally
+        {
+            _parseDepth--;
+        }
+    }
+
+    /// <summary>
+    /// Builds a minimal result for content that exceeded <see cref="MaxBlockNestingDepth"/>:
+    /// the raw text is preserved as a single paragraph (no data loss) alongside an error
+    /// diagnostic, rather than recursing further.
+    /// </summary>
+    private static ParseResult DepthExceededResult(string text)
+    {
+        var document = new DocumentNode();
+        PopulateDefaultAttributes(document);
+        var trimmed = text.TrimEnd('\n');
+        if (trimmed.Length > 0)
+        {
+            document.AddChild(new ParagraphNode
+            {
+                Text = trimmed,
+                Inlines = InlineParser.Parse(trimmed, EffectiveNormalSubs(document.Attributes), document.Attributes),
+            });
+        }
+        var diagnostics = new List<Diagnostic>
+        {
+            new(DiagnosticSeverity.Error,
+                $"Maximum block nesting depth ({MaxBlockNestingDepth}) exceeded; deeper content was not parsed further.",
+                new SourceRange(new(1, 1), new(1, Math.Max(1, trimmed.Length)))),
+        };
+        return new ParseResult(document, diagnostics);
+    }
+
+    private static ParseResult ParseCore(string text, IReadOnlyDictionary<string, string>? externalAttributes, IReadOnlySet<string>? lockedAttributes)
+    {
         var lines = TextUtility.SplitLines(text);
         var document = new DocumentNode();
         var diagnostics = new List<Diagnostic>();
@@ -762,9 +827,10 @@ internal static class BlockParser
                     dlFrames.Clear();
                     if (string.Equals(blockAttrs.Style, "stem", StringComparison.OrdinalIgnoreCase))
                     {
-                        // [stem] uses the document-level :stem: attribute value, default "latexmath"
+                        // [stem] uses the document-level :stem: attribute value. Asciidoctor's
+                        // default interpreter (empty :stem:) is asciimath, not latexmath.
                         pendingStem = document.Attributes.TryGetValue("stem", out var stemAttr) && stemAttr.Length > 0
-                            ? stemAttr : "latexmath";
+                            ? stemAttr.ToLowerInvariant() : "asciimath";
                     }
                     else
                     {
@@ -1059,7 +1125,10 @@ internal static class BlockParser
             // Block macro: image::target[alt]
             if (paragraphLines.Count == 0)
             {
-                var expandedLine = InlineParser.ExpandAttributes(line, document.Attributes);
+                // Speculative expansion to test for a block macro. Must NOT increment counters —
+                // a non-macro line is re-expanded later during inline rendering, so incrementing
+                // here would advance every {counter:} twice.
+                var expandedLine = InlineParser.ExpandAttributes(line, document.Attributes, incrementCounters: false);
                 var macroMatch = TryParseBlockMacro(expandedLine, out var blockMacroNode, out var unknownMacroName, pendingBlockOptions);
                 if (macroMatch)
                 {
@@ -1799,6 +1868,8 @@ internal static class BlockParser
                 var stemBlock = new StemBlockNode
                 {
                     Content = stemContent,
+                    // $$ is an AdocNet-specific LaTeX-style delimiter (not an Asciidoctor construct);
+                    // keep its latexmath default. [stem]/++++ and inline stem: follow :stem:.
                     StemType = "latexmath",
                     Title = pendingBlockTitle,
                     Substitutions = SubstitutionKind.Verbatim,
@@ -2015,6 +2086,24 @@ internal static class BlockParser
                         admonNode.AddChild(child);
                     currentContainer.AddChild(admonNode);
                 }
+                else if (delimKind == DelimitedBlockKind.Passthrough && pendingStem is not null)
+                {
+                    // Canonical stem block: [stem] (or [latexmath]/[asciimath]) over a ++++ passthrough.
+                    var stemBlock = new StemBlockNode
+                    {
+                        Content = rawContent,
+                        StemType = pendingStem,
+                        Title = pendingBlockTitle,
+                        Substitutions = SubstitutionKind.Verbatim,
+                        Source = closingIdx < lines.Length
+                            ? new SourceRange(new(lineNumber, 1), new(closingIdx + 1, lines[closingIdx].Length))
+                            : new SourceRange(new(lineNumber, 1), new(lines.Length, lines[^1].Length)),
+                    };
+                    ApplyPendingId(stemBlock, lineNumber, line.Length);
+                    if (pendingBlockRoles is not null)
+                        stemBlock.Roles = pendingBlockRoles;
+                    currentContainer.AddChild(stemBlock);
+                }
                 else
                 {
                     var delimDefaultSubs = isStructural ? EffectiveNormal() : SubstitutionKind.Verbatim;
@@ -2189,8 +2278,13 @@ internal static class BlockParser
                 }
                 else
                 {
-                    // Fresh start (no frames or going back to root)
-                    if (currentContainer.Children.Count > 0 &&
+                    // Fresh start (no frames or going back to root).
+                    // Reattach to the immediately-preceding description list so a list can continue
+                    // across a blank line — but NOT when a new style is pending (e.g. a [qanda]
+                    // block-attribute line after a [horizontal] list), which must start a separate,
+                    // differently-styled list rather than merging into the previous one.
+                    if (pendingDlStyle is null &&
+                        currentContainer.Children.Count > 0 &&
                         currentContainer.Children[^1] is DescriptionListNode existingDl)
                     {
                         dl = existingDl;
@@ -4182,7 +4276,8 @@ internal static class BlockParser
                 while (colsUsed < colCount && activeRowSpans[colsUsed] > 0)
                     colsUsed++;
 
-                currentRow.AddChild(CreateTableCell(info, attributes));
+                var colStyle = columns is not null && colsUsed < columns.Count ? columns[colsUsed].Style : null;
+                currentRow.AddChild(CreateTableCell(ApplyColumnStyle(info, colStyle), attributes));
 
                 // Record rowspan for this cell's columns.
                 if (info.RowSpan > 1)
@@ -4261,10 +4356,13 @@ internal static class BlockParser
 
                 var cellSource = MakeRowSource(eff, lines);
                 var row = new TableRowNode();
+                int colIdx = 0;
                 foreach (var info in cellInfos)
                 {
+                    var colStyle = columns is not null && colIdx < columns.Count ? columns[colIdx].Style : null;
                     var tagged = info with { Source = cellSource };
-                    row.AddChild(CreateTableCell(tagged, attributes));
+                    row.AddChild(CreateTableCell(ApplyColumnStyle(tagged, colStyle), attributes));
+                    colIdx += info.ColSpan;
                 }
                 row.Source = cellSource;
                 table.AddChild(row);
@@ -4283,6 +4381,15 @@ internal static class BlockParser
     /// When the cell style is <see cref="TableCellStyle.AsciiDoc"/>, the cell text is parsed
     /// as block-level AsciiDoc and the resulting blocks are added as children.
     /// </summary>
+    /// <summary>
+    /// Returns <paramref name="info"/> with the column's default style applied when the cell has no
+    /// style of its own (a cell's own <c>a|</c>/<c>l|</c>/… prefix always wins).
+    /// </summary>
+    private static CellInfo ApplyColumnStyle(CellInfo info, TableCellStyle? columnStyle)
+        => columnStyle is not null && info.ContentStyle == TableCellStyle.Default
+            ? info with { ContentStyle = columnStyle.Value }
+            : info;
+
     private static TableCellNode CreateTableCell(CellInfo info, IReadOnlyDictionary<string, string> attributes)
     {
         if (info.ContentStyle == TableCellStyle.AsciiDoc)
@@ -4396,12 +4503,21 @@ internal static class BlockParser
                 p = p.Substring(star + 1);
             }
 
-            for (int r = 0; r < repeat; r++)
+            // Cap the total column count. An unbounded "N*" repeat (e.g. cols="200000000*")
+            // would otherwise allocate columns — and a matching int[colCount] downstream —
+            // until the process runs out of memory. Real tables never approach this limit.
+            for (int r = 0; r < repeat && columns.Count < MaxTableColumns; r++)
                 columns.Add(ParseSingleColumnSpec(p));
         }
 
         return columns;
     }
+
+    /// <summary>
+    /// Upper bound on the number of table columns. Guards against an adversarial
+    /// <c>[cols="N*"]</c> repeat multiplier driving unbounded allocation (OOM).
+    /// </summary>
+    private const int MaxTableColumns = 1000;
 
     /// <summary>
     /// Parses a single column spec part ("optional-alignment + optional-width",
@@ -4439,11 +4555,28 @@ internal static class BlockParser
         }
 
         var widthStr = p.Substring(parseIdx);
+
+        // Trailing style letter (a/e/h/l/m/s, or 'd' for default), e.g. "2a" → width 2, AsciiDoc.
+        TableCellStyle? columnStyle = null;
+        if (widthStr.Length > 0)
+        {
+            char last = widthStr[^1];
+            if (CellStyleLetters.TryGetValue(last, out var cs))
+            {
+                columnStyle = cs;
+                widthStr = widthStr[..^1];
+            }
+            else if (last == 'd')
+            {
+                widthStr = widthStr[..^1]; // explicit default style: recognised, no styling
+            }
+        }
+
         int width = 1;
         if (widthStr.Length > 0 && int.TryParse(widthStr, out int parsed) && parsed > 0)
             width = parsed;
 
-        return new TableColumnSpec { Width = width, Alignment = horizAlign, VerticalAlignment = vertAlign };
+        return new TableColumnSpec { Width = width, Alignment = horizAlign, VerticalAlignment = vertAlign, Style = columnStyle };
     }
 
     /// <summary>
@@ -4882,7 +5015,7 @@ internal static class BlockParser
     /// A prefix matches patterns like: "2+", ".3+", "2.3+", or a single style letter (a,e,h,l,m),
     /// or a span prefix followed by a style letter (e.g. "2+e"), preceded by whitespace.
     /// </summary>
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
     private static string? ExtractTrailingSpanPrefix(ReadOnlySpan<char> segment)
     {
         var trimmed = segment.TrimEnd();
@@ -5259,7 +5392,7 @@ internal static class BlockParser
         {
             pos = 1;
             var dotIndex = inner[pos..].IndexOf('.');
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
             ReadOnlySpan<char> idPart;
 #else
             string idPart;
@@ -5297,7 +5430,7 @@ internal static class BlockParser
 
         return id is not null || roles is not null;
 
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
         static bool IsValidIdChars(ReadOnlySpan<char> s)
 #else
         static bool IsValidIdChars(string s)
@@ -5574,9 +5707,13 @@ internal static class BlockParser
             number = -1; // auto-numbering sentinel
             return true;
         }
+        // Restrict to ASCII digits: char.IsDigit accepts Unicode digits (e.g. Arabic-Indic or
+        // fullwidth) that int.Parse rejects with FormatException, and a long run of ASCII digits
+        // overflows int. Use a range check plus TryParse so neither can throw out of the parser.
         for (int i = 0; i < inner.Length; i++)
-            if (!char.IsDigit(inner[i])) return false;
-        number = int.Parse(inner);
+            if (inner[i] is < '0' or > '9') return false;
+        if (!int.TryParse(inner, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out number))
+            return false;
         return true;
     }
 
@@ -5785,13 +5922,13 @@ internal static class BlockParser
     {
         if (line.Length == 0)
             return false;
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
         if (char.IsAsciiDigit(line[0]))
 #else
         if (CharCompat.IsAsciiDigit(line[0]))
 #endif
             return true;
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
         if ((line[0] == 'v' || line[0] == 'V') && line.Length > 1 && char.IsAsciiDigit(line[1]))
 #else
         if ((line[0] == 'v' || line[0] == 'V') && line.Length > 1 && CharCompat.IsAsciiDigit(line[1]))

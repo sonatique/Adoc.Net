@@ -31,11 +31,24 @@ public sealed partial class RevealjsRenderer : IDocumentRenderer
     private int _sectnumLevels;
     private bool _highlightJs;
 
+    // Serializes concurrent renders on the same instance: the per-render counters and
+    // per-slide footnote state above would otherwise be clobbered. Use an instance per
+    // render for parallelism.
+    private readonly object _renderLock = new();
+
     /// <inheritdoc />
     public string Format => "revealjs";
 
     /// <inheritdoc />
     public void Render(DocumentNode document, Stream output, RenderOptions options)
+    {
+        lock (_renderLock)
+        {
+            RenderCore(document, output, options);
+        }
+    }
+
+    private void RenderCore(DocumentNode document, Stream output, RenderOptions options)
     {
         _exampleCounter = 0;
         _tableCounter = 0;

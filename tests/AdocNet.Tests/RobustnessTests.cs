@@ -175,6 +175,58 @@ public class RobustnessTests
     }
 
     [Test]
+    public void Deeply_nested_delimited_blocks_do_not_stack_overflow()
+    {
+        // Adversarial: hundreds of nested example blocks would drive recursive-descent block
+        // parsing into an uncatchable StackOverflowException. The depth guard must turn this into
+        // a normal (diagnostic-bearing) parse instead of crashing the process.
+        const int depth = 500;
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < depth; i++) sb.Append("====\n");
+        sb.Append("content\n");
+        for (int i = 0; i < depth; i++) sb.Append("====\n");
+
+        // Must return without an (uncatchable) StackOverflowException.
+        var result = BlockParser.Parse(sb.ToString());
+
+        Assert.That(result.Document.Children, Has.Count.GreaterThanOrEqualTo(1));
+    }
+
+    [Test]
+    public void Deeply_nested_blockquotes_do_not_stack_overflow()
+    {
+        // Markdown-style nested blockquotes are another recursion vector.
+        var line = new string('>', 400) + " quoted";
+        var result = BlockParser.Parse(line);
+        Assert.That(result.Document.Children, Has.Count.GreaterThanOrEqualTo(0));
+        // The point is simply that parsing returns without crashing.
+        Assert.Pass();
+    }
+
+    [Test]
+    public void Callout_with_oversized_or_unicode_number_does_not_throw()
+    {
+        // char.IsDigit accepted Unicode/fullwidth digits that int.Parse rejected, and an 11+ digit
+        // ASCII run overflowed int — both threw out of the parser. Now they degrade to plain text.
+        Assert.DoesNotThrow(() => BlockParser.Parse("----\ncode line <99999999999>\n----"));
+        Assert.DoesNotThrow(() => BlockParser.Parse("----\ncode line <٣>\n----")); // Arabic-Indic 3
+        Assert.DoesNotThrow(() => BlockParser.Parse("----\ncode line <３>\n----")); // fullwidth 3
+    }
+
+    [Test]
+    public void Huge_cols_repeat_does_not_exhaust_memory()
+    {
+        // [cols="200000000*"] would allocate 200M column specs (and a matching int[colCount])
+        // without a clamp. Parsing must complete quickly with a bounded column count.
+        var input = "[cols=\"200000000*\"]\n|===\n| a | b\n|===";
+        var result = BlockParser.Parse(input);
+        Assert.That(result.Document.Children, Has.Count.GreaterThanOrEqualTo(1));
+        var table = result.Document.Children[0] as TableNode;
+        Assert.That(table, Is.Not.Null);
+        Assert.That(table!.Columns?.Count ?? 0, Is.LessThanOrEqualTo(1000));
+    }
+
+    [Test]
     public void Section_with_whitespace_only_title()
     {
         var result = BlockParser.Parse("==   ");

@@ -1,4 +1,4 @@
-using AdocNet.Parser;
+using AdocNet;
 
 namespace CustomIncludeReader;
 

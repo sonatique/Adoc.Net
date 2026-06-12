@@ -1,6 +1,7 @@
 # Renderers
 
-Adoc.Net includes four output renderers, all sharing a common framework.
+Adoc.Net includes six output renderers (HTML, PDF, DocBook, EPUB, man, Reveal.js),
+all sharing a common framework.
 
 ## Renderer Framework
 
@@ -67,13 +68,14 @@ This wraps the output in a complete HTML document with embedded CSS.
 
 ### Themes
 
-Three built-in themes are available:
+Four built-in themes are available:
 
 | Theme | Description |
 |---|---|
 | `HtmlTheme.Default` | Modern sans-serif with muted colors, 960px max-width |
 | `HtmlTheme.Asciidoctor` | Serif body with red-brown headings, matching Asciidoctor's classic look |
 | `HtmlTheme.Clean` | Narrow-width Georgia for maximum readability, minimal decoration |
+| `HtmlTheme.Github` | GitHub-flavoured markdown style |
 
 ### Custom CSS
 
@@ -225,7 +227,9 @@ The `Func<string, DocumentNode>` delegate decouples the parser from the core ass
 
 ## Thread Safety
 
-All renderers are **thread-safe** and **reentrant**. A single renderer instance can be shared across threads:
+A single renderer instance is **safe to use from multiple threads**. The `HtmlRenderer`
+is fully **reentrant** — per-render state lives in the `RenderContext`, so concurrent
+renders on one instance run in parallel without interfering:
 
 ```csharp
 var renderer = new HtmlRenderer();
@@ -236,7 +240,11 @@ Parallel.ForEach(documents, doc =>
 });
 ```
 
-This is guaranteed by the `RenderContext` pattern — all per-render state lives in the context, not in static or instance fields.
+The `PdfRenderer`, `DocBookRenderer`, `RevealjsRenderer`, and `ManRenderer` keep some
+per-render state in instance fields and therefore **serialize** concurrent renders on a
+shared instance behind an internal lock: the output is always correct, but you get no
+parallelism from sharing one instance. When you need renders to run in parallel, create a
+renderer **instance per render** (they are cheap to construct) rather than sharing one.
 
 ## See Also
 

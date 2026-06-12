@@ -3,6 +3,106 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.12] - 2026-06-12
+
+A broad hardening release: secure-by-default document processing, parser
+robustness against hostile input, Asciidoctor parity fixes, thread safety, and
+wider framework reach.
+
+### Security
+
+- **`ParseOptions.SafeMode` now defaults to `SafeMode.Safe`** (was `Unsafe`).
+  Processing an untrusted document with a base directory set (e.g. via
+  `Adoc.ConvertFile` or the language server) previously allowed `include::` to
+  read arbitrary local files through `..`, absolute, and UNC paths. The default
+  now confines includes to the document's base directory while leaving
+  legitimate in-tree includes working. The CLI continues to opt into `Unsafe`
+  explicitly (trusted local invocation). Set `SafeMode = SafeMode.Unsafe` to
+  restore the previous behaviour for trusted sources.
+- **Safe-mode include confinement bypass fixed.** The base-directory check used a
+  bare `StartsWith`, so a sibling sharing the base as a string prefix (base
+  `.../docs` vs. `.../docs-private/secret.adoc`) slipped through. It now compares
+  against the base with a trailing separator. Same fix applied to the CLI preview
+  server's traversal guard.
+- **`:data-uri:` image embedding is gated by safe mode.** The HTML converter read
+  any file the document named — including absolute paths and `..` escapes — and
+  base64-embedded it. `HtmlRenderOptions.SafeMode` (default `Safe`) now confines
+  data-uri reads to the base directory.
+- **Avalonia default link-click restricted to safe schemes.** The `LinkClicked`
+  fallback shell-executed any document-controlled href; it now auto-opens only
+  `http`/`https`/`mailto`, so a single click can't launch a local executable or
+  leak credentials over SMB.
+- **`ParseOptions.LockedAttributes` is honoured through `AdocParser.Parse`.** It
+  was silently a no-op via the primary public API.
+
+### Added
+
+- **`net8.0` target** on every library and on `AdocNet.Avalonia` (previously
+  net10-only). .NET 8/9 consumers now bind to a build that uses the BCL
+  `IReadOnlySet<T>` — resolving a `System.Collections.Generic.IReadOnlySet<T>`
+  ambiguity (CS0433) — and gain the NET6+ feature set. A `ReadOnlySetAdapter<T>`
+  is shipped for netstandard2.0 consumers.
+- **`AdocEngine` implements `IDisposable`** (releases file watchers and
+  collectible assembly load contexts; `Shutdown()` remains as an alias).
+- **Table column-spec style letters** — `cols="1,2a,1l"` now parses per-column
+  widths and applies the trailing style letter (e.g. `a` = AsciiDoc, `l` =
+  literal) as the column's default cell style.
+- **CLI `--theme github`** is now wired up (the `HtmlTheme.Github` theme).
+- **Project files**: `global.json` (pins the .NET 10 SDK band), `CONTRIBUTING.md`,
+  `.github/SECURITY.md` (private vulnerability reporting), and `.gitattributes`
+  (LF normalization for cross-OS-stable fixtures).
+
+### Fixed
+
+- **No more stack overflow or OOM on adversarial documents.** Recursive block
+  parsing now has a nesting-depth guard (deeply nested blocks degrade to a
+  diagnostic instead of an uncatchable `StackOverflowException`), and the
+  `[cols="N*"]` repeat multiplier is clamped so a huge value can't exhaust memory.
+- **Callout-number parsing no longer throws** on Unicode digits or oversized
+  numbers (`<99999999999>`, `<٣>`); such tokens degrade to plain text.
+- **Inline `{counter:}` no longer double-increments** (a speculative block-macro
+  probe was advancing counters before the real render).
+- **`include::[indent=N]`** now applies Asciidoctor's common-indent semantics
+  (removes the block's minimum indentation, then re-indents), preserving nested
+  code structure instead of flattening it.
+- **`[stem]`/`++++` stem blocks are recognized**, stem defaults to **asciimath**
+  (matching Asciidoctor) instead of latexmath, and inline `stem:[...]` honours the
+  `:stem:` interpreter attribute.
+- **Consecutive styled description lists** no longer merge — a `[qanda]` list
+  after a `[horizontal]` list now renders as a separate, correctly-styled list.
+- **`HtmlRenderer` is thread-safe** (per-render state no longer leaks across
+  concurrent renders on a shared instance). `DocBookRenderer`/`RevealjsRenderer`/
+  `ManRenderer` serialize concurrent renders on a shared instance, and
+  **`AdocEngine.Convert` is concurrency-safe when extensions are registered**.
+- **Render cache key** now distinguishes collection-valued options (custom
+  templates, syntax colours), which previously collided and served stale output.
+- **URL `include::` fetching** no longer risks a sync-over-async deadlock on
+  UI / classic-ASP.NET callers.
+- **LanguageServer** resolves includes against the document's filesystem path
+  instead of the raw `file://` URI, fixing spurious "include not found"
+  diagnostics on every keystroke.
+- **CLI**: text stdout is written as UTF-8 (no more mojibake when redirected on
+  Windows); `*.adoc` directory globbing is case-insensitive on Linux; diagram-tool
+  arguments are passed individually so paths with spaces work.
+- Non-compiling README/USAGE "Full API" samples (missing `using AdocNet;`); the
+  `examples/CustomIncludeReader` project (wrong namespace) — rewritten to use the
+  real `ParseOptions.IncludeReader` API, with all examples now in the solution.
+
+### Changed
+
+- **LangVersion** is `latest` instead of `preview` (no preview language features
+  in shipped packages); CI/release `dotnet-quality` is `ga`.
+- The repo-wide `NuGetAuditSuppress` of GHSA-xrw6-gwf8-vvr9 is removed; the
+  affected transitive `Tmds.DBus.Protocol` is pinned to the patched 0.21.3 in the
+  three (non-shipped) projects that used it. The advisory is now actually fixed,
+  not masked.
+- **`NOTICES.md`** third-party font attributions corrected (Noto Serif is Apache
+  2.0; M+ fonts are the M+ FONTS License; the PDF converter's Font Awesome fonts
+  are now listed) and the file is packed into the font-bundling packages.
+- Documentation: accurate "structurally identical to Asciidoctor" parity wording,
+  a package-selection guide, net8.0 TFM tables, and corrected renderer/theme/
+  backend inventories.
+
 ## [1.0.11] - 2026-06-04
 
 A table-parser correctness fix.
