@@ -57,6 +57,20 @@ public class AttributeScopingTests
     }
 
     [Test]
+    public void Locked_attribute_honored_through_AdocParser_entry_point()
+    {
+        // Regression: AdocParser.Parse (the primary public API) previously called the
+        // BlockParser overload that dropped LockedAttributes, making the option a no-op.
+        var options = new ParseOptions
+        {
+            Attributes = new Dictionary<string, string> { ["backend"] = "html5" },
+            LockedAttributes = new HashSet<string> { "backend" },
+        };
+        var result = AdocParser.Parse("= Title\n:backend: pdf\n\nContent", options);
+        Assert.That(result.Document.Attributes["backend"], Is.EqualTo("html5"));
+    }
+
+    [Test]
     public void Locked_attribute_not_overridden_by_body()
     {
         var options = new ParseOptions
