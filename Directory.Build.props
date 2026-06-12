@@ -14,7 +14,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.11</Version>
+    <Version>1.0.12</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) Sylvain Fasel</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -23,7 +23,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.11: Table parser correctly reserves rowspan columns in following rows (#41). A `.N+|` rowspan in a non-last column was not reserving its column in the rows it spanned, so the parser over-filled those rows — collapsing several source rows into fewer AST rows and, with overlapping rowspans, dropping trailing cells entirely. The row-grouping loop now skips trailing columns held by active rowspans before closing a row, so each source row consumes exactly the free-column count. Every backend (HTML, Avalonia, PDF) inherits the corrected structure. See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.12: A hardening release. Security: ParseOptions.SafeMode now defaults to Safe (confines include:: to the base directory) and the safe-mode confinement bypass is fixed; :data-uri: image reads and Avalonia link-clicks are safe-mode/scheme gated; LockedAttributes is honoured through AdocParser.Parse. Robustness: guards against stack-overflow and OOM on adversarial documents (deep block nesting, huge cols repeats, callout-number overflow). Parity: fixes inline {counter:} double-increment, include indent= common-indent, cols="1,2a" style letters, [stem]/++++ blocks (asciimath default), and consecutive styled description lists. Concurrency: HtmlRenderer is reentrant; DocBook/Reveal/Man and AdocEngine+extensions are concurrency-safe. Packaging: libraries (and AdocNet.Avalonia) now also target net8.0, fixing an IReadOnlySet ambiguity for .NET 8/9 consumers; AdocEngine is IDisposable. Plus the LSP resolves includes from file paths, cross-platform CLI fixes, corrected third-party font NOTICES, and many docs fixes. See CHANGELOG.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->
