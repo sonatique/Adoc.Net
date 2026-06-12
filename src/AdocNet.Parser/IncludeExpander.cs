@@ -626,19 +626,34 @@ internal static class IncludeExpander
     internal static string ApplyIndent(string text, int indent)
     {
         var lines = TextUtility.SplitLines(text);
+
+        // Asciidoctor semantics: remove the block's COMMON (minimum) leading indentation across
+        // non-blank lines, then re-indent every non-blank line by `indent` spaces. This preserves
+        // the relative indentation of nested constructs (Python/YAML/etc.); a per-line TrimStart
+        // would flatten them and corrupt the code. Tabs and spaces are counted as one column each.
+        int common = int.MaxValue;
+        foreach (var line in lines)
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            int leading = 0;
+            while (leading < line.Length && (line[leading] == ' ' || line[leading] == '\t'))
+                leading++;
+            if (leading < common) common = leading;
+        }
+        if (common == int.MaxValue) common = 0; // no non-blank lines
+
         var sb = new System.Text.StringBuilder();
         for (int i = 0; i < lines.Length; i++)
         {
             if (i > 0) sb.Append('\n');
-            if (indent == 0)
-            {
-                sb.Append(lines[i].TrimStart());
-            }
-            else
-            {
+            var line = lines[i];
+            if (string.IsNullOrWhiteSpace(line))
+                continue; // blank lines stay blank (no trailing indentation)
+
+            var stripped = common <= line.Length ? line.Substring(common) : line.TrimStart();
+            if (indent > 0)
                 sb.Append(' ', indent);
-                sb.Append(lines[i]);
-            }
+            sb.Append(stripped);
         }
         return sb.ToString();
     }
