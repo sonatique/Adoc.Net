@@ -529,13 +529,42 @@ public class Beta16ParityTests
     }
 
     [Test]
-    public void Stem_inline_macro_renders_inline_math()
+    public void Stem_inline_macro_defaults_to_asciimath()
     {
+        // Asciidoctor's default stem interpreter is asciimath, so stem:[...] without an explicit
+        // :stem: type emits AsciiMath dollar delimiters, not LaTeX \(...\).
         var input = "The formula stem:[x^2+y^2] is a circle.";
         var doc = AdocParser.Parse(input).Document;
         var html = new HtmlRenderer().RenderToString(doc);
 
+        Assert.That(html, Does.Contain("\\$x^2+y^2\\$"));
+    }
+
+    [Test]
+    public void Stem_inline_macro_honors_latexmath_stem_attribute()
+    {
+        var input = ":stem: latexmath\n\nThe formula stem:[x^2+y^2] is a circle.";
+        var doc = AdocParser.Parse(input).Document;
+        var html = new HtmlRenderer().RenderToString(doc);
+
         Assert.That(html, Does.Contain("\\(x^2+y^2\\)"));
+    }
+
+    [Test]
+    public void Stem_block_over_passthrough_delimiter_is_recognized()
+    {
+        // Canonical Asciidoctor form: [stem] over a ++++ passthrough block (not just open --).
+        var input = ":stem: asciimath\n\n[stem]\n++++\nsqrt(4) = 2\n++++";
+        var doc = AdocParser.Parse(input).Document;
+
+        var stemBlock = doc.Children.OfType<StemBlockNode>().FirstOrDefault();
+        Assert.That(stemBlock, Is.Not.Null);
+        Assert.That(stemBlock!.StemType, Is.EqualTo("asciimath"));
+        Assert.That(stemBlock.Content, Does.Contain("sqrt(4) = 2"));
+
+        var html = new HtmlRenderer().RenderToString(doc);
+        Assert.That(html, Does.Contain("<div class=\"stemblock\">"));
+        Assert.That(html, Does.Contain("\\$sqrt(4) = 2\\$"));
     }
 
     [Test]
@@ -593,7 +622,8 @@ public class Beta16ParityTests
 
         var stemBlock = doc.Children.OfType<StemBlockNode>().FirstOrDefault();
         Assert.That(stemBlock, Is.Not.Null);
-        Assert.That(stemBlock!.StemType, Is.EqualTo("latexmath"));
+        // Empty :stem: defaults to asciimath (Asciidoctor parity), not latexmath.
+        Assert.That(stemBlock!.StemType, Is.EqualTo("asciimath"));
         Assert.That(stemBlock.Content, Does.Contain("x^2"));
     }
 

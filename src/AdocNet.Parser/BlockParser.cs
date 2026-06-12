@@ -827,9 +827,10 @@ internal static class BlockParser
                     dlFrames.Clear();
                     if (string.Equals(blockAttrs.Style, "stem", StringComparison.OrdinalIgnoreCase))
                     {
-                        // [stem] uses the document-level :stem: attribute value, default "latexmath"
+                        // [stem] uses the document-level :stem: attribute value. Asciidoctor's
+                        // default interpreter (empty :stem:) is asciimath, not latexmath.
                         pendingStem = document.Attributes.TryGetValue("stem", out var stemAttr) && stemAttr.Length > 0
-                            ? stemAttr : "latexmath";
+                            ? stemAttr.ToLowerInvariant() : "asciimath";
                     }
                     else
                     {
@@ -1867,6 +1868,8 @@ internal static class BlockParser
                 var stemBlock = new StemBlockNode
                 {
                     Content = stemContent,
+                    // $$ is an AdocNet-specific LaTeX-style delimiter (not an Asciidoctor construct);
+                    // keep its latexmath default. [stem]/++++ and inline stem: follow :stem:.
                     StemType = "latexmath",
                     Title = pendingBlockTitle,
                     Substitutions = SubstitutionKind.Verbatim,
@@ -2082,6 +2085,24 @@ internal static class BlockParser
                     foreach (var child in innerResult.Document.Children)
                         admonNode.AddChild(child);
                     currentContainer.AddChild(admonNode);
+                }
+                else if (delimKind == DelimitedBlockKind.Passthrough && pendingStem is not null)
+                {
+                    // Canonical stem block: [stem] (or [latexmath]/[asciimath]) over a ++++ passthrough.
+                    var stemBlock = new StemBlockNode
+                    {
+                        Content = rawContent,
+                        StemType = pendingStem,
+                        Title = pendingBlockTitle,
+                        Substitutions = SubstitutionKind.Verbatim,
+                        Source = closingIdx < lines.Length
+                            ? new SourceRange(new(lineNumber, 1), new(closingIdx + 1, lines[closingIdx].Length))
+                            : new SourceRange(new(lineNumber, 1), new(lines.Length, lines[^1].Length)),
+                    };
+                    ApplyPendingId(stemBlock, lineNumber, line.Length);
+                    if (pendingBlockRoles is not null)
+                        stemBlock.Roles = pendingBlockRoles;
+                    currentContainer.AddChild(stemBlock);
                 }
                 else
                 {
