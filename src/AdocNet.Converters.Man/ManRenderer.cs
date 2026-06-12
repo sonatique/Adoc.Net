@@ -13,17 +13,24 @@ public sealed partial class ManRenderer : IDocumentRenderer
     // the same renderer are deterministic.
     private int _exampleCounter;
 
+    // Serializes concurrent renders on the same instance: _exampleCounter would
+    // otherwise be clobbered. Use an instance per render for parallelism.
+    private readonly object _renderLock = new();
+
     /// <inheritdoc />
     public string Format => "man";
 
     /// <inheritdoc />
     public void Render(DocumentNode document, Stream output, RenderOptions options)
     {
-        _exampleCounter = 0;
-        var sb = new StringBuilder();
-        RenderDocument(sb, document);
-        var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-        output.Write(bytes, 0, bytes.Length);
+        lock (_renderLock)
+        {
+            _exampleCounter = 0;
+            var sb = new StringBuilder();
+            RenderDocument(sb, document);
+            var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+            output.Write(bytes, 0, bytes.Length);
+        }
     }
 
     private void RenderDocument(StringBuilder sb, DocumentNode document)
