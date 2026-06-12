@@ -48,6 +48,16 @@ rendering (e.g. `:toc-title:`, `:note-caption:`, `:table-caption:`).
 All attribute values are HTML-escaped before insertion into rendered output.
 Attributes cannot inject raw HTML into the output.
 
+## Avalonia Renderer Links
+
+When a link is clicked in the Avalonia renderer, `AvaloniaRenderer` raises the
+`LinkClicked` event. If no handler marks it handled, the default behavior opens
+the URL with the OS shell — but **only** for `http`, `https`, and `mailto`
+schemes. Document-controlled `file:`/UNC/`javascript:`/custom-scheme links are
+**not** auto-opened, so a single click cannot launch a local executable or leak
+credentials over SMB. Subscribe to `LinkClicked` and set `Handled = true` to
+implement custom navigation for other schemes.
+
 ## Recommendations for Untrusted Input
 
 | Concern | Recommendation |
