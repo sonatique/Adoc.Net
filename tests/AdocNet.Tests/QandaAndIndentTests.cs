@@ -154,15 +154,30 @@ public class QandaAndIndentTests
     }
 
     [Test]
-    public void Include_indent_zero_strips_whitespace()
+    public void Include_indent_zero_removes_common_indent_preserving_relative()
     {
+        // Asciidoctor indent=0 removes the COMMON leading indentation (here 2 spaces), not all
+        // leading whitespace — so the relative indentation of nested lines is preserved.
         var reader = new DictReader()
             .Add(Path.Combine(BaseDir, "indented.adoc"), "    line1\n      line2\n  line3");
 
         var text = "include::indented.adoc[indent=0]";
         var result = IncludeExpander.Expand(text, BaseDir, reader);
-        Assert.That(result.Text, Is.EqualTo("line1\nline2\nline3"));
+        Assert.That(result.Text, Is.EqualTo("  line1\n    line2\nline3"));
         Assert.That(result.Diagnostics, Is.Empty);
+    }
+
+    [Test]
+    public void Include_indent_preserves_nested_code_indentation()
+    {
+        // Real-world case: a uniformly-indented code region re-indented to 0 must keep its inner
+        // structure (the body stays indented relative to the def), not flatten to the margin.
+        var reader = new DictReader()
+            .Add(Path.Combine(BaseDir, "code.adoc"), "  def foo():\n      return 1");
+
+        var text = "include::code.adoc[indent=0]";
+        var result = IncludeExpander.Expand(text, BaseDir, reader);
+        Assert.That(result.Text, Is.EqualTo("def foo():\n    return 1"));
     }
 
     [Test]
