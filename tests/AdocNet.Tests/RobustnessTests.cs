@@ -204,6 +204,16 @@ public class RobustnessTests
     }
 
     [Test]
+    public void Callout_with_oversized_or_unicode_number_does_not_throw()
+    {
+        // char.IsDigit accepted Unicode/fullwidth digits that int.Parse rejected, and an 11+ digit
+        // ASCII run overflowed int — both threw out of the parser. Now they degrade to plain text.
+        Assert.DoesNotThrow(() => BlockParser.Parse("----\ncode line <99999999999>\n----"));
+        Assert.DoesNotThrow(() => BlockParser.Parse("----\ncode line <٣>\n----")); // Arabic-Indic 3
+        Assert.DoesNotThrow(() => BlockParser.Parse("----\ncode line <３>\n----")); // fullwidth 3
+    }
+
+    [Test]
     public void Huge_cols_repeat_does_not_exhaust_memory()
     {
         // [cols="200000000*"] would allocate 200M column specs (and a matching int[colCount])
