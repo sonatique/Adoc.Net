@@ -19,7 +19,7 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-          dotnet-quality: 'preview'
+          dotnet-quality: 'ga'
 
       - name: Setup .NET 8 (for cross-TFM consistency tests)
         uses: actions/setup-dotnet@v4
@@ -85,7 +85,7 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-          dotnet-quality: 'preview'
+          dotnet-quality: 'ga'
 
       - name: Setup Ruby (for asciidoctor reference renderers)
         uses: ruby/setup-ruby@v1
