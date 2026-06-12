@@ -47,9 +47,11 @@ using AdocNet;
 string html = Adoc.ToHtml("= Hello\n\nThis is *bold* text.");
 ```
 
-More options without additional `using` directives:
+More options (`HtmlTheme` lives in `AdocNet.Converters.Html`):
 
 ```csharp
+using AdocNet.Converters.Html;  // HtmlTheme
+
 // Styled full HTML document
 string page = Adoc.ToStyledHtml(source, HtmlTheme.Asciidoctor);
 
@@ -75,8 +77,9 @@ For advanced scenarios (custom options, include readers, render options), use th
 component API directly:
 
 ```csharp
-using AdocNet.Parser;
-using AdocNet.Converters.Html;
+using AdocNet;                  // ParseOptions, RenderToString extension
+using AdocNet.Parser;           // AdocParser
+using AdocNet.Converters.Html;  // HtmlRenderer, HtmlRenderOptions, HtmlTheme
 
 var result = AdocParser.Parse(text, new ParseOptions { SourceFilePath = "chapter.adoc" });
 var html = new HtmlRenderer().RenderToString(result.Document,

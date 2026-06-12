@@ -52,18 +52,19 @@ These produce valid output that differs from Asciidoctor in minor ways:
 These are tracked and documented in the conformance test suite. None affect
 the rendered visual output in a browser.
 
-## Not supported
+## Notes on specific features
 
-| Feature | Reason |
+| Feature | Status |
 |---------|--------|
-| Stem/math blocks (MathJax, LaTeX) | Requires external rendering engine |
+| Stem/math (`[stem]`/`stem:[]`, AsciiMath & LaTeX) | Supported — emits `stemblock`/inline MathJax markup; the math is typeset client-side by MathJax, which the full-document HTML renderer injects when `:stem:` is set. Defaults to the AsciiMath interpreter, matching Asciidoctor. |
 
 ## Target framework compatibility
 
 | Platform | Supported |
 |----------|-----------|
-| .NET 10+ | Yes (optimized) |
-| .NET 5-9 | Yes (via netstandard2.0) |
-| .NET Core 2.0+ | Yes (via netstandard2.0) |
-| .NET Framework 4.6.1+ | Yes (via netstandard2.0) |
-| Mono | Yes (via netstandard2.0) |
+| .NET 10+ | Yes (optimized `net10.0` build) |
+| .NET 8 / 9 | Yes (optimized `net8.0` build) |
+| .NET 5-7 | Yes (via `netstandard2.0`) |
+| .NET Core 2.0+ | Yes (via `netstandard2.0`) |
+| .NET Framework 4.6.1+ | Yes (via `netstandard2.0`) |
+| Mono | Yes (via `netstandard2.0`) |

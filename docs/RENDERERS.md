@@ -1,6 +1,7 @@
 # Renderers
 
-Adoc.Net includes four output renderers, all sharing a common framework.
+Adoc.Net includes six output renderers (HTML, PDF, DocBook, EPUB, man, Reveal.js),
+all sharing a common framework.
 
 ## Renderer Framework
 
@@ -67,13 +68,14 @@ This wraps the output in a complete HTML document with embedded CSS.
 
 ### Themes
 
-Three built-in themes are available:
+Four built-in themes are available:
 
 | Theme | Description |
 |---|---|
 | `HtmlTheme.Default` | Modern sans-serif with muted colors, 960px max-width |
 | `HtmlTheme.Asciidoctor` | Serif body with red-brown headings, matching Asciidoctor's classic look |
 | `HtmlTheme.Clean` | Narrow-width Georgia for maximum readability, minimal decoration |
+| `HtmlTheme.Github` | GitHub-flavoured markdown style |
 
 ### Custom CSS
 

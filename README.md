@@ -2,13 +2,14 @@
 
 A pure managed C# AsciiDoc library for .NET. No external runtime dependencies.
 
-Adoc.Net parses AsciiDoc into a typed AST and renders it to **HTML5**, **PDF**, **DocBook 5.0**, **EPUB 3.0**, **man pages**, or **reveal.js slides**. HTML rendering supports custom per-node templates via `INodeTemplate`. It targets both **.NET 10** (optimized) and **.NET Standard 2.0** (broad compatibility: .NET Framework 4.6.1+, .NET Core 2.0+, Mono, Unity, Xamarin).
+Adoc.Net parses AsciiDoc into a typed AST and renders it to **HTML5**, **PDF**, **DocBook 5.0**, **EPUB 3.0**, **man pages**, or **reveal.js slides**. HTML rendering supports custom per-node templates via `INodeTemplate`. It multi-targets **.NET 10** and **.NET 8** (optimized) plus **.NET Standard 2.0** (broad compatibility: .NET Framework 4.6.1+, .NET Core 2.0+, Mono, Unity, Xamarin).
 
 ## Asciidoctor parity
 
-AdocNet 1.0 produces **byte-identical output to Asciidoctor** for HTML, DocBook,
-and Reveal.js across the full 36-document conformance corpus
-(`spec/conformance/*.adoc`, verified via `tools/parity-sweep.py`). EPUB ships
+AdocNet 1.0 produces output that is **structurally identical to Asciidoctor**
+(zero DOM diff) for HTML, DocBook, and Reveal.js across the full 36-document
+conformance corpus (`spec/conformance/*.adoc`, verified via `tools/parity-sweep.py`,
+which renders both with matching options and compares the structural DOM). EPUB ships
 the same asset payload as `asciidoctor-epub3` (fonts, stylesheets, default
 images) with a dedicated chapter renderer emitting the reference's semantic
 HTML5; readers see indistinguishable output. Man output is cleaner roff than
@@ -25,11 +26,32 @@ the v1.0 parity arc.
 
 ## Installation
 
+The meta-package pulls in the core parser plus the HTML and PDF renderers:
+
 ```
 dotnet add package AdocNet
 ```
 
-For the CLI tools:
+### Which package do I need?
+
+For library use, reference the package for the output you want. (The `AdocNet.Pdf`,
+`AdocNet.Epub`, etc. IDs are **command-line tools**, not libraries — for code, use the
+`AdocNet.Converters.*` packages below.)
+
+| Task | Library package (`dotnet add package …`) |
+|------|------------------------------------------|
+| Parse + AST | `AdocNet` (or `AdocNet.Parser` + `AdocNet.Ast`) |
+| Render HTML | `AdocNet.Converters.Html` (included in `AdocNet`) |
+| Render PDF | `AdocNet.Converters.Pdf` (included in `AdocNet`) |
+| Render DocBook | `AdocNet.Converters.DocBook` |
+| Render EPUB | `AdocNet.Converters.Epub` |
+| Render man page | `AdocNet.Converters.Man` |
+| Render Reveal.js | `AdocNet.Converters.Revealjs` |
+| Avalonia UI renderer | `AdocNet.Avalonia` |
+
+### Command-line tools
+
+These are `dotnet tool` packages (not referenceable libraries):
 
 ```
 dotnet tool install --global AdocNet.Tool         # adocnet (HTML default)
@@ -72,8 +94,9 @@ if (result.HasErrors)
 ### Full API (when you need options)
 
 ```csharp
-using AdocNet.Parser;
-using AdocNet.Converters.Html;
+using AdocNet;                  // ParseOptions, RenderToString extension
+using AdocNet.Parser;           // AdocParser
+using AdocNet.Converters.Html;  // HtmlRenderer, HtmlRenderOptions, HtmlTheme
 
 var result = AdocParser.Parse(source, new ParseOptions
 {
@@ -97,6 +120,8 @@ File.WriteAllBytes("output.pdf", pdf);
 ### Render to DocBook
 
 ```csharp
+// dotnet add package AdocNet.Converters.DocBook
+using AdocNet;                     // RenderToString extension
 using AdocNet.Converters.DocBook;
 
 string xml = new DocBookRenderer().RenderToString(result.Document);
@@ -105,6 +130,7 @@ string xml = new DocBookRenderer().RenderToString(result.Document);
 ### Render to EPUB
 
 ```csharp
+// dotnet add package AdocNet.Converters.Epub
 using AdocNet.Converters.Epub;
 
 byte[] epub = new EpubRenderer().RenderToBytes(result.Document);
@@ -285,10 +311,11 @@ See [docs/CLI.md](docs/CLI.md) for the full reference.
 
 ## Architecture
 
-Eleven assemblies, each with a single responsibility:
+Focused assemblies, each with a single responsibility:
 
 | Assembly | Namespace | Description |
 |----------|-----------|-------------|
+| AdocNet | `AdocNet` | Facade meta-package (`Adoc.ToHtml`/`ToPdf`/…); references Core, Parser, Html, Pdf |
 | AdocNet.Ast | `AdocNet.Ast` | Typed AST node classes |
 | AdocNet.Core | `AdocNet` | Diagnostics, options, renderer framework |
 | AdocNet.Parser | `AdocNet.Parser` | Block and inline parsing |
@@ -298,8 +325,10 @@ Eleven assemblies, each with a single responsibility:
 | AdocNet.Converters.Epub | `AdocNet.Converters.Epub` | EPUB 3.0 renderer |
 | AdocNet.Converters.Man | `AdocNet.Converters.Man` | Man page (roff) renderer |
 | AdocNet.Converters.Revealjs | `AdocNet.Converters.Revealjs` | Reveal.js slides renderer |
+| AdocNet.Emitter | `AdocNet.Emitter` | AST-to-AsciiDoc emitter (round-trip; in progress) |
 | AdocNet.Layout | `AdocNet.Layout` | UI-agnostic layout model and AST-to-layout builder |
 | AdocNet.Avalonia | `AdocNet.Avalonia` | Avalonia UI renderer (layout tree to controls) |
+| AdocNet.LanguageServer | — | LSP server (`adocnet-lsp`); build-from-source |
 
 The data flow for the Avalonia viewer is strictly layered: `AST → Layout → Avalonia`. The Layout library has zero UI dependencies and targets netstandard2.0, making it consumable by any .NET UI framework.
 
@@ -354,13 +383,15 @@ dotnet test
 
 ## Target Frameworks
 
-All core libraries target `netstandard2.0` and `net10.0`. The CLI and LSP server target `net10.0` only.
+All core libraries (and `AdocNet.Avalonia`) multi-target `netstandard2.0`, `net8.0`,
+and `net10.0`. The CLI tools and LSP server target `net10.0` only.
 
 | Consumer | Resolved TFM |
 |----------|-------------|
 | .NET Framework 4.6.1+ | netstandard2.0 |
 | .NET Core 2.0+ | netstandard2.0 |
-| .NET 5-9 | netstandard2.0 |
+| .NET 5-7 | netstandard2.0 |
+| .NET 8 / 9 | net8.0 (optimized) |
 | .NET 10+ | net10.0 (optimized) |
 
 ## License
