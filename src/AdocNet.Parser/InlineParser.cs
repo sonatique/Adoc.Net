@@ -383,7 +383,7 @@ internal static class InlineParser
                 bool isExperimentalMacro = c is 'k' or 'b' or 'm';
                 if (!isExperimentalMacro || doExperimental)
                 {
-                    if (TryParseGenericMacro(text, i, endIndex, out var genericMacro, out var gmEnd))
+                    if (TryParseGenericMacro(text, i, endIndex, linkAttributes, out var genericMacro, out var gmEnd))
                     {
                         int nodeStart = i;
                         FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
@@ -1436,6 +1436,7 @@ internal static class InlineParser
     /// Forms: <c>name:[content]</c> or <c>name:target[content]</c>.
     /// </summary>
     private static bool TryParseGenericMacro(string text, int pos, int endIndex,
+        IReadOnlyDictionary<string, string>? attributes,
         out InlineNode node, out int endPos)
     {
         node = null!;
@@ -1481,7 +1482,12 @@ internal static class InlineParser
 
         if (StemMacroNames.Contains(name))
         {
-            var stemType = name == "stem" ? "latexmath" : name;
+            // stem:[...] resolves to the document's :stem: interpreter (default asciimath, matching
+            // Asciidoctor); latexmath:[...] / asciimath:[...] are explicit.
+            var stemType = name == "stem"
+                ? (attributes is not null && attributes.TryGetValue("stem", out var s) && s.Length > 0
+                    ? s.ToLowerInvariant() : "asciimath")
+                : name;
             node = new StemInlineNode { Content = content, StemType = stemType };
         }
         else if (name == "indexterm")
