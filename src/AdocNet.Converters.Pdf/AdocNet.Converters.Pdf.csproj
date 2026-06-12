@@ -14,11 +14,14 @@
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
     <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+    <!-- This package embeds Font Awesome fonts; ship their attribution. -->
+    <None Include="..\..\NOTICES.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- FontAwesome 5 Solid + Regular embedded for asciidoctor-pdf admonition
-         and inline icon parity. Licensed under the SIL Open Font License 1.1. -->
+         and inline icon parity. Font under SIL Open Font License 1.1; icon
+         designs under CC BY 4.0. See NOTICES.md. -->
     <EmbeddedResource Include="Resources\fa-solid.ttf" />
     <EmbeddedResource Include="Resources\fa-regular.ttf" />
   </ItemGroup>
