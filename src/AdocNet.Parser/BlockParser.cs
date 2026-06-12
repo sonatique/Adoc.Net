@@ -35,10 +35,75 @@ internal static class BlockParser
     public static ParseResult Parse(string text, IReadOnlyDictionary<string, string>? externalAttributes)
         => Parse(text, externalAttributes, lockedAttributes: null);
 
+    /// <summary>
+    /// Maximum nesting depth for recursively-parsed blocks (delimited blocks, AsciiDoc table
+    /// cells, markdown blockquotes). Block parsing is recursive descent and each level consumes a
+    /// large stack frame, so an adversarial document of deeply nested blocks could otherwise drive
+    /// the process to an uncatchable <see cref="StackOverflowException"/> in a few hundred bytes.
+    /// Real documents nest only a handful of levels; this limit is far above any legitimate use.
+    /// </summary>
+    private const int MaxBlockNestingDepth = 32;
+
+    /// <summary>
+    /// Per-thread recursion depth for <see cref="Parse(string, IReadOnlyDictionary{string, string}?, IReadOnlySet{string}?)"/>.
+    /// Thread-static so concurrent parses on different threads are independent (the parser is
+    /// otherwise stateless). Maintained with a try/finally so it self-heals on pooled threads.
+    /// </summary>
+    [ThreadStatic]
+    private static int _parseDepth;
+
     public static ParseResult Parse(string text, IReadOnlyDictionary<string, string>? externalAttributes, IReadOnlySet<string>? lockedAttributes)
     {
         Guard.NotNull(text);
 
+        // ── Recursion depth guard ──
+        // Every nested-block parse re-enters this method, so a single guard here covers all
+        // recursion sites (delimited blocks, open blocks, quotes, admonitions, AsciiDoc table
+        // cells). Past the limit, emit a diagnostic and keep the over-deep content as a literal
+        // paragraph instead of recursing into an uncatchable stack overflow.
+        if (_parseDepth >= MaxBlockNestingDepth)
+            return DepthExceededResult(text);
+
+        _parseDepth++;
+        try
+        {
+            return ParseCore(text, externalAttributes, lockedAttributes);
+        }
+        finally
+        {
+            _parseDepth--;
+        }
+    }
+
+    /// <summary>
+    /// Builds a minimal result for content that exceeded <see cref="MaxBlockNestingDepth"/>:
+    /// the raw text is preserved as a single paragraph (no data loss) alongside an error
+    /// diagnostic, rather than recursing further.
+    /// </summary>
+    private static ParseResult DepthExceededResult(string text)
+    {
+        var document = new DocumentNode();
+        PopulateDefaultAttributes(document);
+        var trimmed = text.TrimEnd('\n');
+        if (trimmed.Length > 0)
+        {
+            document.AddChild(new ParagraphNode
+            {
+                Text = trimmed,
+                Inlines = InlineParser.Parse(trimmed, EffectiveNormalSubs(document.Attributes), document.Attributes),
+            });
+        }
+        var diagnostics = new List<Diagnostic>
+        {
+            new(DiagnosticSeverity.Error,
+                $"Maximum block nesting depth ({MaxBlockNestingDepth}) exceeded; deeper content was not parsed further.",
+                new SourceRange(new(1, 1), new(1, Math.Max(1, trimmed.Length)))),
+        };
+        return new ParseResult(document, diagnostics);
+    }
+
+    private static ParseResult ParseCore(string text, IReadOnlyDictionary<string, string>? externalAttributes, IReadOnlySet<string>? lockedAttributes)
+    {
         var lines = TextUtility.SplitLines(text);
         var document = new DocumentNode();
         var diagnostics = new List<Diagnostic>();
@@ -4396,12 +4461,21 @@ internal static class BlockParser
                 p = p.Substring(star + 1);
             }
 
-            for (int r = 0; r < repeat; r++)
+            // Cap the total column count. An unbounded "N*" repeat (e.g. cols="200000000*")
+            // would otherwise allocate columns — and a matching int[colCount] downstream —
+            // until the process runs out of memory. Real tables never approach this limit.
+            for (int r = 0; r < repeat && columns.Count < MaxTableColumns; r++)
                 columns.Add(ParseSingleColumnSpec(p));
         }
 
         return columns;
     }
+
+    /// <summary>
+    /// Upper bound on the number of table columns. Guards against an adversarial
+    /// <c>[cols="N*"]</c> repeat multiplier driving unbounded allocation (OOM).
+    /// </summary>
+    private const int MaxTableColumns = 1000;
 
     /// <summary>
     /// Parses a single column spec part ("optional-alignment + optional-width",
