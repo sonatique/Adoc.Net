@@ -28,7 +28,7 @@ public sealed partial class HtmlRenderer
 
     private void RenderInline(StringBuilder sb, InlineNode node, FootnoteState footnotes, HtmlRenderState state)
     {
-        if (TryRenderTemplate(sb, node))
+        if (TryRenderTemplate(sb, node, state))
             return;
 
         switch (node)

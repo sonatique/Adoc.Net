@@ -32,6 +32,9 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
         public string? BaseDirectory { get; set; }
         public SafeMode SafeMode { get; set; } = SafeMode.Safe;
         public string? ImagesDir { get; set; }
+        /// <summary>Per-render context, used to resolve custom templates. Stored here (rather than
+        /// in an instance field) so a single renderer instance is safe to use from multiple threads.</summary>
+        public RenderContext? Context { get; set; }
         public int AppendixCounter { get; set; }
         public int PartCounter { get; set; }
         /// <summary>Maps section IDs to their numbering strings (e.g. "1.2") for xrefstyle.</summary>
@@ -157,17 +160,12 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
         }
     }
 
-    private RenderContext? _currentContext;
-    private RenderOptions? _currentOptions;
-
     /// <inheritdoc />
     protected override void RenderDocument(RenderContext context, Stream output)
     {
-        _currentContext = context;
-        _currentOptions = context.Options;
-
         var document = context.Document;
         var state = context.GetOrCreate(() => new HtmlRenderState());
+        state.Context = context;
         state.IdTitles = BuildIdTitleMap(document);
         state.TitleIds = BuildTitleIdMap(state.IdTitles);
         state.DocumentAttributes = document.Attributes;
@@ -414,16 +412,16 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
         sb.Append("</div>\n");
     }
 
-    private bool TryRenderTemplate(StringBuilder sb, AstNode node)
+    private static bool TryRenderTemplate(StringBuilder sb, AstNode node, HtmlRenderState state)
     {
-        var templates = (_currentOptions as HtmlRenderOptions)?.Templates;
+        var templates = (state.Context?.Options as HtmlRenderOptions)?.Templates;
         if (templates is null) return false;
 
         foreach (var template in templates)
         {
             if (template.CanRender(node))
             {
-                sb.Append(template.Render(node, _currentContext!));
+                sb.Append(template.Render(node, state.Context!));
                 return true;
             }
         }
@@ -432,7 +430,7 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
 
     private void RenderBlock(StringBuilder sb, AstNode node, bool useIconFont, FootnoteState footnotes, SectionNumberingContext secCtx, HtmlRenderState state)
     {
-        if (TryRenderTemplate(sb, node))
+        if (TryRenderTemplate(sb, node, state))
             return;
 
         switch (node)
