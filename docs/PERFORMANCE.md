@@ -155,9 +155,16 @@ This ensures that newly registered extensions don't see stale cached results.
 
 ## Thread Safety
 
-The caching system is fully thread-safe. Multiple threads can call Convert()
-concurrently on the same engine instance. Cache reads and writes are synchronized
-using locks.
+Multiple threads can call `Convert()` concurrently on the same engine instance.
+Cache reads and writes are synchronized with locks, and when extensions are
+registered the engine serializes extension execution (and never shares a
+parse-cached AST with the mutating extension pipeline), so concurrent renders
+stay correct. Engines **without** extensions render fully in parallel; engines
+**with** extensions serialize the extension phase of each render.
+
+One caveat: `LastExtensionDiagnostics` is a single mutable property reflecting the
+most recent `Convert()` call, so it is not reliable to read after concurrent
+converts. Read it only when converts are not overlapping (e.g. single-threaded use).
 
 On the first call for a given input (cold start with multiple threads), duplicate
 parsing may occur briefly before the cache is populated. This is by design —
