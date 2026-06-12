@@ -4255,7 +4255,8 @@ internal static class BlockParser
                 while (colsUsed < colCount && activeRowSpans[colsUsed] > 0)
                     colsUsed++;
 
-                currentRow.AddChild(CreateTableCell(info, attributes));
+                var colStyle = columns is not null && colsUsed < columns.Count ? columns[colsUsed].Style : null;
+                currentRow.AddChild(CreateTableCell(ApplyColumnStyle(info, colStyle), attributes));
 
                 // Record rowspan for this cell's columns.
                 if (info.RowSpan > 1)
@@ -4334,10 +4335,13 @@ internal static class BlockParser
 
                 var cellSource = MakeRowSource(eff, lines);
                 var row = new TableRowNode();
+                int colIdx = 0;
                 foreach (var info in cellInfos)
                 {
+                    var colStyle = columns is not null && colIdx < columns.Count ? columns[colIdx].Style : null;
                     var tagged = info with { Source = cellSource };
-                    row.AddChild(CreateTableCell(tagged, attributes));
+                    row.AddChild(CreateTableCell(ApplyColumnStyle(tagged, colStyle), attributes));
+                    colIdx += info.ColSpan;
                 }
                 row.Source = cellSource;
                 table.AddChild(row);
@@ -4356,6 +4360,15 @@ internal static class BlockParser
     /// When the cell style is <see cref="TableCellStyle.AsciiDoc"/>, the cell text is parsed
     /// as block-level AsciiDoc and the resulting blocks are added as children.
     /// </summary>
+    /// <summary>
+    /// Returns <paramref name="info"/> with the column's default style applied when the cell has no
+    /// style of its own (a cell's own <c>a|</c>/<c>l|</c>/… prefix always wins).
+    /// </summary>
+    private static CellInfo ApplyColumnStyle(CellInfo info, TableCellStyle? columnStyle)
+        => columnStyle is not null && info.ContentStyle == TableCellStyle.Default
+            ? info with { ContentStyle = columnStyle.Value }
+            : info;
+
     private static TableCellNode CreateTableCell(CellInfo info, IReadOnlyDictionary<string, string> attributes)
     {
         if (info.ContentStyle == TableCellStyle.AsciiDoc)
@@ -4521,11 +4534,28 @@ internal static class BlockParser
         }
 
         var widthStr = p.Substring(parseIdx);
+
+        // Trailing style letter (a/e/h/l/m/s, or 'd' for default), e.g. "2a" → width 2, AsciiDoc.
+        TableCellStyle? columnStyle = null;
+        if (widthStr.Length > 0)
+        {
+            char last = widthStr[^1];
+            if (CellStyleLetters.TryGetValue(last, out var cs))
+            {
+                columnStyle = cs;
+                widthStr = widthStr[..^1];
+            }
+            else if (last == 'd')
+            {
+                widthStr = widthStr[..^1]; // explicit default style: recognised, no styling
+            }
+        }
+
         int width = 1;
         if (widthStr.Length > 0 && int.TryParse(widthStr, out int parsed) && parsed > 0)
             width = parsed;
 
-        return new TableColumnSpec { Width = width, Alignment = horizAlign, VerticalAlignment = vertAlign };
+        return new TableColumnSpec { Width = width, Alignment = horizAlign, VerticalAlignment = vertAlign, Style = columnStyle };
     }
 
     /// <summary>

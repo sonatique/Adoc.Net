@@ -8,6 +8,31 @@ namespace AdocNet.Tests;
 [TestFixture]
 public class TableParserTests
 {
+    // ── Column-spec style letters ────────────────────────────────────────
+
+    [Test]
+    public void Column_spec_parses_width_and_style_letter()
+    {
+        // cols="1,2a,1l": widths 1/2/1 with column 2 = AsciiDoc, column 3 = Literal.
+        var result = BlockParser.Parse("[cols=\"1,2a,1l\"]\n|===\n| x | y | z\n|===");
+        var table = (TableNode)result.Document.Children[0];
+        Assert.That(table.Columns, Is.Not.Null);
+        Assert.That(table.Columns!.Select(c => c.Width), Is.EqualTo(new[] { 1, 2, 1 }));
+        Assert.That(table.Columns![0].Style, Is.Null);
+        Assert.That(table.Columns![1].Style, Is.EqualTo(TableCellStyle.AsciiDoc));
+        Assert.That(table.Columns![2].Style, Is.EqualTo(TableCellStyle.Literal));
+    }
+
+    [Test]
+    public void Column_asciidoc_style_renders_nested_block_content()
+    {
+        // The 'a' column must parse its cell as AsciiDoc, so a list renders as a <ul>, not literal text.
+        var result = BlockParser.Parse("[cols=\"1,1a\"]\n|===\n| plain\na| * one\n* two\n|===");
+        var html = new HtmlRenderer().RenderToString(result.Document);
+        Assert.That(html, Does.Contain("<ul>"));
+        Assert.That(html, Does.Contain("<li>"));
+    }
+
     // ── Basic table parsing ──────────────────────────────────────────────
 
     [Test]
