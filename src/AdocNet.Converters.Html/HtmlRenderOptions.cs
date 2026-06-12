@@ -47,7 +47,7 @@ public sealed class HtmlRenderOptions : RenderOptions
     /// <summary>
     /// When true and a supported language is specified, source blocks are highlighted
     /// server-side using the built-in tokenizer. When false, source blocks are emitted
-    /// as plain text (for client-side highlighting). Default: true.
+    /// as plain text (for client-side highlighting). Default: <c>false</c>.
     /// Ignored when :source-highlighter: highlight.js is set (always defers to client).
     /// </summary>
     public bool EnableSyntaxHighlighting { get; init; }

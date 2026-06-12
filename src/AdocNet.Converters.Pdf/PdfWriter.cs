@@ -23,7 +23,7 @@ internal sealed partial class PdfWriter
     private const float DefaultMarginTop = 72f;
     private const float DefaultMarginBottom = 72f;
 
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
     private static readonly byte[] PdfHeader = "%PDF-1.4\n%\xe2\xe3\xcf\xd3\n"u8.ToArray();
 #else
     private static readonly byte[] PdfHeader = Encoding.UTF8.GetBytes("%PDF-1.4\n%\xe2\xe3\xcf\xd3\n");
