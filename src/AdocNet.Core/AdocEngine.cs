@@ -239,13 +239,14 @@ public sealed partial class AdocEngine
             }
         }
 
-        // Parse cache: safe when render cache protects us or when no extensions mutate the AST.
-        // When extensions are present but render cache is disabled, skip parse cache because
-        // extensions mutate the cached AST reference in-place (double-mutation on cache hit).
+        // Parse cache: only safe when no extensions mutate the AST. Extensions mutate the document
+        // in place, so a shared cached AST would be double-mutated on a cache hit and corrupted by
+        // two threads mutating the same instance concurrently. When extensions are present we always
+        // re-parse (the render cache still short-circuits repeated identical renders before this).
         var hasExtensions = _documentProcessors.Count > 0 ||
                             _blockProcessors.Count > 0 ||
                             _inlineProcessors.Count > 0;
-        var useParseCache = useRenderCache || !hasExtensions;
+        var useParseCache = !hasExtensions;
 
         DocumentNode doc;
         if (useParseCache && _parseCache!.TryGet(inputHash, out var cachedDoc))
@@ -503,17 +504,23 @@ public sealed partial class AdocEngine
     {
         if (_documentProcessors.Count > 0 || _blockProcessors.Count > 0 || _inlineProcessors.Count > 0)
         {
-            if (!_frozen)
+            // Serialize extension execution under the same lock that guards hot-reload, so the
+            // freeze/sort, the shared _failureCounts/_disabledProcessors tracking, and the
+            // processor lists are not raced by a concurrent Convert or a reload swapping them out.
+            lock (_reloadLock)
             {
-                _frozen = true;
-                SortByPriority(_documentProcessors);
-                SortByPriority(_blockProcessors);
-                SortByPriority(_inlineProcessors);
+                if (!_frozen)
+                {
+                    _frozen = true;
+                    SortByPriority(_documentProcessors);
+                    SortByPriority(_blockProcessors);
+                    SortByPriority(_inlineProcessors);
+                }
+                var context = new RenderContext(doc, opts);
+                ProcessingPipeline.Run(doc, context, _documentProcessors, _blockProcessors, _inlineProcessors,
+                    OnWarning, _failureCounts, _disabledProcessors, MaxProcessorFailures);
+                LastExtensionDiagnostics = context.Diagnostics;
             }
-            var context = new RenderContext(doc, opts);
-            ProcessingPipeline.Run(doc, context, _documentProcessors, _blockProcessors, _inlineProcessors,
-                OnWarning, _failureCounts, _disabledProcessors, MaxProcessorFailures);
-            LastExtensionDiagnostics = context.Diagnostics;
         }
         else
         {

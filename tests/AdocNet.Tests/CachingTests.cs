@@ -259,6 +259,31 @@ public class CachingTests
         });
     }
 
+    [Test]
+    public void ConcurrentConvert_WithExtensions_DoesNotThrowOrCorrupt()
+    {
+        // Regression: with a processor registered, concurrent Convert calls raced the freeze/
+        // failure-tracking state and shared a parse-cached AST with the mutating pipeline.
+        var engine = new AdocEngine(new HtmlRenderer(), s => AdocParser.Parse(s).Document)
+        {
+            EnableCaching = true
+        };
+        engine.RegisterDocumentProcessor(new DocumentMetadataProcessor("test-meta"));
+
+        var inputs = Enumerable.Range(0, 50)
+            .Select(i => $"= Doc {i}\n\nContent {i}.\n")
+            .ToArray();
+
+        Assert.DoesNotThrow(() =>
+        {
+            Parallel.For(0, 200, k =>
+            {
+                var input = inputs[k % inputs.Length];
+                RenderToBytes(engine, input);
+            });
+        });
+    }
+
     // ── MaxCacheEntries validation ──────────────────────────────────────
 
     [Test]
