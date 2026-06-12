@@ -30,6 +30,7 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
         public bool EnableIncrementalMarkers { get; set; }
         public bool DataUriEnabled { get; set; }
         public string? BaseDirectory { get; set; }
+        public SafeMode SafeMode { get; set; } = SafeMode.Safe;
         public string? ImagesDir { get; set; }
         public int AppendixCounter { get; set; }
         public int PartCounter { get; set; }
@@ -177,6 +178,7 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
         state.EnableIncrementalMarkers = htmlOptions?.EnableIncrementalMarkers ?? false;
         state.DataUriEnabled = document.Attributes.ContainsKey("data-uri");
         state.BaseDirectory = htmlOptions?.BaseDirectory;
+        state.SafeMode = htmlOptions?.SafeMode ?? SafeMode.Safe;
         state.ImagesDir = document.Attributes.TryGetValue("imagesdir", out var imgDir) ? imgDir : null;
         // EPUB chapter rendering passes SuppressInlineToc=true so the chapter
         // markup doesn't duplicate the EPUB reader's nav.xhtml ToC panel.
@@ -548,7 +550,7 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
     {
         if (state.DataUriEnabled)
         {
-            var dataUri = DataUriHelper.TryConvertToDataUri(target, state.BaseDirectory, state.ImagesDir);
+            var dataUri = DataUriHelper.TryConvertToDataUri(target, state.BaseDirectory, state.ImagesDir, state.SafeMode);
             if (dataUri is not null)
             {
                 sb.Append(dataUri);

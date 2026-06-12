@@ -119,6 +119,40 @@ public class Beta16ParityTests
     }
 
     [Test]
+    public void DataUri_out_of_base_image_blocked_by_default_but_allowed_when_Unsafe()
+    {
+        // Security: :data-uri: must not let a document embed arbitrary local files via an
+        // absolute / out-of-base image path when rendering with the default (Safe) mode.
+        var rootDir = Path.Combine(Path.GetTempPath(), "adocnet-datauri-" + Guid.NewGuid().ToString("N")[..8]);
+        var baseDir = Path.Combine(rootDir, "docs");
+        var outsideDir = Path.Combine(rootDir, "secret");
+        Directory.CreateDirectory(baseDir);
+        Directory.CreateDirectory(outsideDir);
+        try
+        {
+            var secretImg = Path.Combine(outsideDir, "secret.png");
+            File.WriteAllBytes(secretImg, new byte[] { 0x89, 0x50, 0x4E, 0x47 });
+
+            var doc = new DocumentNode();
+            doc.SetAttribute("data-uri", "");
+            doc.AddChild(new BlockImageNode { Target = secretImg, Alt = "x" }); // absolute path
+
+            // Default (Safe): refused — falls back to the literal path, no embedding.
+            var safeHtml = new HtmlRenderer().RenderToString(doc, new HtmlRenderOptions { BaseDirectory = baseDir });
+            Assert.That(safeHtml, Does.Not.Contain("data:image/png;base64,"));
+
+            // Unsafe: explicit opt-in allows out-of-tree embedding.
+            var unsafeHtml = new HtmlRenderer().RenderToString(doc,
+                new HtmlRenderOptions { BaseDirectory = baseDir, SafeMode = SafeMode.Unsafe });
+            Assert.That(unsafeHtml, Does.Contain("data:image/png;base64,"));
+        }
+        finally
+        {
+            Directory.Delete(rootDir, true);
+        }
+    }
+
+    [Test]
     public void DataUri_disabled_renders_plain_path()
     {
         var doc = new DocumentNode();
