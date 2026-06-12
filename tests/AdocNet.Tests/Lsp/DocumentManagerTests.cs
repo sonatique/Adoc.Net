@@ -74,4 +74,32 @@ public class DocumentManagerTests
         var attrs = mgr.GetAttributes("file:///test.adoc");
         Assert.That(attrs, Does.ContainKey("author"));
     }
+
+    [Test]
+    public void Parse_resolves_includes_relative_to_the_document_file_uri()
+    {
+        // Regression: the LSP passed the raw file:// URI as SourceFilePath, so include:: resolved
+        // against a bogus path and every include reported "not found" on each keystroke.
+        var dir = Path.Combine(Path.GetTempPath(), "adocnet-lsp-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "part.adoc"), "Included from part.");
+            var mainPath = Path.Combine(dir, "main.adoc");
+            File.WriteAllText(mainPath, "= Main\n\ninclude::part.adoc[]\n");
+            var uri = new Uri(mainPath).AbsoluteUri; // file:///.../main.adoc
+
+            var mgr = new DocumentManager();
+            var result = mgr.Parse(uri, File.ReadAllText(mainPath));
+
+            Assert.That(result.Diagnostics.Any(d => d.Message.Contains("not found")), Is.False,
+                "include should resolve relative to the document's directory");
+            var html = new AdocNet.Converters.Html.HtmlRenderer().RenderToString(result.Document);
+            Assert.That(html, Does.Contain("Included from part"));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
 }
