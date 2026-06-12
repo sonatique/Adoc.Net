@@ -5015,7 +5015,7 @@ internal static class BlockParser
     /// A prefix matches patterns like: "2+", ".3+", "2.3+", or a single style letter (a,e,h,l,m),
     /// or a span prefix followed by a style letter (e.g. "2+e"), preceded by whitespace.
     /// </summary>
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
     private static string? ExtractTrailingSpanPrefix(ReadOnlySpan<char> segment)
     {
         var trimmed = segment.TrimEnd();
@@ -5392,7 +5392,7 @@ internal static class BlockParser
         {
             pos = 1;
             var dotIndex = inner[pos..].IndexOf('.');
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
             ReadOnlySpan<char> idPart;
 #else
             string idPart;
@@ -5430,7 +5430,7 @@ internal static class BlockParser
 
         return id is not null || roles is not null;
 
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
         static bool IsValidIdChars(ReadOnlySpan<char> s)
 #else
         static bool IsValidIdChars(string s)
@@ -5922,13 +5922,13 @@ internal static class BlockParser
     {
         if (line.Length == 0)
             return false;
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
         if (char.IsAsciiDigit(line[0]))
 #else
         if (CharCompat.IsAsciiDigit(line[0]))
 #endif
             return true;
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
         if ((line[0] == 'v' || line[0] == 'V') && line.Length > 1 && char.IsAsciiDigit(line[1]))
 #else
         if ((line[0] == 'v' || line[0] == 'V') && line.Length > 1 && CharCompat.IsAsciiDigit(line[1]))

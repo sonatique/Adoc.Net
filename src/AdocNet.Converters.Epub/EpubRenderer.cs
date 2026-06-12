@@ -249,7 +249,7 @@ public sealed class EpubRenderer : DocumentRendererBase
         var entry = archive.CreateEntry("mimetype", CompressionLevel.NoCompression);
         entry.LastWriteTime = DeterministicTimestamp;
         using var stream = entry.Open();
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
         stream.Write("application/epub+zip"u8);
 #else
         var mimeBytes = Encoding.ASCII.GetBytes("application/epub+zip");

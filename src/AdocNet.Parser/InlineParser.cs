@@ -1177,7 +1177,7 @@ internal static class InlineParser
         endPos = pos;
 
         // Try "link:" (5), "image:" (6), or "anchor:" (7).
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
         ReadOnlySpan<char> span = text.AsSpan(pos, Math.Min(8, endIndex - pos));
 #else
         string span = text.AsSpan(pos, Math.Min(8, endIndex - pos));

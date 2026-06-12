@@ -678,7 +678,7 @@ internal static class IncludeExpander
             // A section heading requires at least one '=' followed by a space
             if (eqCount >= 1 && eqCount < line.Length && line[eqCount] == ' ')
             {
-#if NET10_0_OR_GREATER
+#if !NETSTANDARD2_0
                 int newCount = Math.Clamp(eqCount + offset, 1, 6);
 #else
                 int newCount = MathCompat.Clamp(eqCount + offset, 1, 6);
