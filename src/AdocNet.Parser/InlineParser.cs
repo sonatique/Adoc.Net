@@ -1022,7 +1022,10 @@ internal static class InlineParser
     /// using the provided <paramref name="attributes"/> dictionary.
     /// Unknown references are left as-is.
     /// </summary>
-    internal static string ExpandAttributes(string text, IReadOnlyDictionary<string, string> attributes)
+    // When incrementCounters is false, {counter:name} references expand to their next value but
+    // the counter state is NOT mutated. Used by callers that expand a line speculatively (e.g. to
+    // test whether it is a block macro) and would otherwise double-increment counters.
+    internal static string ExpandAttributes(string text, IReadOnlyDictionary<string, string> attributes, bool incrementCounters = true)
     {
         // Fast path: if no '{' exists, nothing to expand.
         if (!text.Contains('{')) return text;
@@ -1079,8 +1082,8 @@ internal static class InlineParser
                         newVal = currentVal;
                     }
 
-                    // Store back via mutable dictionary
-                    if (attributes is IDictionary<string, string> mutable)
+                    // Store back via mutable dictionary (unless this is a non-mutating probe).
+                    if (incrementCounters && attributes is IDictionary<string, string> mutable)
                         mutable[counterName] = newVal;
 
                     // Flush preceding plain text

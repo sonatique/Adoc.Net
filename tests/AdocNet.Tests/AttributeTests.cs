@@ -538,6 +538,28 @@ public class AttributeTests
     }
 
     [Test]
+    public void ExpandAttributes_probe_mode_does_not_increment_counter()
+    {
+        var attrs = new Dictionary<string, string>();
+        // Non-mutating probe: yields the value but leaves state untouched...
+        Assert.That(InlineParser.ExpandAttributes("{counter:x}", attrs, incrementCounters: false), Is.EqualTo("1"));
+        // ...so the first real expansion still returns 1.
+        Assert.That(InlineParser.ExpandAttributes("{counter:x}", attrs), Is.EqualTo("1"));
+        Assert.That(InlineParser.ExpandAttributes("{counter:x}", attrs), Is.EqualTo("2"));
+    }
+
+    [Test]
+    public void Inline_counters_in_paragraph_increment_once_each()
+    {
+        // Regression: a speculative block-macro probe expanded the first paragraph line and
+        // incremented counters, then the real render incremented them again, so output started
+        // at 3 instead of 1.
+        var result = AdocParser.Parse("Step {counter:step}, then {counter:step}.");
+        var html = new HtmlRenderer().RenderToString(result.Document);
+        Assert.That(html, Does.Contain("Step 1, then 2."));
+    }
+
+    [Test]
     public void ExpandAttributes_mixed_text_and_attribute()
     {
         var attrs = new Dictionary<string, string> { ["name"] = "Alice" };

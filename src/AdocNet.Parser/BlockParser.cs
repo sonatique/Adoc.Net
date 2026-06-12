@@ -1124,7 +1124,10 @@ internal static class BlockParser
             // Block macro: image::target[alt]
             if (paragraphLines.Count == 0)
             {
-                var expandedLine = InlineParser.ExpandAttributes(line, document.Attributes);
+                // Speculative expansion to test for a block macro. Must NOT increment counters —
+                // a non-macro line is re-expanded later during inline rendering, so incrementing
+                // here would advance every {counter:} twice.
+                var expandedLine = InlineParser.ExpandAttributes(line, document.Attributes, incrementCounters: false);
                 var macroMatch = TryParseBlockMacro(expandedLine, out var blockMacroNode, out var unknownMacroName, pendingBlockOptions);
                 if (macroMatch)
                 {
