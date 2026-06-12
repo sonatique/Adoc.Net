@@ -70,6 +70,15 @@ public sealed class HtmlRenderOptions : RenderOptions
     public string? BaseDirectory { get; init; }
 
     /// <summary>
+    /// Safe mode for output-time file access (currently governs <c>:data-uri:</c> image
+    /// embedding). At <see cref="SafeMode.Safe"/> or higher (the default), images are read only
+    /// from within <see cref="BaseDirectory"/>; absolute paths and <c>..</c> escapes are refused
+    /// so that rendering an untrusted document cannot embed arbitrary local files. Set
+    /// <see cref="SafeMode.Unsafe"/> to allow absolute/out-of-tree image paths for trusted input.
+    /// </summary>
+    public SafeMode SafeMode { get; init; } = SafeMode.Safe;
+
+    /// <summary>
     /// Optional list of custom node templates. When rendering a node, the renderer
     /// checks each template in order — the first whose <see cref="INodeTemplate.CanRender"/>
     /// returns true produces the output. When null or empty, built-in rendering is used.
