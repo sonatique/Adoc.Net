@@ -255,11 +255,13 @@ internal static class IncludeExpander
                     continue;
                 }
 
-                // Fetch remote content
+                // Fetch remote content. This parse path is synchronous, so the async fetch is
+                // offloaded with Task.Run: it detaches from any captured SynchronizationContext,
+                // avoiding the classic sync-over-async deadlock on UI / classic-ASP.NET callers.
                 string? urlContent = null;
                 try
                 {
-                    urlContent = SharedHttpClient.GetStringAsync(rawPath).GetAwaiter().GetResult();
+                    urlContent = Task.Run(() => SharedHttpClient.GetStringAsync(rawPath)).GetAwaiter().GetResult();
                 }
                 catch (Exception ex)
                 {
