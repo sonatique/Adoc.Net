@@ -309,6 +309,35 @@ public class Beta16ParityTests
     }
 
     [Test]
+    public void SafeMode_default_is_Safe_and_blocks_parent_directory_includes()
+    {
+        // Blocker regression: the default (no explicit SafeMode) must confine includes to the
+        // base directory so processing an untrusted document cannot disclose arbitrary files.
+        var tempDir = Path.Combine(Path.GetTempPath(), "adocnet-safe-" + Guid.NewGuid().ToString("N")[..8]);
+        var subDir = Path.Combine(tempDir, "sub");
+        Directory.CreateDirectory(subDir);
+        try
+        {
+            File.WriteAllText(Path.Combine(tempDir, "secret.adoc"), "Secret content.");
+            var input = "include::../secret.adoc[]";
+
+            // Note: no SafeMode set — relying on the default.
+            var options = new ParseOptions { BaseDirectory = subDir };
+            Assert.That(options.SafeMode, Is.EqualTo(SafeMode.Safe));
+
+            var result = AdocParser.Parse(input, options);
+            var html = new HtmlRenderer().RenderToString(result.Document);
+
+            Assert.That(html, Does.Not.Contain("Secret content"));
+            Assert.That(result.Diagnostics, Has.Some.Property("Message").Contains("outside base directory"));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
     public void SafeMode_Safe_blocks_sibling_directory_with_shared_prefix()
     {
         // Regression: a sibling directory whose name shares the base directory as a
