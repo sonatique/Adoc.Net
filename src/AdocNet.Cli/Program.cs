@@ -161,10 +161,11 @@ public static class Program
                         "default" => HtmlTheme.Default,
                         "asciidoctor" => HtmlTheme.Asciidoctor,
                         "clean" => HtmlTheme.Clean,
+                        "github" => HtmlTheme.Github,
                         _ => HtmlTheme.None,
                     };
                     if (theme == HtmlTheme.None)
-                        return new CliArgs.Error($"Unknown theme: {themeStr}. Available themes: default, asciidoctor, clean.");
+                        return new CliArgs.Error($"Unknown theme: {themeStr}. Available themes: default, asciidoctor, clean, github.");
                 }
                 continue;
             }
@@ -400,10 +401,11 @@ public static class Program
                     "default" => HtmlTheme.Default,
                     "asciidoctor" => HtmlTheme.Asciidoctor,
                     "clean" => HtmlTheme.Clean,
+                    "github" => HtmlTheme.Github,
                     _ => HtmlTheme.None,
                 };
                 if (theme == HtmlTheme.None)
-                    return new CliArgs.Error("Unknown theme. Available: default, asciidoctor, clean.");
+                    return new CliArgs.Error("Unknown theme. Available: default, asciidoctor, clean, github.");
                 continue;
             }
 

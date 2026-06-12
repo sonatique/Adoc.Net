@@ -38,6 +38,7 @@ internal static class ConfigMerger
                 "default" => HtmlTheme.Default,
                 "asciidoctor" => HtmlTheme.Asciidoctor,
                 "clean" => HtmlTheme.Clean,
+                "github" => HtmlTheme.Github,
                 _ => (HtmlTheme?)null,
             };
 
