@@ -25,6 +25,11 @@ the document's base directory.
 outside the intended directory (path traversal).
 
 **Mitigations built in:**
+- **Safe by default:** `ParseOptions.SafeMode` defaults to `SafeMode.Safe`, which confines
+  `include::` resolution to the document's base directory. Parent-directory (`..`), absolute,
+  and UNC paths are blocked and reported as diagnostics. Legitimate in-tree includes still work.
+  Raise to `SafeMode.Server`/`SafeMode.Secure` to disable includes entirely, or set
+  `SafeMode.Unsafe` only for trusted, local document sources.
 - Includes are disabled by default when no `SourceFilePath` or `BaseDirectory` is set.
 - Remote URL includes (`http://`, `https://`) are disabled by default (`AllowUriRead = false`).
 - Recursive include depth is limited (default: 10 levels).
@@ -48,6 +53,6 @@ Attributes cannot inject raw HTML into the output.
 | Concern | Recommendation |
 |---------|---------------|
 | XSS via passthrough | Sanitize HTML output or strip passthrough blocks |
-| File read via include | Use `ExpandIncludes = false` or custom `IIncludeReader` |
+| File read via include | Safe by default (`SafeMode.Safe`); raise to `Server`/`Secure`, or use `ExpandIncludes = false` / custom `IIncludeReader` |
 | Resource exhaustion | Use default include depth limit; avoid `AllowUriRead = true` |
 | Attribute injection | No action needed — attributes are escaped |

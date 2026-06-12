@@ -6,12 +6,16 @@ namespace AdocNet;
 /// </summary>
 public enum SafeMode
 {
-    /// <summary>No restrictions. All features enabled. Default.</summary>
+    /// <summary>
+    /// No restrictions. All features enabled. Suitable only for trusted document sources
+    /// (e.g. a local CLI run on your own files); not the default for the library API.
+    /// </summary>
     Unsafe = 0,
 
     /// <summary>
     /// Prevents access to files outside the document's base directory.
     /// Disables include path traversal (<c>..</c>). Locks sensitive attributes.
+    /// This is the default for <see cref="ParseOptions.SafeMode"/>.
     /// </summary>
     Safe = 1,
 
