@@ -38,6 +38,9 @@
   </Folder>
   <Folder Name="/examples/">
     <Project Path="examples/BasicUsage/BasicUsage.csproj" />
+    <Project Path="examples/CustomIncludeReader/CustomIncludeReader.csproj" />
+    <Project Path="examples/CustomRenderer/CustomRenderer.csproj" />
+    <Project Path="examples/ExtensionTemplate/ExtensionTemplate.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/AdocNet.Avalonia.Viewer/AdocNet.Avalonia.Viewer.csproj" />

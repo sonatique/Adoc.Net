@@ -47,7 +47,7 @@ public sealed class HtmlRenderOptions : RenderOptions
     /// <summary>
     /// When true and a supported language is specified, source blocks are highlighted
     /// server-side using the built-in tokenizer. When false, source blocks are emitted
-    /// as plain text (for client-side highlighting). Default: true.
+    /// as plain text (for client-side highlighting). Default: <c>false</c>.
     /// Ignored when :source-highlighter: highlight.js is set (always defers to client).
     /// </summary>
     public bool EnableSyntaxHighlighting { get; init; }
@@ -68,6 +68,15 @@ public sealed class HtmlRenderOptions : RenderOptions
     /// Also used for docinfo file lookup. When null, data-uri falls back to literal paths.
     /// </summary>
     public string? BaseDirectory { get; init; }
+
+    /// <summary>
+    /// Safe mode for output-time file access (currently governs <c>:data-uri:</c> image
+    /// embedding). At <see cref="SafeMode.Safe"/> or higher (the default), images are read only
+    /// from within <see cref="BaseDirectory"/>; absolute paths and <c>..</c> escapes are refused
+    /// so that rendering an untrusted document cannot embed arbitrary local files. Set
+    /// <see cref="SafeMode.Unsafe"/> to allow absolute/out-of-tree image paths for trusted input.
+    /// </summary>
+    public SafeMode SafeMode { get; init; } = SafeMode.Safe;
 
     /// <summary>
     /// Optional list of custom node templates. When rendering a node, the renderer

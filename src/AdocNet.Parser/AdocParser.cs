@@ -95,7 +95,9 @@ public static class AdocParser
         allDiagnostics.AddRange(condDiagnostics);
 
         // ── Block + inline parsing ────────────────────────────────────────
-        var parseResult = BlockParser.Parse(sourceText, options.Attributes);
+        // Pass LockedAttributes so document-defined attributes whose names are locked
+        // by the host cannot override them (the BlockParser honours this set).
+        var parseResult = BlockParser.Parse(sourceText, options.Attributes, options.LockedAttributes);
         allDiagnostics.AddRange(parseResult.Diagnostics);
 
         // ── Stamp FilePath on diagnostics when a source file is known ─────

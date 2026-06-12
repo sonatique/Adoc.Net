@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <InvariantGlobalization>true</InvariantGlobalization>
     <AssemblyName>adocnet-pdf</AssemblyName>
     <RootNamespace>AdocNet.Cli.Pdf</RootNamespace>
     <Description>AsciiDoc to PDF converter. Equivalent to: adocnet -b pdf</Description>

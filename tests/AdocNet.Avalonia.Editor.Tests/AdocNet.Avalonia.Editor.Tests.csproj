@@ -15,6 +15,9 @@
     <PackageReference Include="Avalonia.Headless" Version="11.3.12" />
     <PackageReference Include="Avalonia.Headless.NUnit" Version="11.3.12" />
     <PackageReference Include="Avalonia.AvaloniaEdit" Version="11.3.0" />
+    <!-- Pin the patched Tmds.DBus.Protocol: Avalonia.FreeDesktop pulls 0.21.2 transitively,
+         which is affected by GHSA-xrw6-gwf8-vvr9 (CVE-2026-39959); 0.21.3 is the fix. -->
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
   </ItemGroup>
 
   <ItemGroup>

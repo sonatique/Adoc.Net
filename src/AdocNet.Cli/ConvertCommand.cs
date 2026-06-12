@@ -78,8 +78,10 @@ internal sealed class ConvertCommand(ConsoleLogger logger)
 
     public int ConvertDirectory(CliArgs.Run run)
     {
-        var searchOption = run.Recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-        var files = Directory.GetFiles(run.InputPath, "*.adoc", searchOption);
+        // Match the extension case-insensitively so the same command finds INDEX.ADOC / Chapter.Adoc
+        // on Linux (case-sensitive by default) exactly as it does on Windows/macOS.
+        var files = Directory.GetFiles(run.InputPath, "*.adoc",
+            new EnumerationOptions { RecurseSubdirectories = run.Recursive, MatchCasing = MatchCasing.CaseInsensitive });
         Array.Sort(files, StringComparer.OrdinalIgnoreCase);
 
         int succeeded = 0, failed = 0;
@@ -343,7 +345,12 @@ internal sealed class ConvertCommand(ConsoleLogger logger)
         }
         else
         {
-            Console.Write(content);
+            // Write UTF-8 bytes straight to stdout rather than Console.Write, whose console-codepage
+            // encoding mangles the typographic characters AdocNet emits (curly quotes, arrows, em
+            // dashes) on Windows when output is redirected. Matches the file/binary output encoding.
+            var bytes = new System.Text.UTF8Encoding(false).GetBytes(content);
+            using var stdout = Console.OpenStandardOutput();
+            stdout.Write(bytes, 0, bytes.Length);
         }
     }
 

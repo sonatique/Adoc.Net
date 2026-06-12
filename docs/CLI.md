@@ -93,13 +93,13 @@ Editing any `.adoc` file triggers a rebuild and browser refresh via WebSocket.
 
 | Option | Description |
 |--------|-------------|
-| `-b, --backend <fmt>` | Output format: `html5` (default), `pdf`, `docbook5`, `epub` |
+| `-b, --backend <fmt>` | Output format: `html5` (default), `pdf`, `docbook5`, `epub`, `man`, `revealjs` |
 | `-o <file>` | Write output to file (use `-` for stdout) |
 | `-D, --destination-dir <dir>` | Write output files to directory |
 | `-a, --attribute <k=v>` | Set a document attribute |
 | `-n, --section-numbers` | Auto-number section titles |
-| `-e, --embedded` | Wrap HTML in a full document with CSS theme |
-| `--theme <name>` | CSS theme: `default`, `asciidoctor`, `clean` |
+| `-e, --embedded` | Wrap HTML in a full standalone document with CSS theme. **Note:** this is the inverse of Asciidoctor's `-e`, which emits a fragment; AdocNet's default output is already the fragment. |
+| `--theme <name>` | CSS theme: `default`, `asciidoctor`, `clean`, `github` |
 | `--dump-ast` | Print AST tree instead of rendering |
 | `-w, --watch` | Watch for changes and rebuild |
 | `-v, --verbose` | Show per-file status with timing |

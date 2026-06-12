@@ -1,3 +1,5 @@
+using AdocNet;
+
 namespace AdocNet.Converters.Html;
 
 /// <summary>
@@ -13,7 +15,12 @@ internal static class DataUriHelper
     /// <param name="imagePath">The image path from the document (may be relative).</param>
     /// <param name="baseDirectory">Base directory for resolving relative paths.</param>
     /// <param name="imagesDir">Optional images directory from <c>:imagesdir:</c> attribute.</param>
-    public static string? TryConvertToDataUri(string imagePath, string? baseDirectory, string? imagesDir)
+    /// <param name="safeMode">
+    /// When <see cref="SafeMode.Safe"/> or higher, the resolved image must lie within
+    /// <paramref name="baseDirectory"/>; absolute paths and <c>..</c> escapes return null so an
+    /// untrusted document cannot embed arbitrary local files via <c>:data-uri:</c>.
+    /// </param>
+    public static string? TryConvertToDataUri(string imagePath, string? baseDirectory, string? imagesDir, SafeMode safeMode = SafeMode.Safe)
     {
         if (baseDirectory is null)
             return null;
@@ -24,6 +31,10 @@ internal static class DataUriHelper
 
         var resolvedPath = ResolvePath(imagePath, baseDirectory, imagesDir);
         if (resolvedPath is null || !File.Exists(resolvedPath))
+            return null;
+
+        // Safe mode: refuse to read images outside the document's base directory.
+        if (safeMode >= SafeMode.Safe && !IsWithinBaseDirectory(resolvedPath, baseDirectory))
             return null;
 
         try
@@ -57,6 +68,23 @@ internal static class DataUriHelper
             ".bmp" => "image/bmp",
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// Returns true when <paramref name="resolvedPath"/> is the base directory itself or a path
+    /// strictly beneath it, using a directory-separator boundary so a sibling that merely shares
+    /// the base as a string prefix is rejected.
+    /// </summary>
+    private static bool IsWithinBaseDirectory(string resolvedPath, string baseDirectory)
+    {
+        var normalizedBase = Path.GetFullPath(baseDirectory);
+        if (resolvedPath.Equals(normalizedBase, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var baseWithSeparator = normalizedBase.Length > 0 && normalizedBase[^1] == Path.DirectorySeparatorChar
+            ? normalizedBase
+            : normalizedBase + Path.DirectorySeparatorChar;
+        return resolvedPath.StartsWith(baseWithSeparator, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? ResolvePath(string imagePath, string baseDirectory, string? imagesDir)

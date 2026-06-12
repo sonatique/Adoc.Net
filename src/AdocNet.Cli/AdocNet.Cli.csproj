@@ -3,6 +3,10 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>adocnet</AssemblyName>
     <RootNamespace>AdocNet.Cli</RootNamespace>
+    <!-- The CLI emits byte-deterministic, invariant-culture output. Enabling invariant
+         globalization keeps that guarantee and lets the tool start on ICU-less images
+         (musl/Alpine) without a culture dependency. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
     <Description>AsciiDoc CLI tool — convert files and directories to HTML, PDF, DocBook, EPUB. Includes watch mode, live preview server, and project configuration.</Description>
 
     <!-- NuGet tool packaging -->

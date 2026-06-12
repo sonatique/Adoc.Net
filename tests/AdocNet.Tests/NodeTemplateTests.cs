@@ -177,4 +177,49 @@ public class NodeTemplateTests
 
         Assert.That(html, Is.EqualTo("<div class=\"paragraph\">\n<p>before <b class=\"custom-bold\">bold text</b> after</p>\n</div>\n"));
     }
+
+    [Test]
+    public void Shared_renderer_instance_does_not_bleed_templates_across_concurrent_renders()
+    {
+        // Regression: HtmlRenderer kept the current options/context in instance fields, so a
+        // shared instance used concurrently could render one request's nodes with another
+        // request's templates. Per-render state must keep the two renders isolated.
+        var renderer = new HtmlRenderer();
+
+        DocumentNode MakeDoc(string text)
+        {
+            var d = new DocumentNode();
+            d.AddChild(new ParagraphNode { Text = text });
+            return d;
+        }
+
+        string RenderWith(DocumentNode doc, HtmlRenderOptions options)
+        {
+            using var ms = new MemoryStream();
+            renderer.Render(doc, ms, options);
+            return Encoding.UTF8.GetString(ms.ToArray());
+        }
+
+        var templated = new HtmlRenderOptions { Templates = new INodeTemplate[] { new ParagraphTemplate() } };
+        var plain = HtmlRenderOptions.Default;
+
+        var errors = new System.Collections.Concurrent.ConcurrentBag<string>();
+        Parallel.For(0, 400, i =>
+        {
+            if (i % 2 == 0)
+            {
+                var html = RenderWith(MakeDoc("templated"), templated);
+                if (!html.Contains("custom-para") || html.Contains("<p>"))
+                    errors.Add($"templated render {i} bled: {html}");
+            }
+            else
+            {
+                var html = RenderWith(MakeDoc("plain"), plain);
+                if (html.Contains("custom-para"))
+                    errors.Add($"plain render {i} picked up a template: {html}");
+            }
+        });
+
+        Assert.That(errors, Is.Empty, () => string.Join("\n", errors));
+    }
 }

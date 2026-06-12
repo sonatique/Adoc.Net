@@ -64,11 +64,12 @@ public sealed class ProcessDiagramToolRunner : IDiagramToolRunner
 
         File.WriteAllText(inputPath, source, Encoding.UTF8);
 
-        var args = _arguments
-            .Replace("{input}", inputPath)
-            .Replace("{output}", outputPath);
+        // Substitute placeholders per token and pass arguments individually so that input/output
+        // paths containing spaces (e.g. "C:\Users\John Smith\...") are not split into separate
+        // arguments. A single concatenated, unquoted Arguments string would break such paths.
+        var tokens = _arguments.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
 
-        var startInfo = new ProcessStartInfo(_executablePath, args)
+        var startInfo = new ProcessStartInfo(_executablePath)
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -76,6 +77,18 @@ public sealed class ProcessDiagramToolRunner : IDiagramToolRunner
             CreateNoWindow = true,
             WorkingDirectory = outputDirectory,
         };
+
+#if NETSTANDARD2_0
+        // netstandard2.0 has no ArgumentList; quote each substituted token defensively.
+        startInfo.Arguments = string.Join(" ", Array.ConvertAll(tokens, t =>
+        {
+            var v = t.Replace("{input}", inputPath).Replace("{output}", outputPath);
+            return v.IndexOf(' ') >= 0 && !(v.StartsWith("\"") && v.EndsWith("\"")) ? "\"" + v + "\"" : v;
+        }));
+#else
+        foreach (var token in tokens)
+            startInfo.ArgumentList.Add(token.Replace("{input}", inputPath).Replace("{output}", outputPath));
+#endif
 
         using var proc = Process.Start(startInfo);
         if (proc is null) return null;
