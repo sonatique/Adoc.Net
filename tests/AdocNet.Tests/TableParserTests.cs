@@ -929,5 +929,73 @@ public class TableParserTests
         foreach (var expected in new[] { "A1", "A2", "a3", "TALL", "b3", "C1", "C2", "c3", "d3", "e3", "f3" })
             Assert.That(all, Does.Contain(expected), $"cell '{expected}' must be present");
     }
+
+    // ── Per-cell source ranges (issue #45) ───────────────────────────────
+
+    private static List<TableCellNode> CellsOf(TableNode table) =>
+        table.Children.OfType<TableRowNode>()
+            .SelectMany(r => r.Children.OfType<TableCellNode>())
+            .ToList();
+
+    [Test]
+    public void Each_cell_carries_its_own_content_span_not_the_row_range()
+    {
+        // "| H1 | H2 | H3" is on line 1 (no header/blank). Each cell must report
+        // its OWN column span, not the identical whole-row range (issue #45).
+        var table = BlockParser.Parse("|===\n| H1 | H2 | H3\n|===").Document
+            .Children.OfType<TableNode>().First();
+        var cells = CellsOf(table);
+        Assert.That(cells, Has.Count.EqualTo(3));
+
+        // "| H1 | H2 | H3": H1 at cols 3-4, H2 at 8-9, H3 at 13-14 (line 2).
+        Assert.That(cells[0].Source, Is.EqualTo(new SourceRange(new(2, 3), new(2, 4))));
+        Assert.That(cells[1].Source, Is.EqualTo(new SourceRange(new(2, 8), new(2, 9))));
+        Assert.That(cells[2].Source, Is.EqualTo(new SourceRange(new(2, 13), new(2, 14))));
+
+        // The three ranges are all distinct — the pre-#45 bug made them identical.
+        Assert.That(cells.Select(c => c.Source).Distinct().Count(), Is.EqualTo(3));
+    }
+
+    [Test]
+    public void Empty_cell_still_has_a_non_none_source()
+    {
+        // An empty cell collapses to a point right after its opening separator,
+        // so it remains addressable (e.g. for click-to-insert) rather than None.
+        var table = BlockParser.Parse("|===\n| a | | c\n|===").Document
+            .Children.OfType<TableNode>().First();
+        var cells = CellsOf(table);
+        Assert.That(cells, Has.Count.EqualTo(3));
+        Assert.That(cells[1].Text, Is.EqualTo(string.Empty));
+        Assert.That(cells[1].Source.IsNone, Is.False, "empty cell must still have a source position");
+        Assert.That(cells[1].Source.Start.Line, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Multiline_cell_source_spans_its_own_lines()
+    {
+        // A cell whose content continues onto the next physical line reports a
+        // span that starts on the first line and ends on the continuation line.
+        var src = "[cols=\"1\"]\n|===\n| first\ncontinues here\n|===";
+        var table = BlockParser.Parse(src).Document.Children.OfType<TableNode>().First();
+        var cell = CellsOf(table).Single();
+        Assert.That(cell.Source.Start.Line, Is.EqualTo(3));
+        Assert.That(cell.Source.End.Line, Is.EqualTo(4));
+    }
+
+    [Test]
+    public void AsciiDoc_cell_children_carry_absolute_source_lines()
+    {
+        // An a| cell parses its body as nested blocks; those blocks must report
+        // ABSOLUTE document lines, not lines relative to the cell text (issue #45).
+        // Line layout: 1 "= T", 2 "", 3 "|===", 4 "| plain", 5 "a| nested para".
+        var src = "= T\n\n|===\n| plain\na| nested para\n|===";
+        var table = BlockParser.Parse(src).Document.Children.OfType<TableNode>().First();
+        var asciiCell = CellsOf(table).First(c => c.ContentStyle == TableCellStyle.AsciiDoc);
+
+        Assert.That(asciiCell.Children, Is.Not.Empty, "a| cell should hold nested blocks");
+        var para = asciiCell.Children.OfType<ParagraphNode>().First();
+        Assert.That(para.Source.Start.Line, Is.EqualTo(5),
+            "nested block must use the absolute document line, not cell-relative line 1");
+    }
 }
 

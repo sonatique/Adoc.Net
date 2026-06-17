@@ -4227,7 +4227,14 @@ internal static class BlockParser
             var cellInfos = ParseTableCellsWithSpans(eff.Content, cellSeparator);
             var cellSource = MakeRowSource(eff, lines);
             for (int j = 0; j < cellInfos.Count; j++)
-                cellInfos[j] = cellInfos[j] with { Source = cellSource };
+                cellInfos[j] = cellInfos[j] with
+                {
+                    // Promote the buffer-relative per-cell span to absolute document
+                    // coordinates. The effective-line buffer begins at column 1 of its
+                    // first physical line, so only the line component shifts (issue #45).
+                    Source = ShiftRangeByLine(cellInfos[j].Source, eff.StartLine),
+                    RowSource = cellSource,
+                };
             allCells.AddRange(cellInfos);
         }
 
@@ -4261,6 +4268,11 @@ internal static class BlockParser
             // activeRowSpans[col] tracks how many more rows a cell at that column occupies.
             var activeRowSpans = new int[colCount];
             var currentRow = new TableRowNode();
+            // The row span is the union of the row-wide source of every effective
+            // line that contributed a cell to the row — the cells themselves now
+            // carry their own narrower per-cell spans (issue #45), so the row span
+            // is composed separately rather than derived from the cells.
+            var currentRowSource = SourceRange.None;
             int colsUsed = 0;
 
             // Account for columns already occupied by rowspans from previous rows.
@@ -4278,6 +4290,7 @@ internal static class BlockParser
 
                 var colStyle = columns is not null && colsUsed < columns.Count ? columns[colsUsed].Style : null;
                 currentRow.AddChild(CreateTableCell(ApplyColumnStyle(info, colStyle), attributes));
+                currentRowSource = UnionRange(currentRowSource, info.RowSource);
 
                 // Record rowspan for this cell's columns.
                 if (info.RowSpan > 1)
@@ -4300,9 +4313,10 @@ internal static class BlockParser
 
                 if (colsUsed >= colCount)
                 {
-                    FinaliseRowSource(currentRow);
+                    currentRow.Source = currentRowSource;
                     table.AddChild(currentRow);
                     currentRow = new TableRowNode();
+                    currentRowSource = SourceRange.None;
                     // Decrement active rowspans for the next row.
                     // Do NOT pre-count occupied columns — the while loop at
                     // cell placement time handles skipping occupied slots.
@@ -4337,7 +4351,7 @@ internal static class BlockParser
                 }
                 if (actualCells >= availableSlots)
                 {
-                    FinaliseRowSource(currentRow);
+                    currentRow.Source = currentRowSource;
                     table.AddChild(currentRow);
                 }
             }
@@ -4360,7 +4374,9 @@ internal static class BlockParser
                 foreach (var info in cellInfos)
                 {
                     var colStyle = columns is not null && colIdx < columns.Count ? columns[colIdx].Style : null;
-                    var tagged = info with { Source = cellSource };
+                    // Each cell carries its own absolute content span (issue #45);
+                    // the row keeps the full row-wide span below.
+                    var tagged = info with { Source = ShiftRangeByLine(info.Source, eff.StartLine) };
                     row.AddChild(CreateTableCell(ApplyColumnStyle(tagged, colStyle), attributes));
                     colIdx += info.ColSpan;
                 }
@@ -4405,8 +4421,16 @@ internal static class BlockParser
                 ContentStyle = TableCellStyle.AsciiDoc,
                 Source = info.Source,
             };
+            // The nested parse numbers its blocks from the cell text's own (1,1).
+            // Promote them to absolute document coordinates so an a| cell's child
+            // blocks carry real provenance instead of cell-relative lines (issue #45).
+            // The cell's content begins at info.Source.Start (its first content char).
+            var origin = info.Source.Start;
             foreach (var child in innerResult.Document.Children)
+            {
+                ShiftNodeSourceToAbsolute(child, origin);
                 cellNode.AddChild(child);
+            }
             return cellNode;
         }
 
@@ -4443,34 +4467,86 @@ internal static class BlockParser
     }
 
     /// <summary>
-    /// After all cells have been added to a row, set the row's
-    /// <see cref="AstNode.Source"/> to the union of its cells' sources.
+    /// Maps a 0-based character <paramref name="offset"/> within
+    /// <paramref name="content"/> to a 1-based <see cref="SourcePosition"/>
+    /// RELATIVE to that buffer (line 1, column 1 at the start), counting the
+    /// embedded newlines that fold multi-line table cells into one buffer.
     /// </summary>
-    private static void FinaliseRowSource(TableRowNode row)
+    private static SourcePosition RelativePositionAt(string content, int offset)
     {
-        int minStartLine = int.MaxValue;
-        int minStartCol = int.MaxValue;
-        int maxEndLine = int.MinValue;
-        int maxEndCol = int.MinValue;
-        foreach (var child in row.Children)
+        if (offset < 0) offset = 0;
+        if (offset > content.Length) offset = content.Length;
+        int line = 1;
+        int lineStart = 0;
+        for (int k = 0; k < offset; k++)
         {
-            if (child is not TableCellNode cell) continue;
-            if (cell.Source.IsNone) continue;
-            if (cell.Source.Start.Line < minStartLine
-                || (cell.Source.Start.Line == minStartLine && cell.Source.Start.Column < minStartCol))
+            if (content[k] == '\n')
             {
-                minStartLine = cell.Source.Start.Line;
-                minStartCol = cell.Source.Start.Column;
-            }
-            if (cell.Source.End.Line > maxEndLine
-                || (cell.Source.End.Line == maxEndLine && cell.Source.End.Column > maxEndCol))
-            {
-                maxEndLine = cell.Source.End.Line;
-                maxEndCol = cell.Source.End.Column;
+                line++;
+                lineStart = k + 1;
             }
         }
-        if (minStartLine != int.MaxValue)
-            row.Source = new SourceRange(new SourcePosition(minStartLine, minStartCol), new SourcePosition(maxEndLine, maxEndCol));
+        return new SourcePosition(line, offset - lineStart + 1);
+    }
+
+    /// <summary>
+    /// Shifts a buffer-relative <see cref="SourceRange"/> to absolute document
+    /// coordinates when the buffer begins at column 1 of <paramref name="startLine"/>
+    /// — the case for a table effective-line buffer, whose first physical line
+    /// starts at the document's column 1. Only the line component shifts; columns
+    /// are already absolute. <see cref="SourceRange.None"/> passes through.
+    /// </summary>
+    private static SourceRange ShiftRangeByLine(SourceRange relative, int startLine)
+    {
+        if (relative.IsNone) return relative;
+        int delta = startLine - 1;
+        return new SourceRange(
+            new SourcePosition(relative.Start.Line + delta, relative.Start.Column),
+            new SourcePosition(relative.End.Line + delta, relative.End.Column));
+    }
+
+    /// <summary>Returns the smallest range covering both inputs; ignores <see cref="SourceRange.None"/>.</summary>
+    private static SourceRange UnionRange(SourceRange a, SourceRange b)
+    {
+        if (a.IsNone) return b;
+        if (b.IsNone) return a;
+        var start = a.Start <= b.Start ? a.Start : b.Start;
+        var end = a.End >= b.End ? a.End : b.End;
+        return new SourceRange(start, end);
+    }
+
+    /// <summary>
+    /// Recursively promotes a node's (and its block children's) <see cref="AstNode.Source"/>
+    /// from a cell-text-relative position to absolute document coordinates, given the
+    /// absolute position of the cell text's relative <c>(1,1)</c>. Inline source ranges are
+    /// intentionally left buffer-relative — that is the parser's contract, and downstream
+    /// layout promotes them per block (issue #38). Used for AsciiDoc (<c>a|</c>) cells.
+    /// </summary>
+    private static void ShiftNodeSourceToAbsolute(AstNode node, SourcePosition origin)
+    {
+        node.Source = ShiftRangeByOrigin(node.Source, origin);
+        foreach (var child in node.Children)
+            ShiftNodeSourceToAbsolute(child, origin);
+    }
+
+    /// <summary>
+    /// Shifts a buffer-relative <see cref="SourceRange"/> to absolute coordinates given the
+    /// absolute position of the buffer's relative <c>(1,1)</c>. The origin column composes
+    /// only on the buffer's first line; continuation lines start at the document's column 1,
+    /// so their relative column is already absolute. Mirrors the layout's <c>ToAbsolute</c>.
+    /// </summary>
+    private static SourceRange ShiftRangeByOrigin(SourceRange relative, SourcePosition origin)
+    {
+        if (relative.IsNone || origin.IsNone) return relative;
+        return new SourceRange(ShiftPositionByOrigin(relative.Start, origin), ShiftPositionByOrigin(relative.End, origin));
+    }
+
+    private static SourcePosition ShiftPositionByOrigin(SourcePosition p, SourcePosition origin)
+    {
+        if (p.IsNone) return p;
+        int line = origin.Line + (p.Line - 1);
+        int column = p.Line == 1 ? origin.Column + (p.Column - 1) : p.Column;
+        return new SourcePosition(line, column);
     }
 
     /// <summary>
@@ -4885,11 +4961,15 @@ internal static class BlockParser
 
     /// <summary>
     /// Holds parsed cell info including span and alignment metadata.
-    /// <see cref="Source"/> is the source range of the lines that contributed
-    /// the cell's text (defaults to <see cref="SourceRange.None"/> for callers
-    /// that don't track line numbers).
+    /// <c>Source</c> is the per-cell source range covering the cell's own content
+    /// span — from its first content character to its last — rather than the whole
+    /// row (issue #45). <see cref="ParseTableCellsWithSpans"/> populates it RELATIVE
+    /// to the line buffer it was given; <see cref="ParseTableContent"/> shifts it to
+    /// absolute document coordinates. <c>RowSource</c> carries the row-wide span
+    /// (used to compose the owning row's <see cref="AstNode.Source"/>). Both default
+    /// to <see cref="SourceRange.None"/> for callers that don't track line numbers.
     /// </summary>
-    private readonly record struct CellInfo(string Text, int ColSpan, int RowSpan, TableAlignment? Alignment, TableCellStyle ContentStyle = TableCellStyle.Default, SourceRange Source = default);
+    private readonly record struct CellInfo(string Text, int ColSpan, int RowSpan, TableAlignment? Alignment, TableCellStyle ContentStyle = TableCellStyle.Default, SourceRange Source = default, SourceRange RowSource = default);
 
     private static readonly Dictionary<char, TableCellStyle> CellStyleLetters = new()
     {
@@ -5003,7 +5083,30 @@ internal static class BlockParser
             // Unescape literal separators (\| -> |) now that splitting is done.
             if (contentStr.IndexOf('\\') >= 0)
                 contentStr = contentStr.Replace("\\" + separator, separator.ToString());
-            cells.Add(new CellInfo(contentStr, colSpan, rowSpan, alignment, cellStyle));
+
+            // Per-cell source span (issue #45): the trimmed content's own range
+            // within this line buffer, so each cell reports a distinct range
+            // instead of the whole row. Offsets are buffer-relative here; the
+            // caller shifts them to absolute document coordinates. An empty cell
+            // collapses to a point right after its opening separator.
+            int trimStart = contentStart;
+            while (trimStart < contentEnd && char.IsWhiteSpace(line[trimStart]))
+                trimStart++;
+            int trimEnd = contentEnd;
+            while (trimEnd > trimStart && char.IsWhiteSpace(line[trimEnd - 1]))
+                trimEnd--;
+            SourceRange cellRange;
+            if (trimEnd > trimStart)
+            {
+                cellRange = new SourceRange(RelativePositionAt(line, trimStart), RelativePositionAt(line, trimEnd - 1));
+            }
+            else
+            {
+                var pt = RelativePositionAt(line, contentStart);
+                cellRange = new SourceRange(pt, pt);
+            }
+
+            cells.Add(new CellInfo(contentStr, colSpan, rowSpan, alignment, cellStyle, cellRange));
         }
 
         return cells;
