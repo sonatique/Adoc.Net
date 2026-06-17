@@ -41,6 +41,7 @@ public sealed partial class PdfRenderer
 
         // Build column widths array (proportional)
         float[] colWidths = new float[colCount];
+        float cellPadding = 4f;
 
         // Check if column specs have varying weights (user explicitly set different sizes)
         bool hasVaryingWeights = false;
@@ -59,15 +60,24 @@ public sealed partial class PdfRenderer
 
         if (hasVaryingWeights && table.Columns is { Count: > 0 })
         {
-            // User explicitly set different column widths — respect them
+            // User explicitly set different column widths — honour the weights, but
+            // never starve a column below the width its widest unbreakable word
+            // needs. Without this floor a weight-1 column on a wide table is sized
+            // purely by its share of the page and any word wider than that share
+            // spills into the next column, rendering as overlapping text (#48).
             int totalWeight = 0;
             foreach (var col in table.Columns)
                 totalWeight += col.Width;
+
+            float[] desired = new float[colCount];
             for (int c = 0; c < colCount; c++)
             {
                 int weight = c < table.Columns.Count ? table.Columns[c].Width : 1;
-                colWidths[c] = w.ContentWidth * weight / totalWeight;
+                desired[c] = w.ContentWidth * weight / totalWeight;
             }
+
+            float[] minWidths = ComputeMinColumnWidths(w, table, colCount, cellPadding);
+            colWidths = FitWidthsToMinimums(desired, minWidths, w.ContentWidth);
         }
         else
         {
@@ -175,7 +185,12 @@ public sealed partial class PdfRenderer
             }
         }
 
-        float cellPadding = 4f;
+        // Final safety net against overlap: shrink the whole table's font just
+        // enough that no word is wider than the column it sits in. 1.0 (no change)
+        // whenever the column widths already accommodate their content — so normal
+        // tables are unaffected and only genuinely over-wide tables scale down (#48).
+        float fontScale = ComputeTableFontScale(w, table, colWidths, colCount, cellPadding);
+        float effFontSize = _bodyFontSize * fontScale;
 
         // Border/grid color from theme
         var gridColor = _tableBorderColor;
@@ -184,7 +199,7 @@ public sealed partial class PdfRenderer
         // Header row
         if (table.HasHeader && table.Children[0] is TableRowNode headerRow)
         {
-            RenderTableHeader(w, headerRow, colWidths, cellPadding, table.Columns);
+            RenderTableHeader(w, headerRow, colWidths, cellPadding, effFontSize, table.Columns);
             startRow = 1;
         }
 
@@ -201,9 +216,9 @@ public sealed partial class PdfRenderer
 
                 // If EnsurePage moved to a new page, repeat the header
                 if (repeatHeader is not null && w.CurrentPageNumber != pageBefore)
-                    RenderTableHeader(w, repeatHeader, colWidths, cellPadding, table.Columns);
+                    RenderTableHeader(w, repeatHeader, colWidths, cellPadding, effFontSize, table.Columns);
 
-                RenderTableRow(w, row, colWidths, cellPadding, _fontRegular, _bodyFontSize, table.Columns);
+                RenderTableRow(w, row, colWidths, cellPadding, _fontRegular, effFontSize, table.Columns);
 
                 // Draw a separator line between body rows
                 if (i < table.Children.Count - 1)
@@ -221,12 +236,155 @@ public sealed partial class PdfRenderer
         w.MoveCursor(_paragraphSpacingAfter);
     }
 
+    /// <summary>
+    /// Minimum width each column needs so its widest single (space-delimited,
+    /// unbreakable) word fits without spilling into the next column. Header-row
+    /// cells are measured with the bold font (wider). Spanning cells attribute
+    /// their longest word to the starting column, mirroring the auto-size path.
+    /// </summary>
+    private float[] ComputeMinColumnWidths(PdfWriter w, TableNode table, int colCount, float cellPadding)
+    {
+        var minWidths = new float[colCount];
+        int rowIdx = 0;
+        foreach (var child in table.Children)
+        {
+            if (child is TableRowNode r)
+            {
+                string font = (table.HasHeader && rowIdx == 0) ? _fontBold : _fontRegular;
+                int ci = 0;
+                foreach (var cell in r.Children)
+                {
+                    if (cell is TableCellNode c && ci < colCount)
+                    {
+                        string text = GetPlainText(c.Inlines, c.Text);
+                        foreach (var word in text.Split(' '))
+                        {
+                            if (word.Length == 0) continue;
+                            float ww = w.MeasureText(word, font, _bodyFontSize) + 2 * cellPadding;
+                            if (ww > minWidths[ci]) minWidths[ci] = ww;
+                        }
+                        ci += c.ColSpan > 0 ? c.ColSpan : 1;
+                    }
+                }
+                rowIdx++;
+            }
+        }
+        return minWidths;
+    }
+
+    /// <summary>
+    /// Allocates final column widths from the user's <paramref name="desired"/>
+    /// (weight-proportional) widths while guaranteeing every column is at least
+    /// its <paramref name="minWidths"/>. Columns whose desired width already
+    /// covers their content are left untouched (so ordinary tables are
+    /// unchanged); columns that fall short borrow the shortfall from columns
+    /// that have slack, proportional to that slack. When even shrinking every
+    /// column to its minimum cannot fit the page, all columns are pinned to
+    /// their minimum and scaled to fill the content width (the caller's font
+    /// scale then shrinks the text so nothing overflows).
+    /// </summary>
+    internal static float[] FitWidthsToMinimums(float[] desired, float[] minWidths, float contentWidth)
+    {
+        int n = desired.Length;
+        var widths = (float[])desired.Clone();
+
+        float deficit = 0f; // extra width needed by columns narrower than their minimum
+        float slack = 0f;   // reducible width in columns wider than their minimum
+        for (int c = 0; c < n; c++)
+        {
+            if (desired[c] < minWidths[c])
+            {
+                deficit += minWidths[c] - desired[c];
+                widths[c] = minWidths[c];
+            }
+            else
+            {
+                slack += desired[c] - minWidths[c];
+            }
+        }
+
+        if (deficit <= 0f)
+            return widths; // every column already accommodates its content
+
+        if (deficit <= slack)
+        {
+            // Borrow the shortfall from columns that have room, proportional to
+            // how much each can give, never dropping any below its own minimum.
+            for (int c = 0; c < n; c++)
+            {
+                float colSlack = desired[c] - minWidths[c];
+                if (colSlack > 0f)
+                    widths[c] = desired[c] - deficit * (colSlack / slack);
+            }
+            return widths;
+        }
+
+        // The table's minimum width exceeds the page: pin to minimums and scale
+        // to fill. Residual per-word overflow is absorbed by the font scale.
+        float totalMin = 0f;
+        for (int c = 0; c < n; c++) totalMin += minWidths[c];
+        if (totalMin <= 0f) return widths;
+        for (int c = 0; c < n; c++)
+            widths[c] = minWidths[c] * contentWidth / totalMin;
+        return widths;
+    }
+
+    /// <summary>
+    /// Largest font scale (≤ 1) at which no cell's widest unbreakable word is
+    /// wider than the column (or column span) it occupies, given the final
+    /// <paramref name="colWidths"/>. Returns 1 when everything already fits.
+    /// Header cells are measured bold. This is the last-resort guarantee that
+    /// columns never visually overlap, complementing the width allocation.
+    /// </summary>
+    private float ComputeTableFontScale(PdfWriter w, TableNode table, float[] colWidths, int colCount, float cellPadding)
+    {
+        float scale = 1f;
+        int rowIdx = 0;
+        foreach (var child in table.Children)
+        {
+            if (child is TableRowNode r)
+            {
+                string font = (table.HasHeader && rowIdx == 0) ? _fontBold : _fontRegular;
+                int ci = 0;
+                foreach (var cell in r.Children)
+                {
+                    if (cell is TableCellNode c && ci < colCount)
+                    {
+                        int span = c.ColSpan > 0 ? c.ColSpan : 1;
+                        float avail = 0f;
+                        for (int s = 0; s < span && ci + s < colCount; s++)
+                            avail += colWidths[ci + s];
+                        avail -= 2 * cellPadding;
+
+                        if (avail > 0f)
+                        {
+                            string text = GetPlainText(c.Inlines, c.Text);
+                            foreach (var word in text.Split(' '))
+                            {
+                                if (word.Length == 0) continue;
+                                float ww = w.MeasureText(word, font, _bodyFontSize);
+                                if (ww > avail)
+                                {
+                                    float need = avail / ww;
+                                    if (need < scale) scale = need;
+                                }
+                            }
+                        }
+                        ci += span;
+                    }
+                }
+                rowIdx++;
+            }
+        }
+        return scale;
+    }
+
     private void RenderTableHeader(PdfWriter w, TableRowNode headerRow, float[] colWidths,
-        float cellPadding, IReadOnlyList<TableColumnSpec>? columns)
+        float cellPadding, float fontSize, IReadOnlyList<TableColumnSpec>? columns)
     {
         // Measure header row height first (need it for background fill)
         var headerFont = _fontBold;
-        var headerFontSize = _bodyFontSize;
+        var headerFontSize = fontSize;
         float rowHeight = MeasureRowHeight(w, headerRow, colWidths, cellPadding, headerFont, headerFontSize);
 
         // Draw header background if configured
