@@ -3,7 +3,9 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [1.0.14] - 2026-06-17
+
+A PDF table-layout fix.
 
 ### Fixed
 
