@@ -3,6 +3,21 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Fixed
+
+- **PDF: wide tables no longer render overlapping columns (#48).** A table whose
+  natural width exceeded the page divided the width across columns by weight and
+  wrapped each cell to that share, with no handling for content wider than its
+  shrunken column — so words spilled into the next column and columns overlapped.
+  Column widths are now floored at the width each column's widest unbreakable word
+  needs: a starved column borrows the shortfall from columns that have slack
+  (ordinary tables that already fit are unchanged). As a final safety net, when a
+  table's minimum width still exceeds the page the whole table's font is scaled
+  down just enough that no word is wider than its column. Columns never visually
+  overlap.
+
 ## [1.0.13] - 2026-06-17
 
 A source-provenance release for editor integration: authoritative mappings from
