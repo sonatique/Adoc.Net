@@ -78,9 +78,39 @@ internal static class ConditionalPreprocessor
         string text,
         IReadOnlyDictionary<string, string>? externalAttributes = null)
     {
+        var (filtered, diagnostics, _) = ProcessImpl(text, inputOrigins: null, externalAttributes);
+        return (filtered, diagnostics);
+    }
+
+    /// <summary>
+    /// Processes ifdef/ifndef/ifeval directives while carrying a per-line provenance
+    /// table forward: <paramref name="inputOrigins"/>[i] is the origin of input line
+    /// <c>i + 1</c>, and the returned origins are parallel to the filtered output lines
+    /// (directive and skipped lines are dropped from both text and origins together).
+    /// </summary>
+    internal static (string FilteredText, IReadOnlyList<Diagnostic> Diagnostics, IReadOnlyList<LineOrigin> Origins) Process(
+        string text,
+        IReadOnlyList<LineOrigin> inputOrigins,
+        IReadOnlyDictionary<string, string>? externalAttributes = null)
+        => ProcessImpl(text, inputOrigins, externalAttributes);
+
+    private static (string FilteredText, List<Diagnostic> Diagnostics, List<LineOrigin> Origins) ProcessImpl(
+        string text,
+        IReadOnlyList<LineOrigin>? inputOrigins,
+        IReadOnlyDictionary<string, string>? externalAttributes)
+    {
         var lines = TextUtility.SplitLines(text);
         var diagnostics = new List<Diagnostic>();
         var outputLines = new List<string>(lines.Length);
+        var outputOrigins = new List<LineOrigin>(inputOrigins is null ? 0 : lines.Length);
+
+        // Emit one surviving line, carrying its input origin forward when tracking.
+        void AddOut(string emitted, int inputIndex)
+        {
+            outputLines.Add(emitted);
+            if (inputOrigins is not null)
+                outputOrigins.Add(inputIndex < inputOrigins.Count ? inputOrigins[inputIndex] : LineOrigin.None);
+        }
 
         // Pre-scan header attributes so conditionals at the top of the document work.
         var attributes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -141,7 +171,7 @@ internal static class ConditionalPreprocessor
                         $"Conditional nesting depth exceeded ({MaxConditionalDepth}) at line {lineNumber}",
                         new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length))));
                     if (IsOutputActive(condStack))
-                        outputLines.Add(line);
+                        AddOut(line, i);
                     continue;
                 }
 
@@ -167,7 +197,7 @@ internal static class ConditionalPreprocessor
                 {
                     // Single-line form: ifdef::name[content here]
                     if (conditionMet && IsOutputActive(condStack))
-                        outputLines.Add(inlineContent);
+                        AddOut(inlineContent, i);
                 }
                 else
                 {
@@ -179,7 +209,7 @@ internal static class ConditionalPreprocessor
                             $"Conditional nesting depth exceeded ({MaxConditionalDepth}) at line {lineNumber}",
                             new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length))));
                         if (IsOutputActive(condStack))
-                            outputLines.Add(line);
+                            AddOut(line, i);
                         continue;
                     }
 
@@ -192,7 +222,7 @@ internal static class ConditionalPreprocessor
             // ── Regular line ─────────────────────────────────────────────
             if (IsOutputActive(condStack))
             {
-                outputLines.Add(line);
+                AddOut(line, i);
 
                 // Track attribute entries in body for subsequent conditionals.
                 // Pass lockedNames so body entries can't override defaults/API attributes.
@@ -211,7 +241,7 @@ internal static class ConditionalPreprocessor
         }
 
         var filteredText = string.Join("\n", outputLines);
-        return (filteredText, diagnostics);
+        return (filteredText, diagnostics, outputOrigins);
     }
 
     /// <summary>

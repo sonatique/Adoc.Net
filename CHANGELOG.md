@@ -3,7 +3,32 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [1.0.12] - 2026-06-12
+## [Unreleased]
+
+### Added
+
+- **Post-include source provenance (#46).** `ParseResult` now exposes a
+  `LineOrigins` table and `TryGetLineOrigin(expandedLine, out LineOrigin)`,
+  mapping each line of the fully-expanded document (the coordinate space AST
+  `SourcePosition`s count in) back to the file and line the author edits. The
+  new `LineOrigin(string? SourceFile, int SourceLine, bool IsSynthetic)` record
+  flags content pulled in from an `include::` as synthetic while still locating
+  it in its origin file. The mapping is produced authoritatively by the parser
+  and stays correct through `tags=`/`lines=`/`leveloffset=` filtering, nested
+  includes, conditional (`ifdef`/`ifeval`) stripping, and front-matter removal —
+  letting a consuming editor delete its hand-rolled include line-map.
+
+### Fixed
+
+- **Per-cell table source ranges (#45).** `TableCellNode.Source` /
+  `TableCellLayout.Source` previously carried the whole *row*'s range — every
+  cell in a row reported an identical span — making per-cell source mapping
+  (in-place cell editing, per-cell diagnostics) impossible. Each cell now
+  carries its own content span. Inline ranges inside cells are promoted to
+  absolute document coordinates (consistent with #38) instead of being relative
+  to the cell's content, and multi-line `a|` AsciiDoc cells — which previously
+  reported `Source = (none)` — now carry an absolute range, with their nested
+  block children numbered in absolute document lines.
 
 A broad hardening release: secure-by-default document processing, parser
 robustness against hostile input, Asciidoctor parity fixes, thread safety, and
