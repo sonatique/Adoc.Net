@@ -16,6 +16,12 @@ namespace AdocNet.Parser;
 /// Attribute references (<c>{name}</c>) in include paths are resolved using document
 /// attributes and API-provided attributes.
 /// </para>
+/// <para>
+/// Expansion also produces a per-line provenance table (<see cref="LineOrigin"/>) so
+/// downstream consumers can map an expanded line back to the file + line the author
+/// edits — even through <c>tags=</c>/<c>lines=</c>/<c>leveloffset=</c> filtering and
+/// nested includes.
+/// </para>
 /// </summary>
 internal static class IncludeExpander
 {
@@ -87,6 +93,11 @@ internal static class IncludeExpander
 
     /// <summary>
     /// Expands all <c>include::</c> directives in <paramref name="text"/> with safe mode enforcement.
+    /// <para>
+    /// <c>sourceFile</c> is the path of the primary document, recorded as the
+    /// <see cref="LineOrigin.SourceFile"/> of top-level (non-included) lines; it may be
+    /// <c>null</c> when parsing a string with no associated file.
+    /// </para>
     /// </summary>
     public static ExpandResult Expand(
         string text,
@@ -95,7 +106,8 @@ internal static class IncludeExpander
         int maxDepth,
         IReadOnlyDictionary<string, string>? attributes,
         bool allowUriRead,
-        SafeMode safeMode)
+        SafeMode safeMode,
+        string? sourceFile = null)
     {
         Guard.NotNull(text);
         Guard.NotNull(baseDirectory);
@@ -107,13 +119,17 @@ internal static class IncludeExpander
         // First pass: build preliminary attribute map from document attribute definitions.
         var attrMap = BuildAttributeMap(text, attributes);
 
-        var expanded = ExpandRecursive(text, baseDirectory, reader, diagnostics, visitedPaths, 0, maxDepth, attrMap, allowUriRead, safeMode);
-        return new ExpandResult(expanded, diagnostics);
+        var (expanded, origins) = ExpandRecursive(
+            text, baseDirectory, sourceFile, lineMap: null, reader, diagnostics, visitedPaths,
+            0, maxDepth, attrMap, allowUriRead, safeMode);
+        return new ExpandResult(expanded, diagnostics, origins);
     }
 
-    private static string ExpandRecursive(
+    private static (string Text, List<LineOrigin> Origins) ExpandRecursive(
         string text,
         string baseDirectory,
+        string? currentFile,
+        int[]? lineMap,
         IIncludeReader reader,
         List<Diagnostic> diagnostics,
         HashSet<string> visitedPaths,
@@ -125,7 +141,42 @@ internal static class IncludeExpander
     {
         var lines = TextUtility.SplitLines(text);
         var result = new StringBuilder();
+        var origins = new List<LineOrigin>();
         var condStack = new Stack<bool>(); // true = active
+        bool synthetic = currentDepth > 0;
+
+        // Origin of line index `idx` of THIS buffer. When `lineMap` is supplied
+        // (filtered include content) it maps each buffer line back to its original
+        // line in `currentFile`; otherwise lines are numbered 1, 2, 3, … An empty
+        // filter result can leave more buffer lines than map entries — those report
+        // SourceLine 0 (unknown) rather than crashing.
+        LineOrigin OriginAt(int idx)
+        {
+            int srcLine = lineMap is null
+                ? idx + 1
+                : (idx < lineMap.Length ? lineMap[idx] : 0);
+            return new LineOrigin(currentFile, srcLine, synthetic);
+        }
+
+        // Append one source line, preserving the original separator logic so the
+        // emitted text is byte-for-byte identical to a pure-string expansion.
+        void EmitLine(int idx, string lineText)
+        {
+            if (result.Length > 0 || idx > 0)
+                result.Append('\n');
+            result.Append(lineText);
+            origins.Add(OriginAt(idx));
+        }
+
+        // Append a fully-expanded include block (already trailing-trimmed) along
+        // with its parallel origins.
+        void EmitBlock(int idx, string blockText, List<LineOrigin> blockOrigins)
+        {
+            if (result.Length > 0 || idx > 0)
+                result.Append('\n');
+            result.Append(blockText);
+            origins.AddRange(blockOrigins);
+        }
 
         for (int i = 0; i < lines.Length; i++)
         {
@@ -135,27 +186,21 @@ internal static class IncludeExpander
             // Handle conditional directives — always pass through to output
             if (TryHandleConditional(line, condStack, attributes))
             {
-                if (result.Length > 0 || i > 0)
-                    result.Append('\n');
-                result.Append(line);
+                EmitLine(i, line);
                 continue;
             }
 
             // Inside a false conditional block — skip include expansion
             if (condStack.Count > 0 && condStack.Any(a => !a))
             {
-                if (result.Length > 0 || i > 0)
-                    result.Append('\n');
-                result.Append(line);
+                EmitLine(i, line);
                 continue;
             }
 
             var match = IncludePattern.Match(line);
             if (!match.Success)
             {
-                if (result.Length > 0 || i > 0)
-                    result.Append('\n');
-                result.Append(line);
+                EmitLine(i, line);
                 continue;
             }
 
@@ -169,9 +214,7 @@ internal static class IncludeExpander
                     DiagnosticSeverity.Warning,
                     $"Include disabled by safe mode ({safeMode}): {rawPath} (line {lineNumber})",
                     new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length))));
-                if (result.Length > 0 || i > 0)
-                    result.Append('\n');
-                result.Append(line);
+                EmitLine(i, line);
                 continue;
             }
 
@@ -235,9 +278,7 @@ internal static class IncludeExpander
                         new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length))));
 
                     // Emit the directive as-is so it becomes visible paragraph text.
-                    if (result.Length > 0 || i > 0)
-                        result.Append('\n');
-                    result.Append(line);
+                    EmitLine(i, line);
                     continue;
                 }
 
@@ -249,9 +290,7 @@ internal static class IncludeExpander
                         $"Maximum include depth ({maxDepth}) exceeded at line {lineNumber}",
                         new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length))));
 
-                    if (result.Length > 0 || i > 0)
-                        result.Append('\n');
-                    result.Append(line);
+                    EmitLine(i, line);
                     continue;
                 }
 
@@ -270,13 +309,12 @@ internal static class IncludeExpander
                         $"Failed to fetch URL include: {rawPath} — {ex.Message} (line {lineNumber})",
                         new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length))));
 
-                    if (result.Length > 0 || i > 0)
-                        result.Append('\n');
-                    result.Append(line);
+                    EmitLine(i, line);
                     continue;
                 }
 
-                // Apply tag/lines/leveloffset filtering
+                // Apply tag/lines/leveloffset filtering, tracking source-line provenance.
+                int[]? urlLineMap = null;
                 if (tagValue is not null || tagsValue is not null)
                 {
                     string[] urlTagNames;
@@ -298,42 +336,49 @@ internal static class IncludeExpander
                     }
 
                     var urlLines = TextUtility.SplitLines(urlContent);
-                    var (urlFiltered, urlMatched) = ExtractTaggedRegions(urlLines, urlTagNames, urlNegate);
+                    var (urlFiltered, urlFilteredNums, urlMatched) = ExtractTaggedRegions(urlLines, urlTagNames, urlNegate);
 
                     if (urlMatched)
+                    {
                         urlContent = string.Join("\n", urlFiltered);
+                        urlLineMap = urlFilteredNums.ToArray();
+                    }
                 }
                 else if (linesValue is not null)
                 {
                     var ranges = ParseLineRanges(linesValue);
                     var urlLines = TextUtility.SplitLines(urlContent);
                     var urlFiltered = new List<string>();
+                    var urlFilteredNums = new List<int>();
                     foreach (var (start, end) in ranges)
                     {
                         for (int ln = start; ln <= end; ln++)
                         {
                             if (ln >= 1 && ln <= urlLines.Length)
+                            {
                                 urlFiltered.Add(urlLines[ln - 1]);
+                                urlFilteredNums.Add(ln);
+                            }
                         }
                     }
                     urlContent = string.Join("\n", urlFiltered);
+                    urlLineMap = urlFilteredNums.ToArray();
                 }
 
+                // indent/leveloffset transform lines in place (1:1), so the line map
+                // computed above still applies after them.
                 if (indentValue is not null)
                     urlContent = ApplyIndent(urlContent, indentValue.Value);
 
                 if (levelOffset is not null && levelOffset.Value != 0)
                     urlContent = ApplyLevelOffset(urlContent, levelOffset.Value);
 
-                var urlExpanded = ExpandRecursive(
-                    urlContent, baseDirectory, reader, diagnostics, visitedPaths,
+                var urlNested = ExpandRecursive(
+                    urlContent, baseDirectory, rawPath, urlLineMap, reader, diagnostics, visitedPaths,
                     currentDepth + 1, maxDepth, attributes, allowUriRead, safeMode);
 
-                urlExpanded = urlExpanded.TrimEnd('\n');
-
-                if (result.Length > 0 || i > 0)
-                    result.Append('\n');
-                result.Append(urlExpanded);
+                var (urlBlock, urlBlockOrigins) = TrimTrailingNewlines(urlNested.Text, urlNested.Origins);
+                EmitBlock(i, urlBlock, urlBlockOrigins);
                 continue;
             }
 
@@ -357,9 +402,7 @@ internal static class IncludeExpander
                         $"Undefined attribute reference in include path: {rawPath} (line {lineNumber})",
                         new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length))));
 
-                    if (result.Length > 0 || i > 0)
-                        result.Append('\n');
-                    result.Append(line);
+                    EmitLine(i, line);
                     continue;
                 }
             }
@@ -372,9 +415,7 @@ internal static class IncludeExpander
                     $"Maximum include depth ({maxDepth}) exceeded at line {lineNumber}",
                     new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length))));
 
-                if (result.Length > 0 || i > 0)
-                    result.Append('\n');
-                result.Append(line);
+                EmitLine(i, line);
                 continue;
             }
 
@@ -392,9 +433,7 @@ internal static class IncludeExpander
                         DiagnosticSeverity.Warning,
                         $"Include path outside base directory blocked by safe mode: {rawPath} (line {lineNumber})",
                         new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length))));
-                    if (result.Length > 0 || i > 0)
-                        result.Append('\n');
-                    result.Append(line);
+                    EmitLine(i, line);
                     continue;
                 }
             }
@@ -407,9 +446,7 @@ internal static class IncludeExpander
                     $"Circular include detected: {rawPath} (line {lineNumber})",
                     new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length))));
 
-                if (result.Length > 0 || i > 0)
-                    result.Append('\n');
-                result.Append(line);
+                EmitLine(i, line);
                 continue;
             }
 
@@ -425,9 +462,7 @@ internal static class IncludeExpander
                 // gets its own diagnostic rather than a misleading "circular" error.
                 visitedPaths.Remove(resolvedPath);
 
-                if (result.Length > 0 || i > 0)
-                    result.Append('\n');
-                result.Append(line);
+                EmitLine(i, line);
                 continue;
             }
 
@@ -444,11 +479,13 @@ internal static class IncludeExpander
                     $"Failed to read include file: {rawPath} — {ex.Message} (line {lineNumber})",
                     new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length))));
                 visitedPaths.Remove(resolvedPath);
-                if (result.Length > 0 || i > 0)
-                    result.Append('\n');
-                result.Append(line);
+                EmitLine(i, line);
                 continue;
             }
+
+            // Source-line map for the (possibly filtered) include content: null means
+            // identity (full file, line i → i+1).
+            int[]? includeLineMap = null;
 
             if (tagValue is not null || tagsValue is not null)
             {
@@ -481,7 +518,7 @@ internal static class IncludeExpander
                 }
 
                 var allLines = TextUtility.SplitLines(includeContent);
-                var (filtered, matched) = ExtractTaggedRegions(allLines, tagNames, negate);
+                var (filtered, filteredNums, matched) = ExtractTaggedRegions(allLines, tagNames, negate);
 
                 if (!matched)
                 {
@@ -489,11 +526,12 @@ internal static class IncludeExpander
                         DiagnosticSeverity.Warning,
                         $"Tag(s) not found in included file: {string.Join(", ", tagNames)} (line {lineNumber})",
                         new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length))));
-                    // Fall back to entire file content — don't filter
+                    // Fall back to entire file content — don't filter (map stays identity).
                 }
                 else
                 {
                     includeContent = string.Join("\n", filtered);
+                    includeLineMap = filteredNums.ToArray();
                 }
             }
             else if (linesValue is not null)
@@ -501,24 +539,29 @@ internal static class IncludeExpander
                 var ranges = ParseLineRanges(linesValue);
                 var allLines = TextUtility.SplitLines(includeContent);
                 var filtered = new List<string>();
+                var filteredNums = new List<int>();
                 foreach (var (start, end) in ranges)
                 {
                     for (int ln = start; ln <= end; ln++)
                     {
                         if (ln >= 1 && ln <= allLines.Length)
+                        {
                             filtered.Add(allLines[ln - 1]);
+                            filteredNums.Add(ln);
+                        }
                     }
                 }
                 includeContent = string.Join("\n", filtered);
+                includeLineMap = filteredNums.ToArray();
             }
 
-            // ── Apply indent ──
+            // ── Apply indent ── (1:1 line transform — preserves the line map)
             if (indentValue is not null)
             {
                 includeContent = ApplyIndent(includeContent, indentValue.Value);
             }
 
-            // ── Apply level offset ──
+            // ── Apply level offset ── (1:1 line transform — preserves the line map)
             if (levelOffset is not null && levelOffset.Value != 0)
             {
                 includeContent = ApplyLevelOffset(includeContent, levelOffset.Value);
@@ -526,23 +569,37 @@ internal static class IncludeExpander
 
             var includeDir = Path.GetDirectoryName(resolvedPath) ?? baseDirectory;
 
-            var expandedContent = ExpandRecursive(
-                includeContent, includeDir, reader, diagnostics, visitedPaths,
+            var nested = ExpandRecursive(
+                includeContent, includeDir, resolvedPath, includeLineMap, reader, diagnostics, visitedPaths,
                 currentDepth + 1, maxDepth, attributes, allowUriRead, safeMode);
 
             // Remove trailing newline from included content to avoid double-blank-lines.
-            expandedContent = expandedContent.TrimEnd('\n');
-
-            if (result.Length > 0 || i > 0)
-                result.Append('\n');
-            result.Append(expandedContent);
+            var (block, blockOrigins) = TrimTrailingNewlines(nested.Text, nested.Origins);
+            EmitBlock(i, block, blockOrigins);
 
             // Allow the same file to be included again at a different call-site
             // (only *recursive* cycles are blocked, not diamond includes).
             visitedPaths.Remove(resolvedPath);
         }
 
-        return result.ToString();
+        return (result.ToString(), origins);
+    }
+
+    /// <summary>
+    /// Trims trailing newlines from an expanded include block (matching the original
+    /// <c>TrimEnd('\n')</c>) and drops the corresponding trailing origin entries so the
+    /// two stay aligned (one origin per remaining line).
+    /// </summary>
+    private static (string Text, List<LineOrigin> Origins) TrimTrailingNewlines(string text, List<LineOrigin> origins)
+    {
+        var trimmed = text.TrimEnd('\n');
+        int removed = text.Length - trimmed.Length; // number of '\n' chars trimmed
+        if (removed <= 0)
+            return (text, origins);
+
+        int keep = origins.Count - removed;
+        if (keep < 0) keep = 0;
+        return (trimmed, origins.GetRange(0, keep));
     }
 
     /// <summary>
@@ -731,16 +788,21 @@ internal static class IncludeExpander
     /// <param name="lines">All lines of the included file.</param>
     /// <param name="tagNames">Tag names to match.</param>
     /// <param name="negate">If true, include everything except the tagged regions (and marker lines).</param>
-    /// <returns>Filtered lines and whether any tag was matched.</returns>
-    internal static (List<string> Lines, bool Matched) ExtractTaggedRegions(string[] lines, string[] tagNames, bool negate)
+    /// <returns>
+    /// Filtered lines, their 1-based line numbers in <paramref name="lines"/> (parallel to the
+    /// filtered lines), and whether any tag was matched.
+    /// </returns>
+    internal static (List<string> Lines, List<int> LineNumbers, bool Matched) ExtractTaggedRegions(string[] lines, string[] tagNames, bool negate)
     {
         var tagSet = new HashSet<string>(tagNames, StringComparer.Ordinal);
         var result = new List<string>();
+        var resultLineNumbers = new List<int>();
         var activeTags = new HashSet<string>(StringComparer.Ordinal);
         bool anyMatched = false;
 
-        foreach (var line in lines)
+        for (int idx = 0; idx < lines.Length; idx++)
         {
+            var line = lines[idx];
             var trimmed = line.TrimStart();
 
             // Check if this is a tag marker line
@@ -801,17 +863,23 @@ internal static class IncludeExpander
             {
                 // Negated: include lines NOT inside any matched tag region
                 if (activeTags.Count == 0)
+                {
                     result.Add(line);
+                    resultLineNumbers.Add(idx + 1);
+                }
             }
             else
             {
                 // Normal: include lines inside any matched tag region
                 if (activeTags.Count > 0)
+                {
                     result.Add(line);
+                    resultLineNumbers.Add(idx + 1);
+                }
             }
         }
 
-        return (result, anyMatched);
+        return (result, resultLineNumbers, anyMatched);
     }
 
     /// <summary>
