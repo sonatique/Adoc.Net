@@ -787,4 +787,57 @@ public class LayoutBuilderTests
         Assert.That(firstRow.Source.End.Line, Is.GreaterThan(firstRow.Source.Start.Line),
             "Multi-line cell content must extend the row's Source.End past Source.Start");
     }
+
+    // ── Per-cell source ranges (issue #45) ────────────────────────────────
+
+    [Test]
+    public void TableCellLayout_carries_its_own_span_not_the_row_range()
+    {
+        // Before #45 every cell in a row reported the identical row-wide range.
+        // Now each cell carries its own content span (line 2: "| H1 | H2 | H3").
+        var layout = Build("|===\n| H1 | H2 | H3\n|===");
+        var cells = layout.Children.OfType<TableLayout>().Single()
+            .Rows.SelectMany(r => r.Cells).ToList();
+        Assert.That(cells, Has.Count.EqualTo(3));
+
+        Assert.That(cells[0].Source, Is.EqualTo(new SourceRange(new(2, 3), new(2, 4))));
+        Assert.That(cells[1].Source, Is.EqualTo(new SourceRange(new(2, 8), new(2, 9))));
+        Assert.That(cells[2].Source, Is.EqualTo(new SourceRange(new(2, 13), new(2, 14))));
+        Assert.That(cells.Select(c => c.Source).Distinct().Count(), Is.EqualTo(3),
+            "each cell must report a distinct range, not the whole row");
+    }
+
+    [Test]
+    public void Cell_inline_ranges_use_absolute_document_columns()
+    {
+        // Inline ranges inside a cell are absolute, like every inline since #38 —
+        // the column is the document column, not relative to the cell content.
+        var layout = Build("|===\n| a2 with *bold* | x\n|===");
+        var cells = layout.Children.OfType<TableLayout>().Single()
+            .Rows.SelectMany(r => r.Cells).ToList();
+
+        // "| a2 with *bold* | x": the *bold* run sits at columns 11-16 of line 2.
+        var bold = cells[0].Inlines.OfType<BoldRun>().First();
+        Assert.That(bold.Source.Start, Is.EqualTo(new SourcePosition(2, 11)));
+        Assert.That(bold.Source.End, Is.EqualTo(new SourcePosition(2, 16)));
+    }
+
+    [Test]
+    public void AsciiDoc_cell_content_has_an_absolute_source_range()
+    {
+        // A multi-line a| cell used to surface its content with Source = None.
+        // It now carries the cell's own absolute span (issue #45).
+        var layout = Build("[cols=\"1\"]\n|===\na| multi\nline cell\n|===");
+        var cell = layout.Children.OfType<TableLayout>().Single()
+            .Rows.SelectMany(r => r.Cells).Single();
+
+        Assert.That(cell.Source.IsNone, Is.False);
+        Assert.That(cell.Source.Start.Line, Is.EqualTo(3));
+        Assert.That(cell.Source.End.Line, Is.EqualTo(4));
+
+        var run = cell.Inlines.OfType<TextRun>().First();
+        Assert.That(run.Source.IsNone, Is.False,
+            "a| cell content must carry a source range, not None (issue #45)");
+        Assert.That(run.Source, Is.EqualTo(cell.Source));
+    }
 }

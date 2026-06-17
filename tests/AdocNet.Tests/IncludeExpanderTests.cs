@@ -614,6 +614,146 @@ public class IncludeExpanderTests
             Is.EqualTo(new[] { (1, 1), (3, 4), (8, 8) }));
     }
 
+    // ── Line-origin provenance (issue #46) ───────────────────────────────
+
+    private static ParseResult ParseWithIncludes(string main, DictReader reader, string mainPath = "/docs/main.adoc")
+        => AdocParser.Parse(main, new ParseOptions
+        {
+            SourceFilePath = mainPath,
+            IncludeReader = reader,
+            SafeMode = SafeMode.Unsafe,
+        });
+
+    [Test]
+    public void LineOrigins_maps_expanded_lines_back_to_origin_file_and_line()
+    {
+        // The issue's minimal repro: a single include::part.adoc[] (3 lines of
+        // content) pushes "Last paragraph." from editor line 7 to AST line 9.
+        var main =
+            "= Title\n\nFirst paragraph.\n\ninclude::part.adoc[]\n\nLast paragraph.";
+        var part = "Included line one.\n\nIncluded line two.";
+        var reader = new DictReader()
+            .Add("/docs/main.adoc", main)
+            .Add("/docs/part.adoc", part);
+
+        var result = ParseWithIncludes(main, reader);
+        var partPath = Path.GetFullPath("/docs/part.adoc");
+
+        // Expanded layout:
+        //   1 "= Title"            -> main:1
+        //   2 ""                   -> main:2
+        //   3 "First paragraph."   -> main:3
+        //   4 ""                   -> main:4
+        //   5 "Included line one." -> part:1  (synthetic)
+        //   6 ""                   -> part:2  (synthetic)
+        //   7 "Included line two." -> part:3  (synthetic)
+        //   8 ""                   -> main:6
+        //   9 "Last paragraph."    -> main:7
+        Assert.That(result.LineOrigins, Has.Count.EqualTo(9));
+
+        Assert.That(result.TryGetLineOrigin(3, out var l3), Is.True);
+        Assert.That(l3.SourceLine, Is.EqualTo(3));
+        Assert.That(l3.IsSynthetic, Is.False);
+
+        // AST line 9 -> editor line 7 of the primary document.
+        Assert.That(result.TryGetLineOrigin(9, out var l9), Is.True);
+        Assert.That(l9.SourceLine, Is.EqualTo(7));
+        Assert.That(l9.IsSynthetic, Is.False);
+
+        // AST lines 5-7 came from part.adoc.
+        foreach (var (expandedLine, partLine) in new[] { (5, 1), (6, 2), (7, 3) })
+        {
+            Assert.That(result.TryGetLineOrigin(expandedLine, out var o), Is.True);
+            Assert.That(o.IsSynthetic, Is.True, $"expanded line {expandedLine} should be from the include");
+            Assert.That(o.SourceLine, Is.EqualTo(partLine));
+            Assert.That(o.SourceFile, Is.EqualTo(partPath));
+        }
+    }
+
+    [Test]
+    public void LineOrigins_handles_lines_filtered_include()
+    {
+        // lines=2..3 pulls a non-contiguous slice; the origins must report the
+        // ORIGINAL include line numbers (2 and 3), not 1 and 2.
+        var main = "Intro.\n\ninclude::snip.adoc[lines=2..3]";
+        var snip = "one\ntwo\nthree\nfour";
+        var reader = new DictReader()
+            .Add("/docs/main.adoc", main)
+            .Add("/docs/snip.adoc", snip);
+
+        var result = ParseWithIncludes(main, reader);
+
+        // Expanded: 1 "Intro." (main:1), 2 "" (main:2), 3 "two" (snip:2), 4 "three" (snip:3)
+        Assert.That(result.TryGetLineOrigin(3, out var o3), Is.True);
+        Assert.That(o3.IsSynthetic, Is.True);
+        Assert.That(o3.SourceLine, Is.EqualTo(2), "first included line is original line 2");
+
+        Assert.That(result.TryGetLineOrigin(4, out var o4), Is.True);
+        Assert.That(o4.SourceLine, Is.EqualTo(3), "second included line is original line 3");
+    }
+
+    [Test]
+    public void LineOrigins_tracks_lines_through_tag_filtered_include()
+    {
+        // tag=middle selects only the tagged region; origins must point at the
+        // tagged lines' real positions in the include file.
+        var main = "include::tagged.adoc[tag=middle]";
+        var snip =
+            "before\n" +              // 1
+            "// tag::middle[]\n" +     // 2
+            "kept one\n" +            // 3
+            "kept two\n" +            // 4
+            "// end::middle[]\n" +     // 5
+            "after";                   // 6
+        var reader = new DictReader()
+            .Add("/docs/main.adoc", main)
+            .Add("/docs/tagged.adoc", snip);
+
+        var result = ParseWithIncludes(main, reader);
+
+        Assert.That(result.TryGetLineOrigin(1, out var o1), Is.True);
+        Assert.That(o1.SourceLine, Is.EqualTo(3), "first kept line is original line 3");
+        Assert.That(result.TryGetLineOrigin(2, out var o2), Is.True);
+        Assert.That(o2.SourceLine, Is.EqualTo(4), "second kept line is original line 4");
+    }
+
+    [Test]
+    public void LineOrigins_are_present_for_documents_without_includes()
+    {
+        // With no expansion, every line maps to itself in the primary source.
+        var result = AdocParser.Parse("= Title\n\nA paragraph.", new ParseOptions
+        {
+            SourceFilePath = "/docs/solo.adoc",
+        });
+
+        Assert.That(result.LineOrigins, Has.Count.EqualTo(3));
+        Assert.That(result.TryGetLineOrigin(3, out var o), Is.True);
+        Assert.That(o.SourceLine, Is.EqualTo(3));
+        Assert.That(o.IsSynthetic, Is.False);
+        Assert.That(o.SourceFile, Is.EqualTo("/docs/solo.adoc"));
+    }
+
+    [Test]
+    public void LineOrigins_account_for_conditional_filtering()
+    {
+        // The ifdef block and its directives are removed; surviving lines must
+        // still report their ORIGINAL line numbers.
+        //   1 "Start."
+        //   2 ""
+        //   3 "ifdef::flag[]"   (removed)
+        //   4 "hidden"          (removed; flag not set)
+        //   5 "endif::[]"       (removed)
+        //   6 ""
+        //   7 "End."
+        var src = "Start.\n\nifdef::flag[]\nhidden\nendif::[]\n\nEnd.";
+        var result = AdocParser.Parse(src, new ParseOptions { SourceFilePath = "/docs/c.adoc" });
+
+        // "End." is the last surviving line; it must map back to original line 7.
+        var last = result.LineOrigins[result.LineOrigins.Count - 1];
+        Assert.That(last.SourceLine, Is.EqualTo(7));
+        Assert.That(last.IsSynthetic, Is.False);
+    }
+
     /// <summary>Reader that throws IOException on Read to simulate I/O failures.</summary>
     private sealed class ThrowingReader : IIncludeReader
     {
