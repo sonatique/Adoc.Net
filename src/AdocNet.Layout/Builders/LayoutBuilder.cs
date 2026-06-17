@@ -179,10 +179,16 @@ public class LayoutBuilder
         {
             if (child is TableCellNode cellNode)
             {
+                // cellNode.Source is the cell's own content span (issue #45), so its
+                // Start is the content origin: inline columns promote to absolute
+                // document coordinates here, like every other inline since #38.
                 var inlines = BuildInlines(cellNode.Inlines, cellNode.Source.Start);
                 if (inlines.Count == 0 && !string.IsNullOrEmpty(cellNode.Text))
                 {
-                    inlines = new InlineLayout[] { new TextRun(cellNode.Text) };
+                    // AsciiDoc (a|) cells expose no inline list (their content is a
+                    // nested block tree). Surface the raw text as one run, tagged with
+                    // the cell's absolute span so it has a source range rather than None.
+                    inlines = new InlineLayout[] { new TextRun(cellNode.Text) { Source = cellNode.Source } };
                 }
                 bool isHeader = isHeaderRow || cellNode.ContentStyle == TableCellStyle.Header;
                 cells.Add(new TableCellLayout(inlines, cellNode.ColSpan, cellNode.RowSpan, isHeader)

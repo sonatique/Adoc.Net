@@ -3,7 +3,19 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [1.0.12] - 2026-06-12
+## [Unreleased]
+
+### Fixed
+
+- **Per-cell table source ranges (#45).** `TableCellNode.Source` /
+  `TableCellLayout.Source` previously carried the whole *row*'s range — every
+  cell in a row reported an identical span — making per-cell source mapping
+  (in-place cell editing, per-cell diagnostics) impossible. Each cell now
+  carries its own content span. Inline ranges inside cells are promoted to
+  absolute document coordinates (consistent with #38) instead of being relative
+  to the cell's content, and multi-line `a|` AsciiDoc cells — which previously
+  reported `Source = (none)` — now carry an absolute range, with their nested
+  block children numbered in absolute document lines.
 
 A broad hardening release: secure-by-default document processing, parser
 robustness against hostile input, Asciidoctor parity fixes, thread safety, and
