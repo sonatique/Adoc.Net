@@ -50,10 +50,18 @@ public static class AdocParser
         var sourceText = text;
         string? frontMatterContent = null;
 
+        // Number of leading lines removed by front-matter stripping. Top-level
+        // (non-included) line origins are shifted by this so they report the line
+        // in the ORIGINAL document — the buffer the author actually edits.
+        int frontMatterOffset = 0;
+
         // ── Front matter stripping (step 0) ──────────────────────────────
         if (options.Attributes?.ContainsKey("skip-front-matter") == true)
         {
+            var beforeLineCount = TextUtility.SplitLines(sourceText).Length;
             var (stripped, fm, fmDiag) = StripFrontMatter(sourceText);
+            if (fm is not null) // front matter was actually present and removed
+                frontMatterOffset = beforeLineCount - TextUtility.SplitLines(stripped).Length;
             sourceText = stripped;
             frontMatterContent = fm;
             if (fmDiag is not null)
@@ -61,6 +69,10 @@ public static class AdocParser
         }
 
         // ── Include expansion ─────────────────────────────────────────────
+        // `lineOrigins` tracks, per line of `sourceText`, the file + line the author
+        // edits (issue #46). It is built here and carried through conditional
+        // preprocessing so the final list aligns with the AST's line coordinates.
+        IReadOnlyList<LineOrigin> lineOrigins;
         if (options.ShouldExpandIncludes())
         {
             var baseDir = options.ResolveBaseDirectory()!;
@@ -75,10 +87,22 @@ public static class AdocParser
 
             var expandResult = IncludeExpander.Expand(
                 sourceText, baseDir, reader: options.IncludeReader, maxDepth: effectiveMaxDepth,
-                attributes: options.Attributes, allowUriRead: options.AllowUriRead, safeMode: options.SafeMode);
+                attributes: options.Attributes, allowUriRead: options.AllowUriRead, safeMode: options.SafeMode,
+                sourceFile: options.SourceFilePath);
             sourceText = expandResult.Text;
             allDiagnostics.AddRange(expandResult.Diagnostics);
+            lineOrigins = expandResult.Origins;
         }
+        else
+        {
+            // No expansion: every line maps to itself in the primary source.
+            lineOrigins = BuildIdentityOrigins(sourceText, options.SourceFilePath);
+        }
+
+        // Shift top-level (non-synthetic) origins past any stripped front matter so
+        // their SourceLine reflects the original, un-stripped document.
+        if (frontMatterOffset > 0)
+            lineOrigins = ApplyFrontMatterOffset(lineOrigins, frontMatterOffset);
 
         // ── Conditional preprocessing ─────────────────────────────────────
         // Build a complete attribute context: defaults (lowest priority) + external (API-provided).
@@ -89,9 +113,10 @@ public static class AdocParser
             foreach (var kvp in options.Attributes)
                 condAttrs[kvp.Key] = kvp.Value;
         }
-        var (filteredText, condDiagnostics) = ConditionalPreprocessor.Process(
-            sourceText, condAttrs);
+        var (filteredText, condDiagnostics, filteredOrigins) = ConditionalPreprocessor.Process(
+            sourceText, lineOrigins, condAttrs);
         sourceText = filteredText;
+        lineOrigins = filteredOrigins;
         allDiagnostics.AddRange(condDiagnostics);
 
         // ── Block + inline parsing ────────────────────────────────────────
@@ -173,7 +198,35 @@ public static class AdocParser
             catch (ArgumentException) { /* malformed path */ }
         }
 
-        return new ParseResult(parseResult.Document, allDiagnostics);
+        return new ParseResult(parseResult.Document, allDiagnostics) { LineOrigins = lineOrigins };
+    }
+
+    /// <summary>
+    /// Builds an identity provenance table for un-expanded source: line <c>i + 1</c>
+    /// maps to line <c>i + 1</c> of the primary file (never synthetic).
+    /// </summary>
+    private static IReadOnlyList<LineOrigin> BuildIdentityOrigins(string text, string? sourceFile)
+    {
+        var lines = TextUtility.SplitLines(text);
+        var origins = new LineOrigin[lines.Length];
+        for (int i = 0; i < lines.Length; i++)
+            origins[i] = new LineOrigin(sourceFile, i + 1, false);
+        return origins;
+    }
+
+    /// <summary>
+    /// Adds <paramref name="offset"/> to the <see cref="LineOrigin.SourceLine"/> of every
+    /// non-synthetic (top-level) origin, leaving included-content origins untouched.
+    /// </summary>
+    private static IReadOnlyList<LineOrigin> ApplyFrontMatterOffset(IReadOnlyList<LineOrigin> origins, int offset)
+    {
+        var shifted = new LineOrigin[origins.Count];
+        for (int i = 0; i < origins.Count; i++)
+        {
+            var o = origins[i];
+            shifted[i] = o.IsSynthetic ? o : o with { SourceLine = o.SourceLine + offset };
+        }
+        return shifted;
     }
 
     /// <summary>
