@@ -540,21 +540,62 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 float titleWidth = w.MeasureText(displayTitle, font, fontSize);
                 float pageWidth = w.MeasureText(pageText, _fontRegular, fontSize);
                 float spaceWidth = w.MeasureText(" ", _fontRegular, fontSize);
-                // Asciidoctor-pdf TOC uses ". " (dot+space) as leader content
-                // for visual breathing room between dots. Each unit is dotWidth + spaceWidth.
+                // ". " (dot+space) leader unit, matching asciidoctor-pdf.
                 float unitWidth = w.MeasureText(". ", _fontRegular, fontSize);
-                const float Safety = 12f;
-                float available = w.ContentWidth - titleWidth - pageWidth - 2 * spaceWidth - Safety;
-                int dotCount = available > 0 && unitWidth > 0
-                    ? Math.Max(1, (int)(available / unitWidth) - 1) : 1;
-                var leader = " " + string.Concat(System.Linq.Enumerable.Repeat(". ", dotCount)) + " ";
-                var segments = new List<TextSegment>
+
+                // Pin the page number's right edge to the content right margin so it
+                // aligns across ALL entries regardless of nesting depth. MarginLeftValue
+                // + ContentWidth is constant under indentation (the indent shifts the
+                // left edge in and narrows ContentWidth by the same amount), so the
+                // right edge does not move. Previously the page number floated after a
+                // dot leader whose integer-dot rounding left a per-entry remainder, so
+                // nested entries' numbers sat a few points left of the top-level ones (#51).
+                float leftX = w.MarginLeftValue;            // indented title start
+                float rightEdge = w.MarginLeftValue + w.ContentWidth; // fixed content right margin
+                float pageX = rightEdge - pageWidth;        // page number, right-aligned
+                float titleEnd = leftX + titleWidth;
+                string? titleLink = entry.Id is not null ? $"#internal#{entry.Id}" : null;
+
+                if (titleEnd + 2 * spaceWidth >= pageX)
                 {
-                    new(displayTitle, font, fontSize, entry.Id is not null ? $"#internal#{entry.Id}" : null),
-                    new(leader, _fontRegular, fontSize, null),
-                    new(pageText, _fontRegular, fontSize, null),
-                };
-                w.WriteWrappedSegments(segments, tocLeading, justify: false);
+                    // Title (with number) is too wide to share the line — let it wrap;
+                    // append the page number rather than risk an overlap.
+                    var segments = new List<TextSegment>
+                    {
+                        new(displayTitle, font, fontSize, titleLink),
+                        new(" " + pageText, _fontRegular, fontSize, null),
+                    };
+                    w.WriteWrappedSegments(segments, tocLeading, justify: false);
+                }
+                else
+                {
+                    w.EnsurePage();
+                    w.ReserveFirstLineLeading(tocLeading);
+                    float y = w.CursorY;
+
+                    // Title (carries the clickable internal link).
+                    w.WriteTextSegments(
+                        new List<TextSegment> { new(displayTitle, font, fontSize, titleLink) }, leftX, y);
+
+                    // Dot leader ending just before the page number (so the dots lead
+                    // up to it and any rounding remainder sits next to the title).
+                    float gapStart = titleEnd + spaceWidth;
+                    float gapEnd = pageX - spaceWidth;
+                    if (gapEnd > gapStart && unitWidth > 0)
+                    {
+                        int dots = (int)((gapEnd - gapStart) / unitWidth);
+                        if (dots > 0)
+                        {
+                            var leader = string.Concat(System.Linq.Enumerable.Repeat(". ", dots));
+                            float leaderWidth = w.MeasureText(leader, _fontRegular, fontSize);
+                            w.WriteText(leader, _fontRegular, fontSize, gapEnd - leaderWidth, y);
+                        }
+                    }
+
+                    // Page number, right-aligned at the fixed content margin.
+                    w.WriteText(pageText, _fontRegular, fontSize, pageX, y);
+                    w.MoveCursor(tocLeading);
+                }
             }
             else
             {
