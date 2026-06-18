@@ -14,7 +14,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.14</Version>
+    <Version>1.0.15</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) Sylvain Fasel</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -23,7 +23,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.14: PDF table-layout fix. #48: wide tables no longer render overlapping columns. Column widths are floored at the width each column's widest unbreakable word needs — a starved column borrows the shortfall from columns with slack (tables that already fit are unchanged); when even the minimum widths exceed the page, the whole table's font is scaled down just enough that no word is wider than its column. See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.15: PDF rendering fixes. #50: tables using row/column spans now get correct, span-aware column widths instead of starving a column or over-shrinking to micro-text. #51: table-of-contents page numbers right-align at the same margin regardless of nesting depth. #52: special/Unicode characters (✓, arrows incl. ⇒/⇐, bullets, geometric and math symbols) now render with an embedded Unicode fallback font (DejaVu Sans) plus a ToUnicode CMap, so they render portably and stay selectable/searchable instead of becoming '?'; the font is subset and embedded only when used (ASCII-only output unchanged). See CHANGELOG.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->
