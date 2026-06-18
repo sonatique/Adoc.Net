@@ -157,14 +157,16 @@ public sealed partial class PdfRenderer
         float fontScale = ComputeTableFontScale(w, grid, table.HasHeader, colWidths, colCount, cellPadding);
         float effFontSize = _bodyFontSize * fontScale;
 
-        // Border/grid color from theme
-        var gridColor = _tableBorderColor;
+        // Grid/frame lines to draw — AsciiDoc default is grid=all + frame=all, i.e.
+        // full cell borders (horizontal AND vertical), honouring grid=/frame= (#59).
+        var gridOpts = ParseTableGrid(table);
 
         int startRow = 0;
         // Header row
         if (table.HasHeader && grid.Count > 0)
         {
-            RenderTableHeader(w, grid[0], colWidths, cellPadding, effFontSize, table.Columns);
+            RenderTableHeader(w, grid[0], colWidths, cellPadding, effFontSize, table.Columns,
+                gridOpts, isLastRow: grid.Count == 1);
             startRow = 1;
         }
 
@@ -179,20 +181,13 @@ public sealed partial class PdfRenderer
 
             // If EnsurePage moved to a new page, repeat the header
             if (repeatHeader is not null && w.CurrentPageNumber != pageBefore)
-                RenderTableHeader(w, repeatHeader, colWidths, cellPadding, effFontSize, table.Columns);
+                RenderTableHeader(w, repeatHeader, colWidths, cellPadding, effFontSize, table.Columns,
+                    gridOpts, isLastRow: false);
 
-            RenderTableRow(w, grid[i], colWidths, cellPadding, _fontRegular, effFontSize, table.Columns);
-
-            // Draw a separator line between body rows
-            if (i < grid.Count - 1)
-            {
-                if (gridColor is { } gc)
-                    w.SetStrokeColor(gc.R, gc.G, gc.B);
-                else
-                    w.SetStrokeColor(0.85f, 0.85f, 0.85f);
-                w.DrawLine(w.MarginLeftValue, w.CursorY + _bodyLeading - 2, w.MarginLeftValue + w.ContentWidth, w.CursorY + _bodyLeading - 2, 0.25f);
-                w.SetStrokeColor(0, 0, 0);
-            }
+            // A body row is the table's first row only when there is no header.
+            bool firstRow = startRow == 0 && i == 0;
+            RenderTableRow(w, grid[i], colWidths, cellPadding, _fontRegular, effFontSize, table.Columns,
+                gridOpts, isFirstRow: firstRow, isLastRow: i == grid.Count - 1);
         }
 
         w.MoveCursor(_paragraphSpacingAfter);
@@ -438,7 +433,8 @@ public sealed partial class PdfRenderer
     }
 
     private void RenderTableHeader(PdfWriter w, List<PlacedCell> headerRow, float[] colWidths,
-        float cellPadding, float fontSize, IReadOnlyList<TableColumnSpec>? columns)
+        float cellPadding, float fontSize, IReadOnlyList<TableColumnSpec>? columns,
+        TableGrid gridOpts, bool isLastRow)
     {
         // Measure header row height first (need it for background fill)
         var headerFont = _fontBold;
@@ -459,19 +455,13 @@ public sealed partial class PdfRenderer
             ?? (_tableHeaderBackground is not null ? new PdfColor(1, 1, 1) : (PdfColor?)null);
         if (headerFontColor is { } fc) w.SetFillColor(fc.R, fc.G, fc.B);
 
-        RenderTableRow(w, headerRow, colWidths, cellPadding, headerFont, headerFontSize, columns);
+        // The header is the table's first row; its grid/frame lines (including the
+        // rule beneath it, drawn as the next row's top rule) are emitted by
+        // RenderTableRow / DrawRowBorders, so no separate underline is needed (#59).
+        RenderTableRow(w, headerRow, colWidths, cellPadding, headerFont, headerFontSize, columns,
+            gridOpts, isFirstRow: true, isLastRow: isLastRow);
 
         if (headerFontColor is not null) w.SetFillColor(0, 0, 0);
-
-        // Draw line under header using border color or background color
-        if (_tableBorderColor is { } tbc)
-            w.SetStrokeColor(tbc.R, tbc.G, tbc.B);
-        else if (_tableHeaderBackground is { } hbg)
-            w.SetStrokeColor(hbg.R, hbg.G, hbg.B);
-        else
-            w.SetStrokeColor(0, 0, 0);
-        w.DrawLine(w.MarginLeftValue, w.CursorY + _bodyLeading - 2, w.MarginLeftValue + w.ContentWidth, w.CursorY + _bodyLeading - 2, 1f);
-        w.SetStrokeColor(0, 0, 0);
     }
 
     private float MeasureRowHeight(PdfWriter w, List<PlacedCell> placed, float[] colWidths,
@@ -491,7 +481,8 @@ public sealed partial class PdfRenderer
     }
 
     private void RenderTableRow(PdfWriter w, List<PlacedCell> placed, float[] colWidths,
-        float cellPadding, string font, float fontSize, IReadOnlyList<TableColumnSpec>? columns)
+        float cellPadding, string font, float fontSize, IReadOnlyList<TableColumnSpec>? columns,
+        TableGrid gridOpts, bool isFirstRow, bool isLastRow)
     {
         // First pass: wrap text, and resolve each cell's absolute x from its column.
         var cellWrapped = new List<(List<string> Lines, float X, float CellWidth, TableAlignment? Align)>();
@@ -529,6 +520,10 @@ public sealed partial class PdfRenderer
 
         // Second pass: render each cell's lines at its own column x.
         float baseY = w.CursorY;
+        // Row border extents: the top rule sits where the previous row's bottom rule
+        // sat (so rows share a boundary), the bottom rule one row-height below.
+        float topRuleY = baseY + _bodyLeading - 2;
+        float bottomRuleY = topRuleY - rowHeight;
 
         foreach (var (lines, x, cellWidth, align) in cellWrapped)
         {
@@ -573,6 +568,75 @@ public sealed partial class PdfRenderer
 
         // Move cursor past the entire row
         w.MoveCursor(rowHeight);
+
+        // Draw this row's grid/frame lines now (while on the correct page — a table
+        // may span page breaks), span-aware: verticals fall on actual cell edges.
+        DrawRowBorders(w, placed, colWidths, topRuleY, bottomRuleY, gridOpts, isFirstRow, isLastRow);
+    }
+
+    /// <summary>
+    /// Which table grid (internal) and frame (outer) lines to draw, resolved from
+    /// the table's <c>grid=</c>/<c>frame=</c> attributes (AsciiDoc default: both
+    /// <c>all</c>). #59.
+    /// </summary>
+    private readonly record struct TableGrid(
+        bool ColsInternal, bool RowsInternal,
+        bool FrameTop, bool FrameBottom, bool FrameLeft, bool FrameRight)
+    {
+        public bool Any => ColsInternal || RowsInternal || FrameTop || FrameBottom || FrameLeft || FrameRight;
+    }
+
+    private static TableGrid ParseTableGrid(TableNode table)
+    {
+        string grid = (table.Grid ?? "all").Trim().ToLowerInvariant();
+        string frame = (table.Frame ?? "all").Trim().ToLowerInvariant();
+
+        bool cols = grid is "all" or "cols";
+        bool rows = grid is "all" or "rows";
+        bool fTopBottom = frame is "all" or "topbot" or "ends";
+        bool fSides = frame is "all" or "sides";
+        return new TableGrid(cols, rows, fTopBottom, fTopBottom, fSides, fSides);
+    }
+
+    /// <summary>
+    /// Draws one row's contribution to the table grid: the internal column verticals
+    /// (at the row's actual cell edges, so colspans aren't split), the left/right
+    /// frame verticals, the row's top rule (frame for the first row, an internal
+    /// row rule otherwise), and the bottom frame rule for the last row.
+    /// </summary>
+    private void DrawRowBorders(PdfWriter w, List<PlacedCell> placed, float[] colWidths,
+        float topY, float bottomY, TableGrid g, bool isFirstRow, bool isLastRow)
+    {
+        if (!g.Any) return;
+
+        float left = w.MarginLeftValue;
+        float right = w.MarginLeftValue + w.ContentWidth;
+        const float lw = 0.5f;
+        if (_tableBorderColor is { } c) w.SetStrokeColor(c.R, c.G, c.B);
+        else w.SetStrokeColor(0.8f, 0.8f, 0.8f);
+
+        // Horizontal rules.
+        if (isFirstRow ? g.FrameTop : g.RowsInternal)
+            w.DrawLine(left, topY, right, topY, lw);
+        if (isLastRow && g.FrameBottom)
+            w.DrawLine(left, bottomY, right, bottomY, lw);
+
+        // Vertical rules.
+        if (g.FrameLeft) w.DrawLine(left, topY, left, bottomY, lw);
+        if (g.FrameRight) w.DrawLine(right, topY, right, bottomY, lw);
+        if (g.ColsInternal)
+        {
+            foreach (var p in placed)
+            {
+                if (p.Col <= 0) continue; // column 0's left edge is the frame
+                float x = left;
+                for (int col = 0; col < p.Col && col < colWidths.Length; col++)
+                    x += colWidths[col];
+                w.DrawLine(x, topY, x, bottomY, lw);
+            }
+        }
+
+        w.SetStrokeColor(0, 0, 0);
     }
 
     private void RenderBlockImage(PdfWriter w, BlockImageNode image, int indentLevel)
