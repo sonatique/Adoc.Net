@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using AdocNet.Ast;
 using AdocNet.Converters.Pdf;
 using AdocNet.Parser;
 
@@ -133,5 +134,87 @@ public class PdfWideTableTests
         // Proportions follow the minimums: 300:200:100 == 3:2:1.
         Assert.That(result[0] / result[2], Is.EqualTo(3f).Within(0.01f));
         Assert.That(result[1] / result[2], Is.EqualTo(2f).Within(0.01f));
+    }
+
+    // ── Span-aware column widths (issue #50) ─────────────────────────────
+
+    // Table 1: 8 columns, rowspan-heavy. Over-shrank to micro-text before #50.
+    private const string RowspanTable =
+        "|===\n" +
+        "| PG Lzikit | Lzikit Wira Qgch | Xnpryhw | Puwpozacj Xnpryhw | YRNT xehfzz | Hmwhj vslprq xehfzz | Hmwhj lnxrkl xehfzz | Puwpozacj Wira Qgch\n\n" +
+        ".2+| WOI_JIHDXGK_DXR YWF_JIHDXGK_GGX .2+| WOI fl pixsyqtj | fjdsajs | fjdsajs | V | K .14+| M .2+| XQN\n" +
+        "| xrblh | xrblh | | K, V\n" +
+        ".4+| WOI_DGJH_DXR iqyf LFJ awre .4+| pixsyqtj | fjdsajs .2+| fjdsajs | ib jn V | nno ENE K .4+| ENE\n" +
+        "| xrblh .1+| | nno ENE K, V\n" +
+        "| fjdsajs .2+| xrblh | x .2+| nno ENE K\n" +
+        "| xrblh |\n" +
+        "| GIVCFHFR | cfan | fjdsajs | fjdsajs | K, V | | owtpjbhjw\n" +
+        "|===";
+
+    // Table 2: 13 columns, header colspans/rowspans. Starved trailing columns
+    // before #50 because the column count was taken from the 2-node header row.
+    private const string ColspanHeaderTable =
+        "|===\n" +
+        ".3+h| Jqwinpph 12+| Jtgwkgv vdsg lrnv (_oremg_)\n" +
+        "2+h| WOI 2+h| XQN 2+h| pixsyqtj 2+h| ENE 2+h| STB 2+h| owtpjbhjw\n" +
+        "| fjdsajs | xrblh | fjdsajs | xrblh | fjdsajs | xrblh | fjdsajs | xrblh | fjdsajs | xrblh | fjdsajs | xrblh\n" +
+        "| YRNT fvcjqvut | y | | y | y | y | | y | | y | | y |\n" +
+        "| vslprq xrblh fvcjqvut | | y | y | y | | y | | y | | y | | y\n" +
+        "|===";
+
+    private static TableNode FirstTable(string adoc)
+        => AdocParser.Parse(adoc).Document.Children.OfType<TableNode>().First();
+
+    [Test]
+    public void ColumnCount_counts_first_row_colspans_not_cell_nodes()
+    {
+        // The header is two cell NODES ("h| X" + "12+| Y") spanning 1 + 12 = 13 columns.
+        Assert.That(PdfRenderer.ComputeColumnCount(FirstTable(ColspanHeaderTable)), Is.EqualTo(13));
+        Assert.That(PdfRenderer.ComputeColumnCount(FirstTable(RowspanTable)), Is.EqualTo(8));
+    }
+
+    [Test]
+    public void Rowspan_table_does_not_overshrink_to_micro_text()
+    {
+        // Before #50 the rowspan table over-shrank to ~4pt; correct column
+        // attribution keeps it legible (≥ 8pt here).
+        var pdf = new PdfRenderer().RenderToBytes(AdocParser.Parse(RowspanTable).Document, PdfRenderOptions.A4);
+        var sizes = ParseTextOps(pdf).Select(o => o.Size).Distinct().ToList();
+        Assert.That(sizes, Is.Not.Empty);
+        Assert.That(sizes.Min(), Is.GreaterThanOrEqualTo(8f),
+            $"table font over-shrank (sizes: {string.Join(",", sizes)})");
+    }
+
+    [Test]
+    public void Colspan_header_table_lays_out_all_columns_not_starved()
+    {
+        // A 12-cell data row must place 12 distinct columns — before #50 the
+        // column count was 2, so trailing cells were starved to zero width.
+        var pdf = new PdfRenderer().RenderToBytes(AdocParser.Parse(ColspanHeaderTable).Document, PdfRenderOptions.A4);
+        var ops = ParseTextOps(pdf);
+        int maxColsOnALine = ops.GroupBy(o => MathF.Round(o.Y, 1))
+            .Select(g => g.Select(o => MathF.Round(o.X, 1)).Distinct().Count())
+            .DefaultIfEmpty(0).Max();
+        Assert.That(maxColsOnALine, Is.GreaterThanOrEqualTo(12),
+            $"expected ≥12 distinct column positions on a row, got {maxColsOnALine}");
+    }
+
+    [Test]
+    public void Span_tables_have_no_overlapping_columns()
+    {
+        foreach (var src in new[] { RowspanTable, ColspanHeaderTable })
+        {
+            var pdf = new PdfRenderer().RenderToBytes(AdocParser.Parse(src).Document, PdfRenderOptions.A4);
+            foreach (var lineGroup in ParseTextOps(pdf).GroupBy(o => MathF.Round(o.Y, 1)))
+            {
+                var frags = lineGroup.OrderBy(o => o.X).ToList();
+                for (int i = 0; i + 1 < frags.Count; i++)
+                {
+                    float rightEdge = frags[i].X + PdfWriter.MeasureStandardText(frags[i].Text, frags[i].Font, frags[i].Size);
+                    Assert.That(rightEdge, Is.LessThanOrEqualTo(frags[i + 1].X + 0.5f),
+                        $"'{frags[i].Text}' overlaps '{frags[i + 1].Text}' at y={frags[i].Y:F1}");
+                }
+            }
+        }
     }
 }
