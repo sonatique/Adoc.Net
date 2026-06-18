@@ -966,7 +966,8 @@ public sealed partial class PdfRenderer : DocumentRendererBase
     // ── Helpers ──────────────────────────────────────────────────────────
 
     /// <summary>Extracts plain text from inline nodes or falls back to raw text.</summary>
-    private static string GetPlainText(IReadOnlyList<InlineNode> inlines, string fallback)
+    private static string GetPlainText(IReadOnlyList<InlineNode> inlines, string fallback,
+        FootnoteState? footnotes = null)
     {
         if (inlines.Count == 0) return fallback;
 
@@ -986,7 +987,15 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 case SubscriptInlineNode sub: sb.Append(sub.Content); break;
                 case PassthroughInlineNode pt: sb.Append(pt.Content); break;
                 case CrossReferenceInlineNode xref: sb.Append(xref.Label ?? xref.Target); break;
-                case FootnoteInlineNode fn: sb.Append(fn.Text ?? string.Empty); break;
+                case FootnoteInlineNode fn:
+                    // When a footnote registry is supplied (table cells, #57), register
+                    // the footnote and emit its [n] marker — matching paragraph rendering
+                    // — instead of inlining the body text and dropping it from the list.
+                    if (footnotes is not null)
+                        sb.Append($"[{footnotes.Register(fn)}]");
+                    else
+                        sb.Append(fn.Text ?? string.Empty);
+                    break;
                 case InlineMacroNode macro: sb.Append(macro.Content); break;
             }
         }
