@@ -1323,7 +1323,7 @@ internal static class BlockParser
                 else
                 {
                     char cellSep = isNestedTable ? '!' : '|';
-                    table = ParseTableContent(lines, i + 1, closingIdx, hasPendingOptionsHeader, hasPendingAutoWidth, hasPendingFooter, pendingColSpec, pendingStripes, pendingGrid, pendingFrame, detectedFormat, document.Attributes, cellSep);
+                    table = ParseTableContent(lines, i + 1, closingIdx, hasPendingOptionsHeader, hasPendingAutoWidth, hasPendingFooter, pendingColSpec, pendingStripes, pendingGrid, pendingFrame, detectedFormat, document.Attributes, diagnostics, cellSep);
                 }
                 table.Source = closingIdx < lines.Length
                     ? new SourceRange(new(lineNumber, 1), new(closingIdx + 1, lines[closingIdx].Length))
@@ -4120,7 +4120,7 @@ internal static class BlockParser
     /// Cell text is split by | and inline-parsed.
     /// Supports cell span prefixes (2+|, .2+|, 2.3+|) and header detection by blank line.
     /// </summary>
-    private static TableNode ParseTableContent(string[] lines, int startIdx, int endIdx, bool hasHeader, bool isAutoWidth, bool hasFooter, string? colSpec, string? stripes, string? grid, string? frame, string? format, IReadOnlyDictionary<string, string> attributes, char cellSeparator = '|')
+    private static TableNode ParseTableContent(string[] lines, int startIdx, int endIdx, bool hasHeader, bool isAutoWidth, bool hasFooter, string? colSpec, string? stripes, string? grid, string? frame, string? format, IReadOnlyDictionary<string, string> attributes, List<Diagnostic> diagnostics, char cellSeparator = '|')
     {
         // Parse column specifications if provided.
         var columns = colSpec is not null ? ParseColumnSpec(colSpec) : null;
@@ -4353,6 +4353,17 @@ internal static class BlockParser
                 {
                     currentRow.Source = currentRowSource;
                     table.AddChild(currentRow);
+                }
+                else
+                {
+                    // The table ended before this row filled all its columns. We drop
+                    // the incomplete row (matching Asciidoctor's recovery) but, unlike
+                    // before, tell the author their table is malformed (#58).
+                    int line = currentRowSource.IsNone ? endIdx + 1 : currentRowSource.Start.Line;
+                    diagnostics.Add(new Diagnostic(
+                        DiagnosticSeverity.Warning,
+                        $"Table ended with an incomplete row: expected {availableSlots} cell(s) but found {actualCells}; dropping the incomplete row",
+                        new SourceRange(new SourcePosition(line, 1), new SourcePosition(line, 1))));
                 }
             }
         }
