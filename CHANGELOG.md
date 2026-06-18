@@ -3,7 +3,18 @@
 All notable changes to this project are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [1.0.15] - 2026-06-18
+## [Unreleased]
+
+### Fixed
+
+- **PDF: tables now render full cell borders by default and honour `grid=`/`frame=` (#59).**
+  PDF tables drew horizontal row rules only — no vertical column borders — diverging
+  from AsciiDoc's default `grid=all` and from asciidoctor-pdf. Tables now draw the
+  full grid (vertical **and** horizontal cell borders) plus an outer frame by
+  default, and honour the table's `grid=` (`all`/`rows`/`cols`/`none`) and `frame=`
+  (`all`/`topbot`/`sides`/`none`) attributes. Borders are span-aware (verticals fall
+  on real cell edges, so colspans aren't split) and drawn per row so they stay
+  correct across page breaks.
 
 A PDF rendering release: span-aware table column widths, aligned TOC page
 numbers, and portable special/Unicode characters.
