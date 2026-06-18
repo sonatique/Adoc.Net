@@ -997,5 +997,36 @@ public class TableParserTests
         Assert.That(para.Source.Start.Line, Is.EqualTo(5),
             "nested block must use the absolute document line, not cell-relative line 1");
     }
+
+    // ── Incomplete-row diagnostic (issue #58) ────────────────────────────
+
+    [Test]
+    public void Incomplete_final_table_row_emits_warning_with_line_number()
+    {
+        // The last row has 2 cells in a 3-column table; asciidoctor errors and
+        // drops the cells. AdocNet must at least warn (it was silent before #58).
+        var src = "= T\n\n|===\n| A | B | C\n\n| 1 | 2\n|===\n";
+        var result = AdocParser.Parse(src);
+
+        Assert.That(result.HasWarnings, Is.True, "an incomplete table row should produce a diagnostic");
+        var diag = result.Diagnostics.FirstOrDefault(d => d.Message.Contains("incomplete row"));
+        Assert.That(diag, Is.Not.Null, "expected an 'incomplete row' diagnostic");
+        Assert.That(diag!.Range.Start.Line, Is.EqualTo(6),
+            "diagnostic should point at the incomplete row's line");
+
+        // Recovery still matches asciidoctor: the incomplete row is dropped, the
+        // header survives.
+        var table = result.Document.Children.OfType<TableNode>().Single();
+        Assert.That(table.Children.OfType<TableRowNode>().Count(), Is.EqualTo(1),
+            "only the complete (header) row remains");
+    }
+
+    [Test]
+    public void Complete_table_emits_no_incomplete_row_warning()
+    {
+        var src = "|===\n| A | B | C\n| 1 | 2 | 3\n|===\n";
+        var result = AdocParser.Parse(src);
+        Assert.That(result.Diagnostics.Any(d => d.Message.Contains("incomplete row")), Is.False);
+    }
 }
 
