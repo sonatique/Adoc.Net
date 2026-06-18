@@ -291,6 +291,21 @@ internal sealed partial class PdfWriter
 
     internal float MeasureText(string text, string font, float fontSize)
     {
+        // Account for any characters the primary font can't show that are routed
+        // to a fallback font (#52) — each run is measured in its own font. The
+        // fast path (no fallback) returns null and measures the string as-is.
+        var runs = SplitFontRuns(text, font);
+        if (runs is null)
+            return MeasureRaw(text, font, fontSize);
+
+        float total = 0;
+        foreach (var (runText, runFont) in runs)
+            total += MeasureRaw(runText, runFont, fontSize);
+        return total;
+    }
+
+    private float MeasureRaw(string text, string font, float fontSize)
+    {
         if (_embeddedFonts.TryGetValue(font, out var ttFont))
         {
             return ttFont.MeasureText(text, fontSize);

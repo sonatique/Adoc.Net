@@ -24,6 +24,12 @@
          designs under CC BY 4.0. See NOTICES.md. -->
     <EmbeddedResource Include="Resources\fa-solid.ttf" />
     <EmbeddedResource Include="Resources\fa-regular.ttf" />
+    <!-- DejaVu Sans embedded as an on-demand fallback for glyphs outside WinAnsi
+         (arrows incl. ⇒/⇐, check marks, dingbats, geometric shapes, math), so
+         special characters render portably with a ToUnicode CMap. Subset per
+         document and only embedded when actually used. Bitstream Vera / public
+         domain; see NOTICES.md. -->
+    <EmbeddedResource Include="Resources\DejaVuSans.ttf" />
   </ItemGroup>
 
   <ItemGroup>

@@ -719,25 +719,51 @@ internal sealed partial class PdfWriter
     /// <summary>Font identifiers: F1=Helvetica, F2=Helvetica-Bold, F3=Helvetica-Oblique, F4=Courier.</summary>
     internal void WriteText(string text, string font, float fontSize, float x, float y)
     {
+        var runs = SplitFontRuns(text, font);
         _currentStream!.Append("BT\n");
-        _currentStream.Append($"/{font} {Fmt(fontSize)} Tf\n");
-        _currentStream.Append($"{Fmt(x)} {Fmt(y)} Td\n");
 
+        if (runs is null)
+        {
+            // Fast path (no fallback glyphs): byte-for-byte the original emission.
+            _currentStream.Append($"/{font} {Fmt(fontSize)} Tf\n");
+            _currentStream.Append($"{Fmt(x)} {Fmt(y)} Td\n");
+            AppendShowText(text, font);
+        }
+        else
+        {
+            // Mixed fonts: set the start once, then switch font per run. Consecutive
+            // Tj operators advance the text position automatically (#52).
+            _currentStream.Append($"{Fmt(x)} {Fmt(y)} Td\n");
+            foreach (var (runText, runFont) in runs)
+            {
+                _currentStream.Append($"/{runFont} {Fmt(fontSize)} Tf\n");
+                AppendShowText(runText, runFont);
+            }
+        }
+
+        _currentStream.Append("ET\n");
+    }
+
+    /// <summary>
+    /// Appends a single <c>Tj</c> show operator for <paramref name="text"/> in
+    /// <paramref name="font"/>: hex glyph-IDs for an embedded TrueType font (and
+    /// tracks the code points for subsetting), otherwise an escaped WinAnsi string.
+    /// </summary>
+    private void AppendShowText(string text, string font)
+    {
         if (_embeddedFonts.TryGetValue(font, out var ttFont))
         {
             TrackCodePoints(font, text);
-            _currentStream.Append('<');
+            _currentStream!.Append('<');
             _currentStream.Append(EncodeTextAsGlyphIds(text, ttFont));
             _currentStream.Append("> Tj\n");
         }
         else
         {
-            _currentStream.Append('(');
+            _currentStream!.Append('(');
             _currentStream.Append(EscapePdfString(text));
             _currentStream.Append(") Tj\n");
         }
-
-        _currentStream.Append("ET\n");
     }
 
     /// <summary>
@@ -745,23 +771,27 @@ internal sealed partial class PdfWriter
     /// </summary>
     internal void WriteJustifiedText(string text, string font, float fontSize, float x, float y, float wordSpacing)
     {
+        var runs = SplitFontRuns(text, font);
         _currentStream!.Append("BT\n");
-        _currentStream.Append($"/{font} {Fmt(fontSize)} Tf\n");
-        _currentStream.Append($"{Fmt(x)} {Fmt(y)} Td\n");
-        _currentStream.Append($"{Fmt(wordSpacing)} Tw\n");
 
-        if (_embeddedFonts.TryGetValue(font, out var ttFont))
+        if (runs is null)
         {
-            TrackCodePoints(font, text);
-            _currentStream.Append('<');
-            _currentStream.Append(EncodeTextAsGlyphIds(text, ttFont));
-            _currentStream.Append("> Tj\n");
+            // Fast path: byte-for-byte the original emission order.
+            _currentStream.Append($"/{font} {Fmt(fontSize)} Tf\n");
+            _currentStream.Append($"{Fmt(x)} {Fmt(y)} Td\n");
+            _currentStream.Append($"{Fmt(wordSpacing)} Tw\n");
+            AppendShowText(text, font);
         }
         else
         {
-            _currentStream.Append('(');
-            _currentStream.Append(EscapePdfString(text));
-            _currentStream.Append(") Tj\n");
+            _currentStream.Append($"{Fmt(x)} {Fmt(y)} Td\n");
+            _currentStream.Append($"{Fmt(wordSpacing)} Tw\n");
+            // The Tw word-spacing persists across the per-run Tj operators.
+            foreach (var (runText, runFont) in runs)
+            {
+                _currentStream.Append($"/{runFont} {Fmt(fontSize)} Tf\n");
+                AppendShowText(runText, runFont);
+            }
         }
 
         _currentStream.Append("0 Tw\n");
