@@ -26,6 +26,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   right-aligned position (the content right margin, which is constant under
   indentation), with the dot leader filling up to it — so every page number lines
   up vertically while the entry text keeps its depth indentation on the left.
+- **PDF: special/Unicode characters now render portably and stay extractable (#52).**
+  Characters outside the WinAnsi set (e.g. `✓`, the arrows `→`/`←`/`⇒`/`⇐` produced
+  by `->`/`<-`/`=>`/`<=`, geometric shapes, bullets and math symbols) were emitted
+  with the WinAnsi base fonts and so rendered as `?` and could not be selected,
+  searched, or extracted. Such glyphs are now drawn with an embedded Unicode fallback
+  font (DejaVu Sans, Bitstream Vera / public domain) carrying a ToUnicode CMap. The
+  font is subset per document and embedded only when a special character is actually
+  used, so ASCII-only output is unchanged. (Color emoji remain out of scope.)
 
 ## [1.0.14] - 2026-06-17
 
