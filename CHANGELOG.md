@@ -7,6 +7,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **PDF: tables with row/column spans now get correct column widths (#50).** The
+  renderer took the column count from the number of cell *nodes* in the first row,
+  so a header using colspans (e.g. `h| X 12+| Y` = 13 columns) under-counted and
+  starved the trailing columns; and it attributed cell content to columns without
+  accounting for rowspans, so rowspan-heavy tables mis-sized columns and
+  over-shrank to illegible micro-text. Column layout is now span-aware: the column
+  count is the sum of the first row's colspans, cells are placed on a grid that
+  tracks rowspan occupancy (so each cell is attributed to its true column), a
+  spanning cell's width requirement is spread across the columns it covers rather
+  than pinning one, and when the table is genuinely too wide the column *minimum*
+  widths (not natural widths) are scaled to fit — so the accompanying font scale
+  shrinks text only modestly instead of crushing it.
+- **PDF: TOC page numbers now right-align regardless of nesting depth (#51).**
+  Nested table-of-contents entries' page numbers sat a few points left of the
+  top-level ones because the number floated after a dot leader whose integer-dot
+  rounding left a per-entry remainder. The page number is now drawn at a fixed,
+  right-aligned position (the content right margin, which is constant under
+  indentation), with the dot leader filling up to it — so every page number lines
+  up vertically while the entry text keeps its depth indentation on the left.
 - **PDF: special/Unicode characters now render portably and stay extractable (#52).**
   Characters outside the WinAnsi set (e.g. `✓`, the arrows `→`/`←`/`⇒`/`⇐` produced
   by `->`/`<-`/`=>`/`<=`, geometric shapes, bullets and math symbols) were emitted
@@ -15,6 +34,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   font (DejaVu Sans, Bitstream Vera / public domain) carrying a ToUnicode CMap. The
   font is subset per document and embedded only when a special character is actually
   used, so ASCII-only output is unchanged. (Color emoji remain out of scope.)
+
+## [1.0.14] - 2026-06-17
 
 A PDF table-layout fix.
 
