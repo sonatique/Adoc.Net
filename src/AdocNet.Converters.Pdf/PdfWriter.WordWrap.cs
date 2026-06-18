@@ -252,6 +252,10 @@ internal sealed partial class PdfWriter
     /// </summary>
     internal float WriteWrappedSegments(List<TextSegment> segments, float leading, bool justify = true)
     {
+        // Route characters the segment fonts can't show (✓, arrows, …) onto a
+        // Unicode fallback font, splitting affected segments. Downstream wrapping
+        // and the per-segment embedded-font emission then handle them as usual (#52).
+        segments = ExpandSegmentsForFallback(segments);
         var lines = WrapSegments(segments, ContentWidth);
         float consumed = 0;
         for (int i = 0; i < lines.Count; i++)

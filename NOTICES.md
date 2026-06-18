@@ -22,6 +22,7 @@ generated EPUBs match the reference renderer.
 | `mplus1mn-regular-ascii-conums.ttf`<br>`mplus1mn-italic-ascii.ttf`<br>`mplus1mn-bold-ascii.ttf`<br>`mplus1mn-bolditalic-ascii.ttf` | M+ FONTS (M+ 1mn, ASCII subset, with callout glyph overrides) | M+ FONTS License |
 | `fa-solid-900.ttf` | Font Awesome 6 Free (Solid) | SIL Open Font License 1.1 (font); icon designs CC BY 4.0 |
 | `assorted-icons.ttf` | asciidoctor-epub3 custom subset | SIL Open Font License 1.1 |
+| `DejaVuSans.ttf` | DejaVu Sans (PDF Unicode fallback for arrows, check marks, geometric shapes, math symbols) | Bitstream Vera Fonts License + public-domain additions |
 
 ### Stylesheets
 
