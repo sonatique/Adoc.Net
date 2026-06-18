@@ -7,6 +7,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **PDF: footnotes inside table cells now produce a marker and a list entry (#57).**
+  A `footnote:[…]` in a table cell was rendered as its body text inline — no `[n]`
+  reference marker, no entry in the document footnote list, and the inlined body
+  bloated the column width. Cell footnotes are now registered and replaced with
+  their `[n]` marker (matching paragraph rendering), and a reused attribute
+  footnote (e.g. `{myfn}`) deduplicates to its existing number. Registration
+  happens once per cell when the table grid is built, so the repeated
+  measure/render passes don't double-count.
 - **Parser: an incomplete final table row now emits a diagnostic (#58).** A table
   whose last row supplied fewer cells than the column count (e.g. an early end of
   table or unbalanced spans) was accepted silently — no warning, empty
