@@ -15,6 +15,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   footnote (e.g. `{myfn}`) deduplicates to its existing number. Registration
   happens once per cell when the table grid is built, so the repeated
   measure/render passes don't double-count.
+- **Parser: an incomplete final table row now emits a diagnostic (#58).** A table
+  whose last row supplied fewer cells than the column count (e.g. an early end of
+  table or unbalanced spans) was accepted silently — no warning, empty
+  `Diagnostics`. AdocNet still drops the incomplete row (matching Asciidoctor's
+  recovery) but now also emits a warning with the row's line number, so authors
+  are told the table is malformed.
 
 A PDF rendering release: span-aware table column widths, aligned TOC page
 numbers, and portable special/Unicode characters.
