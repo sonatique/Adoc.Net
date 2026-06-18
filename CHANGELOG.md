@@ -5,6 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.16] - 2026-06-19
+
+A PDF-tables release plus a parser diagnostic: footnotes inside table cells now
+produce markers and footnote-list entries, tables render full cell borders by
+default (honouring `grid=`/`frame=`), and the parser warns on an incomplete
+final table row.
+
 ### Fixed
 
 - **PDF: footnotes inside table cells now produce a marker and a list entry (#57).**
