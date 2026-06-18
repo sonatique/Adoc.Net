@@ -30,6 +30,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   on real cell edges, so colspans aren't split) and drawn per row so they stay
   correct across page breaks.
 
+## [1.0.15] - 2026-06-18
+
 A PDF rendering release: span-aware table column widths, aligned TOC page
 numbers, and portable special/Unicode characters.
 
