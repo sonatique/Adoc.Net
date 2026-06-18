@@ -33,15 +33,27 @@ public sealed partial class PdfRenderer
 
         w.EnsurePage();
 
-        // Calculate column count from first row
-        int colCount = 0;
-        if (table.Children[0] is TableRowNode firstRow)
-            colCount = firstRow.Children.Count;
+        // True column count = the sum of the first row's colspans. Counting cell
+        // NODES under-counts a header that uses colspans (e.g. a 13-column table
+        // whose header row is "h| X 12+| Y" has only two cell nodes) — which
+        // starved the trailing columns (#50).
+        int colCount = ComputeColumnCount(table);
         if (colCount == 0) return;
 
         // Build column widths array (proportional)
         float[] colWidths = new float[colCount];
         float cellPadding = 4f;
+
+        // Lay cells out on a grid, tracking rowspan occupancy so each cell knows
+        // the column it truly starts in (rows beneath a rowspan shift right past
+        // the occupied columns). Without this, content was attributed to the wrong
+        // columns and rowspan-heavy tables over-shrank to micro-text (#50).
+        var grid = BuildTableGrid(table, colCount);
+
+        // Per-column natural / minimum widths from cells that occupy a single
+        // column; a spanning cell's requirement is spread across the columns it
+        // covers rather than pinning one column (#50).
+        var (naturalWidths, minWidths) = ComputeSpanAwareColumnWidths(w, grid, table.HasHeader, colCount, cellPadding);
 
         // Check if column specs have varying weights (user explicitly set different sizes)
         bool hasVaryingWeights = false;
@@ -61,13 +73,13 @@ public sealed partial class PdfRenderer
         if (hasVaryingWeights && table.Columns is { Count: > 0 })
         {
             // User explicitly set different column widths — honour the weights, but
-            // never starve a column below the width its widest unbreakable word
-            // needs. Without this floor a weight-1 column on a wide table is sized
-            // purely by its share of the page and any word wider than that share
-            // spills into the next column, rendering as overlapping text (#48).
+            // never starve a column below the width its content needs. Without this
+            // floor a weight-1 column on a wide table is sized purely by its share
+            // of the page and any wider word spills into the next column (#48/#50).
             int totalWeight = 0;
             foreach (var col in table.Columns)
                 totalWeight += col.Width;
+            if (totalWeight <= 0) totalWeight = 1;
 
             float[] desired = new float[colCount];
             for (int c = 0; c < colCount; c++)
@@ -76,65 +88,15 @@ public sealed partial class PdfRenderer
                 desired[c] = w.ContentWidth * weight / totalWeight;
             }
 
-            float[] minWidths = ComputeMinColumnWidths(w, table, colCount, cellPadding);
             colWidths = FitWidthsToMinimums(desired, minWidths, w.ContentWidth);
         }
         else
         {
-            // Auto-size columns: weight each column by its natural unwrapped
-            // content width (max over all cells), then scale to fit the page
-            // width. Per-column "longest word" widths act as floors so a single
-            // word never overflows its column. Columns with prose ask for —
-            // and get — far more space than columns with short identifiers.
-            //
-            // The previous algorithm pinned each column to its longest-word
-            // width up front and distributed only the leftover by character
-            // count. When a wide table mixed long identifiers with prose, the
-            // identifier columns soaked up the budget and prose columns
-            // collapsed to one-word-per-line (see issue #17).
-
-            float[] naturalWidths = new float[colCount];
-            float[] minWidths = new float[colCount];
-            float cellPad = 4f;
-
-            foreach (var child in table.Children)
-            {
-                if (child is TableRowNode r)
-                {
-                    int ci = 0;
-                    foreach (var cell in r.Children)
-                    {
-                        if (cell is TableCellNode c && ci < colCount)
-                        {
-                            string text = GetPlainText(c.Inlines, c.Text);
-                            float fullWidth = w.MeasureText(text, _fontRegular, _bodyFontSize) + 2 * cellPad;
-
-                            // Spanning cells contribute natural width spread
-                            // evenly across the columns they cover; no single
-                            // column gets the whole span's natural width.
-                            int span = c.ColSpan > 0 ? c.ColSpan : 1;
-                            float perColNatural = fullWidth / span;
-                            for (int s = 0; s < span && ci + s < colCount; s++)
-                            {
-                                if (perColNatural > naturalWidths[ci + s])
-                                    naturalWidths[ci + s] = perColNatural;
-                            }
-
-                            // Min width = longest single word + padding, attributed
-                            // to the cell's starting column. Spanning cells with
-                            // long unbreakable words still pin only the first col.
-                            foreach (var word in text.Split(' '))
-                            {
-                                float ww = w.MeasureText(word, _fontRegular, _bodyFontSize) + 2 * cellPad;
-                                if (ww > minWidths[ci])
-                                    minWidths[ci] = ww;
-                            }
-                            ci += span;
-                        }
-                    }
-                }
-            }
-
+            // Auto-size columns by their natural content width (span-aware, from
+            // ComputeSpanAwareColumnWidths above), with the per-column longest word
+            // as a floor. Columns with prose ask for — and get — far more space than
+            // columns with short identifiers (#17), and a spanning cell's width is
+            // shared across its columns rather than starving one (#50).
             float totalNatural = naturalWidths.Sum();
             float totalMin = minWidths.Sum();
 
@@ -146,11 +108,14 @@ public sealed partial class PdfRenderer
             }
             else if (totalMin >= w.ContentWidth)
             {
-                // Even minimum word widths don't fit on the page. Scale natural
-                // widths to ContentWidth and accept some single-word overflow —
-                // there's no better placement available.
+                // Even the longest words don't all fit. Scale the MINIMUM widths to
+                // fill the page so columns stay proportional to what they actually
+                // need; the font scale below then shrinks the text by the same
+                // modest factor (~totalMin/ContentWidth). Scaling *natural* widths
+                // here instead collapses columns far below their word widths and
+                // makes the font scale crush the table to micro-text (#50).
                 for (int c = 0; c < colCount; c++)
-                    colWidths[c] = naturalWidths[c] * w.ContentWidth / totalNatural;
+                    colWidths[c] = minWidths[c] * w.ContentWidth / totalMin;
             }
             else if (totalNatural <= w.ContentWidth)
             {
@@ -189,7 +154,7 @@ public sealed partial class PdfRenderer
         // enough that no word is wider than the column it sits in. 1.0 (no change)
         // whenever the column widths already accommodate their content — so normal
         // tables are unaffected and only genuinely over-wide tables scale down (#48).
-        float fontScale = ComputeTableFontScale(w, table, colWidths, colCount, cellPadding);
+        float fontScale = ComputeTableFontScale(w, grid, table.HasHeader, colWidths, colCount, cellPadding);
         float effFontSize = _bodyFontSize * fontScale;
 
         // Border/grid color from theme
@@ -197,79 +162,175 @@ public sealed partial class PdfRenderer
 
         int startRow = 0;
         // Header row
-        if (table.HasHeader && table.Children[0] is TableRowNode headerRow)
+        if (table.HasHeader && grid.Count > 0)
         {
-            RenderTableHeader(w, headerRow, colWidths, cellPadding, effFontSize, table.Columns);
+            RenderTableHeader(w, grid[0], colWidths, cellPadding, effFontSize, table.Columns);
             startRow = 1;
         }
 
         // Body rows — repeat header on continuation pages
-        TableRowNode? repeatHeader = _repeatTableHeader && table.HasHeader && startRow == 1
-            ? table.Children[0] as TableRowNode : null;
+        List<PlacedCell>? repeatHeader = _repeatTableHeader && table.HasHeader && startRow == 1 && grid.Count > 0
+            ? grid[0] : null;
 
-        for (int i = startRow; i < table.Children.Count; i++)
+        for (int i = startRow; i < grid.Count; i++)
         {
-            if (table.Children[i] is TableRowNode row)
+            int pageBefore = w.CurrentPageNumber;
+            w.EnsurePage();
+
+            // If EnsurePage moved to a new page, repeat the header
+            if (repeatHeader is not null && w.CurrentPageNumber != pageBefore)
+                RenderTableHeader(w, repeatHeader, colWidths, cellPadding, effFontSize, table.Columns);
+
+            RenderTableRow(w, grid[i], colWidths, cellPadding, _fontRegular, effFontSize, table.Columns);
+
+            // Draw a separator line between body rows
+            if (i < grid.Count - 1)
             {
-                int pageBefore = w.CurrentPageNumber;
-                w.EnsurePage();
-
-                // If EnsurePage moved to a new page, repeat the header
-                if (repeatHeader is not null && w.CurrentPageNumber != pageBefore)
-                    RenderTableHeader(w, repeatHeader, colWidths, cellPadding, effFontSize, table.Columns);
-
-                RenderTableRow(w, row, colWidths, cellPadding, _fontRegular, effFontSize, table.Columns);
-
-                // Draw a separator line between body rows
-                if (i < table.Children.Count - 1)
-                {
-                    if (gridColor is { } gc)
-                        w.SetStrokeColor(gc.R, gc.G, gc.B);
-                    else
-                        w.SetStrokeColor(0.85f, 0.85f, 0.85f);
-                    w.DrawLine(w.MarginLeftValue, w.CursorY + _bodyLeading - 2, w.MarginLeftValue + w.ContentWidth, w.CursorY + _bodyLeading - 2, 0.25f);
-                    w.SetStrokeColor(0, 0, 0);
-                }
+                if (gridColor is { } gc)
+                    w.SetStrokeColor(gc.R, gc.G, gc.B);
+                else
+                    w.SetStrokeColor(0.85f, 0.85f, 0.85f);
+                w.DrawLine(w.MarginLeftValue, w.CursorY + _bodyLeading - 2, w.MarginLeftValue + w.ContentWidth, w.CursorY + _bodyLeading - 2, 0.25f);
+                w.SetStrokeColor(0, 0, 0);
             }
         }
 
         w.MoveCursor(_paragraphSpacingAfter);
     }
 
+    /// <summary>A table cell placed on the column grid: its starting column and span.</summary>
+    private sealed record PlacedCell(TableCellNode Cell, int Col, int ColSpan);
+
     /// <summary>
-    /// Minimum width each column needs so its widest single (space-delimited,
-    /// unbreakable) word fits without spilling into the next column. Header-row
-    /// cells are measured with the bold font (wider). Spanning cells attribute
-    /// their longest word to the starting column, mirroring the auto-size path.
+    /// The table's true column count: the sum of the colspans in the first row
+    /// (the first row is never overlapped by a rowspan, so it always defines the
+    /// full width), taking the larger of that and an explicit <c>[cols=]</c> spec.
     /// </summary>
-    private float[] ComputeMinColumnWidths(PdfWriter w, TableNode table, int colCount, float cellPadding)
+    internal static int ComputeColumnCount(TableNode table)
     {
-        var minWidths = new float[colCount];
-        int rowIdx = 0;
+        int fromFirstRow = 0;
         foreach (var child in table.Children)
         {
-            if (child is TableRowNode r)
+            if (child is TableRowNode row)
             {
-                string font = (table.HasHeader && rowIdx == 0) ? _fontBold : _fontRegular;
-                int ci = 0;
-                foreach (var cell in r.Children)
-                {
-                    if (cell is TableCellNode c && ci < colCount)
-                    {
-                        string text = GetPlainText(c.Inlines, c.Text);
-                        foreach (var word in text.Split(' '))
-                        {
-                            if (word.Length == 0) continue;
-                            float ww = w.MeasureText(word, font, _bodyFontSize) + 2 * cellPadding;
-                            if (ww > minWidths[ci]) minWidths[ci] = ww;
-                        }
-                        ci += c.ColSpan > 0 ? c.ColSpan : 1;
-                    }
-                }
-                rowIdx++;
+                foreach (var node in row.Children)
+                    if (node is TableCellNode c)
+                        fromFirstRow += c.ColSpan > 0 ? c.ColSpan : 1;
+                break; // first row only
             }
         }
-        return minWidths;
+        int fromSpec = table.Columns?.Count ?? 0;
+        return Math.Max(fromFirstRow, fromSpec);
+    }
+
+    /// <summary>
+    /// Assigns every cell its true starting column, tracking rowspan occupancy so
+    /// rows beneath a rowspan are shifted right past the columns it still holds.
+    /// Returns one entry per AST row, each listing the cells placed in that row.
+    /// </summary>
+    private static List<List<PlacedCell>> BuildTableGrid(TableNode table, int colCount)
+    {
+        var grid = new List<List<PlacedCell>>();
+        var rowsLeft = new int[colCount]; // remaining rows each column is held by a rowspan
+
+        foreach (var child in table.Children)
+        {
+            if (child is not TableRowNode row) continue;
+
+            var placed = new List<PlacedCell>();
+            int col = 0;
+            foreach (var node in row.Children)
+            {
+                if (node is not TableCellNode cell) continue;
+
+                while (col < colCount && rowsLeft[col] > 0) col++; // skip held columns
+                if (col >= colCount) break;
+
+                int span = cell.ColSpan > 0 ? cell.ColSpan : 1;
+                if (col + span > colCount) span = colCount - col;
+                int rowSpan = cell.RowSpan > 0 ? cell.RowSpan : 1;
+
+                placed.Add(new PlacedCell(cell, col, span));
+
+                if (rowSpan > 1)
+                    for (int s = 0; s < span; s++)
+                        rowsLeft[col + s] = rowSpan;
+
+                col += span;
+            }
+            grid.Add(placed);
+
+            // One grid row consumed: release a row of each active rowspan.
+            for (int c = 0; c < colCount; c++)
+                if (rowsLeft[c] > 0) rowsLeft[c]--;
+        }
+        return grid;
+    }
+
+    /// <summary>
+    /// Per-column natural (full unwrapped text) and minimum (longest unbreakable
+    /// word) widths — including padding. Cells occupying a single column size that
+    /// column directly; a spanning cell only raises the columns it covers when
+    /// their combined width falls short of what it needs, with the shortfall spread
+    /// evenly across them — so a wide spanned cell never starves a single column
+    /// (#50). Header-row cells are measured with the (wider) bold font.
+    /// </summary>
+    private (float[] Natural, float[] Min) ComputeSpanAwareColumnWidths(
+        PdfWriter w, List<List<PlacedCell>> grid, bool hasHeader, int colCount, float cellPadding)
+    {
+        var natural = new float[colCount];
+        var min = new float[colCount];
+        var spans = new List<(int Col, int Span, float Natural, float Min)>();
+
+        for (int ri = 0; ri < grid.Count; ri++)
+        {
+            string font = (hasHeader && ri == 0) ? _fontBold : _fontRegular;
+            foreach (var p in grid[ri])
+            {
+                string text = GetPlainText(p.Cell.Inlines, p.Cell.Text);
+                float full = w.MeasureText(text, font, _bodyFontSize) + 2 * cellPadding;
+                float word = 0;
+                foreach (var wd in text.Split(' '))
+                {
+                    if (wd.Length == 0) continue;
+                    float ww = w.MeasureText(wd, font, _bodyFontSize) + 2 * cellPadding;
+                    if (ww > word) word = ww;
+                }
+
+                if (p.ColSpan <= 1)
+                {
+                    if (full > natural[p.Col]) natural[p.Col] = full;
+                    if (word > min[p.Col]) min[p.Col] = word;
+                }
+                else
+                {
+                    spans.Add((p.Col, p.ColSpan, full, word));
+                }
+            }
+        }
+
+        // Spread each spanning cell's requirement across the columns it covers.
+        foreach (var (col, span, fullW, wordW) in spans)
+        {
+            float curNatural = 0, curMin = 0;
+            for (int s = 0; s < span && col + s < colCount; s++) { curNatural += natural[col + s]; curMin += min[col + s]; }
+            if (fullW > curNatural)
+            {
+                float add = (fullW - curNatural) / span;
+                for (int s = 0; s < span && col + s < colCount; s++) natural[col + s] += add;
+            }
+            if (wordW > curMin)
+            {
+                float add = (wordW - curMin) / span;
+                for (int s = 0; s < span && col + s < colCount; s++) min[col + s] += add;
+            }
+        }
+
+        // Columns touched only by empty cells still need a sliver so the grid is intact.
+        for (int c = 0; c < colCount; c++)
+            if (natural[c] <= 0) natural[c] = 2 * cellPadding;
+
+        return (natural, min);
     }
 
     /// <summary>
@@ -336,50 +397,37 @@ public sealed partial class PdfRenderer
     /// Header cells are measured bold. This is the last-resort guarantee that
     /// columns never visually overlap, complementing the width allocation.
     /// </summary>
-    private float ComputeTableFontScale(PdfWriter w, TableNode table, float[] colWidths, int colCount, float cellPadding)
+    private float ComputeTableFontScale(PdfWriter w, List<List<PlacedCell>> grid, bool hasHeader, float[] colWidths, int colCount, float cellPadding)
     {
         float scale = 1f;
-        int rowIdx = 0;
-        foreach (var child in table.Children)
+        for (int ri = 0; ri < grid.Count; ri++)
         {
-            if (child is TableRowNode r)
+            string font = (hasHeader && ri == 0) ? _fontBold : _fontRegular;
+            foreach (var p in grid[ri])
             {
-                string font = (table.HasHeader && rowIdx == 0) ? _fontBold : _fontRegular;
-                int ci = 0;
-                foreach (var cell in r.Children)
-                {
-                    if (cell is TableCellNode c && ci < colCount)
-                    {
-                        int span = c.ColSpan > 0 ? c.ColSpan : 1;
-                        float avail = 0f;
-                        for (int s = 0; s < span && ci + s < colCount; s++)
-                            avail += colWidths[ci + s];
-                        avail -= 2 * cellPadding;
+                float avail = 0f;
+                for (int s = 0; s < p.ColSpan && p.Col + s < colCount; s++)
+                    avail += colWidths[p.Col + s];
+                avail -= 2 * cellPadding;
+                if (avail <= 0f) continue;
 
-                        if (avail > 0f)
-                        {
-                            string text = GetPlainText(c.Inlines, c.Text);
-                            foreach (var word in text.Split(' '))
-                            {
-                                if (word.Length == 0) continue;
-                                float ww = w.MeasureText(word, font, _bodyFontSize);
-                                if (ww > avail)
-                                {
-                                    float need = avail / ww;
-                                    if (need < scale) scale = need;
-                                }
-                            }
-                        }
-                        ci += span;
+                string text = GetPlainText(p.Cell.Inlines, p.Cell.Text);
+                foreach (var word in text.Split(' '))
+                {
+                    if (word.Length == 0) continue;
+                    float ww = w.MeasureText(word, font, _bodyFontSize);
+                    if (ww > avail)
+                    {
+                        float need = avail / ww;
+                        if (need < scale) scale = need;
                     }
                 }
-                rowIdx++;
             }
         }
         return scale;
     }
 
-    private void RenderTableHeader(PdfWriter w, TableRowNode headerRow, float[] colWidths,
+    private void RenderTableHeader(PdfWriter w, List<PlacedCell> headerRow, float[] colWidths,
         float cellPadding, float fontSize, IReadOnlyList<TableColumnSpec>? columns)
     {
         // Measure header row height first (need it for background fill)
@@ -416,53 +464,47 @@ public sealed partial class PdfRenderer
         w.SetStrokeColor(0, 0, 0);
     }
 
-    private float MeasureRowHeight(PdfWriter w, TableRowNode row, float[] colWidths,
+    private float MeasureRowHeight(PdfWriter w, List<PlacedCell> placed, float[] colWidths,
         float cellPadding, string font, float fontSize)
     {
-        int colIndex = 0;
         int maxLines = 1;
-        foreach (var child in row.Children)
+        foreach (var p in placed)
         {
-            if (child is TableCellNode cell)
-            {
-                float cellWidth = 0;
-                for (int s = 0; s < cell.ColSpan && colIndex + s < colWidths.Length; s++)
-                    cellWidth += colWidths[colIndex + s];
-                string text = GetPlainText(cell.Inlines, cell.Text);
-                var lines = w.WrapText(text, font, fontSize, cellWidth - 2 * cellPadding);
-                if (lines.Count > maxLines) maxLines = lines.Count;
-                colIndex += cell.ColSpan;
-            }
+            float cellWidth = 0;
+            for (int s = 0; s < p.ColSpan && p.Col + s < colWidths.Length; s++)
+                cellWidth += colWidths[p.Col + s];
+            string text = GetPlainText(p.Cell.Inlines, p.Cell.Text);
+            var lines = w.WrapText(text, font, fontSize, cellWidth - 2 * cellPadding);
+            if (lines.Count > maxLines) maxLines = lines.Count;
         }
         return maxLines * _bodyLeading;
     }
 
-    private void RenderTableRow(PdfWriter w, TableRowNode row, float[] colWidths,
+    private void RenderTableRow(PdfWriter w, List<PlacedCell> placed, float[] colWidths,
         float cellPadding, string font, float fontSize, IReadOnlyList<TableColumnSpec>? columns)
     {
-        // First pass: wrap text and determine row height
-        var cellWrapped = new List<(List<string> Lines, float CellWidth, TableAlignment? Align, int ColSpan)>();
-        int colIndex = 0;
+        // First pass: wrap text, and resolve each cell's absolute x from its column.
+        var cellWrapped = new List<(List<string> Lines, float X, float CellWidth, TableAlignment? Align)>();
 
-        foreach (var child in row.Children)
+        foreach (var p in placed)
         {
-            if (child is TableCellNode cell)
-            {
-                string text = GetPlainText(cell.Inlines, cell.Text);
+            string text = GetPlainText(p.Cell.Inlines, p.Cell.Text);
 
-                float cellWidth = 0;
-                for (int s = 0; s < cell.ColSpan && colIndex + s < colWidths.Length; s++)
-                    cellWidth += colWidths[colIndex + s];
+            float cellX = w.MarginLeftValue;
+            for (int c = 0; c < p.Col && c < colWidths.Length; c++)
+                cellX += colWidths[c];
 
-                var lines = w.WrapText(text, font, fontSize, cellWidth - 2 * cellPadding);
+            float cellWidth = 0;
+            for (int s = 0; s < p.ColSpan && p.Col + s < colWidths.Length; s++)
+                cellWidth += colWidths[p.Col + s];
 
-                var align = cell.Alignment;
-                if (align is null && columns is not null && colIndex < columns.Count)
-                    align = columns[colIndex].Alignment;
+            var lines = w.WrapText(text, font, fontSize, cellWidth - 2 * cellPadding);
 
-                cellWrapped.Add((lines, cellWidth, align, cell.ColSpan));
-                colIndex += cell.ColSpan;
-            }
+            var align = p.Cell.Alignment;
+            if (align is null && columns is not null && p.Col < columns.Count)
+                align = columns[p.Col].Alignment;
+
+            cellWrapped.Add((lines, cellX, cellWidth, align));
         }
 
         // Row height = max number of lines * leading
@@ -475,11 +517,10 @@ public sealed partial class PdfRenderer
             w.EnsurePage(); // Force new page
         }
 
-        // Second pass: render each cell's lines
-        float x = w.MarginLeftValue;
+        // Second pass: render each cell's lines at its own column x.
         float baseY = w.CursorY;
 
-        foreach (var (lines, cellWidth, align, colSpan) in cellWrapped)
+        foreach (var (lines, x, cellWidth, align) in cellWrapped)
         {
             float lineY = baseY;
             float availWidth = cellWidth - 2 * cellPadding;
@@ -518,7 +559,6 @@ public sealed partial class PdfRenderer
                 w.WriteText(line, font, fontSize, textX, lineY);
                 lineY -= _bodyLeading;
             }
-            x += cellWidth;
         }
 
         // Move cursor past the entire row
