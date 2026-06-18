@@ -48,7 +48,7 @@ public sealed partial class PdfRenderer
         // the column it truly starts in (rows beneath a rowspan shift right past
         // the occupied columns). Without this, content was attributed to the wrong
         // columns and rowspan-heavy tables over-shrank to micro-text (#50).
-        var grid = BuildTableGrid(table, colCount);
+        var grid = BuildTableGrid(table, colCount, footnotes);
 
         // Per-column natural / minimum widths from cells that occupy a single
         // column; a spanning cell's requirement is spread across the columns it
@@ -193,8 +193,14 @@ public sealed partial class PdfRenderer
         w.MoveCursor(_paragraphSpacingAfter);
     }
 
-    /// <summary>A table cell placed on the column grid: its starting column and span.</summary>
-    private sealed record PlacedCell(TableCellNode Cell, int Col, int ColSpan);
+    /// <summary>
+    /// A table cell placed on the column grid: its starting column, span, and the
+    /// display text used for measuring/rendering. <see cref="Text"/> is resolved
+    /// once when the grid is built (footnotes registered and replaced with their
+    /// <c>[n]</c> marker, #57), so the repeated measure/render passes reuse it
+    /// without re-registering.
+    /// </summary>
+    private sealed record PlacedCell(TableCellNode Cell, int Col, int ColSpan, string Text);
 
     /// <summary>
     /// The table's true column count: the sum of the colspans in the first row
@@ -223,7 +229,7 @@ public sealed partial class PdfRenderer
     /// rows beneath a rowspan are shifted right past the columns it still holds.
     /// Returns one entry per AST row, each listing the cells placed in that row.
     /// </summary>
-    private static List<List<PlacedCell>> BuildTableGrid(TableNode table, int colCount)
+    private List<List<PlacedCell>> BuildTableGrid(TableNode table, int colCount, FootnoteState footnotes)
     {
         var grid = new List<List<PlacedCell>>();
         var rowsLeft = new int[colCount]; // remaining rows each column is held by a rowspan
@@ -245,7 +251,11 @@ public sealed partial class PdfRenderer
                 if (col + span > colCount) span = colCount - col;
                 int rowSpan = cell.RowSpan > 0 ? cell.RowSpan : 1;
 
-                placed.Add(new PlacedCell(cell, col, span));
+                // Resolve the cell's display text once — registering any footnotes
+                // and substituting their [n] marker (#57). Done here so the later
+                // measure/render passes reuse it without re-registering.
+                string text = GetPlainText(cell.Inlines, cell.Text, footnotes);
+                placed.Add(new PlacedCell(cell, col, span, text));
 
                 if (rowSpan > 1)
                     for (int s = 0; s < span; s++)
@@ -282,7 +292,7 @@ public sealed partial class PdfRenderer
             string font = (hasHeader && ri == 0) ? _fontBold : _fontRegular;
             foreach (var p in grid[ri])
             {
-                string text = GetPlainText(p.Cell.Inlines, p.Cell.Text);
+                string text = p.Text;
                 float full = w.MeasureText(text, font, _bodyFontSize) + 2 * cellPadding;
                 float word = 0;
                 foreach (var wd in text.Split(' '))
@@ -406,7 +416,7 @@ public sealed partial class PdfRenderer
                 avail -= 2 * cellPadding;
                 if (avail <= 0f) continue;
 
-                string text = GetPlainText(p.Cell.Inlines, p.Cell.Text);
+                string text = p.Text;
                 foreach (var word in text.Split(' '))
                 {
                     if (word.Length == 0) continue;
@@ -463,7 +473,7 @@ public sealed partial class PdfRenderer
             float cellWidth = 0;
             for (int s = 0; s < p.ColSpan && p.Col + s < colWidths.Length; s++)
                 cellWidth += colWidths[p.Col + s];
-            string text = GetPlainText(p.Cell.Inlines, p.Cell.Text);
+            string text = p.Text;
             var lines = w.WrapText(text, font, fontSize, cellWidth - 2 * cellPadding);
             if (lines.Count > maxLines) maxLines = lines.Count;
         }
@@ -479,7 +489,7 @@ public sealed partial class PdfRenderer
 
         foreach (var p in placed)
         {
-            string text = GetPlainText(p.Cell.Inlines, p.Cell.Text);
+            string text = p.Text;
 
             float cellX = w.MarginLeftValue;
             for (int c = 0; c < p.Col && c < colWidths.Length; c++)

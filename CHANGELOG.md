@@ -7,6 +7,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **PDF: footnotes inside table cells now produce a marker and a list entry (#57).**
+  A `footnote:[…]` in a table cell was rendered as its body text inline — no `[n]`
+  reference marker, no entry in the document footnote list, and the inlined body
+  bloated the column width. Cell footnotes are now registered and replaced with
+  their `[n]` marker (matching paragraph rendering), and a reused attribute
+  footnote (e.g. `{myfn}`) deduplicates to its existing number. Registration
+  happens once per cell when the table grid is built, so the repeated
+  measure/render passes don't double-count.
 - **PDF: tables now render full cell borders by default and honour `grid=`/`frame=` (#59).**
   PDF tables drew horizontal row rules only — no vertical column borders — diverging
   from AsciiDoc's default `grid=all` and from asciidoctor-pdf. Tables now draw the
