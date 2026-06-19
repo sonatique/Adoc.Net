@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **PDF: footnote markers are now superscript, clickable internal links (#64).**
+  A footnote reference rendered as a full-size, inline `[n]` that wasn't a
+  hyperlink, with a stray space before any following punctuation (`a [1] .`).
+  Markers now render as a smaller, raised superscript that hugs the preceding
+  word (no space before a following `.`/`,`/etc.) and is a clickable internal
+  link (`/Link` → `/GoTo`) to the footnote entry; the footnote entry's number
+  links back to the (first) reference. Matches asciidoctor-pdf's navigable
+  footnotes. (Footnote markers inside table cells remain plain text.)
+
 ## [1.0.16] - 2026-06-19
 
 A PDF-tables release plus a parser diagnostic: footnotes inside table cells now
