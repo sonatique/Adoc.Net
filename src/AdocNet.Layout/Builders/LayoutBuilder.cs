@@ -6,10 +6,23 @@ namespace AdocNet.Layout.Builders;
 
 /// <summary>
 /// Converts an AST <see cref="DocumentNode"/> into a <see cref="DocumentLayout"/> tree.
-/// Pure function: no side effects, no state.
 /// </summary>
+/// <remarks>
+/// A single <see cref="Build"/> call is self-contained: it carries transient
+/// footnote-numbering state for the duration of that call only and clears it
+/// before returning, so one builder instance can be reused across documents
+/// (as the incremental renderer does). Output is a deterministic function of
+/// the input document.
+/// </remarks>
 public class LayoutBuilder
 {
+    /// <summary>
+    /// Footnotes collected during the current <see cref="Build"/> call. Non-null
+    /// only while building; cleared before the footnotes area is rendered so a
+    /// footnote nested inside a footnote body can't renumber the document.
+    /// </summary>
+    private FootnoteCollector? _footnotes;
+
     /// <summary>
     /// Builds a <see cref="DocumentLayout"/> from the given AST document.
     /// </summary>
@@ -17,11 +30,24 @@ public class LayoutBuilder
     /// <returns>A layout tree suitable for rendering.</returns>
     public DocumentLayout Build(DocumentNode document)
     {
-        var blocks = BuildBlocks(document.Children);
+        _footnotes = new FootnoteCollector();
+
+        var blocks = new List<BlockLayout>();
+        foreach (var child in document.Children)
+        {
+            BuildBlock(child, blocks);
+        }
+
+        // Footnote references become [n] markers in the body (see BuildInlineCore);
+        // their bodies are collected here into a trailing footnotes area, matching
+        // the HTML/PDF converters (issue #63).
+        AppendFootnotesArea(blocks);
+
+        _footnotes = null;
         return new DocumentLayout(document.Title, blocks);
     }
 
-    private static IReadOnlyList<BlockLayout> BuildBlocks(IReadOnlyList<AstNode> children)
+    private IReadOnlyList<BlockLayout> BuildBlocks(IReadOnlyList<AstNode> children)
     {
         if (children.Count == 0)
             return Array.Empty<BlockLayout>();
@@ -34,7 +60,7 @@ public class LayoutBuilder
         return result;
     }
 
-    private static void BuildBlock(AstNode node, List<BlockLayout> output)
+    private void BuildBlock(AstNode node, List<BlockLayout> output)
     {
         switch (node)
         {
@@ -69,7 +95,7 @@ public class LayoutBuilder
         }
     }
 
-    private static void BuildSection(SectionNode section, List<BlockLayout> output)
+    private void BuildSection(SectionNode section, List<BlockLayout> output)
     {
         var inlines = BuildInlines(section.TitleInlines, HeadingContentOrigin(section));
         output.Add(new HeadingLayout(section.Level, inlines) { Source = section.Source });
@@ -80,7 +106,7 @@ public class LayoutBuilder
         }
     }
 
-    private static ParagraphLayout BuildParagraph(ParagraphNode paragraph)
+    private ParagraphLayout BuildParagraph(ParagraphNode paragraph)
     {
         // A paragraph's inline buffer begins exactly at its source start
         // (col 1, no marker), so the block start is the content origin.
@@ -88,7 +114,7 @@ public class LayoutBuilder
         return new ParagraphLayout(inlines) { Source = paragraph.Source };
     }
 
-    private static ListLayout BuildList(ListNode list)
+    private ListLayout BuildList(ListNode list)
     {
         bool ordered = list.ListKind == ListKind.Ordered;
         var items = new List<ListItemLayout>();
@@ -102,7 +128,7 @@ public class LayoutBuilder
         return new ListLayout(ordered, items) { Source = list.Source };
     }
 
-    private static ListItemLayout BuildListItem(ListItemNode item)
+    private ListItemLayout BuildListItem(ListItemNode item)
     {
         // The item's source range starts at the list marker; the inline text
         // begins after it. We don't have the marker width on the AST, so use
@@ -113,7 +139,7 @@ public class LayoutBuilder
         return new ListItemLayout(inlines, blocks);
     }
 
-    private static void BuildDelimitedBlock(DelimitedBlockNode delimited, List<BlockLayout> output)
+    private void BuildDelimitedBlock(DelimitedBlockNode delimited, List<BlockLayout> output)
     {
         switch (delimited.BlockKind)
         {
@@ -137,7 +163,7 @@ public class LayoutBuilder
         }
     }
 
-    private static AdmonitionLayout BuildAdmonition(AdmonitionNode admonition)
+    private AdmonitionLayout BuildAdmonition(AdmonitionNode admonition)
     {
         var kind = ParseAdmonitionKind(admonition.AdmonitionType);
 
@@ -158,7 +184,7 @@ public class LayoutBuilder
         return new AdmonitionLayout(kind, blocks) { Source = admonition.Source };
     }
 
-    private static TableLayout BuildTable(TableNode table)
+    private TableLayout BuildTable(TableNode table)
     {
         var rows = new List<TableRowLayout>();
         for (int i = 0; i < table.Children.Count; i++)
@@ -172,7 +198,7 @@ public class LayoutBuilder
         return new TableLayout(table.Title, table.HasHeader, table.HasFooter, rows) { Source = table.Source };
     }
 
-    private static TableRowLayout BuildTableRow(TableRowNode rowNode, bool isHeaderRow)
+    private TableRowLayout BuildTableRow(TableRowNode rowNode, bool isHeaderRow)
     {
         var cells = new List<TableCellLayout>();
         foreach (var child in rowNode.Children)
@@ -200,7 +226,7 @@ public class LayoutBuilder
         return new TableRowLayout(cells) { Source = rowNode.Source };
     }
 
-    private static DescriptionListLayout BuildDescriptionList(DescriptionListNode descList)
+    private DescriptionListLayout BuildDescriptionList(DescriptionListNode descList)
     {
         var items = new List<DescriptionItemLayout>();
         foreach (var child in descList.Children)
@@ -270,7 +296,38 @@ public class LayoutBuilder
         }
     }
 
-    private static IReadOnlyList<InlineLayout> BuildInlines(IReadOnlyList<InlineNode> nodes, SourcePosition contentOrigin)
+    /// <summary>
+    /// Appends a trailing footnotes area (a thematic break followed by one
+    /// paragraph per footnote, each prefixed with its <c>[n]</c> number) when the
+    /// document defined any footnotes. Mirrors the HTML converter's
+    /// <c>&lt;div id="footnotes"&gt;&lt;hr&gt;…</c> section so the live-preview
+    /// path shows footnote bodies in a dedicated area rather than inlining them
+    /// at the reference (issue #63).
+    /// </summary>
+    private void AppendFootnotesArea(List<BlockLayout> blocks)
+    {
+        var collector = _footnotes;
+        if (collector is null || collector.Footnotes.Count == 0)
+            return;
+
+        // Clear the collector before rendering bodies so a footnote nested inside
+        // a footnote body falls back to literal text instead of registering a new
+        // (and renumbering an existing) entry.
+        _footnotes = null;
+
+        blocks.Add(new ThematicBreakLayout());
+        foreach (var (number, _, node) in collector.Footnotes)
+        {
+            var inlines = new List<InlineLayout> { new TextRun("[" + number + "] ") };
+            if (node.Inlines.Count > 0)
+                inlines.AddRange(BuildInlines(node.Inlines, node.Source.Start));
+            else if (node.Text is { Length: > 0 } bodyText)
+                inlines.Add(new TextRun(bodyText));
+            blocks.Add(new ParagraphLayout(inlines) { Source = node.Source });
+        }
+    }
+
+    private IReadOnlyList<InlineLayout> BuildInlines(IReadOnlyList<InlineNode> nodes, SourcePosition contentOrigin)
     {
         if (nodes.Count == 0)
             return Array.Empty<InlineLayout>();
@@ -287,7 +344,7 @@ public class LayoutBuilder
         return result;
     }
 
-    private static InlineLayout? BuildInline(InlineNode node, SourcePosition contentOrigin)
+    private InlineLayout? BuildInline(InlineNode node, SourcePosition contentOrigin)
     {
         // Stamp the source range once here so every inline layout node carries
         // it (for editor caret/selection ↔ source mapping) without repeating the
@@ -351,7 +408,7 @@ public class LayoutBuilder
         return new SourcePosition(start.Line, start.Column + markerWidth);
     }
 
-    private static InlineLayout? BuildInlineCore(InlineNode node, SourcePosition contentOrigin)
+    private InlineLayout? BuildInlineCore(InlineNode node, SourcePosition contentOrigin)
     {
         switch (node)
         {
@@ -381,11 +438,7 @@ public class LayoutBuilder
                 return new TextRun(xref.Label ?? xref.Target);
 
             case FootnoteInlineNode footnote:
-                if (footnote.Text != null)
-                    return new TextRun("[" + footnote.Text + "]");
-                if (footnote.Id != null)
-                    return new TextRun("[" + footnote.Id + "]");
-                return null;
+                return BuildFootnoteMarker(footnote);
 
             case PassthroughInlineNode passthrough:
                 return new TextRun(passthrough.Content);
@@ -416,6 +469,61 @@ public class LayoutBuilder
 
             default:
                 return null;
+        }
+    }
+
+    /// <summary>
+    /// Renders a footnote reference as a <c>[n]</c> marker (matching the HTML and
+    /// PDF converters) and registers its body for the trailing footnotes area.
+    /// When the collector has been cleared — i.e. we are already rendering a
+    /// footnote body — a nested footnote falls back to its literal text so its
+    /// content is never silently dropped (issue #63).
+    /// </summary>
+    private InlineLayout? BuildFootnoteMarker(FootnoteInlineNode footnote)
+    {
+        if (_footnotes is null)
+        {
+            if (footnote.Text is not null)
+                return new TextRun("[" + footnote.Text + "]");
+            if (footnote.Id is not null)
+                return new TextRun("[" + footnote.Id + "]");
+            return null;
+        }
+
+        int number = _footnotes.Register(footnote);
+        return new TextRun("[" + number + "]");
+    }
+
+    /// <summary>
+    /// Assigns document-wide footnote numbers during a single build, mirroring
+    /// the HTML converter's footnote state: anonymous footnotes get the next
+    /// number, named footnotes (and their <c>footnote:id[]</c> back-references)
+    /// reuse the first number seen for that id.
+    /// </summary>
+    private sealed class FootnoteCollector
+    {
+        public List<(int Number, string? Id, FootnoteInlineNode Node)> Footnotes { get; } = new();
+        private int _next = 1;
+
+        /// <summary>
+        /// Registers a footnote and returns its display number. A named footnote
+        /// or a back-reference whose id was already registered reuses the existing
+        /// number (and does not add a second body entry).
+        /// </summary>
+        public int Register(FootnoteInlineNode node)
+        {
+            if (node.Id is not null)
+            {
+                foreach (var (num, id, _) in Footnotes)
+                {
+                    if (id == node.Id)
+                        return num;
+                }
+            }
+
+            int number = _next++;
+            Footnotes.Add((number, node.Id, node));
+            return number;
         }
     }
 }
