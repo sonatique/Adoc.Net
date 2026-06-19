@@ -167,6 +167,20 @@ internal sealed partial class PdfWriter
     }
 
     /// <summary>
+    /// Registers a named destination on the current page at an explicit vertical
+    /// position (rather than the cursor). Used to anchor a destination at a
+    /// segment's rendered baseline — e.g. a footnote marker so the footnote
+    /// entry can link back to it (issue #64). The first registration for an id
+    /// wins, so a footnote referenced multiple times links back to its first
+    /// occurrence (matching asciidoctor-pdf).
+    /// </summary>
+    internal void AddNamedDestination(string id, float y)
+    {
+        if (!_namedDestinations.ContainsKey(id))
+            _namedDestinations[id] = (_currentPageNumber - 1, y);
+    }
+
+    /// <summary>
     /// Returns the 1-based page number where the named destination was registered,
     /// or null if no destination with that id exists. Used by the TOC renderer
     /// to fill in page numbers after content rendering completes.

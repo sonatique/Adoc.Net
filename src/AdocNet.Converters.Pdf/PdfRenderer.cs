@@ -106,29 +106,33 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         public List<(int Number, string? Id, FootnoteInlineNode Node)> Footnotes { get; } = [];
         private int _nextNumber = 1;
 
-        public int Register(FootnoteInlineNode node)
+        /// <summary>
+        /// Registers a footnote and returns its display number plus whether this
+        /// is the first reference to it (i.e. a newly allocated number rather than
+        /// a reuse of a named footnote / back-reference). The first reference owns
+        /// the back-link target so the footnote entry can link back to it.
+        /// </summary>
+        public (int Number, bool IsFirstReference) Register(FootnoteInlineNode node)
         {
-            if (node.Text is null && node.Id is not null)
-            {
-                foreach (var (num, id, _) in Footnotes)
-                {
-                    if (id == node.Id) return num;
-                }
-            }
-
             if (node.Id is not null)
             {
                 foreach (var (num, id, _) in Footnotes)
                 {
-                    if (id == node.Id) return num;
+                    if (id == node.Id) return (num, false);
                 }
             }
 
             int number = _nextNumber++;
             Footnotes.Add((number, node.Id, node));
-            return number;
+            return (number, true);
         }
     }
+
+    /// <summary>Named-destination id of a footnote entry (the GoTo target of its marker).</summary>
+    private static string FootnoteDestId(int number) => $"_footnotedef_{number}";
+
+    /// <summary>Named-destination id of a footnote's first reference (the GoTo target of its back-link).</summary>
+    private static string FootnoteRefDestId(int number) => $"_footnoteref_{number}";
 
     // ── Public API ──────────────────────────────────────────────────────
 
@@ -465,8 +469,17 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         foreach (var (number, _, node) in footnotes.Footnotes)
         {
             w.EnsurePage();
+            // Anchor the forward target so a body marker's link lands on this entry.
+            w.AddNamedDestination(FootnoteDestId(number));
             var text = GetPlainText(node.Inlines, node.Text ?? string.Empty);
-            w.WriteWrappedText($"{number}. {text}", _fontRegular, _smallFontSize, _codeLeading);
+            // The leading number links back to the (first) reference marker (#64).
+            var segments = new List<TextSegment>
+            {
+                new($"{number}.", _fontRegular, _smallFontSize,
+                    LinkUri: $"#internal#{FootnoteRefDestId(number)}"),
+                new($" {text}", _fontRegular, _smallFontSize),
+            };
+            w.WriteWrappedSegments(segments, _codeLeading, justify: false);
         }
     }
 
@@ -992,7 +1005,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                     // the footnote and emit its [n] marker — matching paragraph rendering
                     // — instead of inlining the body text and dropping it from the list.
                     if (footnotes is not null)
-                        sb.Append($"[{footnotes.Register(fn)}]");
+                        sb.Append($"[{footnotes.Register(fn).Number}]");
                     else
                         sb.Append(fn.Text ?? string.Empty);
                     break;

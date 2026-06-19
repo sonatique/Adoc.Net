@@ -1068,8 +1068,14 @@ public sealed partial class PdfRenderer
                 break;
 
             case FootnoteInlineNode footnote:
-                int fnNum = footnotes.Register(footnote);
-                segments.Add(new TextSegment($"[{fnNum}]", defaultFont, defaultFontSize));
+                var (fnNum, fnFirst) = footnotes.Register(footnote);
+                // Render the marker as a small superscript that links to the footnote
+                // entry; the first reference also anchors the entry's back-link (#64).
+                segments.Add(new TextSegment(
+                    $"[{fnNum}]", defaultFont, defaultFontSize * PdfWriter.SuperscriptScale,
+                    LinkUri: $"#internal#{FootnoteDestId(fnNum)}",
+                    Superscript: true,
+                    DestId: fnFirst ? FootnoteRefDestId(fnNum) : null));
                 break;
 
             case InlineMacroNode macro:
