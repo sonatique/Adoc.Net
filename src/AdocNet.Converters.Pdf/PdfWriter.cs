@@ -63,6 +63,12 @@ internal sealed partial class PdfWriter
     private float _contentWidth;
     private int _currentPageNumber;
 
+    // ── Superscript geometry (footnote markers, issue #64) ───────────
+    /// <summary>Fraction of the surrounding text size used for superscript glyphs.</summary>
+    internal const float SuperscriptScale = 0.7f;
+    /// <summary>Baseline rise of a superscript segment, as a fraction of its (already reduced) font size.</summary>
+    private const float SuperscriptRiseFactor = 0.45f;
+
     // ── Link annotations for the current page ─────────────────────────
     private readonly List<PdfAnnotation> _currentAnnotations = [];
     // Internal link annotations (GoTo destinations within the document)
@@ -830,6 +836,11 @@ internal sealed partial class PdfWriter
         {
             _currentStream.Append($"/{seg.Font} {Fmt(seg.FontSize)} Tf\n");
 
+            // Raise superscript segments (e.g. footnote markers) above the baseline.
+            float rise = seg.Superscript ? seg.FontSize * SuperscriptRiseFactor : 0f;
+            if (rise != 0f)
+                _currentStream.Append($"{Fmt(rise)} Ts\n");
+
             // Apply explicit color (e.g. codespan red) or link color when set.
             // Explicit Color takes precedence over LinkColor.
             PdfColor? activeColor = seg.Color
@@ -859,15 +870,20 @@ internal sealed partial class PdfWriter
                 else
                     _currentStream.Append("0 0 0 rg\n");
             }
+            if (rise != 0f)
+                _currentStream.Append("0 Ts\n");
 
             float segWidth = MeasureText(seg.Text, seg.Font, seg.FontSize);
+            float rectY = y - 2 + rise;
+            if (seg.DestId is not null)
+                AddNamedDestination(seg.DestId, y + rise);
             if (seg.LinkUri is not null)
             {
                 if (seg.LinkUri.StartsWith("#internal#"))
-                    AddInternalLinkAnnotation(currentX, y - 2, segWidth, seg.FontSize + 4,
+                    AddInternalLinkAnnotation(currentX, rectY, segWidth, seg.FontSize + 4,
                         seg.LinkUri.Substring(10));
                 else
-                    AddLinkAnnotation(currentX, y - 2, segWidth, seg.FontSize + 4, seg.LinkUri);
+                    AddLinkAnnotation(currentX, rectY, segWidth, seg.FontSize + 4, seg.LinkUri);
             }
             currentX += segWidth;
         }
@@ -890,7 +906,14 @@ internal record struct PdfInternalLink(float X, float Y, float Width, float Heig
 internal readonly record struct DeferredInternalLink(int PlaceholderObjId, PdfInternalLink Link);
 
 /// <summary>A text segment with font and size info for mixed-style rendering.</summary>
-internal readonly record struct TextSegment(string Text, string Font, float FontSize, string? LinkUri = null, PdfColor? Background = null, PdfColor? Color = null);
+/// <remarks>
+/// <paramref name="Superscript"/> raises the segment above the baseline (its
+/// <paramref name="FontSize"/> is expected to already be the reduced superscript
+/// size). <paramref name="DestId"/> registers a named destination at the
+/// segment's rendered position — used so a footnote marker can be a GoTo target
+/// for the footnote's back-link (issue #64).
+/// </remarks>
+internal readonly record struct TextSegment(string Text, string Font, float FontSize, string? LinkUri = null, PdfColor? Background = null, PdfColor? Color = null, bool Superscript = false, string? DestId = null);
 
 /// <summary>An outline/bookmark entry for the PDF document outline tree.</summary>
 internal sealed class OutlineEntry

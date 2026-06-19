@@ -170,7 +170,7 @@ internal sealed partial class PdfWriter
                     // Flush word buffer as a segment on the current line
                     if (wordBuffer.Length > 0)
                     {
-                        currentLine.Add(new TextSegment(wordBuffer.ToString(), seg.Font, seg.FontSize, seg.LinkUri, seg.Background, seg.Color));
+                        currentLine.Add(seg with { Text = wordBuffer.ToString() });
                         wordBuffer.Clear();
                     }
 
@@ -184,12 +184,16 @@ internal sealed partial class PdfWriter
                     wordBuffer.Append(' ');
                 else if (currentWidth > 0 && i == 0)
                 {
-                    // Add space between previous segment and this one,
-                    // but only if previous segment didn't already end with whitespace
+                    // Add space between previous segment and this one, but only
+                    // if the previous segment didn't already end with whitespace
+                    // and this one doesn't open with punctuation that hugs the
+                    // preceding text. Without the punctuation guard, a footnote
+                    // marker followed by a period reads as "word [1] ." (issue #64).
                     bool prevEndsWithSpace = currentLine.Count > 0
                         && currentLine[^1].Text.Length > 0
                         && currentLine[^1].Text[^1] == ' ';
-                    if (!prevEndsWithSpace)
+                    bool startsWithTightPunct = word.Length > 0 && IsTightFollowingPunctuation(word[0]);
+                    if (!prevEndsWithSpace && !startsWithTightPunct)
                         wordBuffer.Append(' ');
                     else
                         neededWidth = wordWidth; // No space needed, recalculate
@@ -202,7 +206,7 @@ internal sealed partial class PdfWriter
             // Flush remaining words in buffer
             if (wordBuffer.Length > 0)
             {
-                currentLine.Add(new TextSegment(wordBuffer.ToString(), seg.Font, seg.FontSize, seg.LinkUri, seg.Background, seg.Color));
+                currentLine.Add(seg with { Text = wordBuffer.ToString() });
             }
         }
 
@@ -214,6 +218,15 @@ internal sealed partial class PdfWriter
 
         return result;
     }
+
+    /// <summary>
+    /// Punctuation that should sit tight against the preceding text, so no space
+    /// is synthesized before a segment that opens with it (closing punctuation
+    /// and brackets). Used to keep a footnote marker flush with a following
+    /// period/comma, etc. (issue #64).
+    /// </summary>
+    private static bool IsTightFollowingPunctuation(char c) =>
+        c is '.' or ',' or ';' or ':' or '!' or '?' or ')' or ']' or '}';
 
     // ── Wrapped text output ─────────────────────────────────────────────
 
@@ -326,6 +339,11 @@ internal sealed partial class PdfWriter
         {
             _currentStream.Append($"/{seg.Font} {Fmt(seg.FontSize)} Tf\n");
 
+            // Raise superscript segments (e.g. footnote markers) above the baseline.
+            float rise = seg.Superscript ? seg.FontSize * SuperscriptRiseFactor : 0f;
+            if (rise != 0f)
+                _currentStream.Append($"{Fmt(rise)} Ts\n");
+
             // Check if this segment uses a monospace font (Courier or embedded monospace)
             bool isMonospaceFnt = seg.Font == "F4" || // Standard Courier
                 (_embeddedFonts.ContainsKey(seg.Font) && _monospaceFonts.Contains(seg.Font));
@@ -368,6 +386,8 @@ internal sealed partial class PdfWriter
                 else
                     _currentStream.Append("0 0 0 rg\n");
             }
+            if (rise != 0f)
+                _currentStream.Append("0 Ts\n");
 
             float segWidth = MeasureText(seg.Text, seg.Font, seg.FontSize);
             // Account for extra spacing per space in this segment (only for non-monospace)
@@ -376,13 +396,16 @@ internal sealed partial class PdfWriter
                 if (ch == ' ') segSpaces++;
             float adjustedWidth = segWidth + (isMonospaceFnt ? 0 : segSpaces * extraSpacing);
 
+            float rectY = y - 2 + rise;
+            if (seg.DestId is not null)
+                AddNamedDestination(seg.DestId, y + rise);
             if (seg.LinkUri is not null)
             {
                 if (seg.LinkUri.StartsWith("#internal#"))
-                    AddInternalLinkAnnotation(currentX, y - 2, adjustedWidth, seg.FontSize + 4,
+                    AddInternalLinkAnnotation(currentX, rectY, adjustedWidth, seg.FontSize + 4,
                         seg.LinkUri.Substring(10));
                 else
-                    AddLinkAnnotation(currentX, y - 2, adjustedWidth, seg.FontSize + 4, seg.LinkUri);
+                    AddLinkAnnotation(currentX, rectY, adjustedWidth, seg.FontSize + 4, seg.LinkUri);
             }
 
             currentX += adjustedWidth;
