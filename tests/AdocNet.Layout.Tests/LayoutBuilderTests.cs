@@ -257,15 +257,83 @@ public class LayoutBuilderTests
         Assert.That(para.Inlines.Any(i => i is TextRun t && t.Text.Contains("My Label")), Is.True);
     }
 
-    // ── Footnotes ───────────────────────────────────────────────────
+    // ── Footnotes (issue #63) ───────────────────────────────────────
+
+    private static string PlainText(ParagraphLayout para) =>
+        string.Concat(para.Inlines.OfType<TextRun>().Select(t => t.Text));
 
     [Test]
-    public void Footnote_renders_as_bracketed_text()
+    public void Footnote_reference_renders_as_numbered_marker_not_body()
     {
         var layout = Build("Some text.footnote:[This is a footnote.]");
 
         var para = (ParagraphLayout)layout.Children.First(c => c is ParagraphLayout);
-        Assert.That(para.Inlines.Any(i => i is TextRun t && t.Text.Contains("This is a footnote")), Is.True);
+        // The reference is a [1] marker; the body must NOT be inlined at the reference.
+        Assert.That(PlainText(para), Does.Contain("[1]"));
+        Assert.That(PlainText(para), Does.Not.Contain("This is a footnote"));
+    }
+
+    [Test]
+    public void Footnote_body_is_collected_into_trailing_footnotes_area()
+    {
+        var layout = Build("Some text.footnote:[This is a footnote.]");
+
+        // A thematic break separates the body from the footnotes area, whose
+        // entry carries the body text prefixed with its number.
+        Assert.That(layout.Children.Any(c => c is ThematicBreakLayout), Is.True);
+        var entry = layout.Children.OfType<ParagraphLayout>().Last();
+        Assert.That(PlainText(entry), Does.Contain("[1]"));
+        Assert.That(PlainText(entry), Does.Contain("This is a footnote."));
+    }
+
+    [Test]
+    public void Footnotes_number_sequentially()
+    {
+        var layout = Build("First footnote:[one] and second footnote:[two].");
+
+        var para = (ParagraphLayout)layout.Children.First(c => c is ParagraphLayout);
+        Assert.That(PlainText(para), Does.Contain("[1]"));
+        Assert.That(PlainText(para), Does.Contain("[2]"));
+
+        // Two footnote-area entries, in document order.
+        var entries = layout.Children.OfType<ParagraphLayout>().Skip(1).ToList();
+        Assert.That(entries, Has.Count.EqualTo(2));
+        Assert.That(PlainText(entries[0]), Does.Contain("one"));
+        Assert.That(PlainText(entries[1]), Does.Contain("two"));
+    }
+
+    [Test]
+    public void Named_footnote_and_back_reference_share_one_number_and_one_entry()
+    {
+        var layout = Build("See footnote:fn[the body] then again footnote:fn[].");
+
+        var para = (ParagraphLayout)layout.Children.First(c => c is ParagraphLayout);
+        // Both the definition and the back-reference render the same [1] marker.
+        Assert.That(
+            System.Text.RegularExpressions.Regex.Matches(PlainText(para), @"\[1\]"),
+            Has.Count.EqualTo(2));
+
+        // The back-reference does not add a second body entry.
+        var entries = layout.Children.OfType<ParagraphLayout>().Skip(1).ToList();
+        Assert.That(entries, Has.Count.EqualTo(1));
+        Assert.That(PlainText(entries[0]), Does.Contain("the body"));
+    }
+
+    [Test]
+    public void Footnote_in_table_cell_renders_marker_not_inlined_body()
+    {
+        // The originally-observed case: a footnote inside a table cell.
+        var layout = Build("|===\n| Header footnote:[cell note] | B\n| x | y\n|===");
+
+        var table = (TableLayout)layout.Children.First(c => c is TableLayout);
+        var cellText = string.Concat(
+            table.Rows[0].Cells[0].Inlines.OfType<TextRun>().Select(t => t.Text));
+        Assert.That(cellText, Does.Contain("[1]"));
+        Assert.That(cellText, Does.Not.Contain("cell note"));
+
+        // The body surfaces in the trailing footnotes area instead.
+        var entry = layout.Children.OfType<ParagraphLayout>().Last();
+        Assert.That(PlainText(entry), Does.Contain("cell note"));
     }
 
     // ── Passthrough ─────────────────────────────────────────────────
