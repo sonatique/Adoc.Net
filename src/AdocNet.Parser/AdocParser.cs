@@ -116,16 +116,27 @@ public static class AdocParser
         var (filteredText, condDiagnostics, filteredOrigins) = ConditionalPreprocessor.Process(
             sourceText, lineOrigins, condAttrs);
         sourceText = filteredText;
+        // Conditional diagnostics index into the pre-filter (post-include) text, so
+        // translate them to original-source coordinates against the origins valid at
+        // that point — before `lineOrigins` advances to the filtered space (issue #67).
+        foreach (var cd in condDiagnostics)
+            allDiagnostics.Add(TranslateToSource(cd, lineOrigins));
         lineOrigins = filteredOrigins;
-        allDiagnostics.AddRange(condDiagnostics);
 
         // ── Block + inline parsing ────────────────────────────────────────
         // Pass LockedAttributes so document-defined attributes whose names are locked
         // by the host cannot override them (the BlockParser honours this set).
         var parseResult = BlockParser.Parse(sourceText, options.Attributes, options.LockedAttributes);
-        allDiagnostics.AddRange(parseResult.Diagnostics);
+        // BlockParser diagnostics count in the fully-expanded+filtered text. Report
+        // them in original-source coordinates (matching asciidoctor) so file:line is
+        // directly usable even when an include precedes the diagnostic (issue #67).
+        foreach (var pd in parseResult.Diagnostics)
+            allDiagnostics.Add(TranslateToSource(pd, lineOrigins));
 
         // ── Stamp FilePath on diagnostics when a source file is known ─────
+        // Translation above already names the included file for diagnostics that
+        // originate inside an include; this fills the remaining (main-document)
+        // diagnostics with the primary source path so every diagnostic is locatable.
         var filePath = options.SourceFilePath;
         if (filePath is not null)
         {
@@ -199,6 +210,49 @@ public static class AdocParser
         }
 
         return new ParseResult(parseResult.Document, allDiagnostics) { LineOrigins = lineOrigins };
+    }
+
+    /// <summary>
+    /// Re-expresses a diagnostic's range in original-source coordinates by mapping
+    /// each endpoint line through <paramref name="origins"/> (expanded → source). When
+    /// the diagnostic originates inside an included file, its <see cref="Diagnostic.FilePath"/>
+    /// is set to that file so <c>file:line</c> is directly usable (issue #67).
+    /// Columns are preserved; an out-of-range or unknown line keeps its value.
+    /// </summary>
+    private static Diagnostic TranslateToSource(Diagnostic d, IReadOnlyList<LineOrigin> origins)
+    {
+        if (d.Range.IsNone || origins.Count == 0)
+            return d;
+
+        var (startLine, startOrigin) = MapToSource(d.Range.Start.Line, origins);
+        var (endLine, _) = MapToSource(d.Range.End.Line, origins);
+
+        var range = new SourceRange(
+            new SourcePosition(startLine, d.Range.Start.Column),
+            new SourcePosition(endLine, d.Range.End.Column));
+
+        // Name the included file when the diagnostic falls inside one; main-document
+        // diagnostics keep FilePath null here (the caller fills the primary path).
+        string? filePath = d.FilePath;
+        if (startOrigin.IsSynthetic && startOrigin.SourceFile is not null)
+            filePath = startOrigin.SourceFile;
+
+        return d with { Range = range, FilePath = filePath };
+    }
+
+    /// <summary>
+    /// Maps a 1-based expanded line to its original-source line via
+    /// <paramref name="origins"/>, returning the matching <see cref="LineOrigin"/> too.
+    /// Falls back to the input line when out of range or the source line is unknown.
+    /// </summary>
+    private static (int Line, LineOrigin Origin) MapToSource(int expandedLine, IReadOnlyList<LineOrigin> origins)
+    {
+        if (expandedLine >= 1 && expandedLine <= origins.Count)
+        {
+            var o = origins[expandedLine - 1];
+            return (o.SourceLine > 0 ? o.SourceLine : expandedLine, o);
+        }
+        return (expandedLine, LineOrigin.None);
     }
 
     /// <summary>

@@ -7,6 +7,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **Diagnostics now report original-source line numbers, not post-include coordinates (#67).**
+  `ParseResult.Diagnostics` ranges (and therefore the `adocnet` CLI's `file:line`
+  and the LSP's squiggle position) were expressed in post-`include::`-expansion
+  (AST) line numbers, so every diagnostic after an include was shifted by the
+  expanded size of that include. Ranges are now translated to original-source
+  coordinates (matching asciidoctor), and `Diagnostic.FilePath` names the
+  included file when a diagnostic originates inside one — so `file:line` is
+  directly usable. Added `ParseResult.ToSourceLine(int)` to translate AST node
+  positions the same way, and documented the coordinate space on `Diagnostic`.
 - **Layout/Avalonia: footnotes now render as a marker, not inlined body text (#63).**
   The layout path that drives the live preview (`LayoutBuilder` + the Avalonia
   renderer) rendered a `footnote:[…]` as its literal body text inline — e.g. a

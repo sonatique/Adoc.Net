@@ -44,4 +44,25 @@ public sealed record ParseResult(DocumentNode Document, IReadOnlyList<Diagnostic
         origin = LineOrigin.None;
         return false;
     }
+
+    /// <summary>
+    /// Translates a 1-based expanded (AST <see cref="SourcePosition.Line"/>) line to the
+    /// original-source line the author edits, via <see cref="LineOrigins"/>. Returns the
+    /// input line unchanged when no provenance is available or the source line is unknown.
+    /// <para>
+    /// Note: <see cref="Diagnostic.Range"/>s are already reported in source coordinates,
+    /// so this helper is for mapping <em>AST node</em> positions (e.g. for click-to-source
+    /// over the rendered document); diagnostics need no further translation.
+    /// </para>
+    /// </summary>
+    public int ToSourceLine(int expandedLine)
+    {
+        if (expandedLine >= 1 && expandedLine <= LineOrigins.Count)
+        {
+            var line = LineOrigins[expandedLine - 1].SourceLine;
+            if (line > 0)
+                return line;
+        }
+        return expandedLine;
+    }
 }
