@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Layout/Avalonia: footnotes now render as a marker, not inlined body text (#63).**
+  The layout path that drives the live preview (`LayoutBuilder` + the Avalonia
+  renderer) rendered a `footnote:[…]` as its literal body text inline — e.g. a
+  table cell showed `Title[the body…]`. Footnote references now render as a
+  numbered `[n]` marker (matching the HTML and PDF converters), with the bodies
+  collected into a trailing footnotes area (a separator rule followed by one
+  numbered entry per footnote). Numbering is document-wide and named footnotes
+  plus their `footnote:id[]` back-references share a single number and entry.
+
 ## [1.0.16] - 2026-06-19
 
 A PDF-tables release plus a parser diagnostic: footnotes inside table cells now
