@@ -7,6 +7,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **Layout/Avalonia: footnotes now render as a marker, not inlined body text (#63).**
+  The layout path that drives the live preview (`LayoutBuilder` + the Avalonia
+  renderer) rendered a `footnote:[…]` as its literal body text inline — e.g. a
+  table cell showed `Title[the body…]`. Footnote references now render as a
+  numbered `[n]` marker (matching the HTML and PDF converters), with the bodies
+  collected into a trailing footnotes area (a separator rule followed by one
+  numbered entry per footnote). Numbering is document-wide and named footnotes
+  plus their `footnote:id[]` back-references share a single number and entry.
 - **PDF: footnote markers are now superscript, clickable internal links (#64).**
   A footnote reference rendered as a full-size, inline `[n]` that wasn't a
   hyperlink, with a stray space before any following punctuation (`a [1] .`).
