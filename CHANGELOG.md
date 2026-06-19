@@ -5,6 +5,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.17] - 2026-06-19
+
+A footnotes-and-diagnostics release: footnotes render correctly in the
+layout/Avalonia live preview and as superscript clickable links in PDF, and
+diagnostics now report original-source line numbers across `include::` boundaries.
+
 ### Fixed
 
 - **Diagnostics now report original-source line numbers, not post-include coordinates (#67).**

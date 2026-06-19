@@ -14,7 +14,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.16</Version>
+    <Version>1.0.17</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) Sylvain Fasel</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -23,7 +23,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.16: PDF table fixes and a parser diagnostic. #57: footnotes inside table cells now produce a [n] marker and a footnote-list entry (and stop bloating the column) instead of being inlined as body text. #58: an incomplete final table row (fewer cells than the column count) now emits a warning diagnostic with the row's line number instead of being dropped silently. #59: PDF tables render full cell borders (vertical and horizontal) plus an outer frame by default and honour grid=/frame= (all/rows/cols/none, all/topbot/sides/none), span-aware and page-break-safe. See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.17: footnote rendering and diagnostic-coordinate fixes. #63: the layout/Avalonia live-preview path now renders footnotes as a numbered [n] marker with the bodies collected into a trailing footnotes area, instead of inlining the body text at the reference. #64: PDF footnote markers now render as a smaller, raised superscript that is a clickable internal link to the footnote entry (which links back to the reference), with no stray space before following punctuation. #67: diagnostic ranges (and the adocnet CLI's file:line) are now reported in original-source line numbers rather than post-include-expansion coordinates, and Diagnostic.FilePath names the included file when a diagnostic originates inside one; added ParseResult.ToSourceLine(int). See CHANGELOG.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->
