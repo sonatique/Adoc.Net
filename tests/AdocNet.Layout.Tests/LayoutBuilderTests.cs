@@ -259,8 +259,31 @@ public class LayoutBuilderTests
 
     // ── Footnotes (issue #63) ───────────────────────────────────────
 
-    private static string PlainText(ParagraphLayout para) =>
-        string.Concat(para.Inlines.OfType<TextRun>().Select(t => t.Text));
+    /// <summary>Flattens an inline tree to plain text, recursing through wrapper runs.</summary>
+    private static string PlainText(IReadOnlyList<InlineLayout> inlines)
+    {
+        var sb = new System.Text.StringBuilder();
+        void Walk(IReadOnlyList<InlineLayout> items)
+        {
+            foreach (var i in items)
+            {
+                switch (i)
+                {
+                    case TextRun t: sb.Append(t.Text); break;
+                    case BoldRun b: Walk(b.Children); break;
+                    case ItalicRun it: Walk(it.Children); break;
+                    case MonoRun m: Walk(m.Children); break;
+                    case SuperscriptRun s: Walk(s.Children); break;
+                    case SubscriptRun sub: Walk(sub.Children); break;
+                    case LinkRun l: Walk(l.Children); break;
+                }
+            }
+        }
+        Walk(inlines);
+        return sb.ToString();
+    }
+
+    private static string PlainText(ParagraphLayout para) => PlainText(para.Inlines);
 
     [Test]
     public void Footnote_reference_renders_as_numbered_marker_not_body()
@@ -326,14 +349,52 @@ public class LayoutBuilderTests
         var layout = Build("|===\n| Header footnote:[cell note] | B\n| x | y\n|===");
 
         var table = (TableLayout)layout.Children.First(c => c is TableLayout);
-        var cellText = string.Concat(
-            table.Rows[0].Cells[0].Inlines.OfType<TextRun>().Select(t => t.Text));
+        var cellText = PlainText(table.Rows[0].Cells[0].Inlines);
         Assert.That(cellText, Does.Contain("[1]"));
         Assert.That(cellText, Does.Not.Contain("cell note"));
 
         // The body surfaces in the trailing footnotes area instead.
         var entry = layout.Children.OfType<ParagraphLayout>().Last();
         Assert.That(PlainText(entry), Does.Contain("cell note"));
+    }
+
+    [Test]
+    public void Footnote_marker_is_a_superscript_link_to_its_definition()
+    {
+        var layout = Build("x footnote:[note body].");
+
+        var para = (ParagraphLayout)layout.Children.First(c => c is ParagraphLayout);
+        var sup = para.Inlines.OfType<SuperscriptRun>().FirstOrDefault();
+        Assert.That(sup, Is.Not.Null, "the footnote marker should be a superscript run");
+
+        var link = sup!.Children.OfType<LinkRun>().FirstOrDefault();
+        Assert.That(link, Is.Not.Null, "the superscript marker should wrap a link to the definition");
+        Assert.That(link!.Href, Does.StartWith("#_footnotedef_"));
+        Assert.That(PlainText(link.Children), Is.EqualTo("[1]"));
+    }
+
+    // ── Superscript / subscript (issue #71) ─────────────────────────
+
+    [Test]
+    public void Superscript_produces_a_SuperscriptRun()
+    {
+        var layout = Build("E=mc^2^ is famous.");
+
+        var para = (ParagraphLayout)layout.Children.First(c => c is ParagraphLayout);
+        var sup = para.Inlines.OfType<SuperscriptRun>().FirstOrDefault();
+        Assert.That(sup, Is.Not.Null, "^2^ should map to a SuperscriptRun, not a plain TextRun");
+        Assert.That(PlainText(sup!.Children), Is.EqualTo("2"));
+    }
+
+    [Test]
+    public void Subscript_produces_a_SubscriptRun()
+    {
+        var layout = Build("H~2~O is water.");
+
+        var para = (ParagraphLayout)layout.Children.First(c => c is ParagraphLayout);
+        var sub = para.Inlines.OfType<SubscriptRun>().FirstOrDefault();
+        Assert.That(sub, Is.Not.Null, "~2~ should map to a SubscriptRun, not a plain TextRun");
+        Assert.That(PlainText(sub!.Children), Is.EqualTo("2"));
     }
 
     // ── Passthrough ─────────────────────────────────────────────────
