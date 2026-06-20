@@ -5,6 +5,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **Layout: `SuperscriptRun` and `SubscriptRun` inline run types (#71).** The layout
+  inline model previously had no super/subscript run, so the Avalonia live preview
+  flattened `^sup^`, `~sub~`, and footnote markers to plain, full-size, baseline text.
+
+### Fixed
+
+- **Layout/Avalonia: superscript, subscript, and footnote markers now render correctly (#71).**
+  `LayoutBuilder` maps `^…^`/`~…~` to the new `SuperscriptRun`/`SubscriptRun`, and a
+  footnote reference to a superscript marker that is also a link to its definition
+  (`SuperscriptRun > LinkRun > TextRun("[n]")`, using the `_footnotedef_N` anchor
+  convention). `AvaloniaRenderer` draws super/subscript runs smaller and shifted off
+  the baseline (`BaselineAlignment.Superscript`/`Subscript`), so `H₂O`, `E=mc²`, and
+  footnote markers match the exported HTML/PDF instead of showing as ordinary inline
+  text. Footnote markers are clickable via the existing `LinkClicked` event. The new
+  `AvaloniaRenderTheme.BodyFontSize` is the reference size for sizing super/subscript.
+
 ## [1.0.18] - 2026-06-19
 
 A PDF footnote follow-up: footnote markers referenced inside table cells now get

@@ -444,10 +444,10 @@ public class LayoutBuilder
                 return new TextRun(passthrough.Content);
 
             case SuperscriptInlineNode superscript:
-                return new TextRun(superscript.Content);
+                return new SuperscriptRun(new InlineLayout[] { new TextRun(superscript.Content) });
 
             case SubscriptInlineNode subscript:
-                return new TextRun(subscript.Content);
+                return new SubscriptRun(new InlineLayout[] { new TextRun(subscript.Content) });
 
             case InlineAnchorNode:
                 return null;
@@ -473,26 +473,40 @@ public class LayoutBuilder
     }
 
     /// <summary>
-    /// Renders a footnote reference as a <c>[n]</c> marker (matching the HTML and
-    /// PDF converters) and registers its body for the trailing footnotes area.
-    /// When the collector has been cleared — i.e. we are already rendering a
-    /// footnote body — a nested footnote falls back to its literal text so its
-    /// content is never silently dropped (issue #63).
+    /// Renders a footnote reference as a superscript <c>[n]</c> marker that links to
+    /// its definition (matching the HTML/PDF converters: a raised, clickable marker)
+    /// and registers its body for the trailing footnotes area. When the collector has
+    /// been cleared — i.e. we are already rendering a footnote body — a nested footnote
+    /// falls back to a plain superscript marker (no link/number) so its content is
+    /// never silently dropped (issues #63, #71).
     /// </summary>
     private InlineLayout? BuildFootnoteMarker(FootnoteInlineNode footnote)
     {
         if (_footnotes is null)
         {
             if (footnote.Text is not null)
-                return new TextRun("[" + footnote.Text + "]");
+                return Superscript(new TextRun("[" + footnote.Text + "]"));
             if (footnote.Id is not null)
-                return new TextRun("[" + footnote.Id + "]");
+                return Superscript(new TextRun("[" + footnote.Id + "]"));
             return null;
         }
 
         int number = _footnotes.Register(footnote);
-        return new TextRun("[" + number + "]");
+        // A superscript marker wrapping a link to the footnote definition, so the
+        // Avalonia preview raises it and makes it navigable (LinkRun is clickable).
+        return Superscript(new LinkRun(FootnoteDefHref(number),
+            new InlineLayout[] { new TextRun("[" + number + "]") }));
     }
+
+    private static SuperscriptRun Superscript(InlineLayout child) =>
+        new(new[] { child });
+
+    /// <summary>
+    /// Anchor href of a footnote's definition in the trailing footnotes area,
+    /// using the same <c>_footnotedef_N</c> convention as the HTML converter so a
+    /// host can resolve the marker's link to the note.
+    /// </summary>
+    private static string FootnoteDefHref(int number) => "#_footnotedef_" + number;
 
     /// <summary>
     /// Assigns document-wide footnote numbers during a single build, mirroring
