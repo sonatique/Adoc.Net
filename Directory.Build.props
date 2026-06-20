@@ -14,7 +14,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.18</Version>
+    <Version>1.0.19</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) Sylvain Fasel</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -23,7 +23,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.18: PDF table-cell footnotes. #69: footnote markers referenced inside table cells now render as a smaller, raised superscript that is a clickable internal link to the footnote entry (which back-links to the first reference) — the same treatment body-text markers received in #64 — instead of a full-size, non-clickable [n] merged into the cell text. See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.19: layout super/subscript and PDF symbol-fallback fixes. #71: the layout/Avalonia live preview gains SuperscriptRun/SubscriptRun and now renders ^sup^, ~sub~, and footnote markers as smaller, baseline-shifted text (footnote markers as clickable superscript links) instead of plain inline text. #72: the PDF symbol font-fallback now iterates Unicode codepoints, so non-BMP characters no longer become '??' (one missing-glyph indicator at worst), and a footnote in a table cell no longer disables symbol fallback for the rest of the cell. See CHANGELOG.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->
