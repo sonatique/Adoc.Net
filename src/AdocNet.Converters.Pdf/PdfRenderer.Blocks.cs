@@ -200,7 +200,25 @@ public sealed partial class PdfRenderer
     /// <c>[n]</c> marker, #57), so the repeated measure/render passes reuse it
     /// without re-registering.
     /// </summary>
-    private sealed record PlacedCell(TableCellNode Cell, int Col, int ColSpan, string Text);
+    private sealed record PlacedCell(TableCellNode Cell, int Col, int ColSpan, string Text, IReadOnlyList<CellRun> Runs)
+    {
+        /// <summary>
+        /// True when the cell contains a footnote marker, which is rendered as a
+        /// superscript clickable link (the segment path) rather than plain text (#69).
+        /// </summary>
+        public bool HasFootnote => Runs.Any(r => r.IsMarker);
+    }
+
+    /// <summary>
+    /// One styled run of a table cell's content. Plain text runs leave
+    /// <see cref="LinkUri"/> null; a footnote marker run carries the internal link
+    /// to its entry and (for the first reference) the back-link destination id, so
+    /// in-cell footnote markers render like body ones — superscript and clickable (#69).
+    /// </summary>
+    private readonly record struct CellRun(string Text, string? LinkUri = null, string? DestId = null)
+    {
+        public bool IsMarker => LinkUri is not null;
+    }
 
     /// <summary>
     /// The table's true column count: the sum of the colspans in the first row
@@ -251,11 +269,15 @@ public sealed partial class PdfRenderer
                 if (col + span > colCount) span = colCount - col;
                 int rowSpan = cell.RowSpan > 0 ? cell.RowSpan : 1;
 
-                // Resolve the cell's display text once — registering any footnotes
-                // and substituting their [n] marker (#57). Done here so the later
-                // measure/render passes reuse it without re-registering.
-                string text = GetPlainText(cell.Inlines, cell.Text, footnotes);
-                placed.Add(new PlacedCell(cell, col, span, text));
+                // Resolve the cell's content once — registering any footnotes and
+                // substituting their [n] marker (#57). Done here so the later
+                // measure/render passes reuse it without re-registering. Runs preserve
+                // footnote markers as styled spans so they can render superscript and
+                // clickable like body markers (#69); Text is the plain concatenation
+                // used by the (string-based) width/height measurement passes.
+                var runs = BuildCellRuns(cell.Inlines, cell.Text ?? string.Empty, footnotes);
+                string text = string.Concat(runs.Select(r => r.Text));
+                placed.Add(new PlacedCell(cell, col, span, text, runs));
 
                 if (rowSpan > 1)
                     for (int s = 0; s < span; s++)
@@ -270,6 +292,58 @@ public sealed partial class PdfRenderer
                 if (rowsLeft[c] > 0) rowsLeft[c]--;
         }
         return grid;
+    }
+
+    /// <summary>
+    /// Splits a cell's inline content into styled runs, mirroring
+    /// <see cref="GetPlainText"/>'s flattening but emitting each footnote reference as
+    /// its own marker run (registering the footnote once, like <see cref="GetPlainText"/>).
+    /// Marker runs carry the internal link to the footnote entry and, for the first
+    /// reference, the back-link destination, so they can render superscript and
+    /// clickable like body markers (#69).
+    /// </summary>
+    private List<CellRun> BuildCellRuns(IReadOnlyList<InlineNode> inlines, string fallback, FootnoteState footnotes)
+    {
+        var runs = new List<CellRun>();
+        var sb = new System.Text.StringBuilder();
+        void Flush()
+        {
+            if (sb.Length > 0) { runs.Add(new CellRun(sb.ToString())); sb.Clear(); }
+        }
+
+        if (inlines.Count == 0)
+        {
+            if (!string.IsNullOrEmpty(fallback)) runs.Add(new CellRun(fallback));
+            return runs;
+        }
+
+        foreach (var inline in inlines)
+        {
+            switch (inline)
+            {
+                case TextInlineNode t: sb.Append(t.Value); break;
+                case StrongInlineNode s: sb.Append(s.Content); break;
+                case EmphasisInlineNode e: sb.Append(e.Content); break;
+                case MonospaceInlineNode m: sb.Append(m.Content); break;
+                case LinkInlineNode l: sb.Append(l.Url); break;
+                case InlineLinkMacroNode lm: sb.Append(lm.Label); break;
+                case InlineImageNode img: sb.Append(img.Alt); break;
+                case SuperscriptInlineNode sup: sb.Append(sup.Content); break;
+                case SubscriptInlineNode sub: sb.Append(sub.Content); break;
+                case PassthroughInlineNode pt: sb.Append(pt.Content); break;
+                case CrossReferenceInlineNode xref: sb.Append(xref.Label ?? xref.Target); break;
+                case FootnoteInlineNode fn:
+                    Flush();
+                    var (num, isFirst) = footnotes.Register(fn);
+                    runs.Add(new CellRun($"[{num}]",
+                        LinkUri: $"#internal#{FootnoteDestId(num)}",
+                        DestId: isFirst ? FootnoteRefDestId(num) : null));
+                    break;
+                case InlineMacroNode macro: sb.Append(macro.Content); break;
+            }
+        }
+        Flush();
+        return runs;
     }
 
     /// <summary>
@@ -485,7 +559,7 @@ public sealed partial class PdfRenderer
         TableGrid gridOpts, bool isFirstRow, bool isLastRow)
     {
         // First pass: wrap text, and resolve each cell's absolute x from its column.
-        var cellWrapped = new List<(List<string> Lines, float X, float CellWidth, TableAlignment? Align)>();
+        var cellWrapped = new List<(PlacedCell Cell, List<string> Lines, float X, float CellWidth, TableAlignment? Align)>();
 
         foreach (var p in placed)
         {
@@ -505,7 +579,7 @@ public sealed partial class PdfRenderer
             if (align is null && columns is not null && p.Col < columns.Count)
                 align = columns[p.Col].Alignment;
 
-            cellWrapped.Add((lines, cellX, cellWidth, align));
+            cellWrapped.Add((p, lines, cellX, cellWidth, align));
         }
 
         // Row height = max number of lines * leading
@@ -525,8 +599,16 @@ public sealed partial class PdfRenderer
         float topRuleY = baseY + _bodyLeading - 2;
         float bottomRuleY = topRuleY - rowHeight;
 
-        foreach (var (lines, x, cellWidth, align) in cellWrapped)
+        foreach (var (cell, lines, x, cellWidth, align) in cellWrapped)
         {
+            // Cells containing a footnote render via the segment path so the marker
+            // is a superscript clickable link, like body text (#69).
+            if (cell.HasFootnote)
+            {
+                RenderCellSegments(w, cell, x, cellWidth, baseY, cellPadding, font, fontSize, align);
+                continue;
+            }
+
             float lineY = baseY;
             float availWidth = cellWidth - 2 * cellPadding;
             for (int li = 0; li < lines.Count; li++)
@@ -572,6 +654,48 @@ public sealed partial class PdfRenderer
         // Draw this row's grid/frame lines now (while on the correct page — a table
         // may span page breaks), span-aware: verticals fall on actual cell edges.
         DrawRowBorders(w, placed, colWidths, topRuleY, bottomRuleY, gridOpts, isFirstRow, isLastRow);
+    }
+
+    /// <summary>
+    /// Renders a footnote-bearing cell as styled segments so the marker is a
+    /// superscript clickable link to the footnote entry (with the entry back-linking
+    /// to the first reference), matching body-text footnotes (#69). Plain runs use the
+    /// cell's font; the marker uses the regular font at the reduced superscript size.
+    /// Layout (row height, column widths) is still driven by the cell's plain text, so
+    /// the smaller marker only ever leaves the cell with a little slack.
+    /// </summary>
+    private void RenderCellSegments(PdfWriter w, PlacedCell cell, float x, float cellWidth,
+        float baseY, float cellPadding, string font, float fontSize, TableAlignment? align)
+    {
+        float availWidth = cellWidth - 2 * cellPadding;
+
+        var segments = new List<TextSegment>(cell.Runs.Count);
+        foreach (var run in cell.Runs)
+        {
+            if (run.IsMarker)
+                segments.Add(new TextSegment(run.Text, _fontRegular, fontSize * PdfWriter.SuperscriptScale,
+                    LinkUri: run.LinkUri, Superscript: true, DestId: run.DestId));
+            else
+                segments.Add(new TextSegment(run.Text, font, fontSize));
+        }
+
+        float lineY = baseY;
+        foreach (var line in w.WrapSegments(segments, availWidth))
+        {
+            float lineWidth = 0;
+            foreach (var seg in line)
+                lineWidth += w.MeasureText(seg.Text, seg.Font, seg.FontSize);
+
+            float textX = align switch
+            {
+                TableAlignment.Right => x + cellWidth - cellPadding - lineWidth,
+                TableAlignment.Center => x + (cellWidth - lineWidth) / 2,
+                _ => x + cellPadding,
+            };
+
+            w.WriteTextSegments(line, textX, lineY);
+            lineY -= _bodyLeading;
+        }
     }
 
     /// <summary>
