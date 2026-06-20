@@ -50,6 +50,22 @@ public sealed class AvaloniaRenderTheme
     /// <summary>Returns the font size for the given 1-based heading level.</summary>
     public double HeadingFontSize(int level) =>
         level >= 1 && level <= HeadingFontSizes.Count ? HeadingFontSizes[level - 1] : FallbackHeadingFontSize;
+
+    /// <summary>
+    /// Reference body font size used to size superscript/subscript runs (including
+    /// footnote markers). Body text itself inherits its size from the host container
+    /// (so the host stays in control); set this to match when the host uses a
+    /// non-default body size, so super/subscript stay proportionally smaller.
+    /// </summary>
+    public double BodyFontSize { get; set; } = 14;
+
+    /// <summary>
+    /// Fraction of <see cref="BodyFontSize"/> used for superscript/subscript glyphs.
+    /// </summary>
+    public double SubSuperscriptFontScale { get; set; } = 0.7;
+
+    /// <summary>Font size for superscript/subscript runs.</summary>
+    public double SubSuperscriptFontSize => BodyFontSize * SubSuperscriptFontScale;
 }
 
 /// <summary>

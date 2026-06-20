@@ -543,6 +543,28 @@ public class AvaloniaRenderer
                 return span;
             }
 
+            case SuperscriptRun superscript:
+            {
+                var span = new Span
+                {
+                    FontSize = Theme.SubSuperscriptFontSize,
+                    BaselineAlignment = BaselineAlignment.Superscript,
+                };
+                AddInlines(span.Inlines, superscript.Children);
+                return span;
+            }
+
+            case SubscriptRun subscript:
+            {
+                var span = new Span
+                {
+                    FontSize = Theme.SubSuperscriptFontSize,
+                    BaselineAlignment = BaselineAlignment.Subscript,
+                };
+                AddInlines(span.Inlines, subscript.Children);
+                return span;
+            }
+
             case LinkRun link:
             {
                 var linkText = new TextBlock
@@ -593,6 +615,12 @@ public class AvaloniaRenderer
                     break;
                 case MonoRun mono:
                     AppendPlainText(sb, mono.Children);
+                    break;
+                case SuperscriptRun superscript:
+                    AppendPlainText(sb, superscript.Children);
+                    break;
+                case SubscriptRun subscript:
+                    AppendPlainText(sb, subscript.Children);
                     break;
                 case LinkRun link:
                     AppendPlainText(sb, link.Children);
