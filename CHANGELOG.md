@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **PDF: footnote markers inside table cells are now superscript and clickable (#69).**
+  The #64 fix only reached body text — a footnote referenced inside a table cell
+  still rendered as a full-size, non-superscript, non-clickable `[n]` merged into
+  the cell's text run. Table cells now render footnote markers the same way as
+  body text: a smaller, raised superscript that is a clickable internal link to
+  the footnote entry, with the entry back-linking to the first reference. Column
+  widths and row heights are still measured from the cell's plain text, so only
+  cells that actually contain a footnote take the styled-run rendering path.
+
 ## [1.0.17] - 2026-06-19
 
 A footnotes-and-diagnostics release: footnotes render correctly in the
