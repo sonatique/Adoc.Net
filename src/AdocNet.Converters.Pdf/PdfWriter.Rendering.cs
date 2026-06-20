@@ -679,30 +679,32 @@ internal sealed partial class PdfWriter
     private static string EscapePdfString(string text)
     {
         var sb = new StringBuilder(text.Length);
-        foreach (var ch in text)
+        // Iterate by codepoint so a non-BMP character (a surrogate pair) becomes a
+        // single missing-glyph indicator rather than two '?'s (issue #72).
+        foreach (var cp in PdfFontEmbedder.EnumerateCodePoints(text))
         {
-            switch (ch)
+            if (cp == '(') sb.Append("\\(");
+            else if (cp == ')') sb.Append("\\)");
+            else if (cp == '\\') sb.Append("\\\\");
+            else if (cp < 128)
             {
-                case '(':  sb.Append("\\("); break;
-                case ')':  sb.Append("\\)"); break;
-                case '\\': sb.Append("\\\\"); break;
-                default:
-                    if (ch < 128)
-                    {
-                        sb.Append(ch);
-                    }
-                    else if (ch <= 255)
-                    {
-                        // WinAnsiEncoding: emit as octal escape
-                        sb.Append('\\');
-                        sb.Append(Convert.ToString(ch, 8).PadLeft(3, '0'));
-                    }
-                    else
-                    {
-                        // Outside WinAnsi range — best effort: try to map common Unicode chars
-                        sb.Append(MapUnicodeToWinAnsi(ch));
-                    }
-                    break;
+                sb.Append((char)cp);
+            }
+            else if (cp <= 255)
+            {
+                // WinAnsiEncoding: emit as octal escape
+                sb.Append('\\');
+                sb.Append(Convert.ToString(cp, 8).PadLeft(3, '0'));
+            }
+            else if (cp <= 0xFFFF)
+            {
+                // Outside WinAnsi range — best effort: map common Unicode chars
+                sb.Append(MapUnicodeToWinAnsi((char)cp));
+            }
+            else
+            {
+                // Non-BMP, not representable in a WinAnsi base font.
+                sb.Append('?');
             }
         }
         return sb.ToString();
