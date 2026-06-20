@@ -679,6 +679,11 @@ public sealed partial class PdfRenderer
                 segments.Add(new TextSegment(run.Text, font, fontSize));
         }
 
+        // Route symbols the cell font can't show (✓, ⇒, …) to the Unicode fallback
+        // font, exactly as the body-text path does — a footnote in the cell must not
+        // disable symbol fallback for its sibling runs (issues #52, #72).
+        segments = w.ExpandSegmentsForFallback(segments);
+
         float lineY = baseY;
         foreach (var line in w.WrapSegments(segments, availWidth))
         {
