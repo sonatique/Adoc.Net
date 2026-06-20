@@ -5,6 +5,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.19] - 2026-06-21
+
+A live-preview and PDF symbol release: the layout/Avalonia path now renders
+superscript, subscript, and footnote markers correctly, and PDF symbol fallback
+handles non-BMP characters and footnote-bearing table cells.
+
 ### Added
 
 - **Layout: `SuperscriptRun` and `SubscriptRun` inline run types (#71).** The layout
