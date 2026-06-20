@@ -50,8 +50,10 @@ public class MultiTargetConsistencyTests
             {
                 var pdfRenderer = new AdocNet.Converters.Pdf.PdfRenderer();
                 var pdfBytes = pdfRenderer.RenderToBytes(result.Document);
+                int objectCount = System.Text.RegularExpressions.Regex.Matches(
+                    Encoding.Latin1.GetString(pdfBytes), "endobj").Count;
                 File.WriteAllText(Path.Combine(_net10OutputDir, name + ".pdf-info.txt"),
-                    $"ByteCount={pdfBytes.Length}");
+                    $"Objects={objectCount}");
             }
             catch (Exception ex)
             {
@@ -117,9 +119,11 @@ public class MultiTargetConsistencyTests
 
         if (!net10Info.StartsWith("Error"))
         {
-            // Compare byte counts — structural equivalence
+            // Compare PDF object counts — a structural check. (Total byte size is not
+            // comparable across runtimes: embedded fonts are Flate-compressed and
+            // Deflate output differs between .NET runtimes.)
             Assert.That(ns20Info, Is.EqualTo(net10Info),
-                $"PDF byte count differs for {fixture}.adoc (may indicate structural difference)");
+                $"PDF object count differs for {fixture}.adoc (may indicate structural difference)");
         }
     }
 
