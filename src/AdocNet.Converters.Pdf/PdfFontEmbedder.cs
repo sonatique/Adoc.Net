@@ -149,12 +149,36 @@ internal static class PdfFontEmbedder
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Enumerates the Unicode codepoints of <paramref name="text"/>, combining a
+    /// surrogate pair into the single codepoint it encodes. Iterating codepoints
+    /// (rather than UTF-16 code units) keeps non-BMP characters whole, so they map
+    /// to one glyph rather than two missing-glyph halves (issue #72).
+    /// </summary>
+    internal static IEnumerable<int> EnumerateCodePoints(string text)
+    {
+        for (int i = 0; i < text.Length;)
+        {
+            char c = text[i];
+            if (char.IsHighSurrogate(c) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
+            {
+                yield return char.ConvertToUtf32(c, text[i + 1]);
+                i += 2;
+            }
+            else
+            {
+                yield return c;
+                i++;
+            }
+        }
+    }
+
     internal static string EncodeTextAsGlyphIds(string text, TrueTypeFont font)
     {
         var sb = new StringBuilder(text.Length * 4);
-        foreach (var ch in text)
+        foreach (var cp in EnumerateCodePoints(text))
         {
-            var gid = font.GetGlyphId(ch);
+            var gid = font.GetGlyphId(cp);
             sb.Append($"{gid:X4}");
         }
         return sb.ToString();
@@ -164,8 +188,8 @@ internal static class PdfFontEmbedder
     {
         if (usedCodePoints.TryGetValue(fontKey, out var codePoints))
         {
-            foreach (var ch in text)
-                codePoints.Add(ch);
+            foreach (var cp in EnumerateCodePoints(text))
+                codePoints.Add(cp);
         }
     }
 

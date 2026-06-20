@@ -53,26 +53,28 @@ internal sealed partial class PdfWriter
         return _fallbackCandidates;
     }
 
-    /// <summary>True when <paramref name="ch"/> cannot be shown by <paramref name="primaryFont"/>.</summary>
-    private bool NeedsFallback(char ch, string primaryFont)
+    /// <summary>True when <paramref name="codePoint"/> cannot be shown by <paramref name="primaryFont"/>.</summary>
+    private bool NeedsFallback(int codePoint, string primaryFont)
     {
         if (_embeddedFonts.TryGetValue(primaryFont, out var ttf))
-            return ttf.GetGlyphId(ch) == 0;
-        // Standard WinAnsi base font: representable when ≤ 0xFF or explicitly mapped.
-        return ch > 0xFF && MapUnicodeToWinAnsi(ch) == "?";
+            return ttf.GetGlyphId(codePoint) == 0;
+        // Standard WinAnsi base font: a non-BMP codepoint is never representable;
+        // a BMP one is representable when ≤ 0xFF or explicitly mapped.
+        if (codePoint > 0xFFFF) return true;
+        return codePoint > 0xFF && MapUnicodeToWinAnsi((char)codePoint) == "?";
     }
 
     /// <summary>
-    /// Resolves the font key that should render <paramref name="ch"/>: the primary
-    /// font when it can show it, otherwise the first fallback font that has the
-    /// glyph (registered on first use), otherwise the primary font (renders '?').
+    /// Resolves the font key that should render <paramref name="codePoint"/>: the
+    /// primary font when it can show it, otherwise the first fallback font that has
+    /// the glyph (registered on first use), otherwise the primary font (renders '?').
     /// </summary>
-    private string FontForChar(char ch, string primaryFont)
+    private string FontForCodePoint(int codePoint, string primaryFont)
     {
-        if (!NeedsFallback(ch, primaryFont)) return primaryFont;
+        if (!NeedsFallback(codePoint, primaryFont)) return primaryFont;
         foreach (var cand in FallbackCandidates())
         {
-            if (cand.Font.GetGlyphId(ch) != 0)
+            if (cand.Font.GetGlyphId(codePoint) != 0)
             {
                 cand.Key ??= RegisterEmbeddedFont($"__fb{_embeddedFonts.Count}", cand.Font);
                 return cand.Key;
@@ -84,6 +86,8 @@ internal sealed partial class PdfWriter
     /// <summary>
     /// Splits <paramref name="text"/> into consecutive runs that share a render
     /// font, routing characters the primary font can't show to a fallback font.
+    /// Iterates by Unicode codepoint so a non-BMP character (a UTF-16 surrogate
+    /// pair) is treated as one glyph rather than two missing halves (issue #72).
     /// Returns <c>null</c> (fast path) when the whole string renders in
     /// <paramref name="primaryFont"/> — the common case — so ordinary text is
     /// measured and emitted exactly as before.
@@ -93,23 +97,23 @@ internal sealed partial class PdfWriter
         if (string.IsNullOrEmpty(text)) return null;
 
         bool needsAny = false;
-        foreach (var ch in text)
-            if (NeedsFallback(ch, primaryFont)) { needsAny = true; break; }
+        foreach (var cp in PdfFontEmbedder.EnumerateCodePoints(text))
+            if (NeedsFallback(cp, primaryFont)) { needsAny = true; break; }
         if (!needsAny) return null;
 
         var runs = new List<(string, string)>();
         var sb = new StringBuilder();
         string runFont = primaryFont;
-        foreach (var ch in text)
+        foreach (var cp in PdfFontEmbedder.EnumerateCodePoints(text))
         {
-            string f = FontForChar(ch, primaryFont);
+            string f = FontForCodePoint(cp, primaryFont);
             if (sb.Length > 0 && f != runFont)
             {
                 runs.Add((sb.ToString(), runFont));
                 sb.Clear();
             }
             if (sb.Length == 0) runFont = f;
-            sb.Append(ch);
+            sb.Append(char.ConvertFromUtf32(cp));
         }
         if (sb.Length > 0) runs.Add((sb.ToString(), runFont));
         return runs;
