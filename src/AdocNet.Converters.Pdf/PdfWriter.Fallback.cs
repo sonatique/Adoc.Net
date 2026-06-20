@@ -6,20 +6,27 @@ namespace AdocNet.Converters.Pdf;
 
 internal sealed partial class PdfWriter
 {
-    // ── Unicode glyph fallback (issue #52) ───────────────────────────────
+    // ── Unicode glyph fallback chain (issues #52, #72, #75) ──────────────
     //
     // The standard PDF base fonts are WinAnsi-encoded and can't show characters
     // like ✓, →, or ⇒ (the typographic output of `->`/`=>` etc.), which otherwise
-    // rendered as '?'. These ordered fallback fonts supply the missing glyphs.
-    // They are parsed on first need and each is registered (hence embedded +
-    // subset + given a ToUnicode CMap) only once a glyph from it is actually
-    // used, so a document with no special characters embeds nothing extra.
+    // rendered as '?'. These ordered fallback fonts form a chain: each codepoint
+    // is routed to the FIRST font (after the primary) that has a glyph for it
+    // (see FontForCodePoint). Fonts are parsed on first need and each is
+    // registered (hence embedded + subset + given a ToUnicode CMap) only once a
+    // glyph from it is actually used, so a document with no special characters
+    // embeds nothing extra, and the symbol font is embedded only when a glyph
+    // DejaVu lacks is actually used.
 
     private static readonly string[] FallbackFontResources =
     {
-        // DejaVu Sans: a single comprehensive cover font for arrows (incl. ⇒/⇐),
-        // dingbats (✓ ✗), geometric shapes, bullets, math symbols, and more.
+        // 1) DejaVu Sans: the general cover font for arrows (incl. ⇒/⇐), dingbats
+        //    (✓ ✗), geometric shapes, bullets, math symbols, and more.
         "AdocNet.Converters.Pdf.Resources.DejaVuSans.ttf",
+        // 2) Symbola: a broad symbol font consulted only for codepoints DejaVu
+        //    lacks — notably SMP symbol blocks (e.g. U+1F6C7 🛇) the Avalonia
+        //    preview shows via system fallback but DejaVu can't (#75).
+        "AdocNet.Converters.Pdf.Resources.Symbola.ttf",
     };
 
     private sealed class FallbackCandidate

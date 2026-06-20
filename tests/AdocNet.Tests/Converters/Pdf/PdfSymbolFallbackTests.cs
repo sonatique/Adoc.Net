@@ -36,10 +36,12 @@ public class PdfSymbolFallbackTests
     [Test]
     public void Non_bmp_char_emits_a_single_missing_glyph_not_double()
     {
-        // U+1F6C7 (PROHIBITED SIGN) is a non-BMP codepoint not covered by the
-        // fallback font — it must collapse to one '?', never '??' (two surrogate
-        // halves). The BMP arrow ⇒ on the same line still routes to the fallback.
-        var raw = Raw(Render("= T\n\nProhibited &#x1F6C7; sign and arrow => Z.\n"));
+        // U+20000 (a CJK Extension B ideograph) is a non-BMP codepoint no bundled
+        // fallback font covers — it must collapse to one '?', never '??' (two
+        // surrogate halves). The BMP arrow ⇒ on the same line still routes to a
+        // fallback. (Symbol codepoints DejaVu lacks but Symbola covers are exercised
+        // by PdfFallbackChainTests; this guards the genuinely-uncovered worst case.)
+        var raw = Raw(Render("= T\n\nHan &#x20000; sign and arrow => Z.\n"));
         var literal = LiteralTjText(raw);
 
         Assert.That(literal, Does.Not.Contain("??"), "a non-BMP char must not become two question marks");
