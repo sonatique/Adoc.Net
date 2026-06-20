@@ -22,6 +22,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   footnote markers match the exported HTML/PDF instead of showing as ordinary inline
   text. Footnote markers are clickable via the existing `LinkClicked` event. The new
   `AvaloniaRenderTheme.BodyFontSize` is the reference size for sizing super/subscript.
+- **PDF: symbol font-fallback now handles non-BMP characters and footnote-bearing cells (#72).**
+  Two cases still emitted `?` despite the #52 fallback: (A) a non-BMP character
+  (e.g. `&#x1F6C7;`) came out as `??` because the fallback iterated UTF-16 code
+  units instead of Unicode codepoints, so each surrogate half became a `?`; and
+  (B) a `footnote:[…]` in a table cell disabled symbol fallback for the rest of
+  that cell (a regression from #69's segment-based cell rendering), so `⇒`/`✓`
+  next to a footnote dropped back to `?`. The fallback, glyph encoder, and WinAnsi
+  escaping now iterate by codepoint (a non-BMP glyph routes to the fallback font,
+  or collapses to a single missing-glyph indicator — never `??`), and the
+  footnote-bearing cell path runs the same fallback expansion as body text.
 
 ## [1.0.18] - 2026-06-19
 
