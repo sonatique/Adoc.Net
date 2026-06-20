@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.18] - 2026-06-19
+
+A PDF footnote follow-up: footnote markers referenced inside table cells now get
+the same superscript, clickable treatment as body-text markers.
+
 ### Fixed
 
 - **PDF: footnote markers inside table cells are now superscript and clickable (#69).**

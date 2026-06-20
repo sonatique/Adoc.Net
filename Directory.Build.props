@@ -14,7 +14,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.17</Version>
+    <Version>1.0.18</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) Sylvain Fasel</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -23,7 +23,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.17: footnote rendering and diagnostic-coordinate fixes. #63: the layout/Avalonia live-preview path now renders footnotes as a numbered [n] marker with the bodies collected into a trailing footnotes area, instead of inlining the body text at the reference. #64: PDF footnote markers now render as a smaller, raised superscript that is a clickable internal link to the footnote entry (which links back to the reference), with no stray space before following punctuation. #67: diagnostic ranges (and the adocnet CLI's file:line) are now reported in original-source line numbers rather than post-include-expansion coordinates, and Diagnostic.FilePath names the included file when a diagnostic originates inside one; added ParseResult.ToSourceLine(int). See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.18: PDF table-cell footnotes. #69: footnote markers referenced inside table cells now render as a smaller, raised superscript that is a clickable internal link to the footnote entry (which back-links to the first reference) — the same treatment body-text markers received in #64 — instead of a full-size, non-clickable [n] merged into the cell text. See CHANGELOG.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->
