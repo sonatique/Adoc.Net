@@ -44,12 +44,17 @@ generated EPUBs match the reference renderer.
 
 ## Bundled in `AdocNet.Converters.Pdf`
 
-The PDF converter embeds Font Awesome icon fonts for admonition and inline icons.
+The PDF converter embeds Font Awesome icon fonts for admonition and inline icons,
+and an ordered Unicode fallback chain (DejaVu Sans, then Symbola) for glyphs the
+standard WinAnsi base fonts can't show. The fallback fonts are subset per document
+and embedded only when a glyph from them is actually used.
 
 | File | Source | License |
 |------|--------|---------|
 | `fa-solid.ttf` | Font Awesome 5 Free (Solid) | SIL Open Font License 1.1 (font); icon designs CC BY 4.0 |
 | `fa-regular.ttf` | Font Awesome 5 Free (Regular) | SIL Open Font License 1.1 (font); icon designs CC BY 4.0 |
+| `DejaVuSans.ttf` | DejaVu Sans (primary Unicode fallback: arrows, check marks, dingbats, geometric shapes, math symbols) | Bitstream Vera Fonts License + public-domain additions |
+| `Symbola.ttf` | Symbola v8.00, George Douros (secondary symbol fallback for codepoints DejaVu Sans lacks, e.g. SMP symbol blocks) | Public domain |
 
 ## Derived in `AdocNet.Converters.Html`
 
@@ -105,6 +110,13 @@ permission notice shall be included in all copies or substantial portions of the
 Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+
+### Public domain (Symbola)
+
+Symbola, by George Douros (part of the "Unicode Fonts for Ancient Scripts"
+project), is released to the public domain by its author; it may be freely used,
+embedded, subset, and redistributed without restriction or attribution
+requirement.
 
 ## How to verify
 

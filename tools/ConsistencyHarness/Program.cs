@@ -36,14 +36,18 @@ foreach (var file in Directory.GetFiles(fixturesDir, "*.adoc"))
     var html = htmlRenderer.RenderToString(result.Document);
     File.WriteAllText(Path.Combine(outputDir, name + ".html"), html);
 
-    // PDF render (byte count only — structural check)
+    // PDF render (object count — a structural check that is deterministic across
+    // runtimes, unlike byte length: embedded fonts are Flate-compressed and Deflate
+    // output differs between .NET runtimes, so total size is not comparable).
     try
     {
         var pdfRenderer = new AdocNet.Converters.Pdf.PdfRenderer();
         using var pdfStream = new MemoryStream();
         pdfRenderer.Render(result.Document, pdfStream, AdocNet.RenderOptions.Default);
+        int objectCount = System.Text.RegularExpressions.Regex.Matches(
+            System.Text.Encoding.Latin1.GetString(pdfStream.ToArray()), "endobj").Count;
         File.WriteAllText(Path.Combine(outputDir, name + ".pdf-info.txt"),
-            $"ByteCount={pdfStream.Length}");
+            $"Objects={objectCount}");
     }
     catch (Exception ex)
     {

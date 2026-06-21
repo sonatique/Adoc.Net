@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **PDF: Unicode fallback is now an ordered font chain with a symbol fallback (#75).**
+  The single DejaVu Sans fallback (#52) became a chain — `primary embedded → DejaVu
+  Sans → Symbola` — and Symbola (public domain, George Douros) is bundled as the
+  secondary slot. Each codepoint routes to the first font in the chain that has a
+  glyph, so symbols outside DejaVu's coverage (e.g. SMP blocks like U+1F6C7 🛇,
+  U+1F6AB, U+26D4, U+29B8) now render in the PDF instead of `?`, matching the
+  Avalonia preview. DejaVu remains the general/text fallback; Symbola is consulted
+  only for glyphs DejaVu lacks and is subset + embedded only when actually used, so
+  documents without such symbols are unchanged. (A truly uncovered codepoint still
+  collapses to a single missing-glyph indicator, per #72.)
+
 ## [1.0.19] - 2026-06-21
 
 A live-preview and PDF symbol release: the layout/Avalonia path now renders
