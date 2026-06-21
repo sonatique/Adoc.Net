@@ -137,7 +137,11 @@ internal static class PdfFontEmbedder
             {
                 var cp = entries[j];
                 var gid = font.GetGlyphId(cp);
-                sb.AppendLine($"<{gid:X4}> <{cp:X4}>");
+                // The bfchar destination is a UTF-16BE string: one 16-bit unit for a
+                // BMP codepoint, a surrogate pair for a supplementary one. Writing a
+                // raw >U+FFFF value (e.g. "1F6C7") is malformed and truncates on
+                // extraction (U+1F6C7 → U+1F6C); emit the surrogate pair instead (#77).
+                sb.AppendLine($"<{gid:X4}> <{Utf16BeHex(cp)}>");
             }
             sb.AppendLine("endbfchar");
         }
@@ -146,6 +150,19 @@ internal static class PdfFontEmbedder
         sb.AppendLine("CMapName currentdict /CMap defineresource pop");
         sb.AppendLine("end");
         sb.AppendLine("end");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Encodes a Unicode codepoint as upper-case UTF-16BE hex: four digits for a
+    /// BMP codepoint, eight (a high+low surrogate pair) for a supplementary one.
+    /// Used for ToUnicode <c>bfchar</c> destinations, which must be UTF-16BE (#77).
+    /// </summary>
+    internal static string Utf16BeHex(int codePoint)
+    {
+        var sb = new StringBuilder(8);
+        foreach (var unit in char.ConvertFromUtf32(codePoint))
+            sb.Append(((int)unit).ToString("X4"));
         return sb.ToString();
     }
 

@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **PDF: ToUnicode for non-BMP glyphs is now a UTF-16BE surrogate pair (#77).**
+  After #75, supplementary-plane symbols (via the Symbola fallback) rendered
+  correctly but their ToUnicode `bfchar` destination was written as a raw
+  `>U+FFFF` value (e.g. `<1F6C7>`), which extractors truncate to the first 16-bit
+  unit — so copy/paste, search, and text extraction returned the wrong character
+  (U+1F6C7 → U+1F6C). The destination is now emitted as the codepoint's UTF-16BE
+  surrogate pair (e.g. `<D83DDEC7>`), so non-BMP glyphs are selectable, searchable,
+  and extractable as the correct character. BMP glyphs are unaffected.
+
 ## [1.0.20] - 2026-06-21
 
 A PDF symbol-coverage release: the Unicode fallback is now an ordered font chain
