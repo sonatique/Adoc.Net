@@ -5,6 +5,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.20] - 2026-06-21
+
+A PDF symbol-coverage release: the Unicode fallback is now an ordered font chain
+with a bundled symbol font, so symbols outside DejaVu Sans's coverage render in
+the PDF instead of `?`.
+
 ### Added
 
 - **PDF: Unicode fallback is now an ordered font chain with a symbol fallback (#75).**
