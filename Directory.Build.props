@@ -14,7 +14,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.20</Version>
+    <Version>1.0.21</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) Sylvain Fasel</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -23,7 +23,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.20: PDF Unicode fallback chain. #75: the single DejaVu Sans fallback is now an ordered chain (primary embedded -> DejaVu Sans -> Symbola), bundling Symbola (public domain) as a secondary symbol font. Symbols outside DejaVu's coverage (e.g. SMP blocks like U+1F6C7) now render in the PDF instead of '?', matching the Avalonia preview. DejaVu remains the general/text fallback; Symbola is consulted only for glyphs DejaVu lacks and is subset + embedded only when actually used. See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.21: PDF non-BMP text-layer fix. #77: supplementary-plane symbols (via the Symbola fallback) now emit their ToUnicode mapping as a UTF-16BE surrogate pair (e.g. U+1F6C7 -> &lt;D83DDEC7&gt;) instead of a truncated raw codepoint, so copy/paste, search, and text extraction return the correct character. BMP glyphs are unaffected. See CHANGELOG.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->

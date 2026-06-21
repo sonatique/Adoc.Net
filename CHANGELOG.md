@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.21] - 2026-06-21
+
+A PDF text-layer fix: supplementary-plane symbols now carry the correct ToUnicode
+mapping, so they're selectable, searchable, and extractable as the right character.
+
 ### Fixed
 
 - **PDF: ToUnicode for non-BMP glyphs is now a UTF-16BE surrogate pair (#77).**
