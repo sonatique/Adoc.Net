@@ -30,6 +30,11 @@
          document and only embedded when actually used. Bitstream Vera / public
          domain; see NOTICES.md. -->
     <EmbeddedResource Include="Resources\DejaVuSans.ttf" />
+    <!-- Symbola embedded as the secondary fallback, consulted only for codepoints
+         DejaVu Sans lacks (e.g. SMP symbols like U+1F6C7). Subset per document and
+         only embedded when actually used. Public domain (George Douros); see
+         NOTICES.md. -->
+    <EmbeddedResource Include="Resources\Symbola.ttf" />
   </ItemGroup>
 
   <ItemGroup>
