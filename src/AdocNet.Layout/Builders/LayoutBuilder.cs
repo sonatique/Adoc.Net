@@ -88,6 +88,9 @@ public class LayoutBuilder
             case ThematicBreakNode thematic:
                 output.Add(new ThematicBreakLayout { Source = thematic.Source });
                 break;
+            case PageBreakNode pageBreak:
+                output.Add(new PageBreakLayout { Source = pageBreak.Source });
+                break;
             case TocNode toc:
                 BuildToc(toc, output);
                 break;
