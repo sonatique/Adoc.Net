@@ -5,6 +5,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.22] - 2026-06-21
+
+A paged preview release: the Avalonia path gains a print-like paged rendering
+mode, and the layout model no longer drops explicit page breaks.
+
+### Added
+
+- **Avalonia: `PagedAvaloniaRenderer` and `PageLayoutOptions` — a print-like paged
+  preview (#79).** Editors building on `AdocNet.Avalonia` can now show content
+  flowed into fixed-size pages that approximate the PDF output, without taking a
+  PDF-rasterizer dependency. `PagedAvaloniaRenderer` wraps an `AvaloniaRenderer`
+  (the same pattern as `IncrementalAvaloniaRenderer`), measures each block with
+  Avalonia's Measure pass at the page content width, and greedily fills pages:
+  `RenderPages(...)` returns one `Border` per page (a `PageBreakLayout` forces a
+  new page; an over-tall block gets its own page and clips), and `Render(...)`
+  stacks them. `PageLayoutOptions` carries page size, margins, gap, and paper
+  chrome in device-independent pixels, with `A4`/`Letter` presets and
+  `FromPdfPoints(...)` to mirror a `PdfRenderOptions` geometry exactly. Inline
+  `SourceRange` stamps are preserved, so click-to-source keeps working inside
+  pages. Note: pagination is at block granularity using on-screen measurement — a
+  print-like preview, not a promise of PDF-identical page breaks.
+- **Layout: `PageBreakLayout` block (#79).** `LayoutBuilder` silently dropped
+  `PageBreakNode` (`<<<`), so the Avalonia path ignored explicit page breaks. It
+  now maps to a `PageBreakLayout` marker (mirroring `ThematicBreakLayout`).
+  `AvaloniaRenderer` still renders it as nothing in the continuous preview — the
+  same effect as HTML's invisible `page-break-after` — so existing consumers are
+  unaffected; paged renderers start a new page.
+
 ## [1.0.21] - 2026-06-21
 
 A PDF text-layer fix: supplementary-plane symbols now carry the correct ToUnicode
