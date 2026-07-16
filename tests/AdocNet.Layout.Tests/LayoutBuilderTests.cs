@@ -297,6 +297,26 @@ public class LayoutBuilderTests
     }
 
     [Test]
+    public void Page_break_produces_PageBreakLayout_between_blocks()
+    {
+        var layout = Build("Before.\n\n<<<\n\nAfter.");
+
+        Assert.That(layout.Children, Has.Count.EqualTo(3));
+        Assert.That(layout.Children[0], Is.InstanceOf<ParagraphLayout>());
+        Assert.That(layout.Children[1], Is.InstanceOf<PageBreakLayout>());
+        Assert.That(layout.Children[2], Is.InstanceOf<ParagraphLayout>());
+    }
+
+    [Test]
+    public void Page_break_carries_its_source_range()
+    {
+        var layout = Build("Before.\n\n<<<\n\nAfter.");
+
+        var pageBreak = layout.Children.OfType<PageBreakLayout>().Single();
+        Assert.That(pageBreak.Source.IsNone, Is.False);
+    }
+
+    [Test]
     public void Footnote_body_is_collected_into_trailing_footnotes_area()
     {
         var layout = Build("Some text.footnote:[This is a footnote.]");
