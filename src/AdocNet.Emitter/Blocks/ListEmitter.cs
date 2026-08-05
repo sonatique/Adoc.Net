@@ -54,6 +54,11 @@ internal static class ListEmitter
                 var nested = item.Children[i];
                 if (nested is ListNode subList)
                 {
+                    // A nested list carries its own numbering style/start, so
+                    // its attribute line goes immediately above its first item;
+                    // without it a `[loweralpha]` sub-list would re-parse as a
+                    // plain arabic one.
+                    EmitListMetaAttributes(subList, ctx);
                     EmitItems(subList, ctx, depth + 1);
                 }
                 else

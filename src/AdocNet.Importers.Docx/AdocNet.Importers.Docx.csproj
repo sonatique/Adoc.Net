@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework />
+    <TargetFrameworks>netstandard2.0;net8.0;net10.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>AdocNet.Importers.Docx</RootNamespace>
+    <Description>Word (.docx) importer for Adoc.Net: reads WordprocessingML into the Adoc.Net AST and emits AsciiDoc source, with a per-document fidelity report.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AdocNet.Ast\AdocNet.Ast.csproj" />
+    <ProjectReference Include="..\AdocNet.Emitter\AdocNet.Emitter.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AdocNet.Importers.Docx.Tests" />
+  </ItemGroup>
+</Project>
