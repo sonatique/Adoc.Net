@@ -404,6 +404,77 @@ public class StructureTests
     }
 
     [Test]
+    public void FontColourIsKeptAsARole()
+    {
+        var adoc = ImportHarness.ToAsciiDoc(new DocxBuilder().Body(
+            "<w:p>" + DocxBuilder.Run("warning text", "<w:color w:val=\"FF0000\"/>") + "</w:p>"));
+
+        Assert.That(adoc, Does.Contain("[.color-ff0000]#warning text#"));
+    }
+
+    [Test]
+    public void ParagraphStyleFormattingDoesNotBecomeInlineMarkup()
+    {
+        // Word's heading styles are bold; turning that into *…* would put
+        // markup in every heading. Direct run formatting still counts.
+        var styles = DocxBuilder.DefaultStyles.Replace(
+            "<w:style w:type=\"paragraph\" w:styleId=\"Heading2\"><w:name w:val=\"heading 2\"/><w:pPr><w:outlineLvl w:val=\"1\"/></w:pPr></w:style>",
+            "<w:style w:type=\"paragraph\" w:styleId=\"Heading2\"><w:name w:val=\"heading 2\"/><w:pPr><w:outlineLvl w:val=\"1\"/></w:pPr><w:rPr><w:b/></w:rPr></w:style>");
+
+        var adoc = ImportHarness.ToAsciiDoc(new DocxBuilder()
+            .Styles(styles)
+            .Body(
+                DocxBuilder.Paragraph("Doc", "Title") +
+                DocxBuilder.Heading(2, "Styled heading") +
+                "<w:p>" + DocxBuilder.Run("really bold", "<w:b/>") + "</w:p>"));
+
+        Assert.That(adoc, Does.Contain("== Styled heading"));
+        Assert.That(adoc, Does.Not.Contain("*Styled heading*"));
+        Assert.That(adoc, Does.Contain("*really bold*"));
+    }
+
+    [Test]
+    public void TextBoxContentBecomesASidebar()
+    {
+        var body =
+            DocxBuilder.Paragraph("Body paragraph.") +
+            "<w:p><w:r><w:drawing><wp:inline><wp:extent cx=\"100\" cy=\"100\"/>" +
+            "<a:graphic><a:graphicData><w:txbxContent>" +
+            DocxBuilder.Paragraph("Pull quote in a box.") +
+            "</w:txbxContent></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>";
+
+        var result = ImportHarness.Import(new DocxBuilder().Body(body));
+        var adoc = new AdocNet.Emitter.AsciidocEmitter().Emit(result.Document);
+
+        Assert.That(adoc, Does.Contain("****\nPull quote in a box.\n****"));
+        Assert.That(result.Report.Issues.Select(i => i.Code), Does.Contain("textbox.moved-to-sidebar"));
+    }
+
+    [Test]
+    public void EqualColumnWidthsAreLeftImplicit()
+    {
+        var body =
+            "<w:tbl><w:tblGrid><w:gridCol w:w=\"3000\"/><w:gridCol w:w=\"3000\"/></w:tblGrid>" +
+            "<w:tr><w:tc><w:p><w:r><w:t>a</w:t></w:r></w:p></w:tc>" +
+            "<w:tc><w:p><w:r><w:t>b</w:t></w:r></w:p></w:tc></w:tr></w:tbl>";
+
+        var adoc = ImportHarness.ToAsciiDoc(new DocxBuilder().Body(body));
+        Assert.That(adoc, Does.Not.Contain("cols="));
+    }
+
+    [Test]
+    public void CoprimeColumnWidthsBecomePercentages()
+    {
+        var body =
+            "<w:tbl><w:tblGrid><w:gridCol w:w=\"1482\"/><w:gridCol w:w=\"3193\"/></w:tblGrid>" +
+            "<w:tr><w:tc><w:p><w:r><w:t>a</w:t></w:r></w:p></w:tc>" +
+            "<w:tc><w:p><w:r><w:t>b</w:t></w:r></w:p></w:tc></w:tr></w:tbl>";
+
+        var adoc = ImportHarness.ToAsciiDoc(new DocxBuilder().Body(body));
+        Assert.That(adoc, Does.Contain("cols=\"32,68\""));
+    }
+
+    [Test]
     public void NotADocxThrowsImportException()
     {
         using var stream = new MemoryStream(new byte[] { 1, 2, 3, 4, 5 });

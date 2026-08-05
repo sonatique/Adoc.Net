@@ -48,6 +48,7 @@ internal sealed class BlockConverter
     private readonly List<SectionNode> _sections = new();
     private readonly List<ListLevel> _lists = new();
 
+    private readonly List<XElement> _pendingTextBoxes = new();
     private List<string>? _codeLines;
     private List<BlockNode>? _quoteBlocks;
     private string? _pendingCaption;
@@ -132,6 +133,41 @@ internal sealed class BlockConverter
 
     private void ConvertParagraph(XElement paragraph)
     {
+        ConvertParagraphCore(paragraph);
+        FlushTextBoxes();
+    }
+
+    /// <summary>
+    /// Emits the text boxes anchored in the paragraph just converted. They
+    /// become sidebars placed after that paragraph, which is the closest
+    /// AsciiDoc has to a floating box.
+    /// </summary>
+    private void FlushTextBoxes()
+    {
+        if (_pendingTextBoxes.Count == 0) return;
+
+        var boxes = new List<XElement>(_pendingTextBoxes);
+        _pendingTextBoxes.Clear();
+
+        foreach (var box in boxes)
+        {
+            var container = new DocumentNode();
+            new BlockConverter(_ctx, container, nested: true).ConvertBody(box);
+            if (container.Children.Count == 0) continue;
+
+            var sidebar = new DelimitedBlockNode { BlockKind = DelimitedBlockKind.Sidebar };
+            foreach (var child in container.Children)
+            {
+                if (child is BlockNode block) sidebar.AddChild(block);
+            }
+
+            FlushLists();
+            AddBlock(sidebar);
+        }
+    }
+
+    private void ConvertParagraphCore(XElement paragraph)
+    {
         _ctx.ParagraphIndex++;
         _ctx.Report.Paragraphs++;
 
@@ -162,6 +198,7 @@ internal sealed class BlockConverter
         var converter = new InlineConverter(_ctx, inTableCell: _nested);
         var inlines = converter.ConvertParagraph(paragraph, styleId);
         EmitPendingComments(converter);
+        _pendingTextBoxes.AddRange(converter.PendingTextBoxes);
 
         var headingLevel = numbering is null ? _ctx.Styles.HeadingLevel(styleId) : null;
         var blockId = HoistAnchor(inlines.Inlines) ?? TakePendingBlockId();

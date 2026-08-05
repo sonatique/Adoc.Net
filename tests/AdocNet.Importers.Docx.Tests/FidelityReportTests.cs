@@ -120,7 +120,8 @@ public class FidelityReportTests
             "<w:p><w:r><w:drawing><wp:inline><wp:extent cx=\"100\" cy=\"100\"/>" +
             "<a:graphic><a:graphicData/></a:graphic></wp:inline></w:drawing></w:r></w:p>";
 
-        var result = ImportHarness.Import(new DocxBuilder().Body(body));
+        var result = ImportHarness.Import(new DocxBuilder().Body(body),
+            new DocxImportOptions { PreserveFormattingAsRoles = false });
         var codes = result.Report.Issues.Select(i => i.Code).ToList();
 
         Assert.That(codes, Does.Contain("embedded-object.dropped"));
@@ -143,7 +144,7 @@ public class FidelityReportTests
         var result = ImportHarness.Import(new DocxBuilder().Body(body));
         var summary = result.Report.ToSummary();
 
-        Assert.That(summary, Does.Contain("run.color-dropped ×5"));
+        Assert.That(summary, Does.Contain("run.color-as-role ×5"));
         Assert.That(summary, Does.Contain("fidelity:"));
     }
 }

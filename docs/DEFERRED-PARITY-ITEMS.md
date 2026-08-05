@@ -281,6 +281,37 @@ The "icon was wrong color" thread settled into a repeatable pattern:
 
 ---
 
+## Parser
+
+### 13. Per-cell alignment specifiers are read as cell content
+
+**Symptom.** In a table row, an alignment specifier attached to a cell —
+`|Total >|4'500.00` or the same shape after a line break — leaves the `>` in the
+*previous* cell's text and the following cell is rendered without alignment. The
+same happens for `^` and for the vertical forms (`.^`, `.>`). Span specifiers
+(`2+|`) are recognised in that position, so the gap is specific to alignment.
+
+**Root cause.** The table cell scanner only accepts a cell specifier at the
+start of a row line; between two separators it treats the specifier characters
+as content. Asciidoctor accepts a specifier anywhere a cell starts.
+
+**Consequence today.** `AdocNet.Importers.Docx` therefore does not emit per-cell
+alignment: a column-wide alignment derived from the Word cells goes into the
+`cols` attribute instead (`cols="1,>2"`), which the parser does honour. Cell
+alignment that varies within a column is dropped.
+
+**Plan.** Extend the cell scanner so a specifier is recognised after any cell
+separator, not only at line start; then have `TableEmitter` stop inserting the
+separator space it currently needs, and let the importer set
+`TableCellNode.Alignment` again. Needs a conformance re-run: table cell parsing
+is on the byte-identical HTML/DocBook path.
+
+**Why deferred.** Touching the cell scanner risks the v1.0 byte-identical
+guarantee across the 36-doc corpus for a presentational attribute; the column
+spec covers the common case.
+
+---
+
 ## How to extend this list
 
 When deferring an item, add a section with:

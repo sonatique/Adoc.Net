@@ -33,11 +33,17 @@ internal static class ImportHarness
         return HtmlToText(html);
     }
 
+    private static readonly Regex InlineTag = new(
+        @"</?(?:a|abbr|b|big|cite|code|del|em|i|ins|kbd|mark|q|s|samp|small|span|strong|sub|sup|tt|u|var)\b[^>]*>",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
     public static string HtmlToText(string html)
     {
-        // Block boundaries become spaces so words from adjacent blocks do not
-        // run together; everything else collapses to single spaces.
-        var text = Regex.Replace(html, "<[^>]+>", " ");
+        // Inline tags vanish without a trace: Word splits words across runs, so
+        // "1<sup>er</sup>" has to read back as "1er", not "1 er". Block-level
+        // tags become spaces so words from adjacent blocks do not run together.
+        var text = InlineTag.Replace(html, string.Empty);
+        text = Regex.Replace(text, "<[^>]+>", " ");
         text = WebUtility.HtmlDecode(text);
         return CollapseWhitespace(text);
     }

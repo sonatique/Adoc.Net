@@ -112,6 +112,90 @@ public class RoundTripFidelityTests
     }
 
     [Test]
+    public void TableCellWithApostropheGroupedNumberSurvives()
+    {
+        var body =
+            "<w:tbl><w:tr>" +
+            "<w:tc><w:p><w:r><w:t>Total TTC</w:t></w:r></w:p></w:tc>" +
+            "<w:tc><w:p><w:r><w:t>4'500.00</w:t></w:r></w:p></w:tc>" +
+            "</w:tr></w:tbl>";
+
+        var adoc = ImportHarness.ToAsciiDoc(new DocxBuilder().Body(body));
+        var rendered = ImportHarness.RenderedText(adoc);
+
+        Assert.That(rendered, Does.Contain("Total TTC"), $"emitted AsciiDoc was:\n{adoc}");
+        Assert.That(rendered, Does.Contain("4'500.00"), $"emitted AsciiDoc was:\n{adoc}");
+    }
+
+    [Test]
+    public void EmptySpannedCellFollowedBySpannedCellKeepsBothContents()
+    {
+        // An invoice total row: an empty 4-column filler, then a 2-column label.
+        var body =
+            "<w:tbl><w:tblGrid>" + string.Concat(Enumerable.Repeat("<w:gridCol w:w=\"1000\"/>", 7)) + "</w:tblGrid>" +
+            "<w:tr>" +
+            "<w:tc><w:tcPr><w:gridSpan w:val=\"4\"/></w:tcPr><w:p/></w:tc>" +
+            "<w:tc><w:tcPr><w:gridSpan w:val=\"2\"/></w:tcPr><w:p><w:r><w:t>Total HT</w:t></w:r></w:p></w:tc>" +
+            "<w:tc><w:p><w:r><w:t>1200.00</w:t></w:r></w:p></w:tc>" +
+            "</w:tr></w:tbl>";
+
+        var adoc = ImportHarness.ToAsciiDoc(new DocxBuilder().Body(body));
+        var rendered = ImportHarness.RenderedText(adoc);
+
+        Assert.That(rendered, Does.Contain("Total HT"), $"emitted AsciiDoc was:\n{adoc}");
+        Assert.That(rendered, Does.Contain("1200.00"), $"emitted AsciiDoc was:\n{adoc}");
+    }
+
+    [Test]
+    public void HyperlinkLabelKeepsItsTextWhenTheStyleAddsDecoration()
+    {
+        // Word's Hyperlink character style is underlined and coloured; turning
+        // that into roles would put a "[.underline]#…#" inside the macro's
+        // attribute list and break the label.
+        var styles = DocxBuilder.DefaultStyles.Replace(
+            "</w:styles>",
+            "<w:style w:type=\"character\" w:styleId=\"Hyperlink\"><w:name w:val=\"Hyperlink\"/>" +
+            "<w:rPr><w:color w:val=\"467886\"/><w:u w:val=\"single\"/></w:rPr></w:style></w:styles>");
+
+        var adoc = ImportHarness.ToAsciiDoc(new DocxBuilder()
+            .Styles(styles)
+            .Hyperlink("rId7", "mailto:someone@example.com")
+            .Body("<w:p><w:hyperlink r:id=\"rId7\"><w:r><w:rPr><w:rStyle w:val=\"Hyperlink\"/></w:rPr>" +
+                  "<w:t>someone@example.com</w:t></w:r></w:hyperlink></w:p>"));
+
+        Assert.That(adoc, Does.Contain("link:mailto:someone@example.com[someone@example.com]"));
+        Assert.That(ImportHarness.RenderedText(adoc), Does.Contain("someone@example.com"));
+    }
+
+    [Test]
+    public void FormattingThatStartsMidWordSurvives()
+    {
+        // Word formats part of a word all the time; constrained delimiters do
+        // not apply there, so the span has to use the unconstrained form.
+        var adoc = ImportHarness.ToAsciiDoc(new DocxBuilder().Body(
+            DocxBuilder.ParagraphOf(
+                DocxBuilder.Run("Fasel, "),
+                DocxBuilder.Run("IBA", "<w:highlight w:val=\"yellow\"/>"),
+                DocxBuilder.Run("N: CH43 0900"))));
+
+        var rendered = ImportHarness.RenderedText(adoc);
+        Assert.That(rendered, Is.EqualTo("Fasel, IBAN: CH43 0900"), $"emitted AsciiDoc was:\n{adoc}");
+    }
+
+    [Test]
+    public void BoldEndingMidWordSurvives()
+    {
+        var adoc = ImportHarness.ToAsciiDoc(new DocxBuilder().Body(
+            DocxBuilder.ParagraphOf(
+                DocxBuilder.Run("micro"),
+                DocxBuilder.Run("SERVICE", "<w:b/>"),
+                DocxBuilder.Run("s are small"))));
+
+        var rendered = ImportHarness.RenderedText(adoc);
+        Assert.That(rendered, Is.EqualTo("microSERVICEs are small"), $"emitted AsciiDoc was:\n{adoc}");
+    }
+
+    [Test]
     public void CodeBlockContentIsVerbatim()
     {
         const string code = "if (a < b) { return \"*not bold*\"; } // {attr}";
