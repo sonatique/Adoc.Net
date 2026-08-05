@@ -414,7 +414,31 @@ internal sealed class InlineConverter
         {
             var text = segment.Text.ToString();
             if (text.Length == 0) continue;
-            Output.Add(BuildFormatted(text, segment.Format));
+
+            if (segment.Format.IsPlain)
+            {
+                Output.Add(new TextInlineNode { Value = AsciidocText.EscapeInline(text, _inTableCell) });
+                continue;
+            }
+
+            // A constrained span cannot start or end on whitespace — `*bold *`
+            // is literal text, asterisks and all — so surrounding spaces move
+            // outside the markup.
+            var start = 0;
+            while (start < text.Length && char.IsWhiteSpace(text[start])) start++;
+
+            var end = text.Length;
+            while (end > start && char.IsWhiteSpace(text[end - 1])) end--;
+
+            if (start == end)
+            {
+                Output.Add(new TextInlineNode { Value = text });
+                continue;
+            }
+
+            if (start > 0) Output.Add(new TextInlineNode { Value = text.Substring(0, start) });
+            Output.Add(BuildFormatted(text.Substring(start, end - start), segment.Format));
+            if (end < text.Length) Output.Add(new TextInlineNode { Value = text.Substring(end) });
         }
 
         _segments.Clear();
@@ -422,10 +446,26 @@ internal sealed class InlineConverter
 
     private InlineNode BuildFormatted(string text, RunFormat format)
     {
-        if (format.VerticalAlign == RunVerticalAlign.Superscript)
-            return new SuperscriptInlineNode { Content = AsciidocText.EscapeInline(text, _inTableCell) };
-        if (format.VerticalAlign == RunVerticalAlign.Subscript)
-            return new SubscriptInlineNode { Content = AsciidocText.EscapeInline(text, _inTableCell) };
+        if (format.VerticalAlign != RunVerticalAlign.Baseline)
+        {
+            var content = AsciidocText.EscapeInline(text, _inTableCell);
+
+            // Sub/superscript content is not a nesting context for a
+            // passthrough: `~+++...+++~` leaves the passthrough markup in the
+            // output. When the text needs one, the characters win and the
+            // vertical alignment is dropped.
+            if (content.IndexOf("+++", StringComparison.Ordinal) >= 0)
+            {
+                _ctx.Report.Approximated("vertical-align.dropped",
+                    "Super/subscript dropped: its text needs an escape that cannot nest inside the markup.",
+                    _ctx.ParagraphIndex);
+                return new TextInlineNode { Value = content };
+            }
+
+            return format.VerticalAlign == RunVerticalAlign.Superscript
+                ? new SuperscriptInlineNode { Content = content }
+                : (InlineNode)new SubscriptInlineNode { Content = content };
+        }
 
         // Monospace content is not subject to further substitutions in
         // AsciiDoc, so it needs no escaping beyond the cell separator.

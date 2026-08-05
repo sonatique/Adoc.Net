@@ -136,6 +136,9 @@ that would be re-interpreted, and only where a substitution would actually fire
   are neutralised the same way, including lines created by a hard break.
 - Table cell text escapes `|`, and a cell whose whole content is a style letter
   is wrapped, because `|a|b` is read as a styled cell, not two cells.
+- A span that starts or ends mid-word uses the unconstrained delimiters
+  (`**`, `__`, ``` `` ```, `##`), and whitespace at the edges of a formatted run
+  moves outside the markup — `*bold *` is literal text, asterisks included.
 
 ## Known gaps
 
@@ -144,4 +147,9 @@ that would be re-interpreted, and only where a substitution would actually fire
   attribute instead. See `docs/DEFERRED-PARITY-ITEMS.md`.
 - Multi-paragraph footnotes are joined into one, since a footnote macro is a
   single inline.
+- Super/subscript is dropped when its text needs a passthrough escape — a
+  passthrough does not nest inside `^…^` / `~…~`, and the characters matter more
+  than the vertical alignment. Reported as `vertical-align.dropped`.
+- A bookmark inside a table cell becomes an inline anchor in the cell, since a
+  cell carries no block attributes.
 - Nested tables support one level, matching AsciiDoc's `!===` nesting.

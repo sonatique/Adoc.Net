@@ -188,6 +188,13 @@ internal sealed class TableConverter
         var cells = new List<XElement>(rows[0].Elements(Ns.W + "tc"));
         if (cells.Count != 1) return false;
 
+        // Test the raw text before converting anything: converting the cell and
+        // then falling back to the table path would run the cell's paragraphs
+        // through the converter twice, double-counting the report and — worse —
+        // reserving every bookmark id in the cell twice, so the second pass
+        // would rename anchors that cross references point at.
+        if (!OpensWithAdmonitionLabel(cells[0])) return false;
+
         var blocks = ConvertCellBlocks(cells[0]);
         if (blocks.Count == 0) return false;
 
@@ -258,6 +265,26 @@ internal sealed class TableConverter
         return true;
     }
 
+    /// <summary>
+    /// True when the cell's first paragraph starts with an admonition label,
+    /// judged on the raw run text so no conversion is needed to decide.
+    /// </summary>
+    private static bool OpensWithAdmonitionLabel(XElement tc)
+    {
+        var paragraph = tc.Element(Ns.W + "p");
+        if (paragraph is null) return false;
+
+        var sb = new StringBuilder();
+        foreach (var text in paragraph.Descendants(Ns.W + "t"))
+        {
+            sb.Append(text.Value);
+            // The longest label plus its separator fits well inside this.
+            if (sb.Length > 16) break;
+        }
+
+        return AdmonitionPrefix.IsMatch(sb.ToString());
+    }
+
     private TableCellNode ConvertCell(XElement tc, int colSpan, int rowSpan)
     {
         _ctx.Report.TableCells++;
@@ -272,10 +299,26 @@ internal sealed class TableConverter
         // it cannot be told apart from content.
         if (blocks.Count == 1 && blocks[0] is ParagraphNode paragraph && paragraph.Children.Count == 0)
         {
+            var inlines = NeutraliseCellSpecLookalike(paragraph.Inlines);
+
+            // A cell is not a block, so a bookmark hoisted onto the paragraph
+            // has nowhere to go; it returns to the content as an inline anchor
+            // rather than being dropped, keeping cross references resolvable.
+            if (paragraph.Id is not null)
+            {
+                var withAnchor = new List<InlineNode>(inlines.Count + 1)
+                {
+                    new InlineAnchorNode { Id = paragraph.Id },
+                };
+
+                withAnchor.AddRange(inlines);
+                inlines = withAnchor;
+            }
+
             return new TableCellNode
             {
                 Text = string.Empty,
-                Inlines = NeutraliseCellSpecLookalike(paragraph.Inlines),
+                Inlines = inlines,
                 ColSpan = colSpan,
                 RowSpan = rowSpan,
             };

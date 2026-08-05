@@ -303,6 +303,34 @@ public class StructureTests
     }
 
     [Test]
+    public void BookmarkInsideATableCellKeepsItsId()
+    {
+        // Admonition detection must not convert a cell twice: the second pass
+        // would see the bookmark id as taken and rename the anchor, breaking
+        // every cross reference that points at it.
+        var body =
+            "<w:tbl><w:tr><w:tc><w:p>" +
+            "<w:bookmarkStart w:id=\"1\" w:name=\"cell_anchor\"/><w:r><w:t>Anchored cell</w:t></w:r>" +
+            "<w:bookmarkEnd w:id=\"1\"/></w:p></w:tc></w:tr></w:tbl>" +
+            "<w:p><w:hyperlink w:anchor=\"cell_anchor\"><w:r><w:t>jump</w:t></w:r></w:hyperlink></w:p>";
+
+        var adoc = ImportHarness.ToAsciiDoc(new DocxBuilder().Body(body));
+
+        Assert.That(adoc, Does.Contain("[[cell_anchor]]"));
+        Assert.That(adoc, Does.Contain("<<cell_anchor,jump>>"));
+        Assert.That(adoc, Does.Not.Contain("cell_anchor_2"));
+    }
+
+    [Test]
+    public void TableCellContentIsConvertedOnlyOnce()
+    {
+        var body = "<w:tbl><w:tr><w:tc><w:p><w:r><w:t>plain cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>";
+        var result = ImportHarness.Import(new DocxBuilder().Body(body));
+
+        Assert.That(result.Report.Paragraphs, Is.EqualTo(1));
+    }
+
+    [Test]
     public void QuoteStyleParagraphsMergeIntoQuoteBlock()
     {
         var adoc = ImportHarness.ToAsciiDoc(new DocxBuilder().Body(
