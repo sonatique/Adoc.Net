@@ -14,16 +14,16 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.22</Version>
+    <Version>1.1.0</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) Sylvain Fasel</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/sonatique/Adoc.Net</PackageProjectUrl>
     <RepositoryUrl>https://github.com/sonatique/Adoc.Net</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;documentation;lsp;avalonia;layout</PackageTags>
+    <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;docx;word;import;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.22: paged Avalonia preview. #79: adds PagedAvaloniaRenderer and PageLayoutOptions to AdocNet.Avalonia — a print-like preview that flows content into fixed-size pages (A4/Letter presets, plus FromPdfPoints to mirror a PdfRenderOptions geometry) without a PDF-rasterizer dependency; RenderPages returns one Border per page and inline source ranges are preserved, so click-to-source still works. Pagination is at block granularity by on-screen measurement, so it approximates rather than matches PDF page breaks. Also adds PageBreakLayout to AdocNet.Layout: LayoutBuilder no longer drops explicit '&lt;&lt;&lt;' page breaks (continuous renderers still ignore them, so existing consumers are unaffected). See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.1.0: Word (.docx) import. Adds AdocNet.Importers.Docx — a pure-managed WordprocessingML reader that maps a .docx package onto the Adoc.Net AST, which the emitter serialises to AsciiDoc — and the docx2adoc tool (AdocNet.Docx). Mapped: sections from heading styles, lists with nesting and numbering style, tables with grid widths, header rows and gridSpan/vMerge spans, images with captions and sizes, text boxes as sidebars, hyperlinks, bookmarks and cross references, footnotes and endnotes, fields, quote and listing blocks, admonitions, page and thematic breaks, tracked changes, and core properties; character formatting maps to AsciiDoc markup with underline/strikethrough/caps/colour kept as roles. DocxImportReport lists everything approximated or lost with a content-mapping fidelity ratio (99.8% weighted over a 69-document corpus, 62 of them at 100%). Literal text is protected by a match-driven escaper verified by a round-trip harness. No dependency on the Open XML SDK or System.IO.Packaging, so netstandard2.0 is unaffected. Also fixes two emitter bugs: nested lists lost their numbering-style attribute line, and a cell specifier after an empty spanned cell was read as content, shortening the row. See CHANGELOG.md and docs/DOCX_IMPORT.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->
