@@ -5,11 +5,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [1.1.0] - 2026-08-05
+## [1.0.23] - 2026-08-05
 
 A Word-import release: `.docx` files convert to AsciiDoc through the existing
 AST and emitter, with a per-document report of everything that could not be
-represented. First release to add packages since 1.0.0, hence the minor bump.
+represented. Two new packages ship with it — `AdocNet.Importers.Docx` and the
+`AdocNet.Docx` tool — and no existing API changes.
 
 ### Added
 

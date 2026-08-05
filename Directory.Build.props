@@ -14,7 +14,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.1.0</Version>
+    <Version>1.0.23</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) Sylvain Fasel</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -23,7 +23,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;docx;word;import;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.1.0: Word (.docx) import. Adds AdocNet.Importers.Docx — a pure-managed WordprocessingML reader that maps a .docx package onto the Adoc.Net AST, which the emitter serialises to AsciiDoc — and the docx2adoc tool (AdocNet.Docx). Mapped: sections from heading styles, lists with nesting and numbering style, tables with grid widths, header rows and gridSpan/vMerge spans, images with captions and sizes, text boxes as sidebars, hyperlinks, bookmarks and cross references, footnotes and endnotes, fields, quote and listing blocks, admonitions, page and thematic breaks, tracked changes, and core properties; character formatting maps to AsciiDoc markup with underline/strikethrough/caps/colour kept as roles. DocxImportReport lists everything approximated or lost with a content-mapping fidelity ratio (99.8% weighted over a 69-document corpus, 62 of them at 100%). Literal text is protected by a match-driven escaper verified by a round-trip harness. No dependency on the Open XML SDK or System.IO.Packaging, so netstandard2.0 is unaffected. Also fixes two emitter bugs: nested lists lost their numbering-style attribute line, and a cell specifier after an empty spanned cell was read as content, shortening the row. See CHANGELOG.md and docs/DOCX_IMPORT.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.23: Word (.docx) import. Adds AdocNet.Importers.Docx — a pure-managed WordprocessingML reader that maps a .docx package onto the Adoc.Net AST, which the emitter serialises to AsciiDoc — and the docx2adoc tool (AdocNet.Docx). Mapped: sections from heading styles, lists with nesting and numbering style, tables with grid widths, header rows and gridSpan/vMerge spans, images with captions and sizes, text boxes as sidebars, hyperlinks, bookmarks and cross references, footnotes and endnotes, fields, quote and listing blocks, admonitions, page and thematic breaks, tracked changes, and core properties; character formatting maps to AsciiDoc markup with underline/strikethrough/caps/colour kept as roles. DocxImportReport lists everything approximated or lost with a content-mapping fidelity ratio (99.8% weighted over a 69-document corpus, 62 of them at 100%). Literal text is protected by a match-driven escaper verified by a round-trip harness. No dependency on the Open XML SDK or System.IO.Packaging, so netstandard2.0 is unaffected. Also fixes two emitter bugs: nested lists lost their numbering-style attribute line, and a cell specifier after an empty spanned cell was read as content, shortening the row. See CHANGELOG.md and docs/DOCX_IMPORT.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->
