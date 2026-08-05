@@ -171,11 +171,24 @@ internal sealed class InlineConverter
         _ctx.Report.Runs++;
         CountFormatting(format);
 
+        var carriedText = false;
+
         foreach (var child in run.Elements())
         {
             var name = child.Name;
 
-            if (name == Ns.W + "t") { AppendText(child.Value, format); continue; }
+            if (name == Ns.W + "t")
+            {
+                if (child.Value.Length > 0)
+                {
+                    // The run's text is itself a content unit: it maps as long
+                    // as the characters reach the output.
+                    carriedText = true;
+                }
+
+                AppendText(child.Value, format);
+                continue;
+            }
             if (name == Ns.W + "delText")
             {
                 if (_ctx.Options.TrackedChanges == TrackedChangeHandling.Reject) AppendText(child.Value, format);
@@ -244,6 +257,8 @@ internal sealed class InlineConverter
 
             if (name == Ns.Mc + "AlternateContent") { ConvertElement(child); continue; }
         }
+
+        if (carriedText) _ctx.Report.Count(mapped: true);
     }
 
     private void CountFormatting(RunFormat format)
