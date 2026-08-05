@@ -196,6 +196,22 @@ public class RoundTripFidelityTests
     }
 
     [Test]
+    public void FormattedRunPaddedWithSpacesStillRendersAsFormatting()
+    {
+        // Word documents are full of "*Label:   *" runs where the trailing
+        // spaces are inside the bold run; a constrained span cannot end on
+        // whitespace, so the delimiters would otherwise print literally.
+        var adoc = ImportHarness.ToAsciiDoc(new DocxBuilder().Body(
+            DocxBuilder.ParagraphOf(
+                DocxBuilder.Run("IBAN :   ", "<w:b/>"),
+                DocxBuilder.Run("CH43 0900"))));
+
+        var rendered = ImportHarness.RenderedText(adoc);
+        Assert.That(rendered, Is.EqualTo("IBAN : CH43 0900"), $"emitted AsciiDoc was:\n{adoc}");
+        Assert.That(adoc, Does.Contain("*IBAN :*"));
+    }
+
+    [Test]
     public void CodeBlockContentIsVerbatim()
     {
         const string code = "if (a < b) { return \"*not bold*\"; } // {attr}";

@@ -73,6 +73,11 @@ public class RealWorldCorpusTests
         Assert.That(missing, Is.Empty,
             $"{Path.GetFileName(path)}: {missing.Count} word occurrence(s) lost, first few: "
             + string.Join(", ", missing.Take(15)));
+
+        // Markup must not leak into the rendered text either: a passthrough or
+        // table delimiter showing up means an escape did not take.
+        Assert.That(rendered, Does.Not.Contain("+++"), $"{Path.GetFileName(path)}: passthrough markup leaked");
+        Assert.That(rendered, Does.Not.Contain("|==="), $"{Path.GetFileName(path)}: table delimiter leaked");
     }
 
     /// <summary>
