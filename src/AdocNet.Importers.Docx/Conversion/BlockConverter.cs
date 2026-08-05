@@ -18,6 +18,10 @@ internal sealed class BlockConverter
     private static readonly Regex AdmonitionPrefix = new(
         @"^(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\s*:\s+", RegexOptions.CultureInvariant);
 
+    private static readonly Regex CaptionNumberPrefix = new(
+        @"^(?:Figure|Table|Listing|Equation|Chart|Exhibit)\s*[0-9IVXivx]+(?:[.\-][0-9]+)*\s*[.:)–—-]?\s*",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
     private static readonly string[] CodeStyleNames =
     {
         "HTMLPreformatted", "PlainText", "Code", "SourceCode", "Preformatted", "CodeBlock",
@@ -280,7 +284,7 @@ internal sealed class BlockConverter
         var node = new ParagraphNode
         {
             Text = string.Empty,
-            Inlines = TrimOuterWhitespace(inlines.Inlines),
+            Inlines = EscapeLeadingBlockMarkers(TrimOuterWhitespace(inlines.Inlines)),
             HasHardbreaks = inlines.HasHardBreak,
         };
 
@@ -487,6 +491,17 @@ internal sealed class BlockConverter
     private void HandleCaption(string caption)
     {
         if (caption.Length == 0) return;
+
+        // Word bakes the caption number into the text ("Figure 1. Overview");
+        // AsciiDoc backends number captions themselves, so keeping it would
+        // render "Figure 1. Figure 1. Overview".
+        var stripped = CaptionNumberPrefix.Replace(caption, string.Empty);
+        if (stripped.Length > 0 && stripped != caption)
+        {
+            caption = stripped;
+            _ctx.Report.Add(DocxIssueSeverity.Info, "caption.number-stripped",
+                "Caption number removed; the AsciiDoc backend renumbers captions.", _ctx.ParagraphIndex);
+        }
 
         // Word puts figure captions after the image and table captions before
         // the table; attach backwards when the previous block can take a title,
@@ -770,6 +785,36 @@ internal sealed class BlockConverter
         if (bottom is null) return false;
         var val = bottom.Attribute(Ns.W + "val")?.Value;
         return val is not null && val != "none" && val != "nil";
+    }
+
+    /// <summary>
+    /// A paragraph's text starts at column zero in the emitted source, so text
+    /// that opens with something AsciiDoc reads as a block marker (a bullet, a
+    /// heading, an attribute entry) has to be neutralised. Only text nodes at
+    /// the start of a line are affected.
+    /// </summary>
+    internal static List<InlineNode> EscapeLeadingBlockMarkers(List<InlineNode> inlines)
+    {
+        for (var i = 0; i < inlines.Count; i++)
+        {
+            if (inlines[i] is not TextInlineNode text) continue;
+
+            // The node opens a line when it is the paragraph's first node, or
+            // when the node before it ended with a hard break.
+            var opensLine = i == 0
+                || (inlines[i - 1] is TextInlineNode previous && previous.Value.EndsWith("\n", StringComparison.Ordinal));
+
+            // A node in the middle of a line can still contain line starts of
+            // its own; EscapeBlockStart is multiline, so it only needs to skip
+            // nodes that neither open a line nor contain one.
+            if (!opensLine && text.Value.IndexOf('\n') < 0) continue;
+
+            var escaped = AsciidocText.EscapeBlockStart(opensLine ? text.Value : " " + text.Value);
+            if (!opensLine) escaped = escaped.Substring(1);
+            if (escaped != text.Value) inlines[i] = new TextInlineNode { Value = escaped };
+        }
+
+        return inlines;
     }
 
     /// <summary>

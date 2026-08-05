@@ -211,8 +211,11 @@ public class StructureTests
             .Body("<w:p>" + DocxBuilder.Drawing("rId10") + "</w:p>" +
                   DocxBuilder.Paragraph("Figure 1. The pipeline", "Caption")));
 
+        // The "Figure 1." prefix is dropped: AsciiDoc backends number captions
+        // themselves, so keeping it would render the number twice.
         var image = (BlockImageNode)result.Document.Children[0];
-        Assert.That(image.Title, Is.EqualTo("Figure 1. The pipeline"));
+        Assert.That(image.Title, Is.EqualTo("The pipeline"));
+        Assert.That(result.Report.Issues.Select(i => i.Code), Does.Contain("caption.number-stripped"));
     }
 
     [Test]
@@ -223,7 +226,7 @@ public class StructureTests
 
         var result = ImportHarness.Import(new DocxBuilder().Body(body));
         var table = (TableNode)result.Document.Children[0];
-        Assert.That(table.Title, Is.EqualTo("Table 1. Results"));
+        Assert.That(table.Title, Is.EqualTo("Results"));
     }
 
     [Test]
