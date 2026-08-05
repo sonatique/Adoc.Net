@@ -14,11 +14,13 @@
     <Project Path="src/AdocNet.Layout/AdocNet.Layout.csproj" />
     <Project Path="src/AdocNet.Avalonia/AdocNet.Avalonia.csproj" />
     <Project Path="src/AdocNet.Emitter/AdocNet.Emitter.csproj" />
+    <Project Path="src/AdocNet.Importers.Docx/AdocNet.Importers.Docx.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AdocNet.Tests/AdocNet.Tests.csproj" />
     <Project Path="tests/AdocNet.Layout.Tests/AdocNet.Layout.Tests.csproj" />
     <Project Path="tests/AdocNet.Emitter.Tests/AdocNet.Emitter.Tests.csproj" />
+    <Project Path="tests/AdocNet.Importers.Docx.Tests/AdocNet.Importers.Docx.Tests.csproj" />
     <Project Path="tests/AdocNet.Avalonia.Editor.Tests/AdocNet.Avalonia.Editor.Tests.csproj" />
     <Project Path="tests/AdocNet.TestExtension/AdocNet.TestExtension.csproj" />
     <Project Path="tests/AdocNet.TestEmptyExtension/AdocNet.TestEmptyExtension.csproj" />
