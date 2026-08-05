@@ -33,6 +33,7 @@
     <Project Path="src/AdocNet.Cli.DocBook/AdocNet.Cli.DocBook.csproj" />
     <Project Path="src/AdocNet.Cli.Man/AdocNet.Cli.Man.csproj" />
     <Project Path="src/AdocNet.Cli.Revealjs/AdocNet.Cli.Revealjs.csproj" />
+    <Project Path="src/AdocNet.Cli.Docx/AdocNet.Cli.Docx.csproj" />
     <Project Path="tools/DifferentialTester/DifferentialTester.csproj" />
   </Folder>
   <Folder Name="/benchmarks/">

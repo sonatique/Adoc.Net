@@ -91,8 +91,54 @@ internal sealed class InlineConverter
         }
 
         FlushSegments();
+        UseUnconstrainedMarkupAtWordBoundaries(_result.Inlines);
         return _result;
     }
+
+    /// <summary>
+    /// Rewrites formatted spans that touch a word character into AsciiDoc's
+    /// unconstrained form. Word formats parts of words routinely (a rsid split
+    /// mid-word, a highlighted prefix), and constrained delimiters do not
+    /// apply there: <c>#IBA#N</c> is literal text, not a highlighted "IBA".
+    /// The rewrite produces a text node holding ready-made markup, since the
+    /// AST has no way to record the choice of delimiter.
+    /// </summary>
+    private static void UseUnconstrainedMarkupAtWordBoundaries(List<InlineNode> inlines)
+    {
+        for (var i = 0; i < inlines.Count; i++)
+        {
+            if (!IsFormattedSpan(inlines[i])) continue;
+            if (!TouchesWordCharacter(inlines, i)) continue;
+
+            inlines[i] = new TextInlineNode { Value = InlineMarkupWriter.WriteUnconstrained(inlines[i]) };
+        }
+    }
+
+    private static bool IsFormattedSpan(InlineNode node)
+        => node is StrongInlineNode or EmphasisInlineNode or MonospaceInlineNode or HighlightInlineNode;
+
+    private static bool TouchesWordCharacter(List<InlineNode> inlines, int index)
+    {
+        if (index > 0 && EndsWithWordCharacter(inlines[index - 1])) return true;
+        return index + 1 < inlines.Count && StartsWithWordCharacter(inlines[index + 1]);
+    }
+
+    private static bool EndsWithWordCharacter(InlineNode node)
+    {
+        // Only a text node can be inspected directly; any other neighbour is
+        // treated as a word character, because two adjacent spans cannot both
+        // use constrained delimiters either.
+        if (node is not TextInlineNode text) return true;
+        return text.Value.Length > 0 && IsWordCharacter(text.Value[text.Value.Length - 1]);
+    }
+
+    private static bool StartsWithWordCharacter(InlineNode node)
+    {
+        if (node is not TextInlineNode text) return true;
+        return text.Value.Length > 0 && IsWordCharacter(text.Value[0]);
+    }
+
+    private static bool IsWordCharacter(char c) => char.IsLetterOrDigit(c) || c == '_';
 
     // ── Element dispatch ────────────────────────────────────────────────────
 
@@ -101,6 +147,12 @@ internal sealed class InlineConverter
         var name = element.Name;
 
         if (name == Ns.W + "r") { ConvertRun(element); return; }
+
+        // Shapes and pictures normally sit inside a run, but markup-compatibility
+        // alternates put them one level up; without these two cases their
+        // content (text boxes especially) would vanish without a report.
+        if (name == Ns.W + "drawing") { ConvertDrawing(element, default); return; }
+        if (name == Ns.W + "pict") { ConvertVmlPicture(element); return; }
         if (name == Ns.W + "hyperlink") { ConvertHyperlink(element); return; }
         if (name == Ns.W + "bookmarkStart") { ConvertBookmark(element); return; }
         if (name == Ns.W + "fldSimple") { ConvertSimpleField(element); return; }
@@ -286,8 +338,22 @@ internal sealed class InlineConverter
 
         if (format.Color is not null)
         {
-            _ctx.Report.Lost("run.color-dropped",
-                $"Font colour #{format.Color} has no AsciiDoc equivalent.", _ctx.ParagraphIndex);
+            if (_ctx.Options.PreserveFormattingAsRoles)
+            {
+                // AsciiDoc has no colour markup, but a role carries the value
+                // into the output (a CSS class in HTML, a theme key in PDF),
+                // so the information survives even though the rendering
+                // depends on the backend's stylesheet.
+                _ctx.Report.Count(mapped: true);
+                _ctx.Report.Add(DocxIssueSeverity.Warning, "run.color-as-role",
+                    $"Font colour #{format.Color} kept as a role; its rendering depends on the backend stylesheet.",
+                    _ctx.ParagraphIndex);
+            }
+            else
+            {
+                _ctx.Report.Lost("run.color-dropped",
+                    $"Font colour #{format.Color} has no AsciiDoc equivalent.", _ctx.ParagraphIndex);
+            }
         }
     }
 
@@ -397,6 +463,8 @@ internal sealed class InlineConverter
         if (format.Strike) (roles ??= new List<string>()).Add("line-through");
         if (format.SmallCaps) (roles ??= new List<string>()).Add("small-caps");
         if (format.AllCaps) (roles ??= new List<string>()).Add("uppercase");
+        if (format.Color is not null)
+            (roles ??= new List<string>()).Add("color-" + format.Color.ToLowerInvariant());
         return roles;
     }
 
@@ -408,7 +476,7 @@ internal sealed class InlineConverter
         var anchor = hyperlink.Attribute(Ns.W + "anchor")?.Value;
 
         var label = ConvertNested(hyperlink);
-        var labelMarkup = InlineMarkupWriter.Write(label).Trim();
+        var labelMarkup = InlineMarkupWriter.WriteLinkLabel(label).Trim();
         var labelText = InlineMarkupWriter.PlainText(label).Trim();
 
         _ctx.Report.Hyperlinks++;
@@ -652,7 +720,7 @@ internal sealed class InlineConverter
 
                 _ctx.Report.Hyperlinks++;
                 _ctx.Report.Count(mapped: true);
-                var label = InlineMarkupWriter.Write(result).Trim();
+                var label = InlineMarkupWriter.WriteLinkLabel(result).Trim();
                 if (label.Length == 0 || string.Equals(label, url, StringComparison.Ordinal))
                     Output.Add(new LinkInlineNode { Url = url });
                 else
@@ -777,10 +845,17 @@ internal sealed class InlineConverter
                 "Floating image imported as an inline/block image; wrapping and position are lost.", _ctx.ParagraphIndex);
         }
 
+        // A drawing can carry both a picture and text boxes — a grouped shape,
+        // or a page converted from PDF — so the text is collected first and
+        // independently of whether an image is found.
+        var capturedText = TryCaptureTextBox(container);
+
         var blip = FirstDescendant(container, Ns.A + "blip");
         var relationshipId = blip?.Attribute(Ns.R + "embed")?.Value ?? blip?.Attribute(Ns.R + "link")?.Value;
         if (relationshipId is null)
         {
+            if (capturedText) return;
+
             _ctx.Report.Lost("drawing.unsupported",
                 "Drawing without an image part (chart, SmartArt or shape) dropped.", _ctx.ParagraphIndex);
             return;
@@ -808,12 +883,46 @@ internal sealed class InlineConverter
         });
     }
 
+    /// <summary>
+    /// Text boxes and shape captions hold real content. A text box has no
+    /// inline equivalent, so its blocks are handed to the block converter,
+    /// which emits them as a sidebar after the paragraph the box was anchored
+    /// in. Returns false when the shape holds no text.
+    /// </summary>
+    private bool TryCaptureTextBox(XElement container)
+    {
+        // A drawing can group several shapes, each with its own text box —
+        // documents converted from PDF are full of them — so every box in the
+        // group is captured, not just the first.
+        var found = false;
+        foreach (var textBox in container.Descendants(Ns.W + "txbxContent"))
+        {
+            if (textBox.Element(Ns.W + "p") is null) continue;
+            PendingTextBoxes.Add(textBox);
+            _ctx.Report.Count(mapped: true);
+            found = true;
+        }
+
+        if (!found) return false;
+
+        _ctx.Report.Add(DocxIssueSeverity.Warning, "textbox.moved-to-sidebar",
+            "Text box content moved into a sidebar block; its floating position is lost.", _ctx.ParagraphIndex);
+        return true;
+    }
+
+    /// <summary>Text-box bodies found while converting the current paragraph.</summary>
+    public List<XElement> PendingTextBoxes { get; } = new();
+
     private void ConvertVmlPicture(XElement pict)
     {
+        var capturedText = TryCaptureTextBox(pict);
+
         var imageData = FirstDescendant(pict, Ns.V + "imagedata");
         var relationshipId = imageData?.Attribute(Ns.R + "id")?.Value;
         if (relationshipId is null)
         {
+            if (capturedText) return;
+
             _ctx.Report.Lost("vml-shape.dropped", "VML shape without image data dropped.", _ctx.ParagraphIndex);
             return;
         }

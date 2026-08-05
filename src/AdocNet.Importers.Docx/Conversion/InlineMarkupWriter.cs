@@ -115,6 +115,109 @@ internal static class InlineMarkupWriter
         sb.Append(']');
     }
 
+    /// <summary>
+    /// Markup for a formatted span using AsciiDoc's <em>unconstrained</em>
+    /// delimiters (<c>**bold**</c>, <c>__italic__</c>, <c>``mono``</c>,
+    /// <c>##mark##</c>). Constrained delimiters only work at word boundaries,
+    /// and Word happily formats half a word — <c>IBA</c> highlighted followed
+    /// by a plain <c>N</c> would otherwise emit <c>#IBA#N</c>, which does not
+    /// parse as a span at all.
+    /// </summary>
+    public static string WriteUnconstrained(InlineNode node)
+    {
+        var sb = new StringBuilder();
+        switch (node)
+        {
+            case StrongInlineNode strong:
+                WriteRoles(strong.Roles, sb);
+                sb.Append("**");
+                WriteAll(strong.Children, sb);
+                sb.Append("**");
+                break;
+
+            case EmphasisInlineNode em:
+                WriteRoles(em.Roles, sb);
+                sb.Append("__");
+                WriteAll(em.Children, sb);
+                sb.Append("__");
+                break;
+
+            case MonospaceInlineNode mono:
+                WriteRoles(mono.Roles, sb);
+                sb.Append("``");
+                WriteAll(mono.Children, sb);
+                sb.Append("``");
+                break;
+
+            case HighlightInlineNode highlight:
+                WriteRoles(highlight.Roles, sb);
+                sb.Append("##");
+                WriteAll(highlight.Children, sb);
+                sb.Append("##");
+                break;
+
+            default:
+                Write(node, sb);
+                break;
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Markup for a link macro's label. Role prefixes are dropped and <c>]</c>
+    /// is escaped, because the label lives inside the macro's attribute list
+    /// where a bracket would end it early.
+    /// </summary>
+    public static string WriteLinkLabel(IReadOnlyList<InlineNode> nodes)
+    {
+        var sb = new StringBuilder();
+        foreach (var node in nodes) WriteWithoutRoles(node, sb);
+        return sb.ToString().Replace("]", "\\]");
+    }
+
+    private static void WriteWithoutRoles(InlineNode node, StringBuilder sb)
+    {
+        switch (node)
+        {
+            case StrongInlineNode strong:
+                sb.Append('*');
+                foreach (var child in strong.Children) WriteWithoutRoles(child, sb);
+                sb.Append('*');
+                break;
+
+            case EmphasisInlineNode em:
+                sb.Append('_');
+                foreach (var child in em.Children) WriteWithoutRoles(child, sb);
+                sb.Append('_');
+                break;
+
+            case MonospaceInlineNode mono:
+                sb.Append('`');
+                foreach (var child in mono.Children) WriteWithoutRoles(child, sb);
+                sb.Append('`');
+                break;
+
+            case HighlightInlineNode highlight:
+                // A highlight span that only exists to carry roles is dropped;
+                // one that came from a real Word highlight keeps its marks.
+                if (highlight.Roles is { Count: > 0 })
+                {
+                    foreach (var child in highlight.Children) WriteWithoutRoles(child, sb);
+                    break;
+                }
+
+                sb.Append('#');
+                foreach (var child in highlight.Children) WriteWithoutRoles(child, sb);
+                sb.Append('#');
+                break;
+
+            default:
+                Write(node, sb);
+                break;
+        }
+    }
+
     /// <summary>Plain text of an inline tree, with all markup removed.</summary>
     public static string PlainText(IReadOnlyList<InlineNode> nodes)
     {

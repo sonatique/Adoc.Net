@@ -36,11 +36,10 @@ internal sealed class TableConverter
         _ctx.Report.Count(mapped: true);
         ReportUnsupportedTableProperties(tbl);
 
-        var table = new TableNode
-        {
-            HasHeader = HasHeaderRow(rows),
-            Columns = ReadColumns(tbl),
-        };
+        var rowNodes = new List<TableRowNode>(rows.Count);
+        var alignments = new List<TableAlignment?>();
+        var alignmentConflict = new List<bool>();
+        var spanned = false;
 
         for (var r = 0; r < rows.Count; r++)
         {
@@ -62,14 +61,117 @@ internal sealed class TableConverter
                 }
 
                 var rowSpan = vMerge is null ? 1 : MeasureRowSpan(rows, r, gridColumn);
+                if (colSpan > 1 || rowSpan > 1) spanned = true;
+
+                // Alignment is recorded per column rather than per cell: a
+                // per-cell alignment specifier has to sit between two cell
+                // separators, where it is indistinguishable from content, so
+                // it goes into the `cols` attribute instead.
+                if (colSpan == 1) RecordAlignment(alignments, alignmentConflict, gridColumn, ReadAlignment(tc));
+
                 rowNode.AddChild(ConvertCell(tc, colSpan, rowSpan));
                 gridColumn += colSpan;
             }
 
-            if (rowNode.Children.Count > 0) table.AddChild(rowNode);
+            if (rowNode.Children.Count > 0) rowNodes.Add(rowNode);
         }
 
+        var columns = BuildColumns(tbl, rowNodes, alignments, alignmentConflict, spanned);
+
+        var table = new TableNode
+        {
+            HasHeader = HasHeaderRow(rows),
+            Columns = columns,
+        };
+
+        foreach (var row in rowNodes) table.AddChild(row);
         return table;
+    }
+
+    private static void RecordAlignment(List<TableAlignment?> alignments, List<bool> conflict,
+        int column, TableAlignment? alignment)
+    {
+        while (alignments.Count <= column)
+        {
+            alignments.Add(null);
+            conflict.Add(false);
+        }
+
+        if (conflict[column]) return;
+
+        if (alignments[column] is TableAlignment existing)
+        {
+            if (existing != (alignment ?? TableAlignment.Left)) conflict[column] = true;
+            return;
+        }
+
+        alignments[column] = alignment ?? TableAlignment.Left;
+    }
+
+    /// <summary>
+    /// Column specs for the table: grid widths when they are not uniform, and
+    /// a column-wide alignment when every cell in the column agrees. An
+    /// explicit spec is also emitted whenever the table has a spanned cell, so
+    /// the column count never has to be inferred from the first row.
+    /// </summary>
+    private static IReadOnlyList<TableColumnSpec>? BuildColumns(XElement tbl, List<TableRowNode> rows,
+        List<TableAlignment?> alignments, List<bool> conflict, bool spanned)
+    {
+        var widths = ReadColumns(tbl);
+        var hasAlignment = false;
+        foreach (var alignment in alignments)
+        {
+            if (alignment is not null && alignment != TableAlignment.Left) { hasAlignment = true; break; }
+        }
+
+        if (widths is null && !spanned && !hasAlignment) return null;
+
+        var count = widths?.Count ?? CountGridColumns(tbl) ?? WidestRow(rows);
+        if (count <= 0) return null;
+
+        var columns = new List<TableColumnSpec>(count);
+        for (var i = 0; i < count; i++)
+        {
+            var alignment = i < alignments.Count && !conflict[i]
+                ? alignments[i] ?? TableAlignment.Left
+                : TableAlignment.Left;
+
+            columns.Add(new TableColumnSpec
+            {
+                Width = widths is not null && i < widths.Count ? widths[i].Width : 1,
+                Alignment = alignment,
+            });
+        }
+
+        return columns;
+    }
+
+    private static int? CountGridColumns(XElement tbl)
+    {
+        var grid = tbl.Element(Ns.W + "tblGrid");
+        if (grid is null) return null;
+
+        var count = 0;
+        foreach (var _ in grid.Elements(Ns.W + "gridCol")) count++;
+        return count > 0 ? count : null;
+    }
+
+    /// <summary>Widest row measured in grid columns, spans included.</summary>
+    private static int WidestRow(List<TableRowNode> rows)
+    {
+        var widest = 0;
+        foreach (var row in rows)
+        {
+            var width = 0;
+            foreach (var cell in row.Children)
+            {
+                if (cell is TableCellNode c) width += c.ColSpan;
+            }
+
+            widest = Math.Max(widest, width);
+        }
+
+        return widest;
     }
 
     /// <summary>
@@ -161,29 +263,21 @@ internal sealed class TableConverter
         _ctx.Report.TableCells++;
         _ctx.Report.Count(mapped: true);
 
-        var tcPr = tc.Element(Ns.W + "tcPr");
         var blocks = ConvertCellBlocks(tc);
-        var alignment = ReadAlignment(tc);
-        var verticalAlignment = tcPr?.Element(Ns.W + "vAlign").WVal() switch
-        {
-            "center" => (TableVerticalAlignment?)TableVerticalAlignment.Middle,
-            "bottom" => TableVerticalAlignment.Bottom,
-            _ => null,
-        };
 
         // The common case — one paragraph of inline content — becomes a plain
         // cell. Anything richer needs an AsciiDoc-styled cell so the nested
-        // blocks survive.
+        // blocks survive. Alignment is carried by the column spec, not the
+        // cell, because a per-cell specifier sits between two separators where
+        // it cannot be told apart from content.
         if (blocks.Count == 1 && blocks[0] is ParagraphNode paragraph && paragraph.Children.Count == 0)
         {
             return new TableCellNode
             {
                 Text = string.Empty,
-                Inlines = paragraph.Inlines,
+                Inlines = NeutraliseCellSpecLookalike(paragraph.Inlines),
                 ColSpan = colSpan,
                 RowSpan = rowSpan,
-                Alignment = alignment,
-                VerticalAlignment = verticalAlignment,
             };
         }
 
@@ -192,10 +286,24 @@ internal sealed class TableConverter
             Text = EmitCellSource(blocks),
             ColSpan = colSpan,
             RowSpan = rowSpan,
-            Alignment = alignment,
-            VerticalAlignment = verticalAlignment,
             ContentStyle = blocks.Count == 0 ? TableCellStyle.Default : TableCellStyle.AsciiDoc,
         };
+    }
+
+    /// <summary>
+    /// A cell holding nothing but a style letter is read as the <em>next</em>
+    /// cell's specifier — <c>|a|b</c> is an empty cell followed by an
+    /// AsciiDoc-styled cell, not the two cells "a" and "b". Wrapping such a
+    /// cell's text in a passthrough keeps it as content.
+    /// </summary>
+    private static IReadOnlyList<InlineNode> NeutraliseCellSpecLookalike(IReadOnlyList<InlineNode> inlines)
+    {
+        if (inlines.Count != 1 || inlines[0] is not TextInlineNode text) return inlines;
+
+        var value = text.Value.Trim();
+        if (value.Length != 1 || "adehlms".IndexOf(value[0]) < 0) return inlines;
+
+        return new List<InlineNode> { new TextInlineNode { Value = "+++" + text.Value + "+++" } };
     }
 
     private List<BlockNode> ConvertCellBlocks(XElement tc)
@@ -351,18 +459,46 @@ internal sealed class TableConverter
 
         if (widths.Count == 0) return null;
 
-        // AsciiDoc column widths are proportional integers; reduce the twip
-        // values by their GCD so `cols="1,2"` comes out of a 2:1 grid.
+        var total = 0L;
+        foreach (var width in widths) total += width;
+        if (total <= 0) return null;
+
+        // Equal columns are AsciiDoc's default; emitting explicit widths for
+        // them adds noise without changing the rendering.
+        var even = true;
+        foreach (var width in widths)
+        {
+            if (Math.Abs(width - (double)total / widths.Count) > total * 0.01) { even = false; break; }
+        }
+
+        if (even) return null;
+
+        // AsciiDoc column widths are proportional integers. Prefer the GCD
+        // reduction when it lands on small numbers (a 2:1 grid should read
+        // `cols="1,2"`), and fall back to percentages when the twip values are
+        // coprime and would otherwise produce four-digit weights.
         var divisor = widths[0];
         foreach (var width in widths) divisor = Gcd(divisor, width);
         if (divisor <= 0) divisor = 1;
 
-        var specs = new List<TableColumnSpec>(widths.Count);
+        var reduced = new List<int>(widths.Count);
+        var largest = 0;
         foreach (var width in widths)
         {
-            specs.Add(new TableColumnSpec { Width = Math.Max(1, width / divisor) });
+            var value = Math.Max(1, width / divisor);
+            largest = Math.Max(largest, value);
+            reduced.Add(value);
         }
 
+        if (largest > 12)
+        {
+            reduced.Clear();
+            foreach (var width in widths)
+                reduced.Add(Math.Max(1, (int)Math.Round(width * 100.0 / total)));
+        }
+
+        var specs = new List<TableColumnSpec>(reduced.Count);
+        foreach (var value in reduced) specs.Add(new TableColumnSpec { Width = value });
         return specs;
     }
 

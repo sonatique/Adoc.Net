@@ -5,6 +5,44 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **Word import: `AdocNet.Importers.Docx` and the `docx2adoc` tool.** Reads a
+  `.docx` package into the Adoc.Net AST, which the emitter turns into AsciiDoc
+  source. Pure managed code — an OPC reader over `ZipArchive`/`XDocument`, no
+  Open XML SDK and no `System.IO.Packaging`, so `netstandard2.0` keeps working.
+  Mapped: sections from heading styles (with `basedOn`/`outlineLvl` resolution),
+  paragraphs, lists with nesting/numbering style/continuations, tables with grid
+  widths, header rows and `gridSpan`/`vMerge` spans, images with captions and
+  sizes, text boxes as sidebars, hyperlinks, bookmarks and cross references,
+  footnotes and endnotes, fields (`HYPERLINK`, `REF`, `TOC`, result-text
+  fallback), quote and listing blocks, admonitions, page and thematic breaks,
+  tracked changes, and core properties. Character formatting maps to AsciiDoc
+  markup, with underline/strikethrough/caps/colour kept as roles;
+  formatting inherited from a *paragraph* style is deliberately not turned into
+  inline markup. `DocxImportReport` records every unit that was mapped,
+  approximated or lost, with a content-mapping fidelity ratio and a
+  `--min-fidelity` gate in the CLI. See `docs/DOCX_IMPORT.md`.
+
+  Literal text is protected by a match-driven escaper: backslash escapes where
+  the parser honours them, inline passthroughs for replacements and macro-shaped
+  text where it does not, block-marker neutralisation at line starts, and
+  unconstrained delimiters (`**`, `##`) when Word formats part of a word.
+  Verified by a round-trip harness — import → emit → parse → render — over a
+  corpus of 69 real Word documents: every word survives, weighted content
+  fidelity 99.8 %, 62 documents at 100 %.
+
+### Fixed
+
+- **Emitter: nested lists lost their numbering style.** `ListEmitter` emitted
+  the `[loweralpha]`/`start=` attribute line only for the outermost list, so a
+  nested list re-parsed as a plain arabic one.
+- **Emitter: a cell specifier after an empty spanned cell was read as content.**
+  `4+|2+|Total` emitted for an empty 4-column cell followed by a 2-column cell
+  left the second specifier glued to the first separator, and the row came out
+  short — the parser then dropped it as incomplete. The separator space is now
+  also inserted after a bare `|`.
+
 ## [1.0.22] - 2026-06-21
 
 A paged preview release: the Avalonia path gains a print-like paged rendering

@@ -48,15 +48,16 @@ internal static class TableEmitter
             || cell.Alignment is not null
             || cell.ContentStyle != TableCellStyle.Default;
 
-        // The parser only recognises a span/style prefix when it's preceded
-        // by whitespace (or the start of the segment) — `aa|` parses as plain
-        // text, but `a a|` parses as style `a` + content `a`. So prepend a
-        // separator space when the previous character is part of cell
-        // content rather than a delimiter.
+        // A span/style prefix is only recognised when whitespace precedes it:
+        // `aa|` is plain text where `a a|` is style `a` plus content `a`. The
+        // separator is needed after cell content *and* after a bare `|` (an
+        // empty spanned cell, e.g. `4+|` followed by `2+|Total`), where the
+        // following prefix would otherwise be read as the empty cell's
+        // content and the row would come out short.
         if (hasPrefix && ctx.Output.Length > 0)
         {
             char prev = ctx.Output[ctx.Output.Length - 1];
-            if (prev != ' ' && prev != '\n' && prev != '|' && prev != '\t')
+            if (prev != ' ' && prev != '\t')
                 ctx.Output.Append(' ');
         }
 

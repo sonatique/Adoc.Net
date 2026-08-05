@@ -54,14 +54,25 @@ internal readonly struct RunFormat
         "PlainText", "HTMLPreformatted", "Preformatted", "CodeChar", "SourceCodeChar",
     };
 
+    /// <summary>
+    /// Resolves the formatting that should become inline markup.
+    /// <para>
+    /// Only direct run properties and the character style chain are consulted.
+    /// Formatting a run inherits from its <em>paragraph</em> style is
+    /// block-level presentation — Word's heading styles are bold, its Quote
+    /// style is italic — and turning that into <c>*…*</c> or <c>_…_</c> would
+    /// litter every heading with markup that says nothing about the author's
+    /// intent. The paragraph style still decides monospacing, because that is
+    /// what identifies a code paragraph.
+    /// </para>
+    /// </summary>
     public static RunFormat Resolve(XElement? directRunProperties, string? characterStyleId,
         string? paragraphStyleId, StyleTable styles)
     {
-        // Search order: direct → character style chain → paragraph style chain.
+        // Search order: direct → character style chain.
         var chain = new List<XElement>();
         if (directRunProperties is not null) chain.Add(directRunProperties);
         foreach (var rPr in styles.RunPropertyChain(characterStyleId)) chain.Add(rPr);
-        foreach (var rPr in styles.RunPropertyChain(paragraphStyleId)) chain.Add(rPr);
 
         var vertAlign = First(chain, "vertAlign").WVal() switch
         {
@@ -77,6 +88,17 @@ internal readonly struct RunFormat
         var underline = First(chain, "u");
         var highlight = First(chain, "highlight").WVal();
         var shading = First(chain, "shd")?.Attribute(Ns.W + "fill")?.Value;
+
+        // The built-in Hyperlink styles are underlined and coloured. That is
+        // how Word draws a link, not authored formatting: an AsciiDoc backend
+        // styles links itself, and carrying the decoration into the link
+        // macro's label would put role markup inside its attribute list.
+        if (styles.IsOrDerivesFrom(characterStyleId, "Hyperlink")
+            || styles.IsOrDerivesFrom(characterStyleId, "FollowedHyperlink"))
+        {
+            underline = null;
+            color = null;
+        }
 
         return new RunFormat
         {
@@ -115,7 +137,19 @@ internal readonly struct RunFormat
         }
 
         var fonts = First(chain, "rFonts");
-        if (fonts is null) return false;
+        if (fonts is null)
+        {
+            // The paragraph style can carry the monospace font itself, which
+            // is how a pasted code paragraph usually looks.
+            foreach (var rPr in styles.RunPropertyChain(paragraphStyleId))
+            {
+                var styleFonts = rPr.Element(Ns.W + "rFonts");
+                var styleAscii = styleFonts?.Attribute(Ns.W + "ascii")?.Value;
+                if (styleAscii is not null && MonospaceFonts.Contains(styleAscii)) return true;
+            }
+
+            return false;
+        }
 
         var ascii = fonts.Attribute(Ns.W + "ascii")?.Value
                     ?? fonts.Attribute(Ns.W + "hAnsi")?.Value

@@ -48,6 +48,8 @@ For library use, reference the package for the output you want. (The `AdocNet.Pd
 | Render man page | `AdocNet.Converters.Man` |
 | Render Reveal.js | `AdocNet.Converters.Revealjs` |
 | Avalonia UI renderer | `AdocNet.Avalonia` |
+| Emit AsciiDoc from an AST | `AdocNet.Emitter` |
+| Import Word `.docx` | `AdocNet.Importers.Docx` |
 
 ### Command-line tools
 
@@ -58,6 +60,7 @@ dotnet tool install --global AdocNet.Tool         # adocnet (HTML default)
 dotnet tool install --global AdocNet.Pdf          # adocnet-pdf
 dotnet tool install --global AdocNet.Epub         # adocnet-epub
 dotnet tool install --global AdocNet.DocBook      # adocnet-docbook
+dotnet tool install --global AdocNet.Docx         # docx2adoc (.docx → AsciiDoc)
 ```
 
 ## Quick Start
@@ -136,6 +139,25 @@ using AdocNet.Converters.Epub;
 byte[] epub = new EpubRenderer().RenderToBytes(result.Document);
 File.WriteAllBytes("output.epub", epub);
 ```
+
+### Import a Word document
+
+```csharp
+// dotnet add package AdocNet.Importers.Docx
+using AdocNet.Importers.Docx;
+
+var importer = new DocxImporter();
+string adoc = importer.ToAsciiDoc("handbook.docx");
+
+// Or keep the AST, extracted images, and the fidelity report
+var imported = importer.ImportFile("handbook.docx");
+Console.Write(imported.Report.ToSummary());   // fidelity: 99.63% (272/273 units) …
+```
+
+Structure, lists, tables, images, links, notes and formatting are mapped;
+anything AsciiDoc cannot express (page geometry, tab stops, shapes) is listed in
+the report rather than dropped silently. See
+[docs/DOCX_IMPORT.md](docs/DOCX_IMPORT.md).
 
 ### Parse with includes
 
