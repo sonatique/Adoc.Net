@@ -201,6 +201,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             writer.HeaderTitle = ht;
 
         _baseDirectory = pdfOptions.BaseDirectory;
+        _xrefTitles = CollectXrefTitles(context.Document);
         _hasTrueTypeBodyFont = false;
         _runningContentStartAt = pdfOptions.RunningContentStartAt;
 
@@ -670,7 +671,13 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 // TOC is rendered in RenderDocumentContent, skip here
                 break;
             case PageBreakNode:
-                w.StartPage();
+                // Close the page in progress (StartPage alone discards its stream).
+                // Like asciidoctor-pdf, a break on a page with no content yet is a no-op.
+                if (w.PageHasContent)
+                {
+                    w.FinishPage();
+                    w.StartPage();
+                }
                 break;
             case ThematicBreakNode:
                 w.EnsurePage();
@@ -680,6 +687,33 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 w.MoveCursor(_paragraphSpacingAfter);
                 break;
         }
+    }
+
+    // id -> display text for <<id>> cross-references without an explicit label.
+    private Dictionary<string, string> _xrefTitles = new(StringComparer.Ordinal);
+
+    private string XrefText(CrossReferenceInlineNode xref) =>
+        xref.Label ?? (_xrefTitles.TryGetValue(xref.Target, out var title) ? title : xref.Target);
+
+    private static Dictionary<string, string> CollectXrefTitles(DocumentNode document)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        void Walk(AstNode node)
+        {
+            if (node is BlockNode { Id: { } id } block)
+            {
+                string? text = block.Reftext ?? node switch
+                {
+                    SectionNode s => s.Title,
+                    DelimitedBlockNode d => d.Title,
+                    _ => null,
+                };
+                if (text is not null) map.TryAdd(id, text);
+            }
+            foreach (var child in node.Children) Walk(child);
+        }
+        Walk(document);
+        return map;
     }
 
     private void RenderSection(PdfWriter w, SectionNode section, int indentLevel, FootnoteState footnotes)
@@ -979,7 +1013,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
     // ── Helpers ──────────────────────────────────────────────────────────
 
     /// <summary>Extracts plain text from inline nodes or falls back to raw text.</summary>
-    private static string GetPlainText(IReadOnlyList<InlineNode> inlines, string fallback,
+    private string GetPlainText(IReadOnlyList<InlineNode> inlines, string fallback,
         FootnoteState? footnotes = null)
     {
         if (inlines.Count == 0) return fallback;
@@ -999,7 +1033,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 case SuperscriptInlineNode sup: sb.Append(sup.Content); break;
                 case SubscriptInlineNode sub: sb.Append(sub.Content); break;
                 case PassthroughInlineNode pt: sb.Append(pt.Content); break;
-                case CrossReferenceInlineNode xref: sb.Append(xref.Label ?? xref.Target); break;
+                case CrossReferenceInlineNode xref: sb.Append(XrefText(xref)); break;
                 case FootnoteInlineNode fn:
                     // When a footnote registry is supplied (table cells, #57), register
                     // the footnote and emit its [n] marker — matching paragraph rendering

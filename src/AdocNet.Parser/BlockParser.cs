@@ -193,6 +193,15 @@ internal static class BlockParser
             return pendingSubs;
         }
 
+        // Resolves {attr} references in the doctitle once every header attribute is known
+        // (Asciidoctor applies header substitutions to the title).
+        void EndHeader()
+        {
+            state = State.Body;
+            if (document.Title is not null)
+                document.Title = ExpandAttributeValue(document.Title, document.Attributes);
+        }
+
         // Header author/revision line tracking.
         bool headerAuthorParsed = false;
         bool headerRevisionParsed = false;
@@ -226,7 +235,7 @@ internal static class BlockParser
                 {
                     // Blank line ends the header only after a title has been seen.
                     if (document.Title is not null)
-                        state = State.Body;
+                        EndHeader();
                     continue;
                 }
 
@@ -300,9 +309,13 @@ internal static class BlockParser
                 // Attribute entry: :name: value, :!name:, :name!:, :counter:name:
                 if (line[0] == ':')
                 {
-                    // Once we see an attribute entry, author/revision lines are no longer possible.
-                    headerAuthorParsed = true;
-                    headerRevisionParsed = true;
+                    // Once an attribute entry follows the title, author/revision lines are no
+                    // longer possible. Entries above the title (allowed by Asciidoctor) don't count.
+                    if (document.Title is not null)
+                    {
+                        headerAuthorParsed = true;
+                        headerRevisionParsed = true;
+                    }
                     if (TryParseAttributeUnset(line, out var unsetName))
                     {
                         if (lockedAttributes?.Contains(unsetName!) == true)
@@ -324,7 +337,7 @@ internal static class BlockParser
                 }
 
                 // Anything else ends the header; fall through to body processing.
-                state = State.Body;
+                EndHeader();
             }
 
             // ── Body state ─────────────────────────────────────────────────
@@ -3156,6 +3169,9 @@ internal static class BlockParser
                 paragraphStartLine = lineNumber;
             paragraphLines.Add(line);
         }
+
+        if (state == State.Header)
+            EndHeader();
 
         FlushParagraph(currentContainer, paragraphLines, ref paragraphStartLine, lines.Length, document.Attributes, pendingBlockId, pendingBlockRoles, seenIds, diagnostics, pendingHardbreaks, pendingAbstract ? "abstract" : null, subsOverride: ResolvePendingSubs(EffectiveNormal()), admonitionType: pendingAdmonitionType);
         pendingBlockId = null;
