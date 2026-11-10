@@ -5,6 +5,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.24] - 2026-11-10
+
+### Fixed
+
+- **Parser: attribute entries above the document title broke the header.** An
+  entry before `= Title` marked the author and revision lines as already
+  consumed, so those lines and every later header entry became a paragraph
+  (losing `sectnums`, `toc`, `author`, `revnumber`). Entries above the title are
+  allowed by Asciidoctor and no longer close those slots.
+- **Parser: attribute references in the document title are resolved.**
+  `= {product}: {subtitle}` kept the references verbatim in every output. They
+  are expanded when the header ends, so attributes set above or below the title
+  both apply.
+- **PDF: a page break discarded the page in progress.** `<<<` started a new page
+  without finishing the current one, dropping its content. A break on a page
+  with no content yet is now ignored, as in asciidoctor-pdf, instead of adding
+  a blank page.
+- **PDF: line breaks inside table cells render as a space.** Words on either
+  side were glued together, or a missing-glyph box appeared with embedded fonts.
+- **PDF: cross-references without a label show the target's title.** `<<id>>`
+  printed the raw id; it now uses the target's reftext or section/block title,
+  like the HTML converter.
+
 ## [1.0.23] - 2026-08-05
 
 A Word-import release: `.docx` files convert to AsciiDoc through the existing
