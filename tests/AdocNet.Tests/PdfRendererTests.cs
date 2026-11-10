@@ -1196,6 +1196,19 @@ public class PdfRendererTests
     }
 
     [Test]
+    public void Page_break_starts_new_page_without_losing_content()
+    {
+        var doc = AdocParser.Parse("Para one\n\n<<<\n\nPara two\n\n<<<\n\nPara three\n").Document;
+        var text = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc, PdfRenderOptions.A4));
+
+        int pageCount = Regex.Matches(text, "/Type /Page ").Count;
+        Assert.That(pageCount, Is.EqualTo(3));
+        Assert.That(text, Does.Contain("Para one"));
+        Assert.That(text, Does.Contain("Para two"));
+        Assert.That(text, Does.Contain("Para three"));
+    }
+
+    [Test]
     public void Table_header_repeats_on_continuation_page()
     {
         // Generate a table with header that spans multiple pages

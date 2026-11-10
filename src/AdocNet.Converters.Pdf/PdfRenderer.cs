@@ -670,7 +670,13 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 // TOC is rendered in RenderDocumentContent, skip here
                 break;
             case PageBreakNode:
-                w.StartPage();
+                // Close the page in progress (StartPage alone discards its stream).
+                // A break before any content has nothing to close and is a no-op.
+                if (w.HasOpenPage)
+                {
+                    w.FinishPage();
+                    w.StartPage();
+                }
                 break;
             case ThematicBreakNode:
                 w.EnsurePage();
