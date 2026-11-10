@@ -300,9 +300,13 @@ internal static class BlockParser
                 // Attribute entry: :name: value, :!name:, :name!:, :counter:name:
                 if (line[0] == ':')
                 {
-                    // Once we see an attribute entry, author/revision lines are no longer possible.
-                    headerAuthorParsed = true;
-                    headerRevisionParsed = true;
+                    // Once an attribute entry follows the title, author/revision lines are no
+                    // longer possible. Entries above the title (allowed by Asciidoctor) don't count.
+                    if (document.Title is not null)
+                    {
+                        headerAuthorParsed = true;
+                        headerRevisionParsed = true;
+                    }
                     if (TryParseAttributeUnset(line, out var unsetName))
                     {
                         if (lockedAttributes?.Contains(unsetName!) == true)

@@ -435,6 +435,18 @@ public class BlockParserTests
     }
 
     [Test]
+    public void Attribute_entries_above_title_keep_author_and_revision_lines()
+    {
+        var doc = BlockParser.Parse(":a: foo\n= T\nAuthor Name\nv1.0\n:sectnums:\n\n== A\n").Document;
+        Assert.That(doc.Title, Is.EqualTo("T"));
+        Assert.That(doc.Attributes["a"], Is.EqualTo("foo"));
+        Assert.That(doc.Attributes["author"], Is.EqualTo("Author Name"));
+        Assert.That(doc.Attributes["revnumber"], Is.EqualTo("1.0"));
+        Assert.That(doc.Attributes.ContainsKey("sectnums"), Is.True);
+        Assert.That(doc.Children[0], Is.InstanceOf<SectionNode>());
+    }
+
+    [Test]
     public void No_author_when_first_line_after_title_is_attribute()
     {
         var doc = BlockParser.Parse("= Title\n:key: value\n\nContent").Document;
