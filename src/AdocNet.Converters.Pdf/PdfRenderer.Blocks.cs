@@ -306,14 +306,16 @@ public sealed partial class PdfRenderer
     {
         var runs = new List<CellRun>();
         var sb = new System.Text.StringBuilder();
+        // Source line breaks inside a cell are whitespace, as in paragraphs — PDF text
+        // operators can't render \n (it vanished or showed as a missing-glyph box).
         void Flush()
         {
-            if (sb.Length > 0) { runs.Add(new CellRun(sb.ToString())); sb.Clear(); }
+            if (sb.Length > 0) { runs.Add(new CellRun(sb.Replace('\n', ' ').ToString())); sb.Clear(); }
         }
 
         if (inlines.Count == 0)
         {
-            if (!string.IsNullOrEmpty(fallback)) runs.Add(new CellRun(fallback));
+            if (!string.IsNullOrEmpty(fallback)) runs.Add(new CellRun(fallback.Replace('\n', ' ')));
             return runs;
         }
 
@@ -331,7 +333,7 @@ public sealed partial class PdfRenderer
                 case SuperscriptInlineNode sup: sb.Append(sup.Content); break;
                 case SubscriptInlineNode sub: sb.Append(sub.Content); break;
                 case PassthroughInlineNode pt: sb.Append(pt.Content); break;
-                case CrossReferenceInlineNode xref: sb.Append(xref.Label ?? xref.Target); break;
+                case CrossReferenceInlineNode xref: sb.Append(XrefText(xref)); break;
                 case FootnoteInlineNode fn:
                     Flush();
                     var (num, isFirst) = footnotes.Register(fn);
@@ -1190,7 +1192,7 @@ public sealed partial class PdfRenderer
                 break;
 
             case CrossReferenceInlineNode xref:
-                var xrefLabel = xref.Label ?? xref.Target;
+                var xrefLabel = XrefText(xref);
                 // Use internal link for cross-references (resolved in ToBytes)
                 segments.Add(new TextSegment(xrefLabel, defaultFont, defaultFontSize,
                     $"#internal#{xref.Target}"));

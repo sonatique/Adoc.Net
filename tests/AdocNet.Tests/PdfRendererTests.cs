@@ -1209,6 +1209,27 @@ public class PdfRendererTests
     }
 
     [Test]
+    public void Cross_reference_without_label_shows_section_title()
+    {
+        var doc = AdocParser.Parse("[[zz-target]]\n== Target Heading\n\nSee <<zz-target>>.\n\n|===\n| <<zz-target>>\n|===").Document;
+        var text = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc));
+
+        // Heading + paragraph xref + table-cell xref; the raw id only survives as a destination name.
+        Assert.That(Regex.Matches(text, @"\(Target Heading\) Tj").Count, Is.EqualTo(3));
+        Assert.That(text, Does.Not.Contain("(zz-target) Tj"));
+    }
+
+    [Test]
+    public void Table_cell_line_break_renders_as_space()
+    {
+        var doc = AdocParser.Parse("|===\n| A | B\n\n| first\nsecond\n| x\n|===").Document;
+        var text = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc));
+
+        Assert.That(text, Does.Contain("first second"));
+        Assert.That(text, Does.Not.Contain("firstsecond"));
+    }
+
+    [Test]
     public void Table_header_repeats_on_continuation_page()
     {
         // Generate a table with header that spans multiple pages
