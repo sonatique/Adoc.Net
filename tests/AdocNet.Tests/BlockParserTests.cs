@@ -447,6 +447,13 @@ public class BlockParserTests
     }
 
     [Test]
+    public void Doctitle_attribute_references_are_resolved()
+    {
+        var doc = BlockParser.Parse(":main-title: Main\n= {main-title}: {subtitle}\n:subtitle: Sub\n\nBody").Document;
+        Assert.That(doc.Title, Is.EqualTo("Main: Sub"));
+    }
+
+    [Test]
     public void No_author_when_first_line_after_title_is_attribute()
     {
         var doc = BlockParser.Parse("= Title\n:key: value\n\nContent").Document;
