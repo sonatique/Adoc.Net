@@ -348,7 +348,10 @@ internal sealed partial class PdfWriter
 
     internal float MarginTopValue => _marginTop;
     internal int CurrentPageNumber => _currentPageNumber;
-    internal bool HasOpenPage => _currentStream is not null;
+    // True once anything has advanced the cursor on the open page (a fresh page sits
+    // at the StartPage position).
+    internal bool PageHasContent =>
+        _currentStream is not null && _cursorY < _pageHeight - _marginTop - BodyLeading;
 
     /// <summary>
     /// Temporarily indents all content by the given amount from the left margin.

@@ -672,8 +672,8 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 break;
             case PageBreakNode:
                 // Close the page in progress (StartPage alone discards its stream).
-                // A break before any content has nothing to close and is a no-op.
-                if (w.HasOpenPage)
+                // Like asciidoctor-pdf, a break on a page with no content yet is a no-op.
+                if (w.PageHasContent)
                 {
                     w.FinishPage();
                     w.StartPage();

@@ -1209,6 +1209,15 @@ public class PdfRendererTests
     }
 
     [Test]
+    public void Page_break_on_empty_page_does_not_add_blank_page()
+    {
+        var doc = AdocParser.Parse("Para one\n\n<<<\n\n<<<\n\nPara two\n").Document;
+        var text = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc, PdfRenderOptions.A4));
+
+        Assert.That(Regex.Matches(text, "/Type /Page ").Count, Is.EqualTo(2));
+    }
+
+    [Test]
     public void Cross_reference_without_label_shows_section_title()
     {
         var doc = AdocParser.Parse("[[zz-target]]\n== Target Heading\n\nSee <<zz-target>>.\n\n|===\n| <<zz-target>>\n|===").Document;
