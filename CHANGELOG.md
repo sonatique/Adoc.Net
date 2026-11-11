@@ -5,6 +5,50 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.27] - 2026-11-11
+
+Themed PDF output now matches asciidoctor-pdf. A made-up manual and theme in
+`spec/pdf-parity/themed-manual`, scored by `tools/pdf-parity.py` (page count and
+per-page pixel difference against asciidoctor-pdf), went from 30.6 % differing
+pixels with a missing page to identical pages at 60 dpi.
+
+### Added
+
+- **PDF title page** from the theme's `title-page` keys (`:title-page:` or the
+  book doctype): background image, logo, title and subtitle split at the last
+  ": ", authors and revision (`PdfRenderOptions.TitlePage`).
+- **`PdfThemeLoader.Load(theme, fontsDir, baseDirectory)`**: sets the image base
+  directory without copying the options.
+- Theme-mapped options: `HeadingLineHeight`, `CodeLineHeight`, `CodePadding`,
+  `HeadingMarginTop/Bottom`, `Heading2..5MarginTop`, `Heading2..5FontPath`,
+  `TocLineHeight`, `TocIndent`, `TocDotLeaderColor`, `TableLineHeight`,
+  `TableCellPadding`, `TableGridWidth`, `TableHeadBorderBottomWidth`,
+  `ListIndent`, `JustifyText`.
+- `tools/pdf-parity.py` and the `spec/pdf-parity` fixture.
+
+### Changed
+
+- **PDF with an embedded body font** follows asciidoctor-pdf (Prawn): font
+  metrics and glyph widths in whole 1/1000 em, kerning from the `kern` table,
+  the default theme's fallbacks (base line height 12/10.5, prose margin 12,
+  bold headings), heading margin-top dropped at a page top, running content
+  placement and numbering, TOC layout, prawn-table rows, text-label
+  admonitions, list indent, code padding and wrapping at spaces,
+  `base.text-align`.
+
+### Fixed
+
+- **Sections with the same title** got the same id, so their TOC entries and
+  cross-references pointed at the last one; generated ids are now unique
+  (`_title`, `_title_2`).
+- **`cols="20%,10%,70%"`** was read as equal widths.
+- **PDF: TOC pages carried running content** with `start-at: after-toc`, and
+  page numbers counted the title page.
+- **PDF: hard line breaks** (`" +"`) in paragraphs were flattened to spaces.
+- **PDF: table header band** was drawn several points below its row.
+- **PDF: a doubled space** after a segment that opens with one.
+- Attribute values continued with `" + \"` keep their line break.
+
 ## [1.0.26] - 2026-11-11
 
 Styling hooks so a host can apply one theme (for example an asciidoctor-pdf

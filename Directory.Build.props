@@ -14,7 +14,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.26</Version>
+    <Version>1.0.27</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) Sylvain Fasel</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -23,7 +23,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;docx;word;import;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.26: styling hooks for applying one theme across outputs. AvaloniaRenderTheme gains BodyFont, BodyForeground, HeadingFont, HeadingForegrounds with FallbackHeadingForeground and HeadingForeground(level), and TableHeaderForeground (all null by default: the host style applies), honoured by the full, paged and incremental Avalonia renderers. New EpubRenderOptions.CustomCss appends CSS to the EPUB stylesheet. New TrueTypeFontInfo.ReadFamilyName returns a font file's family name for CSS and Avalonia font references. See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.27: themed PDF output now matches asciidoctor-pdf. With an asciidoctor-pdf YAML theme and embedded fonts, AdocNet draws the title page (background, logo, title/subtitle, authors, revision), uses Prawn line metrics, kerning and the default theme fallbacks, places headers and footers and numbers pages like asciidoctor-pdf (running content after the TOC), and lays out the TOC, tables (prawn-table geometry, column percentages, repeated header), admonitions, lists and code blocks the same way. Also: unique ids for sections with the same title (TOC and xref page numbers), percentage column widths, hard line breaks in PDF paragraphs, per-level heading fonts, and PdfThemeLoader.Load(theme, fontsDir, baseDirectory). See CHANGELOG.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->
