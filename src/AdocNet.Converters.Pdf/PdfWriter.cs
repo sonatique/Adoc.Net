@@ -338,6 +338,7 @@ internal sealed partial class PdfWriter
 
     internal float CursorY => _cursorY;
     internal float PageHeight => _pageHeight;
+    internal float PageWidth => _pageWidth;
     internal float MarginBottomValue => _marginBottom;
 
     /// <summary>Effective left edge accounting for indent.</summary>

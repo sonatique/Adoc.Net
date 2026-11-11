@@ -255,9 +255,102 @@ public static class PdfThemeLoader
             // ≈ 10.8pt) applies. Our 16pt fallback was too generous.
             TitleMarginTop = GetFloat(props, "heading-h1.margin-top") ?? 0f,
             TitleMarginBottom = GetFloat(props, "heading-h1.margin-bottom") ?? GetFloat(props, "heading.margin-bottom") ?? 16f,
+
+            TitlePage = BuildTitlePage(props, fontsDir, themeDir ?? fontsDir),
         };
 
         return options;
+    }
+
+    // ── Title page ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Maps the <c>title-page</c> keys, falling back to asciidoctor-pdf's default theme
+    /// (which <c>extends: default</c> themes inherit) for anything the theme omits.
+    /// </summary>
+    private static PdfTitlePageOptions BuildTitlePage(Dictionary<string, string> props, string fontsDir, string themeDir)
+    {
+        float baseSize = GetFloat(props, "base.font-size") ?? 10.5f;
+        float baseLineHeight = GetFloat(props, "base.line-height") ?? 12f / 10.5f;
+        var align = ParseAlignment(GetString(props, "title-page.text-align")) ?? PdfAlignment.Right;
+
+        PdfTitlePageText Text(string part, float size, PdfColor? color, string style, float lineHeight,
+            float marginTop, string? top = null)
+        {
+            string prefix = $"title-page.{part}.";
+            var fontStyle = (GetString(props, prefix + "font-style") ?? style).Replace('-', '_');
+            var family = GetString(props, prefix + "font-family");
+            return new PdfTitlePageText
+            {
+                FontPath = family is null ? null : ResolveFontCatalogPath(props, family, fontStyle, fontsDir),
+                FontSize = GetFloat(props, prefix + "font-size") ?? size,
+                Color = ParseColor(GetString(props, prefix + "font-color")) ?? color,
+                Bold = fontStyle is "bold" or "bold_italic",
+                Italic = fontStyle is "italic" or "bold_italic",
+                LineHeight = GetFloat(props, prefix + "line-height") ?? lineHeight,
+                MarginTop = GetFloat(props, prefix + "margin-top") ?? marginTop,
+                MarginBottom = GetFloat(props, prefix + "margin-bottom") ?? 0f,
+                Top = GetString(props, prefix + "top") ?? top,
+            };
+        }
+
+        var logo = GetString(props, "title-page.logo.image");
+        var background = GetString(props, "title-page.background-image");
+        return new PdfTitlePageOptions
+        {
+            Alignment = align,
+            BackgroundImagePath = ResolveThemeImage(background, themeDir),
+            LogoImagePath = ResolveThemeImage(logo, themeDir),
+            LogoTop = GetString(props, "title-page.logo.top") ?? "10%",
+            LogoAlignment = ParseAlignment(GetString(props, "title-page.logo.align")),
+            LogoWidth = logo is null ? null : ParseLength(ImageMacroAttribute(logo, "pdfwidth")),
+            Title = Text("title",
+                GetFloat(props, "heading-h1.font-size") ?? (float)Math.Floor(baseSize * 2.6f),
+                ParseColor(GetString(props, "role.subtitle.font-color")) ?? ParseColor("999999"),
+                "normal", 0.9f, 0f, top: "55%"),
+            Subtitle = Text("subtitle",
+                GetFloat(props, "heading-h3.font-size") ?? (float)Math.Round(baseSize * 1.7f, MidpointRounding.AwayFromZero),
+                null, "bold_italic", 1f, 0f),
+            Authors = Text("authors", (float)Math.Round(baseSize * 1.25f, MidpointRounding.AwayFromZero),
+                ParseColor("181818"), "normal", baseLineHeight, baseSize * 1.25f),
+            Revision = Text("revision", baseSize, null, "normal", baseLineHeight, baseSize * 1.25f),
+        };
+    }
+
+    private static string? ResolveThemeImage(string? value, string themeDir)
+    {
+        if (value is null) return null;
+        var path = ExtractImageMacroPath(value) ?? value;
+        var full = Path.IsPathRooted(path) ? path : Path.Combine(themeDir, path);
+        return File.Exists(full) ? Path.GetFullPath(full) : null;
+    }
+
+    private static string? ImageMacroAttribute(string value, string name)
+    {
+        int open = value.IndexOf('['), close = value.LastIndexOf(']');
+        if (open < 0 || close <= open) return null;
+        foreach (var part in value[(open + 1)..close].Split(','))
+        {
+            var kv = part.Split(new[] { '=' }, 2);
+            if (kv.Length == 2 && kv[0].Trim().Equals(name, StringComparison.OrdinalIgnoreCase))
+                return kv[1].Trim();
+        }
+        return null;
+    }
+
+    /// <summary>Parses a length such as <c>180</c>, <c>2.5in</c>, <c>6cm</c>, <c>50mm</c> or <c>96px</c> into points.</summary>
+    internal static float? ParseLength(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var v = value!.Trim();
+        (string Suffix, float Factor)[] units = { ("in", 72f), ("cm", 72f / 2.54f), ("mm", 72f / 25.4f), ("px", 0.75f), ("pt", 1f) };
+        foreach (var (suffix, factor) in units)
+        {
+            if (v.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+                && float.TryParse(v[..^suffix.Length], NumberStyles.Float, CultureInfo.InvariantCulture, out var n))
+                return n * factor;
+        }
+        return float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out var pts) ? pts : null;
     }
 
     // ── Font resolution ──────────────────────────────────────────────────

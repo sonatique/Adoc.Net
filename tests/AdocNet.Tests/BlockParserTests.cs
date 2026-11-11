@@ -435,6 +435,14 @@ public class BlockParserTests
     }
 
     [Test]
+    public void Attribute_continuation_after_plus_keeps_hard_line_break()
+    {
+        var doc = BlockParser.Parse(":hard: Alpha + \\\nBeta\n:soft: Gamma \\\nDelta\n\nBody").Document;
+        Assert.That(doc.Attributes["hard"], Is.EqualTo("Alpha +\nBeta"));
+        Assert.That(doc.Attributes["soft"], Is.EqualTo("Gamma Delta"));
+    }
+
+    [Test]
     public void Attribute_entries_above_title_keep_author_and_revision_lines()
     {
         var doc = BlockParser.Parse(":a: foo\n= T\nAuthor Name\nv1.0\n:sectnums:\n\n== A\n").Document;

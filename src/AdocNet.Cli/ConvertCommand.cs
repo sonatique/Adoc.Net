@@ -258,6 +258,7 @@ internal sealed class ConvertCommand(ConsoleLogger logger)
                 HeaderAlignment = options.HeaderAlignment,
                 FooterAlignment = options.FooterAlignment,
                 RunningContentStartAt = options.RunningContentStartAt,
+                TitlePage = options.TitlePage,
                 TableBorderColor = options.TableBorderColor,
                 TableHeaderBackground = options.TableHeaderBackground,
                 TableHeaderFontColor = options.TableHeaderFontColor,

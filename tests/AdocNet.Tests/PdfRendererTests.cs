@@ -1196,6 +1196,27 @@ public class PdfRendererTests
     }
 
     [Test]
+    public void Title_page_partitions_title_and_keeps_body_on_next_page()
+    {
+        var doc = AdocParser.Parse(
+            ":main: Alpha + \\\nBeta\n= {main}: Sub Line\nAuthor Name\nv1.0\n:title-page:\n\n<<<\n\nBody text.\n").Document;
+        var text = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc, PdfRenderOptions.A4));
+
+        Assert.That(Regex.Matches(text, "/Type /Page ").Count, Is.EqualTo(2), "title page + body page; the <<< on a fresh page is a no-op");
+        foreach (var line in new[] { "Alpha", "Beta", "Sub Line", "Author Name", "Version 1.0", "Body text." })
+            Assert.That(text, Does.Contain($"({line}) Tj"), line);
+        Assert.That(text, Does.Not.Contain("+) Tj"), "the hard break marker is not printed");
+    }
+
+    [Test]
+    public void No_title_page_without_attribute()
+    {
+        var doc = AdocParser.Parse("= Main: Sub\n\nBody text.\n").Document;
+        var text = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc, PdfRenderOptions.A4));
+        Assert.That(Regex.Matches(text, "/Type /Page ").Count, Is.EqualTo(1));
+    }
+
+    [Test]
     public void Page_break_starts_new_page_without_losing_content()
     {
         var doc = AdocParser.Parse("Para one\n\n<<<\n\nPara two\n\n<<<\n\nPara three\n").Document;

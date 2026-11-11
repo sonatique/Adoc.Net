@@ -286,4 +286,10 @@ public sealed class PdfRenderOptions : RenderOptions
         TitleFontSize = 30f, FontSize = 14f, LineSpacing = 1.5f,
         HeadingColor = new PdfColor(0f, 0f, 0.6f), SectionSpacing = 24f
     };
+
+    /// <summary>
+    /// Title page layout, used when the document sets <c>:title-page:</c> or uses the book
+    /// doctype. Null = asciidoctor-pdf default-theme layout.
+    /// </summary>
+    public PdfTitlePageOptions? TitlePage { get; init; }
 }

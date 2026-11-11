@@ -5487,7 +5487,10 @@ internal static class BlockParser
             if (nextLine[0] == ':')
                 break;
             i++;
-            value = value.Length > 0 ? value + " " + nextLine : nextLine;
+            // " + \" keeps a hard line break (Asciidoctor joins with LF after a trailing " +").
+            value = value.Length == 0 ? nextLine
+                : value.EndsWith(" +") ? value + "\n" + nextLine
+                : value + " " + nextLine;
         }
         return value;
     }

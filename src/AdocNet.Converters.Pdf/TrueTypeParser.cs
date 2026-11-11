@@ -12,6 +12,8 @@ internal sealed class TrueTypeFont
     public int UnitsPerEm { get; }
     public int Ascender { get; }
     public int Descender { get; }
+    /// <summary>Line gap in font units (OS/2 typo line gap when non-zero, else hhea), as Prawn uses it.</summary>
+    public int LineGap { get; }
     public byte[] FontData { get; }
 
     // Maps Unicode code point -> glyph ID
@@ -20,9 +22,10 @@ internal sealed class TrueTypeFont
     // Maps glyph ID -> advance width (in font units)
     private readonly Dictionary<ushort, int> _glyphWidths;
 
-    private TrueTypeFont(string fontName, int unitsPerEm, int ascender, int descender,
+    private TrueTypeFont(string fontName, int unitsPerEm, int ascender, int descender, int lineGap,
         byte[] fontData, Dictionary<int, ushort> cmapTable, Dictionary<ushort, int> glyphWidths)
     {
+        LineGap = lineGap;
         FontName = fontName;
         UnitsPerEm = unitsPerEm;
         Ascender = ascender;
@@ -81,10 +84,12 @@ internal sealed class TrueTypeFont
         int ascender = 0;
         int descender = 0;
         int numberOfHMetrics = 0;
+        int lineGap = 0;
         if (tables.TryGetValue("hhea", out var hheaTable))
         {
             ascender = ReadInt16(data, hheaTable.Offset + 4);
             descender = ReadInt16(data, hheaTable.Offset + 6);
+            lineGap = ReadInt16(data, hheaTable.Offset + 8);
             numberOfHMetrics = ReadUInt16(data, hheaTable.Offset + 34);
         }
 
@@ -97,6 +102,9 @@ internal sealed class TrueTypeFont
                 ascender = sTypoAscender;
             if (sTypoDescender != 0)
                 descender = sTypoDescender;
+            int sTypoLineGap = ReadInt16(data, os2Table.Offset + 72);
+            if (sTypoLineGap != 0)
+                lineGap = sTypoLineGap;
         }
 
         // Parse hmtx table: array of numberOfHMetrics entries (4 bytes each: uint16 advanceWidth + int16 lsb)
@@ -137,7 +145,7 @@ internal sealed class TrueTypeFont
             fontName = ParseName(data, nameTable.Offset, nameId: 6) ?? fontName;
         }
 
-        return new TrueTypeFont(fontName, unitsPerEm, ascender, descender, data, cmapTable2, glyphWidths);
+        return new TrueTypeFont(fontName, unitsPerEm, ascender, descender, lineGap, data, cmapTable2, glyphWidths);
     }
 
     private static void ParseCmap(byte[] data, int cmapOffset, Dictionary<int, ushort> result)

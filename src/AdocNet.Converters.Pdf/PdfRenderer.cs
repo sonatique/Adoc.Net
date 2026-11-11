@@ -196,11 +196,14 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         writer.FooterAlignment = pdfOptions.FooterAlignment;
         writer.HeaderHeight = pdfOptions.HeaderHeight;
         writer.FooterHeight = pdfOptions.FooterHeight;
-        writer.DocumentTitle = context.Document.Title;
+        writer.DocumentTitle = context.Document.Title is { } docTitle ? PlainTitle(docTitle) : null;
         if (context.Document.Attributes.TryGetValue("header-title", out var ht))
             writer.HeaderTitle = ht;
 
         _baseDirectory = pdfOptions.BaseDirectory;
+        _titlePage = pdfOptions.TitlePage;
+        _baseLineHeight = pdfOptions.LineSpacing;
+        _fontKeysByPath.Clear(); // font keys belong to this pass's writer
         _xrefTitles = CollectXrefTitles(context.Document);
         _hasTrueTypeBodyFont = false;
         _runningContentStartAt = pdfOptions.RunningContentStartAt;
@@ -399,7 +402,14 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
     private void RenderDocumentContent(PdfWriter w, DocumentNode document, FootnoteState footnotes)
     {
-        if (document.Title is not null)
+        if (WantsTitlePage(document))
+        {
+            w.AddOutlineEntry(PlainTitle(document.Title!), 1, "_document_title");
+            RenderTitlePage(w, document);
+            w.FinishPage();
+            w.StartPage();
+        }
+        else if (document.Title is not null)
         {
             w.EnsurePage();
             // Position the document title at TitleFirstPageTop from the top of
@@ -422,9 +432,9 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 w.MoveCursor(-overshoot);
             // Register document title as outline entry. Use level 1 so it appears
             // as a sibling of top-level sections (matches Asciidoctor's flat outline).
-            w.AddOutlineEntry(document.Title, 1, "_document_title");
+            w.AddOutlineEntry(PlainTitle(document.Title), 1, "_document_title");
             if (_headingColor is { } hc) w.SetFillColor(hc.R, hc.G, hc.B);
-            w.WriteWrappedText(document.Title, _fontHeading, _titleFontSize, _titleLeading, _titleAlignment);
+            w.WriteWrappedText(PlainTitle(document.Title), _fontHeading, _titleFontSize, _titleLeading, _titleAlignment);
             if (_headingColor is not null) RestoreBodyFill(w);
             w.MoveCursor(_titleMarginBottom);
         }
