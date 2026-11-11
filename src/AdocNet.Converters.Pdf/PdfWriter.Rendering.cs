@@ -361,6 +361,9 @@ internal sealed partial class PdfWriter
         if (_currentStream is not null)
             FinishPage();
 
+        // Running content needs the final page count; write it before the fonts are subset.
+        WriteDeferredRunningContent();
+
         // Embed registered TrueType fonts (fills placeholder objects)
         EmbedRegisteredFonts();
 
@@ -449,16 +452,7 @@ internal sealed partial class PdfWriter
             $"trailer\n<< /Size {_objects.Count + 1} /Root {catalogId} 0 R /Info {infoId} 0 R >>\n" +
             $"startxref\n{xrefOffset}\n%%EOF\n"));
 
-        byte[] result = ms.ToArray();
-
-        // Replace total page count placeholders with actual count (same byte length)
-        int pageCount = _pageObjectIds.Count - PageNumberOffset;
-        ReplaceTotalPagesPlaceholder(result, pageCount);
-        // Also replace placeholders encoded as TrueType glyph IDs (when using embedded fonts)
-        foreach (var ttFont in _embeddedFonts.Values)
-            ReplaceTotalPagesPlaceholderTrueType(result, pageCount, ttFont);
-
-        return result;
+        return ms.ToArray();
     }
 
     /// <summary>
@@ -614,77 +608,11 @@ internal sealed partial class PdfWriter
     private int? BuildPageLabels()
     {
         if (_pageObjectIds.Count == 0) return null;
-        // Single entry: starting at index 0, use decimal numbering style "/D"
+        // Pages before numbering starts (the title page) get lower-case roman labels (i, ii...),
+        // then decimal from 1, like asciidoctor-pdf; otherwise decimal throughout.
+        if (PageNumberOffset > 0 && PageNumberOffset < _pageObjectIds.Count)
+            return AllocObject(new PdfObject($"<< /Nums [ 0 << /S /r >> {PageNumberOffset} << /S /D >> ] >>"));
         return AllocObject(new PdfObject("<< /Nums [ 0 << /S /D >> ] >>"));
-    }
-
-    /// <summary>
-    /// Scans the PDF bytes for the total pages placeholder and replaces it
-    /// with the actual page count, padded to maintain byte offsets.
-    /// </summary>
-    private static void ReplaceTotalPagesPlaceholder(byte[] data, int totalPages)
-    {
-        byte[] placeholder = Encoding.ASCII.GetBytes(TotalPagesPlaceholder);
-        string replacement = totalPages.ToString(CultureInfo.InvariantCulture);
-        // Pad replacement to match placeholder length
-        byte[] replacementBytes = Encoding.ASCII.GetBytes(replacement.PadRight(placeholder.Length));
-
-        for (int i = 0; i <= data.Length - placeholder.Length; i++)
-        {
-            bool match = true;
-            for (int j = 0; j < placeholder.Length; j++)
-            {
-                if (data[i + j] != placeholder[j])
-                {
-                    match = false;
-                    break;
-                }
-            }
-            if (match)
-            {
-                Array.Copy(replacementBytes, 0, data, i, replacementBytes.Length);
-                i += placeholder.Length - 1; // skip past replacement
-            }
-        }
-    }
-
-    /// <summary>
-    /// Replaces TrueType-encoded placeholders. When TrueType fonts are used, text is
-    /// encoded as a hex string of glyph IDs (4 hex chars per character). The placeholder
-    /// "___TOTAL___" becomes a 44-character hex sequence specific to each font's GID mapping.
-    /// </summary>
-    private static void ReplaceTotalPagesPlaceholderTrueType(byte[] data, int totalPages, TrueTypeFont font)
-    {
-        // Build the GID-encoded form of the placeholder for this font
-        string encodedPlaceholder = PdfFontEmbedder.EncodeTextAsGlyphIds(TotalPagesPlaceholder, font);
-        string replacement = totalPages.ToString(CultureInfo.InvariantCulture);
-        // Encode replacement followed by spaces (to match placeholder length)
-        string padded = replacement + new string(' ', TotalPagesPlaceholder.Length - replacement.Length);
-        string encodedReplacement = PdfFontEmbedder.EncodeTextAsGlyphIds(padded, font);
-
-        // Both should be the same length (4 hex chars per character)
-        if (encodedPlaceholder.Length != encodedReplacement.Length) return;
-
-        byte[] placeholderBytes = Encoding.ASCII.GetBytes(encodedPlaceholder);
-        byte[] replacementBytes = Encoding.ASCII.GetBytes(encodedReplacement);
-
-        for (int i = 0; i <= data.Length - placeholderBytes.Length; i++)
-        {
-            bool match = true;
-            for (int j = 0; j < placeholderBytes.Length; j++)
-            {
-                if (data[i + j] != placeholderBytes[j])
-                {
-                    match = false;
-                    break;
-                }
-            }
-            if (match)
-            {
-                Array.Copy(replacementBytes, 0, data, i, replacementBytes.Length);
-                i += placeholderBytes.Length - 1;
-            }
-        }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

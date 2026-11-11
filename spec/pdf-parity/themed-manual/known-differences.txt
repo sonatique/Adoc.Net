@@ -1,0 +1,6 @@
+# Differences from asciidoctor-pdf that AdocNet keeps on purpose (regex per line, matched
+# against tools/pdf-parity.py mismatch messages).
+
+# asciidoctor-pdf drops the hard line break from the title metadata without a space
+# ("FormatUser Guide"); AdocNet writes "Format User Guide".
+^title metadata: ref 'Widget Exchange FormatUser Guide

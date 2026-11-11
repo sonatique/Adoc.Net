@@ -240,7 +240,7 @@ A record is finalised when the next directive starts, so an error reported on on
 
 [cols="35%,65%",options="header"]
 |===
-|Message or symptom |Action
+|`Message` or symptom |Action
 |Unknown directive |Check the spelling and the case of the directive name, and that the previous quoted value was closed.
 |Time goes backwards |Sort the records by time, or move them into a batch with its own time base.
 |Checksum mismatch |Regenerate the checksum after editing the file by hand, or remove the `Checksum` directive.

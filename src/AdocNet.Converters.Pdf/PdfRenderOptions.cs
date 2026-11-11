@@ -361,4 +361,13 @@ public sealed class PdfRenderOptions : RenderOptions
 
     /// <summary>TrueType font for H5 headings (section level 4). Null = <see cref="HeadingFontPath"/>.</summary>
     public string? Heading5FontPath { get; init; }
+
+    /// <summary>Code block border width (theme <c>code.border-width</c>). Null = 0.75 for themed output.</summary>
+    public float? CodeBorderWidth { get; init; }
+
+    /// <summary>
+    /// Colour of heading levels without their own (theme <c>heading.font-color</c>). Null = #333333
+    /// (asciidoctor-pdf default theme) for themed output.
+    /// </summary>
+    public PdfColor? HeadingFontColor { get; init; }
 }

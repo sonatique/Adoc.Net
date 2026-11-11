@@ -405,9 +405,11 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
     private void RenderDocumentContent(PdfWriter w, DocumentNode document, FootnoteState footnotes)
     {
+        _outlineLevels = int.TryParse(document.Attributes.TryGetValue("outlinelevels", out var ol) ? ol
+                : document.Attributes.TryGetValue("toclevels", out var tl) ? tl : "2", out var levels) ? levels : 2;
         if (WantsTitlePage(document))
         {
-            w.AddOutlineEntry(PlainTitle(document.Title!), 1, "_document_title");
+            w.AddOutlineEntry(PlainTitle(_prawnMetrics ? PartitionTitle(document, document.Title!).Main : document.Title!), 1, "_document_title");
             RenderTitlePage(w, document);
             w.FinishPage();
             w.StartPage();
@@ -511,7 +513,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             // Styled and placed like a level-1 section title (asciidoctor-pdf toc title = h2).
             if ((_h2Color ?? _headingColor) is { } tc) w.SetFillColor(tc.R, tc.G, tc.B);
             WritePrawnHeading(w, new List<TextSegment> { new("Table of Contents", HeadingFont(1), _h2FontSize) },
-                _h2FontSize, 1, () => { });
+                _h2FontSize, 1, () => w.AddOutlineEntry("Table of Contents", 1, "_toc"));
             RestoreBodyFill(w);
         }
         else
@@ -637,7 +639,8 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
                     // Dot leader ending just before the page number (so the dots lead
                     // up to it and any rounding remainder sits next to the title).
-                    float gapStart = titleEnd + spaceWidth;
+                    // asciidoctor-pdf counts leader units from the title's end (no extra space).
+                    float gapStart = _prawnMetrics ? titleEnd : titleEnd + spaceWidth;
                     // asciidoctor-pdf ends the leader at a quarter-size no-break space before the number.
                     float gapEnd = _prawnMetrics
                         ? pageX - w.MeasureText(" ", _fontRegular, fontSize * 0.25f)
@@ -656,7 +659,10 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                     }
 
                     // Page number, right-aligned at the fixed content margin.
-                    w.WriteText(pageText, _fontRegular, fontSize, pageX, y);
+                    if (_prawnMetrics && titleLink is not null)
+                        w.WriteTextSegments(new List<TextSegment> { new(pageText, _fontRegular, fontSize, titleLink) }, pageX, y);
+                    else
+                        w.WriteText(pageText, _fontRegular, fontSize, pageX, y);
                     w.MoveCursor(tocLeading);
                 }
             }
@@ -817,7 +823,11 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         // every level, as asciidoctor-pdf does.
         void RegisterHeading()
         {
-            w.AddOutlineEntry(outlineTitle, section.Level, section.Id);
+            // asciidoctor-pdf lists sections up to outlinelevels (default toclevels, 2) in the outline.
+            if (!_prawnMetrics || section.Level <= _outlineLevels)
+                w.AddOutlineEntry(outlineTitle, section.Level, section.Id);
+            else if (section.Id is not null)
+                w.AddNamedDestination(section.Id);
             if (_prawnMetrics ? section.Level <= 2 : section.Level == 1)
                 w.SetSectionTitleForPage(outlineTitle);
         }
@@ -952,7 +962,8 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                     // left of the text, separated by the width of an "x".
                     float itemIndent = w.PushIndent(w.MarginLeftValue - w.MarginLeftBase + _listIndent);
                     var marker = prefix.TrimEnd();
-                    float markerX = w.MarginLeftValue - w.MeasureText(marker, _fontRegular, _bodyFontSize)
+                    // + 0.5: asciidoctor-pdf's character-spacing correction for the marker.
+                    float markerX = w.MarginLeftValue + 0.5f - w.MeasureText(marker, _fontRegular, _bodyFontSize)
                         - w.MeasureText("x", _fontRegular, _bodyFontSize);
                     w.EnsurePage();
                     w.WriteText(marker, _fontRegular, _bodyFontSize, markerX, w.CursorY);

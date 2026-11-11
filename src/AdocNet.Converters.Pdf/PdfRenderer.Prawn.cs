@@ -20,6 +20,7 @@ public sealed partial class PdfRenderer
     private float _codePadding = 11f;
     private float _tocLineHeight = 1.4f;
     private float _listIndent = 18f;
+    private int _outlineLevels = 2;
     private readonly string[] _headingFonts = new string[4];
 
     /// <summary>Font key for a section level's heading (per-level theme font in themed output).</summary>
@@ -60,6 +61,7 @@ public sealed partial class PdfRenderer
             writer.VerbatimWrapAtSpaces = false;
             writer.Kerning = false;
             writer.SynthesizeSegmentSpaces = true;
+            writer.BreakAfterHyphens = false;
             return;
         }
 
@@ -71,9 +73,18 @@ public sealed partial class PdfRenderer
         writer.VerbatimWrapAtSpaces = true;
         writer.Kerning = true; // asciidoctor-pdf: base.font-kerning defaults to normal
         writer.SynthesizeSegmentSpaces = false;
+        writer.BreakAfterHyphens = true;
         _codeLineHeight = options.CodeLineHeight ?? 1.25f;
         _codeLeading = MetricsFor(writer, _fontMono, _codeFontSize, _codeLineHeight).Advance;
         _codePadding = options.CodePadding ?? 11f;
+        // asciidoctor-pdf: a level without its own colour uses heading.font-color, whose default-theme
+        // value is #333333 — not the h1 colour (the legacy layout falls back to that).
+        var levelDefault = options.HeadingFontColor ?? new PdfColor(0x33 / 255f, 0x33 / 255f, 0x33 / 255f);
+        _h2Color = options.Heading2Color ?? levelDefault;
+        _h3Color = options.Heading3Color ?? levelDefault;
+        _h4Color = options.Heading4Color ?? levelDefault;
+        _h5Color = options.Heading5Color ?? levelDefault;
+        writer.CodeBlockBorderWidth = options.CodeBorderWidth ?? 0.75f;
         _tocLineHeight = options.TocLineHeight ?? 1.4f;
         _listIndent = options.ListIndent ?? 18f;
         // Reuse fonts already embedded under another role instead of embedding the file twice.
@@ -153,6 +164,32 @@ public sealed partial class PdfRenderer
             top = NextBlockTop(w);
         }
 
+        // The rule (and, on the first page, the label) are drawn per page: when the content runs
+        // onto another page, the part on the page being finished is closed at its content bottom,
+        // as asciidoctor-pdf does; the label stays centred on the first page's part.
+        var (asc, desc, gap) = FontMetrics(w, _fontBold);
+        float labelHeight = (asc + desc + gap) * _bodyFontSize;
+        float partTop = top;
+        bool labelDrawn = false;
+        void ClosePart(float partBottom)
+        {
+            w.SetStrokeColor(0xEE / 255f, 0xEE / 255f, 0xEE / 255f);
+            w.DrawLine(ruleX, partTop, ruleX, partBottom, ruleWidth);
+            w.SetStrokeColor(0, 0, 0);
+            if (labelDrawn) return;
+            labelDrawn = true;
+            float labelTop = (partTop + partBottom) / 2 + labelHeight / 2;
+            RestoreBodyFill(w);
+            w.WriteText(label, _fontBold, _bodyFontSize, left + padH, labelTop - (gap + asc) * _bodyFontSize);
+        }
+        var outerHook = w.BeforeFinishPage;
+        w.BeforeFinishPage = () =>
+        {
+            outerHook?.Invoke();
+            ClosePart(w.MarginBottomValue);
+            partTop = w.PageHeight - w.MarginTopValue;
+        };
+
         SetNextBlockTop(w, top - padV);
         float savedIndent = w.PushIndent(ruleX - w.MarginLeftBase + padH);
         float savedRight = w.ContentRightIndent;
@@ -175,17 +212,10 @@ public sealed partial class PdfRenderer
         w.ContentRightIndent = savedRight;
         w.PopIndent(savedIndent);
 
+        w.BeforeFinishPage = outerHook;
         float bottom = contentBottom - padV;
-        w.SetStrokeColor(0xEE / 255f, 0xEE / 255f, 0xEE / 255f);
-        w.DrawLine(ruleX, top, ruleX, bottom, ruleWidth);
-        w.SetStrokeColor(0, 0, 0);
-
-        // Label: one line, centred on the box using the font height (asc + desc + gap).
-        var (asc, desc, gap) = FontMetrics(w, _fontBold);
-        float height = (asc + desc + gap) * _bodyFontSize;
-        float labelTop = (top + bottom) / 2 + height / 2;
-        RestoreBodyFill(w);
-        w.WriteText(label, _fontBold, _bodyFontSize, left + padH, labelTop - (gap + asc) * _bodyFontSize);
+        // Label: one line, centred on its part using the font height (asc + desc + gap).
+        ClosePart(bottom);
 
         SetNextBlockTop(w, bottom - _paragraphSpacingAfter);
     }
@@ -226,6 +256,10 @@ public sealed partial class PdfRenderer
             {
                 segments = BuildInlineSegments(p.Cell.Inlines, p.Text, font, fontSize, noFootnotes);
             }
+            // Header text colour applies to every run without its own (a leading codespan's colour
+            // reset the fill to black for the rest of the row).
+            if (headerTextColor is { } headerColor)
+                segments = segments.Select(sg => sg.Color is null ? sg with { Color = headerColor } : sg).ToList();
             segments = w.ExpandSegmentsForFallback(segments);
             var lines = w.WrapSegments(segments, width - 2 * cellPadding + CellWrapTolerance);
             if (lines.Count == 0) lines.Add(new List<TextSegment>());

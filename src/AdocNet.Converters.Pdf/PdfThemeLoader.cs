@@ -224,7 +224,7 @@ public static class PdfThemeLoader
 
             // Link color (asciidoctor-pdf default theme: #428BCA blue)
             LinkColor = ParseColor(GetString(props, "link.font-color"))
-                      ?? new PdfColor(0.066f, 0.337f, 0.624f), // #115fa6 fallback
+                      ?? ParseColor("428BCA"), // asciidoctor-pdf default theme link colour
 
             // Asciidoctor-pdf centers the document title for article doctype.
             // Themes may explicitly override via heading-h1.text-align.
@@ -276,6 +276,10 @@ public static class PdfThemeLoader
             HeadingLineHeight = GetFloat(props, "heading.line-height"),
             CodeLineHeight = GetFloat(props, "code.line-height"),
             CodePadding = GetFloat(props, "code.padding"),
+            HeadingFontColor = ParseColor(GetString(props, "heading.font-color")),
+            // asciidoctor-pdf default theme: code background F5F5F5, border 0.75.
+            CodeBackground = ParseColor(GetString(props, "code.background-color")) ?? ParseColor("F5F5F5"),
+            CodeBorderWidth = GetFloat(props, "code.border-width"),
             TocLineHeight = GetFloat(props, "toc.line-height"),
             ListIndent = GetFloat(props, "list.indent"),
             Heading2FontPath = ResolveHeadingLevelFontPath(props, 2, fontsDir),

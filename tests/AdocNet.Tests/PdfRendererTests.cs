@@ -1254,6 +1254,45 @@ public class PdfRendererTests
     }
 
     [Test]
+    public void Wrapping_breaks_after_hyphen_and_counts_no_extra_separator()
+    {
+        var w = new PdfWriter { BreakAfterHyphens = true, SynthesizeSegmentSpaces = false };
+        float Width(string s) => w.MeasureText(s, "F1", 10);
+
+        // "non-byte-" fits after "aaa ", the rest wraps (Prawn breaks after hyphens).
+        var hyphen = new List<TextSegment> { new("aaa non-byte-aligned", "F1", 10) };
+        var lines = w.WrapSegments(hyphen, Width("aaa non-byte-") + 0.1f)
+            .Select(l => string.Concat(l.Select(s => s.Text))).ToList();
+        Assert.That(lines, Is.EqualTo(new[] { "aaa non-byte-", "aligned" }));
+
+        // A segment ending in a space already separates the next one: "x or " + "next" fits exactly.
+        var spaced = new List<TextSegment> { new("x or ", "F1", 10), new("next", "F4", 10) };
+        float exact = Width("x or ") + w.MeasureText("next", "F4", 10);
+        Assert.That(w.WrapSegments(spaced, exact + 0.01f), Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void Title_page_gets_roman_page_label_and_outline_omits_deep_sections()
+    {
+        var doc = AdocParser.Parse("= Main: Sub\n:title-page:\n\n== One\n\n=== Two\n\n==== Three\n\nText.\n").Document;
+        var font = Path.Combine(FindRepoRoot(), "src", "AdocNet.Converters.Epub", "Resources", "notoserif-regular-latin.ttf");
+        var text = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc, new PdfRenderOptions { FontPath = font }));
+
+        Assert.That(text, Does.Contain("/Nums [ 0 << /S /r >> 1 << /S /D >> ]"), "title page 'i', then 1, 2, ...");
+        Assert.That(text, Does.Contain("(Main)"), "outline shows the main title, not the subtitle");
+        Assert.That(text, Does.Contain("(1. One)").Or.Contain("(One)"));
+        Assert.That(text, Does.Not.Contain("Three) /"), "levels beyond toclevels (2) stay out of the outline");
+    }
+
+    private static string FindRepoRoot()
+    {
+        var dir = TestContext.CurrentContext.TestDirectory;
+        while (dir is not null && !File.Exists(Path.Combine(dir, "AdocNet.slnx")))
+            dir = Path.GetDirectoryName(dir);
+        return dir!;
+    }
+
+    [Test]
     public void Toc_page_numbers_follow_display_numbering_and_duplicate_titles()
     {
         // Two subsections share a title; each TOC entry must point at its own page.
