@@ -356,6 +356,8 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             _fontHeading = writer.RegisterEmbeddedFont("FH", font);
         }
 
+        ApplyPrawnLineMetrics(writer, pdfOptions);
+
         // :icons: any non-empty value enables icon-style admonitions (asciidoctor
         // treats `:icons: font` as the canonical opt-in but the legacy `:icons:`
         // bare attribute also activates them).
@@ -728,7 +730,8 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
     private void RenderSection(PdfWriter w, SectionNode section, int indentLevel, FootnoteState footnotes)
     {
-        w.MoveCursor(_sectionSpacing);
+        if (!_prawnMetrics)
+            w.MoveCursor(_sectionSpacing);
         w.EnsurePage();
 
         // Per-level leading and margin-bottom calibrated against asciidoctor-pdf:
@@ -783,9 +786,16 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         var segments = BuildInlineSegments(section.TitleInlines, section.Title, _fontHeading, fontSize, footnotes);
         if (secNumPrefix is not null)
             segments.Insert(0, new TextSegment(secNumPrefix, _fontHeading, fontSize));
-        w.WriteWrappedSegments(segments, leading);
+        if (_prawnMetrics)
+        {
+            WritePrawnHeading(w, segments, fontSize, section.Level);
+        }
+        else
+        {
+            w.WriteWrappedSegments(segments, leading);
+            w.MoveCursor(marginBottom);
+        }
         if (color is not null) RestoreBodyFill(w);
-        w.MoveCursor(marginBottom);
 
         foreach (var child in section.Children)
             RenderBlock(w, child, indentLevel, footnotes);
@@ -942,9 +952,27 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         var content = block.Content ?? string.Empty;
         w.EnsurePage();
 
+        LineMetrics code = default;
+        if (_prawnMetrics)
+        {
+            code = MetricsFor(w, _fontMono, _codeFontSize, _codeLineHeight);
+            w.CodeBlockPadding = _codePadding;
+            // Begin* steps down by the padding; the first baseline lands padding + first offset below the top.
+            w.SetCursor(NextBlockTop(w) - code.FirstOffset);
+        }
+
         // Enable per-line background drawing (handles page breaks correctly)
         if (_codeBackground is { } bg)
-            w.BeginCodeBlockBackground(bg, _codeFontSize, _codeLeading, _codeBorderColor);
+        {
+            if (_prawnMetrics)
+                w.BeginCodeBlockBackground(bg, _codeFontSize, _codeLeading, _codeBorderColor, code.FirstOffset, code.Bottom);
+            else
+                w.BeginCodeBlockBackground(bg, _codeFontSize, _codeLeading, _codeBorderColor);
+        }
+        else if (_prawnMetrics)
+        {
+            w.MoveCursor(_codePadding);
+        }
 
         // Asciidoctor-pdf doesn't print the language label inside the code
         // block — the syntax highlighter's color cues are the only visual
@@ -964,8 +992,16 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 w.WriteWrappedVerbatimText(line, _fontMono, _codeFontSize, _codeLeading);
         }
 
+        float lastCodeBaseline = w.CursorY + _codeLeading; // before End*, which steps down by the padding
         w.EndCodeBlockBackground();
-        w.MoveCursor(_bodyLeading);
+        if (_prawnMetrics)
+        {
+            SetNextBlockTop(w, lastCodeBaseline - code.Bottom - _codePadding - _paragraphSpacingAfter);
+        }
+        else
+        {
+            w.MoveCursor(_bodyLeading);
+        }
 
         // Render callout list — asciidoctor-pdf renders the conum (callout
         // number) as a circled-number glyph (U+2460 ① for 1, U+2461 ② for 2,

@@ -108,6 +108,19 @@ internal sealed partial class PdfWriter
     /// on each page is positioned one leading below the top margin so text fits inside the body
     /// area instead of climbing into the top margin (matches Asciidoctor PDF behavior).</summary>
     internal float BodyLeading { get; set; }
+
+    /// <summary>
+    /// Distance from the content top to the first body baseline. Null = <see cref="BodyLeading"/>
+    /// (legacy). Set from font metrics (Prawn's half leading + line gap + ascender) for embedded fonts.
+    /// </summary>
+    internal float? FirstLineOffset { get; set; }
+
+    /// <summary>Places the cursor (next baseline) explicitly; no first-line reservation applies after.</summary>
+    internal void SetCursor(float y)
+    {
+        _cursorY = y;
+        _atTopOfPage = false;
+    }
     /// <summary>Section title for the {section-title} placeholder. Updated by SetSectionTitleForPage.
     /// Carries over across pages until a new section starts on a page.</summary>
     internal string? CurrentSectionTitle { get; private set; }
@@ -146,7 +159,10 @@ internal sealed partial class PdfWriter
     private PdfColor? _codeBlockBorderColor;
     private float _codeBlockSavedIndent;
     private int _codeBlockOriginalPage;
-    private const float CodeBlockPadding = 10f;
+    /// <summary>Inner padding of code blocks (theme <c>code.padding</c>). Default 10 (legacy calibration).</summary>
+    internal float CodeBlockPadding { get; set; } = 10f;
+    private float _codeBlockFirstOffset;
+    private float _codeBlockDescent;
     private const float CodeBlockRadius = 4f;
     private const float CodeBlockBorderWidth = 0.5f;
 
@@ -155,8 +171,11 @@ internal sealed partial class PdfWriter
     /// stream position so the background can be inserted behind the text.
     /// </summary>
     internal void BeginCodeBlockBackground(PdfColor bg, float fontSize, float leading,
-        PdfColor? borderColor = null)
+        PdfColor? borderColor = null, float? firstLineOffset = null, float? descent = null)
     {
+        // Box top = first baseline + offset; box bottom = last baseline - descent (then padding).
+        _codeBlockFirstOffset = firstLineOffset ?? fontSize * 0.75f;
+        _codeBlockDescent = descent ?? fontSize * 0.25f;
         _codeBlockBg = bg;
         _codeBlockFontSize = fontSize;
         _codeBlockLeading = leading;
@@ -164,7 +183,7 @@ internal sealed partial class PdfWriter
 
         // Add vertical padding before content
         _cursorY -= CodeBlockPadding;
-        _codeBlockStartY = _cursorY + fontSize * 0.75f + CodeBlockPadding;
+        _codeBlockStartY = _cursorY + _codeBlockFirstOffset + CodeBlockPadding;
         _codeBlockStartPage = _currentPageNumber;
         _codeBlockOriginalPage = _currentPageNumber;
 
@@ -184,7 +203,7 @@ internal sealed partial class PdfWriter
 
         if (_codeBlockBg is { } bg)
         {
-            float descent = _codeBlockFontSize * 0.25f;
+            float descent = _codeBlockDescent;
             float top = _codeBlockStartY;
             // Bottom: padding below the last line's descender
             // Last baseline = _cursorY + _codeBlockLeading (cursor moved down after last line)
@@ -352,7 +371,7 @@ internal sealed partial class PdfWriter
     // True once anything has advanced the cursor on the open page (a fresh page sits
     // at the StartPage position).
     internal bool PageHasContent =>
-        _currentStream is not null && _cursorY < _pageHeight - _marginTop - BodyLeading;
+        _currentStream is not null && _cursorY < _pageHeight - _marginTop - (FirstLineOffset ?? BodyLeading);
 
     /// <summary>
     /// Temporarily indents all content by the given amount from the left margin.
@@ -465,7 +484,7 @@ internal sealed partial class PdfWriter
         _currentStream = new StringBuilder();
         // First text baseline starts one body-leading below the top margin so text ascender
         // doesn't climb above the top margin into the header area. Matches Asciidoctor PDF.
-        _cursorY = _pageHeight - _marginTop - BodyLeading;
+        _cursorY = _pageHeight - _marginTop - (FirstLineOffset ?? BodyLeading);
         _currentPageNumber++;
         _atTopOfPage = true;
         // Allow the next section on this page to set the {section-title} for footer/header.

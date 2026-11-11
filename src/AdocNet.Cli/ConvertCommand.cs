@@ -210,76 +210,9 @@ internal sealed class ConvertCommand(ConsoleLogger logger)
             var fontsDir = run.PdfFontsDir;
             if (fontsDir is null && run.Attributes is not null && run.Attributes.TryGetValue("pdf-fontsdir", out var attrFontsDir) && attrFontsDir.Length > 0)
                 fontsDir = attrFontsDir;
-            var options = PdfThemeLoader.Load(run.PdfThemePath!, fontsDir);
-            // Override BaseDirectory relative to the input file for image resolution
+            // Images in the document resolve relative to the input file.
             var inputDir = Path.GetDirectoryName(Path.GetFullPath(run.InputPath));
-            return new PdfRenderOptions
-            {
-                FontPath = options.FontPath,
-                BoldFontPath = options.BoldFontPath,
-                ItalicFontPath = options.ItalicFontPath,
-                MonoFontPath = options.MonoFontPath,
-                MonoBoldFontPath = options.MonoBoldFontPath,
-                MonoItalicFontPath = options.MonoItalicFontPath,
-                MonoBoldItalicFontPath = options.MonoBoldItalicFontPath,
-                HeadingFontPath = options.HeadingFontPath,
-                PageWidth = options.PageWidth,
-                PageHeight = options.PageHeight,
-                MarginTop = options.MarginTop,
-                MarginRight = options.MarginRight,
-                MarginBottom = options.MarginBottom,
-                MarginLeft = options.MarginLeft,
-                FontSize = options.FontSize,
-                CodeFontSize = options.CodeFontSize,
-                TitleFontSize = options.TitleFontSize,
-                LineSpacing = options.LineSpacing,
-                TitleLineHeight = options.TitleLineHeight,
-                Heading2FontSize = options.Heading2FontSize,
-                Heading3FontSize = options.Heading3FontSize,
-                Heading4FontSize = options.Heading4FontSize,
-                Heading5FontSize = options.Heading5FontSize,
-                Heading2MarginBottom = options.Heading2MarginBottom,
-                Heading3MarginBottom = options.Heading3MarginBottom,
-                Heading4MarginBottom = options.Heading4MarginBottom,
-                Heading5MarginBottom = options.Heading5MarginBottom,
-                HeadingColor = options.HeadingColor,
-                Heading2Color = options.Heading2Color,
-                Heading3Color = options.Heading3Color,
-                Heading4Color = options.Heading4Color,
-                Heading5Color = options.Heading5Color,
-                BodyColor = options.BodyColor,
-                ShowPageNumbers = options.ShowPageNumbers,
-                HeaderText = options.HeaderText,
-                FooterText = options.FooterText,
-                HeaderFontSize = options.HeaderFontSize,
-                FooterFontSize = options.FooterFontSize,
-                HeaderFontColor = options.HeaderFontColor,
-                FooterFontColor = options.FooterFontColor,
-                HeaderAlignment = options.HeaderAlignment,
-                FooterAlignment = options.FooterAlignment,
-                RunningContentStartAt = options.RunningContentStartAt,
-                TitlePage = options.TitlePage,
-                TableBorderColor = options.TableBorderColor,
-                TableHeaderBackground = options.TableHeaderBackground,
-                TableHeaderFontColor = options.TableHeaderFontColor,
-                CodeBorderColor = options.CodeBorderColor,
-                HeaderHeight = options.HeaderHeight,
-                FooterHeight = options.FooterHeight,
-                FooterImagePath = options.FooterImagePath,
-                FooterImageWidth = options.FooterImageWidth,
-                HeadingScale = options.HeadingScale,
-                ParagraphSpacingAfter = options.ParagraphSpacingAfter,
-                ParagraphSpacingBefore = options.ParagraphSpacingBefore,
-                SectionSpacing = options.SectionSpacing,
-                TitleMarginTop = options.TitleMarginTop,
-                TitleMarginBottom = options.TitleMarginBottom,
-                CodeBackground = options.CodeBackground,
-                CodespanBackground = options.CodespanBackground,
-                LinkColor = options.LinkColor,
-                TitleAlignment = options.TitleAlignment,
-                CodespanColor = options.CodespanColor,
-                BaseDirectory = inputDir,
-            };
+            return PdfThemeLoader.Load(run.PdfThemePath!, fontsDir, inputDir);
         }
         catch (Exception ex) when (ex is IOException or FormatException)
         {

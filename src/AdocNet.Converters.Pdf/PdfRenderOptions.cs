@@ -292,4 +292,31 @@ public sealed class PdfRenderOptions : RenderOptions
     /// doctype. Null = asciidoctor-pdf default-theme layout.
     /// </summary>
     public PdfTitlePageOptions? TitlePage { get; init; }
+
+    /// <summary>Line height of section headings (theme <c>heading.line-height</c>). Null = 1.</summary>
+    public float? HeadingLineHeight { get; init; }
+
+    /// <summary>Line height of code blocks (theme <c>code.line-height</c>). Null = 1.25.</summary>
+    public float? CodeLineHeight { get; init; }
+
+    /// <summary>Space above section headings (theme <c>heading.margin-top</c>), skipped at the top of a page. Null = 4.8.</summary>
+    public float? HeadingMarginTop { get; init; }
+
+    /// <summary>Space below section headings (theme <c>heading.margin-bottom</c>) when no per-level value is set. Null = 10.8.</summary>
+    public float? HeadingMarginBottom { get; init; }
+
+    /// <summary>Space above H2 headings (section level 1). Null = <see cref="HeadingMarginTop"/>.</summary>
+    public float? Heading2MarginTop { get; init; }
+
+    /// <summary>Space above H3 headings (section level 2). Null = <see cref="HeadingMarginTop"/>.</summary>
+    public float? Heading3MarginTop { get; init; }
+
+    /// <summary>Space above H4 headings (section level 3). Null = <see cref="HeadingMarginTop"/>.</summary>
+    public float? Heading4MarginTop { get; init; }
+
+    /// <summary>Space above H5 headings (section level 4). Null = <see cref="HeadingMarginTop"/>.</summary>
+    public float? Heading5MarginTop { get; init; }
+
+    /// <summary>Inner padding of code blocks (theme <c>code.padding</c>, single value). Null = 11 for themed output.</summary>
+    public float? CodePadding { get; init; }
 }

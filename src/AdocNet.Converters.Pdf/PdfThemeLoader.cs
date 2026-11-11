@@ -14,13 +14,23 @@ public static class PdfThemeLoader
     /// </summary>
     /// <param name="themePath">Path to the YAML theme file.</param>
     /// <param name="fontsDir">Base directory for resolving font file paths. Null = same directory as theme file.</param>
-    public static PdfRenderOptions Load(string themePath, string? fontsDir = null)
+    public static PdfRenderOptions Load(string themePath, string? fontsDir = null) =>
+        Load(themePath, fontsDir, baseDirectory: null);
+
+    /// <summary>
+    /// Loads a theme file and returns configured <see cref="PdfRenderOptions"/> whose
+    /// <see cref="PdfRenderOptions.BaseDirectory"/> (where document images resolve) is set.
+    /// </summary>
+    /// <param name="themePath">Path to the YAML theme file.</param>
+    /// <param name="fontsDir">Base directory for resolving font file paths. Null = same directory as theme file.</param>
+    /// <param name="baseDirectory">Directory document image paths are relative to (usually the document's folder).</param>
+    public static PdfRenderOptions Load(string themePath, string? fontsDir, string? baseDirectory)
     {
         var themeDir = Path.GetDirectoryName(Path.GetFullPath(themePath)) ?? ".";
         fontsDir ??= themeDir;
         var lines = File.ReadAllLines(themePath);
         var props = ParseYaml(lines);
-        return BuildOptions(props, fontsDir, themeDir);
+        return BuildOptions(props, fontsDir, themeDir, baseDirectory);
     }
 
     /// <summary>
@@ -110,7 +120,8 @@ public static class PdfThemeLoader
     /// <summary>
     /// Builds PdfRenderOptions from parsed theme properties.
     /// </summary>
-    internal static PdfRenderOptions BuildOptions(Dictionary<string, string> props, string fontsDir, string? themeDir = null)
+    internal static PdfRenderOptions BuildOptions(Dictionary<string, string> props, string fontsDir, string? themeDir = null,
+        string? baseDirectory = null)
     {
         // Resolve font paths from the font catalog
         string? fontRegular = ResolveFontPath(props, "base.font-family", "normal", fontsDir);
@@ -154,7 +165,8 @@ public static class PdfThemeLoader
             TitleFontSize = GetFloat(props, "heading.h1-font-size")
                           ?? GetFloat(props, "heading-h1.font-size")
                           ?? GetFloat(props, "title-page.title.font-size") ?? 24f,
-            LineSpacing = GetFloat(props, "base.line-height") ?? 1.35f,
+            // asciidoctor-pdf default theme: $base_line_height_length / $base_font_size = 12 / 10.5.
+            LineSpacing = GetFloat(props, "base.line-height") ?? 12f / 10.5f,
             TitleLineHeight = GetFloat(props, "heading.h1-line-height") ?? GetFloat(props, "heading-h1.line-height"),
 
             // Per-heading sizes
@@ -240,7 +252,7 @@ public static class PdfThemeLoader
             ParagraphSpacingAfter = GetFloat(props, "block.margin-bottom")
                                   ?? GetFloat(props, "prose.margin-bottom")
                                   ?? GetFloat(props, "base.margin-bottom")
-                                  ?? 8f,
+                                  ?? 12f, // default theme: $block_margin_bottom = $vertical_rhythm
 
             // Section spacing — empirically calibrated against asciidoctor-pdf:
             // body→heading baseline-to-baseline is ~43pt (vs 33pt with raw theme value).
@@ -257,6 +269,16 @@ public static class PdfThemeLoader
             TitleMarginBottom = GetFloat(props, "heading-h1.margin-bottom") ?? GetFloat(props, "heading.margin-bottom") ?? 16f,
 
             TitlePage = BuildTitlePage(props, fontsDir, themeDir ?? fontsDir),
+            HeadingLineHeight = GetFloat(props, "heading.line-height"),
+            CodeLineHeight = GetFloat(props, "code.line-height"),
+            CodePadding = GetFloat(props, "code.padding"),
+            HeadingMarginTop = GetFloat(props, "heading.margin-top"),
+            HeadingMarginBottom = GetFloat(props, "heading.margin-bottom"),
+            Heading2MarginTop = GetFloat(props, "heading.h2-margin-top") ?? GetFloat(props, "heading-h2.margin-top"),
+            Heading3MarginTop = GetFloat(props, "heading.h3-margin-top") ?? GetFloat(props, "heading-h3.margin-top"),
+            Heading4MarginTop = GetFloat(props, "heading.h4-margin-top") ?? GetFloat(props, "heading-h4.margin-top"),
+            Heading5MarginTop = GetFloat(props, "heading.h5-margin-top") ?? GetFloat(props, "heading-h5.margin-top"),
+            BaseDirectory = baseDirectory,
         };
 
         return options;
@@ -380,7 +402,11 @@ public static class PdfThemeLoader
                          ?? GetString(props, "heading-h1.font-family");
         if (headingFamily is null) return null;
 
-        return ResolveFontCatalogPath(props, headingFamily, "normal", fontsDir);
+        // Headings default to bold (asciidoctor-pdf heading.font-style: bold).
+        var style = (GetString(props, "heading-h2.font-style") ?? GetString(props, "heading.font-style") ?? "bold")
+            .Replace('-', '_');
+        return ResolveFontCatalogPath(props, headingFamily, style, fontsDir)
+            ?? ResolveFontCatalogPath(props, headingFamily, "normal", fontsDir);
     }
 
     private static string? ResolveAbsoluteFontPath(string relativePath, string fontsDir)
