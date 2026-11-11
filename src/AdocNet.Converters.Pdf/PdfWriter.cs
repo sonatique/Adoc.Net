@@ -115,6 +115,9 @@ internal sealed partial class PdfWriter
     /// </summary>
     internal bool SynthesizeSegmentSpaces { get; set; } = true;
 
+    /// <summary>Break after a hyphen inside a word when the word doesn't fit (Prawn).</summary>
+    internal bool BreakAfterHyphens { get; set; }
+
     /// <summary>Apply the fonts' 'kern' pairs when measuring and drawing embedded-font text (Prawn default).</summary>
     internal bool Kerning { get; set; }
 
@@ -208,7 +211,8 @@ internal sealed partial class PdfWriter
     private float _codeBlockFirstOffset;
     private float _codeBlockDescent;
     private const float CodeBlockRadius = 4f;
-    private const float CodeBlockBorderWidth = 0.5f;
+    /// <summary>Code block border width (theme code.border-width). Default 0.5 (legacy).</summary>
+    internal float CodeBlockBorderWidth { get; set; } = 0.5f;
 
     /// <summary>
     /// Begins a code block region. Pushes padding indent and records the
@@ -561,17 +565,26 @@ internal sealed partial class PdfWriter
         _atTopOfPage = false;
     }
 
+    /// <summary>
+    /// Called at the start of <see cref="FinishPage"/>, while the page is still open, so a block
+    /// that continues on the next page can close its part of this page (e.g. an admonition rule).
+    /// </summary>
+    internal Action? BeforeFinishPage { get; set; }
+
     internal void FinishPage()
     {
         if (_currentStream is null) return;
-
-        // Append header/footer text before finalizing the page stream
-        AppendHeaderFooter();
+        BeforeFinishPage?.Invoke();
 
         var streamContent = _currentStream.ToString();
         var streamBytes = Encoding.ASCII.GetByteCount(streamContent);
         int streamObjId = AllocObject(new PdfObject(
             $"<< /Length {streamBytes} >>\nstream\n{streamContent}endstream"));
+
+        // Header/footer go in a second content stream, written in ToBytes once the page
+        // count is known ({page-count}); the page's state is captured now.
+        int runningObjId = AllocPlaceholder();
+        _deferredRunningContent.Add(new DeferredRunningContent(runningObjId, _currentPageNumber, CurrentSectionTitle));
 
         // Create annotation objects for links on this page
         var annotIds = new List<int>();
@@ -619,7 +632,7 @@ internal sealed partial class PdfWriter
 
         int pageId = AllocObject(new PdfObject(
             $"<< /Type /Page /MediaBox [0 0 {Fmt(_pageWidth)} {Fmt(_pageHeight)}] " +
-            $"/Contents {streamObjId} 0 R " +
+            $"/Contents [{streamObjId} 0 R {runningObjId} 0 R] " +
             $"{annotsEntry}" +
             $"/Resources << /Font << {fontResources} >> {xobjectEntry}>> " +
             $"/Parent {{PAGES}} >>"));
@@ -629,11 +642,35 @@ internal sealed partial class PdfWriter
         _currentPageImages.Clear();
     }
 
+    private readonly record struct DeferredRunningContent(int ObjectId, int PageNumber, string? SectionTitle);
+    private readonly List<DeferredRunningContent> _deferredRunningContent = [];
+
+    /// <summary>Displayed page count ({page-count}); known only when the document is complete.</summary>
+    private int _finalPageCount;
+
     /// <summary>
-    /// Fixed-width placeholder for total page count. Must be exactly the same length
-    /// as the replacement value (padded with spaces) to avoid shifting byte offsets.
+    /// Writes each page's header/footer stream now that the page count is known. Runs before
+    /// font embedding so the running content's glyphs are part of the font subsets.
     /// </summary>
-    private const string TotalPagesPlaceholder = "___TOTAL___";
+    private void WriteDeferredRunningContent()
+    {
+        _finalPageCount = _pageObjectIds.Count - PageNumberOffset;
+        int savedPage = _currentPageNumber;
+        string? savedTitle = CurrentSectionTitle;
+        foreach (var page in _deferredRunningContent)
+        {
+            _currentPageNumber = page.PageNumber;
+            CurrentSectionTitle = page.SectionTitle;
+            _currentStream = new StringBuilder();
+            AppendHeaderFooter();
+            var content = _currentStream.ToString();
+            SetObject(page.ObjectId, new PdfObject(
+                $"<< /Length {Encoding.ASCII.GetByteCount(content)} >>\nstream\n{content}endstream"));
+        }
+        _currentStream = null;
+        _currentPageNumber = savedPage;
+        CurrentSectionTitle = savedTitle;
+    }
 
     private void AppendHeaderFooter()
     {
@@ -694,9 +731,9 @@ internal sealed partial class PdfWriter
     {
         string text = template
             .Replace("{page}", DisplayPageNumber)
-            .Replace("{pages}", TotalPagesPlaceholder)
+            .Replace("{pages}", _finalPageCount.ToString(CultureInfo.InvariantCulture))
             .Replace("{page-number}", DisplayPageNumber)
-            .Replace("{page-count}", TotalPagesPlaceholder)
+            .Replace("{page-count}", _finalPageCount.ToString(CultureInfo.InvariantCulture))
             .Replace("{section-title}", CurrentSectionTitle ?? "")
             .Replace("{document-title}", DocumentTitle ?? "")
             .Replace("{header-title}", HeaderTitle ?? DocumentTitle ?? "");
@@ -704,13 +741,7 @@ internal sealed partial class PdfWriter
         // Use the body font (F1) for headers/footers — embedded TrueType if available
         string font = ResolveFontKey("F1");
 
-        // For width measurement (used to compute X position), substitute the placeholder
-        // with a single digit. The placeholder is wider than the eventual replacement
-        // ("3" + 10 trailing spaces), so measuring with the placeholder would shift
-        // right-aligned text away from the right edge. After byte-level replacement,
-        // trailing spaces extend invisibly past the right edge — visible text aligns correctly.
-        string measureText = text.Replace(TotalPagesPlaceholder, "1");
-        float textWidth = MeasureText(measureText, font, fontSize);
+        float textWidth = MeasureText(text, font, fontSize);
 
         float x = alignment switch
         {

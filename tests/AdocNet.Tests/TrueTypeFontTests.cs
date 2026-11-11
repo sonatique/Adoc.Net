@@ -290,4 +290,41 @@ public class TrueTypeFontTests
         var pdf = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc, new PdfRenderOptions { FontPath = path }));
         Assert.That(pdf, Does.Match(@"\[<[0-9A-F]+> [\d.]+ <[0-9A-F]+>.*\] TJ"));
     }
+
+    /// <summary>
+    /// Text of each BT..ET block, decoded from the shown glyph IDs (Tj strings and kerned
+    /// TJ arrays) through the font's cmap — enough to read ASCII running content.
+    /// </summary>
+    private static List<string> ShownText(string pdf, TrueTypeFont font)
+    {
+        var byGlyph = new Dictionary<int, char>();
+        for (char c = ' '; c <= '~'; c++)
+            byGlyph.TryAdd(font.GetGlyphId(c), c);
+        var blocks = new List<string>();
+        foreach (System.Text.RegularExpressions.Match bt in System.Text.RegularExpressions.Regex.Matches(pdf, @"BT\n(.*?)ET\n", System.Text.RegularExpressions.RegexOptions.Singleline))
+        {
+            var sb = new StringBuilder();
+            foreach (System.Text.RegularExpressions.Match hex in System.Text.RegularExpressions.Regex.Matches(bt.Groups[1].Value, @"<([0-9A-Fa-f]+)>"))
+                for (int i = 0; i + 4 <= hex.Groups[1].Value.Length; i += 4)
+                    sb.Append(byGlyph.TryGetValue(Convert.ToInt32(hex.Groups[1].Value.Substring(i, 4), 16), out var ch) ? ch : '?');
+            blocks.Add(sb.ToString());
+        }
+        return blocks;
+    }
+
+    [Test]
+    public void Kerned_running_content_shows_the_page_count()
+    {
+        // Kerning splits text into TJ arrays; the page count must still be written (it once
+        // survived as a "___TOTAL___" placeholder that a byte patch no longer recognised).
+        var path = RepoFile("src", "AdocNet.Converters.Pdf", "Resources", "DejaVuSans.ttf");
+        var font = TrueTypeFont.Parse(File.ReadAllBytes(path));
+        var doc = AdocParser.Parse("== One\n\nText.\n\n<<<\n\n== Two\n\nMore text.\n").Document;
+        var options = new PdfRenderOptions { FontPath = path, FooterText = "TOTAL AVA {page} of {pages}", FooterHeight = 48 };
+        var pdf = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc, options));
+
+        var footers = ShownText(pdf, font).Where(t => t.Contains(" of ")).ToList();
+        Assert.That(footers, Is.EqualTo(new[] { "TOTAL AVA 1 of 2", "TOTAL AVA 2 of 2" }));
+        Assert.That(pdf, Does.Contain("] TJ"), "the footer text is kerned");
+    }
 }
