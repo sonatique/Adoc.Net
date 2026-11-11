@@ -26,6 +26,18 @@ internal sealed partial class PdfWriter
         {
             int remaining = text.Length - pos;
             int lineLen = Math.Min(remaining, charsPerLine);
+            int skip = 0;
+            // Themed output wraps code like Prawn: at the last space that fits (the space is
+            // dropped), falling back to a hard break inside a token longer than the line.
+            if (VerbatimWrapAtSpaces && lineLen < remaining)
+            {
+                int space = text.LastIndexOf(' ', pos + lineLen, lineLen + 1);
+                if (space > pos)
+                {
+                    lineLen = space - pos;
+                    skip = 1;
+                }
+            }
             string line = text.Substring(pos, lineLen);
 
             EnsurePage();
@@ -34,7 +46,7 @@ internal sealed partial class PdfWriter
             WriteText(line, font, fontSize, MarginLeftValue, _cursorY);
             _cursorY -= leading;
             consumed += leading;
-            pos += lineLen;
+            pos += lineLen + skip;
         }
         return consumed;
     }
@@ -117,12 +129,12 @@ internal sealed partial class PdfWriter
 
     internal void SetFillColor(float r, float g, float b)
     {
-        _currentStream!.Append($"{Fmt(r)} {Fmt(g)} {Fmt(b)} rg\n");
+        _currentStream!.Append($"{FmtColor(r)} {FmtColor(g)} {FmtColor(b)} rg\n");
     }
 
     internal void SetStrokeColor(float r, float g, float b)
     {
-        _currentStream!.Append($"{Fmt(r)} {Fmt(g)} {Fmt(b)} RG\n");
+        _currentStream!.Append($"{FmtColor(r)} {FmtColor(g)} {FmtColor(b)} RG\n");
     }
 
     // ── Link annotations ─────────────────────────────────────────────────
@@ -322,7 +334,7 @@ internal sealed partial class PdfWriter
     {
         if (_embeddedFonts.TryGetValue(font, out var ttFont))
         {
-            return ttFont.MeasureText(text, fontSize);
+            return ttFont.MeasureText(text, fontSize, Kerning);
         }
 
         return MeasureStandardText(text, font, fontSize);
@@ -440,10 +452,11 @@ internal sealed partial class PdfWriter
         byte[] result = ms.ToArray();
 
         // Replace total page count placeholders with actual count (same byte length)
-        ReplaceTotalPagesPlaceholder(result, _pageObjectIds.Count);
+        int pageCount = _pageObjectIds.Count - PageNumberOffset;
+        ReplaceTotalPagesPlaceholder(result, pageCount);
         // Also replace placeholders encoded as TrueType glyph IDs (when using embedded fonts)
         foreach (var ttFont in _embeddedFonts.Values)
-            ReplaceTotalPagesPlaceholderTrueType(result, _pageObjectIds.Count, ttFont);
+            ReplaceTotalPagesPlaceholderTrueType(result, pageCount, ttFont);
 
         return result;
     }
@@ -732,6 +745,10 @@ internal sealed partial class PdfWriter
     private static string Fmt(float value) =>
         value.ToString("0.##", CultureInfo.InvariantCulture);
 
+    // Colour components need ~1/255 resolution; two decimals shifted #909090 to #8f8f8f.
+    private static string FmtColor(float value) =>
+        value.ToString("0.####", CultureInfo.InvariantCulture);
+
     // ── Embedded font helpers ───────────────────────────────────────────
 
     private void TrackCodePoints(string fontKey, string text) =>
@@ -739,6 +756,32 @@ internal sealed partial class PdfWriter
 
     private static string EncodeTextAsGlyphIds(string text, TrueTypeFont font) =>
         PdfFontEmbedder.EncodeTextAsGlyphIds(text, font);
+
+    /// <summary>
+    /// Appends a show-text operator for an embedded font: <c>&lt;glyphs&gt; Tj</c>, or with
+    /// <see cref="Kerning"/> a <c>[&lt;glyphs&gt; adj &lt;glyphs&gt;] TJ</c> array carrying the 'kern'
+    /// adjustments (positive numbers move the next glyph left, in 1/1000 em).
+    /// </summary>
+    private void AppendGlyphShow(string text, TrueTypeFont font)
+    {
+        if (!Kerning || !font.HasKerning || text.Length < 2)
+        {
+            _currentStream!.Append('<').Append(EncodeTextAsGlyphIds(text, font)).Append("> Tj\n");
+            return;
+        }
+        var sb = _currentStream!;
+        sb.Append('[');
+        int start = 0;
+        for (int i = 1; i < text.Length; i++)
+        {
+            short kern = font.GetKerning(font.GetGlyphId(text[i - 1]), font.GetGlyphId(text[i]));
+            if (kern == 0) continue;
+            sb.Append('<').Append(EncodeTextAsGlyphIds(text.Substring(start, i - start), font)).Append('>');
+            sb.Append(' ').Append(Fmt(-kern * 1000f / font.UnitsPerEm)).Append(' ');
+            start = i;
+        }
+        sb.Append('<').Append(EncodeTextAsGlyphIds(text.Substring(start), font)).Append(">] TJ\n");
+    }
 
     private void EmbedRegisteredFonts() =>
         PdfFontEmbedder.EmbedFonts(_embeddedFonts, _usedCodePoints, _embeddedFontPlaceholders,

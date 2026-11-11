@@ -1,0 +1,13 @@
+== Legal Notices
+
+*Copyright Notice*
+
+Copyright (C) 2026 Example Documentation Group. All rights reserved.
+
+No part of this guide may be copied, adapted or redistributed without the prior written consent of the Example Documentation Group.
+
+*Disclaimer*
+
+This guide is provided "as is" without warranty of any kind, express or implied, including any warranty of merchantability, fitness for a particular purpose or non-infringement.
+The Example Documentation Group accepts no liability for damages arising from the use of the information it contains.
+Reading this guide grants no licence, express or implied, to any intellectual property.

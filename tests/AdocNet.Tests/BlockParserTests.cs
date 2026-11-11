@@ -435,6 +435,29 @@ public class BlockParserTests
     }
 
     [Test]
+    public void Percentage_column_widths_are_weights()
+    {
+        var table = BlockParser.Parse("[cols=\"20%,10%,70%\"]\n|===\n|a |b |c\n|===").Document.Children.OfType<TableNode>().Single();
+        Assert.That(table.Columns!.Select(c => c.Width), Is.EqualTo(new[] { 20, 10, 70 }));
+    }
+
+    [Test]
+    public void Duplicate_section_titles_get_unique_generated_ids()
+    {
+        var doc = BlockParser.Parse("== A\n\n=== Field\n\n== B\n\n=== Field\n\n=== Field\n").Document;
+        var ids = doc.Children.OfType<SectionNode>().SelectMany(s => s.Children.OfType<SectionNode>()).Select(s => s.Id);
+        Assert.That(ids, Is.EqualTo(new[] { "_field", "_field_2", "_field_3" }));
+    }
+
+    [Test]
+    public void Attribute_continuation_after_plus_keeps_hard_line_break()
+    {
+        var doc = BlockParser.Parse(":hard: Alpha + \\\nBeta\n:soft: Gamma \\\nDelta\n\nBody").Document;
+        Assert.That(doc.Attributes["hard"], Is.EqualTo("Alpha +\nBeta"));
+        Assert.That(doc.Attributes["soft"], Is.EqualTo("Gamma Delta"));
+    }
+
+    [Test]
     public void Attribute_entries_above_title_keep_author_and_revision_lines()
     {
         var doc = BlockParser.Parse(":a: foo\n= T\nAuthor Name\nv1.0\n:sectnums:\n\n== A\n").Document;

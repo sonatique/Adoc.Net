@@ -196,11 +196,14 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         writer.FooterAlignment = pdfOptions.FooterAlignment;
         writer.HeaderHeight = pdfOptions.HeaderHeight;
         writer.FooterHeight = pdfOptions.FooterHeight;
-        writer.DocumentTitle = context.Document.Title;
+        writer.DocumentTitle = context.Document.Title is { } docTitle ? PlainTitle(docTitle) : null;
         if (context.Document.Attributes.TryGetValue("header-title", out var ht))
             writer.HeaderTitle = ht;
 
         _baseDirectory = pdfOptions.BaseDirectory;
+        _titlePage = pdfOptions.TitlePage;
+        _baseLineHeight = pdfOptions.LineSpacing;
+        _fontKeysByPath.Clear(); // font keys belong to this pass's writer
         _xrefTitles = CollectXrefTitles(context.Document);
         _hasTrueTypeBodyFont = false;
         _runningContentStartAt = pdfOptions.RunningContentStartAt;
@@ -285,6 +288,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
         // Typography options
         writer.HyphenationEnabled = pdfOptions.EnableHyphenation;
+        writer.JustifyText = pdfOptions.JustifyText ?? true;
         _paragraphSpacingBefore = pdfOptions.ParagraphSpacingBefore;
         _paragraphSpacingAfter = pdfOptions.ParagraphSpacingAfter;
         float defaultHeadingMarginBottom = _paragraphSpacingAfter / 2;
@@ -353,6 +357,8 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             _fontHeading = writer.RegisterEmbeddedFont("FH", font);
         }
 
+        ApplyPrawnLineMetrics(writer, pdfOptions);
+
         // :icons: any non-empty value enables icon-style admonitions (asciidoctor
         // treats `:icons: font` as the canonical opt-in but the legacy `:icons:`
         // bare attribute also activates them).
@@ -399,7 +405,14 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
     private void RenderDocumentContent(PdfWriter w, DocumentNode document, FootnoteState footnotes)
     {
-        if (document.Title is not null)
+        if (WantsTitlePage(document))
+        {
+            w.AddOutlineEntry(PlainTitle(document.Title!), 1, "_document_title");
+            RenderTitlePage(w, document);
+            w.FinishPage();
+            w.StartPage();
+        }
+        else if (document.Title is not null)
         {
             w.EnsurePage();
             // Position the document title at TitleFirstPageTop from the top of
@@ -422,9 +435,9 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 w.MoveCursor(-overshoot);
             // Register document title as outline entry. Use level 1 so it appears
             // as a sibling of top-level sections (matches Asciidoctor's flat outline).
-            w.AddOutlineEntry(document.Title, 1, "_document_title");
+            w.AddOutlineEntry(PlainTitle(document.Title), 1, "_document_title");
             if (_headingColor is { } hc) w.SetFillColor(hc.R, hc.G, hc.B);
-            w.WriteWrappedText(document.Title, _fontHeading, _titleFontSize, _titleLeading, _titleAlignment);
+            w.WriteWrappedText(PlainTitle(document.Title), _fontHeading, _titleFontSize, _titleLeading, _titleAlignment);
             if (_headingColor is not null) RestoreBodyFill(w);
             w.MoveCursor(_titleMarginBottom);
         }
@@ -444,8 +457,11 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         }
 
         // If running-content starts after-toc, suppress headers/footers until now
+        // (on the page after the TOC: asciidoctor-pdf never puts running content on a TOC page)
         if (_runningContentStartAt == "after-toc")
-            w.RunningContentStartPage = w.CurrentPageNumber;
+            w.RunningContentStartPage = tocNode is not null && tocNode.Entries.Count > 0
+                ? w.CurrentPageNumber + 1
+                : w.CurrentPageNumber;
 
         foreach (var child in document.Children)
         {
@@ -490,13 +506,24 @@ public sealed partial class PdfRenderer : DocumentRendererBase
     {
         // TOC title
         w.EnsurePage();
-        if (_headingColor is { } hc) w.SetFillColor(hc.R, hc.G, hc.B);
-        w.WriteWrappedText("Table of Contents", _fontHeading, _h2FontSize, _headingLeading);
-        if (_headingColor is not null) RestoreBodyFill(w);
-        // Asciidoctor-pdf uses tighter spacing here than after a body paragraph:
-        // ref baseline-to-baseline (TOC heading→first entry) ≈ 30.5pt.
-        // With heading_leading 22pt + this MoveCursor, total ≈ 30.5 ⇒ 8.5pt move.
-        w.MoveCursor(_paragraphSpacingAfter / 2f);
+        if (_prawnMetrics)
+        {
+            // Styled and placed like a level-1 section title (asciidoctor-pdf toc title = h2).
+            if ((_h2Color ?? _headingColor) is { } tc) w.SetFillColor(tc.R, tc.G, tc.B);
+            WritePrawnHeading(w, new List<TextSegment> { new("Table of Contents", HeadingFont(1), _h2FontSize) },
+                _h2FontSize, 1, () => { });
+            RestoreBodyFill(w);
+        }
+        else
+        {
+            if (_headingColor is { } hc) w.SetFillColor(hc.R, hc.G, hc.B);
+            w.WriteWrappedText("Table of Contents", _fontHeading, _h2FontSize, _headingLeading);
+            if (_headingColor is not null) RestoreBodyFill(w);
+            // Asciidoctor-pdf uses tighter spacing here than after a body paragraph:
+            // ref baseline-to-baseline (TOC heading→first entry) ≈ 30.5pt.
+            // With heading_leading 22pt + this MoveCursor, total ≈ 30.5 ⇒ 8.5pt move.
+            w.MoveCursor(_paragraphSpacingAfter / 2f);
+        }
 
         // Asciidoctor-pdf renders TOC entries in body text color (not link
         // blue). Suppress link coloring for the TOC and restore afterwards.
@@ -505,12 +532,26 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         var savedLinkColor = w.LinkColor;
         w.LinkColor = null;
         RestoreBodyFill(w);
+        if (_prawnMetrics)
+        {
+            // Entries use the TOC line height (default theme 1.4) from the title's bottom.
+            var toc1 = MetricsFor(w, _fontRegular, _bodyFontSize, _tocLineHeight);
+            w.SetCursor(NextBlockTop(w) - toc1.FirstOffset);
+        }
         RenderTocEntries(w, toc.Entries, 0, parentNumber: "");
         w.LinkColor = savedLinkColor;
-        // Trailing space matches asciidoctor-pdf TOC→first-section gap (~19pt).
-        // Combined with RenderSection's _sectionSpacing prefix, this lands near
-        // the REF measurement.
-        w.MoveCursor(_paragraphSpacingAfter);
+        if (_prawnMetrics)
+        {
+            var toc1 = MetricsFor(w, _fontRegular, _bodyFontSize, _tocLineHeight);
+            SetNextBlockTop(w, w.CursorY + toc1.Advance - toc1.Bottom - _paragraphSpacingAfter);
+        }
+        else
+        {
+            // Trailing space matches asciidoctor-pdf TOC→first-section gap (~19pt).
+            // Combined with RenderSection's _sectionSpacing prefix, this lands near
+            // the REF measurement.
+            w.MoveCursor(_paragraphSpacingAfter);
+        }
     }
 
     private void RenderTocEntries(PdfWriter w, IReadOnlyList<TocEntry> entries, int depth, string parentNumber)
@@ -518,7 +559,9 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         // Asciidoctor-pdf TOC line spacing measured at ~18.5pt baseline-to-baseline
         // for 10.5pt body (factor ~1.76). Theme says toc.line-height: 1.4 but the
         // observed visual leading is wider; matches REF measurement.
-        float tocLeading = _bodyFontSize * 1.76f;
+        float tocLeading = _prawnMetrics
+            ? MetricsFor(w, _fontRegular, _bodyFontSize, _tocLineHeight).Advance
+            : _bodyFontSize * 1.76f;
 
         int counter = 0;
         foreach (var entry in entries)
@@ -534,7 +577,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
             w.EnsurePage();
 
-            float indent = depth * ListIndent;
+            float indent = depth * (_prawnMetrics ? _tocIndent : ListIndent);
             float savedIndent = w.PushIndent(indent);
 
             // Asciidoctor-pdf renders TOC entries in regular weight at the body
@@ -550,7 +593,8 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             var displayTitle = numberPrefix + entry.Title;
             if (page is int pageNum)
             {
-                var pageText = pageNum.ToString();
+                // Displayed numbers count from the page after the title page, like the footer.
+                var pageText = (pageNum - w.PageNumberOffset).ToString(System.Globalization.CultureInfo.InvariantCulture);
                 float titleWidth = w.MeasureText(displayTitle, font, fontSize);
                 float pageWidth = w.MeasureText(pageText, _fontRegular, fontSize);
                 float spaceWidth = w.MeasureText(" ", _fontRegular, fontSize);
@@ -594,7 +638,10 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                     // Dot leader ending just before the page number (so the dots lead
                     // up to it and any rounding remainder sits next to the title).
                     float gapStart = titleEnd + spaceWidth;
-                    float gapEnd = pageX - spaceWidth;
+                    // asciidoctor-pdf ends the leader at a quarter-size no-break space before the number.
+                    float gapEnd = _prawnMetrics
+                        ? pageX - w.MeasureText(" ", _fontRegular, fontSize * 0.25f)
+                        : pageX - spaceWidth;
                     if (gapEnd > gapStart && unitWidth > 0)
                     {
                         int dots = (int)((gapEnd - gapStart) / unitWidth);
@@ -602,7 +649,9 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                         {
                             var leader = string.Concat(System.Linq.Enumerable.Repeat(". ", dots));
                             float leaderWidth = w.MeasureText(leader, _fontRegular, fontSize);
+                            if (_prawnMetrics) w.SetFillColor(_tocDotLeaderColor.R, _tocDotLeaderColor.G, _tocDotLeaderColor.B);
                             w.WriteText(leader, _fontRegular, fontSize, gapEnd - leaderWidth, y);
+                            if (_prawnMetrics) RestoreBodyFill(w);
                         }
                     }
 
@@ -718,7 +767,8 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
     private void RenderSection(PdfWriter w, SectionNode section, int indentLevel, FootnoteState footnotes)
     {
-        w.MoveCursor(_sectionSpacing);
+        if (!_prawnMetrics)
+            w.MoveCursor(_sectionSpacing);
         w.EnsurePage();
 
         // Per-level leading and margin-bottom calibrated against asciidoctor-pdf:
@@ -758,24 +808,40 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         // Register as outline entry and named destination for bookmarks/cross-refs.
         // Include section number prefix in outline title when sectnums is enabled.
         string outlineTitle = secNumPrefix is not null ? $"{secNumPrefix}{section.Title}" : section.Title;
-        w.AddOutlineEntry(outlineTitle, section.Level, section.Id);
 
         // Track section title for header/footer {section-title} placeholder.
-        // Only level-1 sections (== headings) are tracked, matching Asciidoctor behavior.
         // Include the section number prefix when sectnums is enabled.
-        // SetSectionTitleForPage only takes effect on the FIRST level-1 section per page;
+        // SetSectionTitleForPage only takes effect on the FIRST section per page;
         // subsequent sections on the same page don't override (matches Asciidoctor).
-        if (section.Level == 1)
-            w.SetSectionTitleForPage(secNumPrefix is not null ? $"{secNumPrefix}{section.Title}" : section.Title);
+        // The legacy layout tracks level-1 sections only; themed (Prawn) output tracks
+        // every level, as asciidoctor-pdf does.
+        void RegisterHeading()
+        {
+            w.AddOutlineEntry(outlineTitle, section.Level, section.Id);
+            if (_prawnMetrics ? section.Level <= 2 : section.Level == 1)
+                w.SetSectionTitleForPage(outlineTitle);
+        }
+        // The themed path registers after its keep-with-next page break so the outline,
+        // cross-reference destination and running section title land on the heading's page.
+        if (!_prawnMetrics)
+            RegisterHeading();
 
         // Render section title with heading font, per-level color
         if (color is { } hc) w.SetFillColor(hc.R, hc.G, hc.B);
-        var segments = BuildInlineSegments(section.TitleInlines, section.Title, _fontHeading, fontSize, footnotes);
+        var headingFont = HeadingFont(section.Level);
+        var segments = BuildInlineSegments(section.TitleInlines, section.Title, headingFont, fontSize, footnotes);
         if (secNumPrefix is not null)
-            segments.Insert(0, new TextSegment(secNumPrefix, _fontHeading, fontSize));
-        w.WriteWrappedSegments(segments, leading);
+            segments.Insert(0, new TextSegment(secNumPrefix, headingFont, fontSize));
+        if (_prawnMetrics)
+        {
+            WritePrawnHeading(w, segments, fontSize, section.Level, RegisterHeading);
+        }
+        else
+        {
+            w.WriteWrappedSegments(segments, leading);
+            w.MoveCursor(marginBottom);
+        }
         if (color is not null) RestoreBodyFill(w);
-        w.MoveCursor(marginBottom);
 
         foreach (var child in section.Children)
             RenderBlock(w, child, indentLevel, footnotes);
@@ -790,9 +856,40 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
         // Body color is set globally at start of document; no per-paragraph
         // override needed unless we change colors mid-paragraph.
-        var segments = BuildInlineSegments(paragraph.Inlines, paragraph.Text, _fontRegular, _bodyFontSize, footnotes);
-        w.WriteWrappedSegments(segments, _bodyLeading);
+        if (paragraph.HasHardbreaks)
+        {
+            // " +" line ends (or hardbreaks): each piece starts a new line; a broken line is
+            // never justified, like the last line of a paragraph.
+            _keepHardBreaks = true;
+            var pieces = BuildInlineSegments(paragraph.Inlines, paragraph.Text.Replace('\n', ' '), _fontRegular, _bodyFontSize, footnotes);
+            _keepHardBreaks = false;
+            foreach (var line in SplitAtHardBreaks(pieces))
+                w.WriteWrappedSegments(line, _bodyLeading);
+        }
+        else
+        {
+            var segments = BuildInlineSegments(paragraph.Inlines, paragraph.Text, _fontRegular, _bodyFontSize, footnotes);
+            w.WriteWrappedSegments(segments, _bodyLeading);
+        }
         w.MoveCursor(_paragraphSpacingAfter);
+    }
+
+    private bool _keepHardBreaks;
+
+    /// <summary>Splits segments at the newlines kept for hard breaks: one segment list per line.</summary>
+    private static List<List<TextSegment>> SplitAtHardBreaks(List<TextSegment> segments)
+    {
+        var lines = new List<List<TextSegment>> { new() };
+        foreach (var seg in segments)
+        {
+            var parts = seg.Text.Split('\n');
+            for (int i = 0; i < parts.Length; i++)
+            {
+                if (i > 0) lines.Add(new List<TextSegment>());
+                if (parts[i].Length > 0) lines[^1].Add(seg with { Text = parts[i] });
+            }
+        }
+        return lines;
     }
 
     private void RenderList(PdfWriter w, ListNode list, int indentLevel, FootnoteState footnotes)
@@ -849,12 +946,28 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 }
 
                 var segments = BuildInlineSegments(item.Inlines, item.Text, _fontRegular, _bodyFontSize, footnotes);
-                if (segments.Count > 0)
+                if (_prawnMetrics)
                 {
-                    segments.Insert(0, new TextSegment(prefix, _fontRegular, _bodyFontSize));
+                    // asciidoctor-pdf: item text indented by list.indent; the marker sits to the
+                    // left of the text, separated by the width of an "x".
+                    float itemIndent = w.PushIndent(w.MarginLeftValue - w.MarginLeftBase + _listIndent);
+                    var marker = prefix.TrimEnd();
+                    float markerX = w.MarginLeftValue - w.MeasureText(marker, _fontRegular, _bodyFontSize)
+                        - w.MeasureText("x", _fontRegular, _bodyFontSize);
+                    w.EnsurePage();
+                    w.WriteText(marker, _fontRegular, _bodyFontSize, markerX, w.CursorY);
+                    w.WriteWrappedSegments(segments, _bodyLeading);
+                    w.PopIndent(itemIndent);
                 }
+                else
+                {
+                    if (segments.Count > 0)
+                    {
+                        segments.Insert(0, new TextSegment(prefix, _fontRegular, _bodyFontSize));
+                    }
 
-                w.WriteWrappedSegments(segments, _bodyLeading);
+                    w.WriteWrappedSegments(segments, _bodyLeading);
+                }
                 // Asciidoctor-pdf adds vertical breathing room between list
                 // items (matches its block.margin_bottom = vertical_rhythm).
                 // Without this each bullet runs straight into the next.
@@ -932,14 +1045,36 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         var content = block.Content ?? string.Empty;
         w.EnsurePage();
 
+        LineMetrics code = default;
+        if (_prawnMetrics)
+        {
+            code = MetricsFor(w, _fontMono, _codeFontSize, _codeLineHeight);
+            w.CodeBlockPadding = _codePadding;
+            // Begin* steps down by the padding; the first baseline lands padding + first offset below the top.
+            w.SetCursor(NextBlockTop(w) - code.FirstOffset);
+        }
+
         // Enable per-line background drawing (handles page breaks correctly)
         if (_codeBackground is { } bg)
-            w.BeginCodeBlockBackground(bg, _codeFontSize, _codeLeading, _codeBorderColor);
+        {
+            if (_prawnMetrics)
+                w.BeginCodeBlockBackground(bg, _codeFontSize, _codeLeading, _codeBorderColor, code.FirstOffset, code.Bottom);
+            else
+                w.BeginCodeBlockBackground(bg, _codeFontSize, _codeLeading, _codeBorderColor);
+        }
+        else if (_prawnMetrics)
+        {
+            w.MoveCursor(_codePadding);
+        }
 
         // Asciidoctor-pdf doesn't print the language label inside the code
         // block — the syntax highlighter's color cues are the only visual
         // language hint. Emitting the label takes a line of vertical space
         // and adds visual noise that doesn't appear in the asciidoctor PDF.
+
+        // Themed output: the code box is padded on the right too.
+        float savedRightIndent = w.ContentRightIndent;
+        if (_prawnMetrics) w.ContentRightIndent = savedRightIndent + _codePadding;
 
         // Render content: highlighted if supported, plain monospace otherwise
         if (_syntaxColors is not null && block.BlockKind == DelimitedBlockKind.Source
@@ -954,8 +1089,17 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 w.WriteWrappedVerbatimText(line, _fontMono, _codeFontSize, _codeLeading);
         }
 
+        float lastCodeBaseline = w.CursorY + _codeLeading; // before End*, which steps down by the padding
+        w.ContentRightIndent = savedRightIndent;
         w.EndCodeBlockBackground();
-        w.MoveCursor(_bodyLeading);
+        if (_prawnMetrics)
+        {
+            SetNextBlockTop(w, lastCodeBaseline - code.Bottom - _codePadding - _paragraphSpacingAfter);
+        }
+        else
+        {
+            w.MoveCursor(_bodyLeading);
+        }
 
         // Render callout list — asciidoctor-pdf renders the conum (callout
         // number) as a circled-number glyph (U+2460 ① for 1, U+2461 ② for 2,

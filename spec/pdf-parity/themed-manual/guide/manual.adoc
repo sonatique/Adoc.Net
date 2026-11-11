@@ -1,0 +1,250 @@
+:header-title: Widget Exchange Format User Guide
+:outline-title: Widget Exchange Format User Guide
+:main-title: Widget Exchange Format + \
+User Guide
+:subtitle: The widget exchange format is a plain-text format for moving widget records between tools, \
+with timestamps, sources and free-form metadata.
+= {main-title}: {subtitle}
+Example Documentation Group
+v2.1
+:sectnums:
+:title-page:
+:toc: macro
+
+<<<
+toc::[]
+
+<<<
+== Revision History
+
+[width=100%,cols="20%,10%,70%",options="header"]
+|===
+|Date |Rev |Changes
+|Mar. 4, 2026 |2.0 |Second edition, covering exchange format 2.0 and record format 1.3.
+|Sep. 18, 2026 |2.1 |Adds batch records, the checksum directive and the troubleshooting chapter.
+|===
+
+include::../shared/legal.adoc[]
+
+<<<
+== Introduction
+
+The widget exchange format lets one tool hand widget records to another for review, storage or analysis.
+It also lets a tool export its records to an editable text file that people can read and correct by hand.
+A file can hold single records, batch records, or both.
+
+The file extension is `.wxf`.
+Tools list the format as *Widget exchange (text)* in their import and export dialogs.
+Select that entry when you open or save a file, as appropriate.
+
+This guide describes version 2.1 of the format.
+It covers the file structure, the directives, the record fields, and the rules a tool must follow when it reads or writes a file.
+
+== Quick Example
+
+The following file declares the format, selects the record format and lists three records.
+
+[source,text]
+----
+Format:WidgetExchange version=2.0
+Info author="Example Tool" created="2026-09-18" site="North Plant"
+RecordFormat:Single version=1.3
+Record time=1000 id=17 kind=gear size=12 colour=blue
+Record time=2500 id=18 kind=spring size=4 colour=red
+Record time=4000 id=19 kind=gear size=12 colour=blue note="rework"
+----
+
+Each `Record` line describes one widget.
+The `time` field is the number of milliseconds since the start of the session; the other fields describe the widget itself.
+
+== File Structure and Text Syntax
+
+=== Directives
+
+Start the file with its format declaration.
+Then select a record format and write records using `Record`.
+A directive begins a new entry; its fields continue until the next directive or the end of the file.
+
+[cols="25%,75%",options="header"]
+|===
+|Directive |Purpose
+|`Format` |Declares the exchange format and its version. Must be the first directive in the file.
+|`Info` |Optional file-level metadata: author, creation date and site.
+|`RecordFormat` |Selects the record format for the records that follow. May appear more than once.
+|`Record` |One widget record.
+|`Batch` |Opens a batch of records that share a time base; closed by `EndBatch`.
+|`Checksum` |Optional checksum over the preceding records, checked on import.
+|===
+
+=== Companion Files
+
+Importing a `.wxf` file also imports matching companion files in the same directory.
+A companion file has the same base name and one of the extensions listed below.
+
+* `.wxn` holds free-form notes attached to records by `id`.
+* `.wxi` holds images attached to records by `id`.
+* `.wxl` holds the import log written by the last tool that read the file.
+
+A missing companion file is not an error.
+A companion file whose records refer to an unknown `id` produces a warning for each such record.
+
+=== Whitespace, Case and Quoting
+
+Fields are separated by one or more spaces or tabs.
+Directive and field names are case-insensitive; field values are case-sensitive.
+Values that contain spaces must be quoted with double quotes, and a double quote inside a quoted value is written twice.
+
+[source,text]
+----
+Record time=5000 id=20 kind=gear note="said ""fine"" twice"
+Record time=5100 id=21 kind=spring note='single quotes are not allowed'
+----
+
+The second line is rejected: single quotes are not quoting characters, so the value ends at the first space.
+
+IMPORTANT: Use matched double quotes and keep quoted values on a single line.
+A line break inside a quoted value ends the record and makes the remaining text an unknown directive.
+
+=== Comments and Hexadecimal Data
+
+A line that starts with `#` is a comment and is ignored.
+Binary payloads are written as hexadecimal byte strings, two digits per byte, optionally separated by spaces.
+
+[source,text]
+----
+# Calibration record with a raw payload
+Record time=6000 id=22 kind=sensor payload="0A 1B 2C 3D 4E 5F"
+----
+
+=== Versions
+
+Use these versions when generating files.
+The format requires major version 2; a higher minor version is accepted, and unknown fields are ignored with a warning.
+
+[cols="30%,20%,50%",options="header"]
+|===
+|Item |Version |Notes
+|Exchange format |2.0 |Declared by `Format`.
+|Single record format |1.3 |Declared by `RecordFormat:Single`.
+|Batch record format |1.1 |Declared by `RecordFormat:Batch`.
+|===
+
+[#common-fields]
+== Common Record Fields
+
+Every record, single or batched, carries the fields below.
+Fields marked as required must appear exactly once; optional fields may be omitted.
+
+[cols="14%,14%,14%,14%,44%",options="header"]
+|===
+|Field |Type |Unit |Required |Meaning
+|`time` |Decimal integer |ms |Yes |Time since the start of the session. Must not decrease from one record to the next.
+|`id` |Decimal integer |- |Yes |Identifier of the widget, unique within the file.
+|`kind` |Keyword |- |Yes |Widget kind: `gear`, `spring`, `sensor` or `housing`.
+|`size` |Decimal number |mm |No |Nominal size. Defaults to the size of the previous record of the same kind.
+|`colour` |Keyword |- |No |Surface colour, from the palette defined by the reading tool.
+|`note` |Quoted text |- |No |Free-form remark shown next to the record.
+|`payload` |Hex bytes |- |No |Raw payload, for sensor widgets only.
+|===
+
+== Single Records
+
+Select single records with:
+
+[source,text]
+----
+RecordFormat:Single version=1.3
+----
+
+=== Field Reference
+
+Single records accept the common fields and the fields below.
+
+[cols="20%,20%,60%",options="header"]
+|===
+|Field |Type |Meaning
+|`station` |Keyword |Station that produced the widget.
+|`operator` |Quoted text |Name of the operator on duty.
+|`grade` |Keyword |Quality grade: `a`, `b` or `reject`.
+|===
+
+=== Station Numbering
+
+Stations are numbered from 1 in the order they appear on the plant floor plan.
+Station 0 is reserved for widgets created by hand and must not appear in exported files.
+
+For example, a widget produced at the first press uses `station=1`, not `station=0`.
+Tools that number stations from 0 internally must add one when they write a file.
+
+=== Grade Layout
+
+Grades are written in lower case.
+A record without a `grade` field is treated as ungraded; it is still imported but is excluded from quality reports.
+
+==== Station Roles
+
+Each station has a fixed role, listed on the floor plan as one line per station: +
+Station 1: press +
+Station 2: grinder +
+Station 3: inspection and grading
+
+IMPORTANT: The `reject` grade removes the widget from the default views.
+Reading tools must still keep the record, so that a later import of the same file can restore it.
+
+== Batch Records
+
+Select batch records with:
+
+[source,text]
+----
+RecordFormat:Batch version=1.1
+----
+
+=== Field Reference
+
+A batch shares one time base.
+Records inside a batch give their `time` relative to the `Batch` directive, which carries the absolute time.
+
+[source,text]
+----
+Batch time=10000 station=3 operator="R. Lee"
+Record time=0 id=30 kind=gear size=8
+Record time=120 id=31 kind=gear size=8
+Record time=240 id=32 kind=gear size=8 grade=b
+EndBatch
+----
+
+=== Checksums
+
+The `Checksum` directive closes a group of records with a checksum over their text.
+It is optional; when present, an import fails if the checksum does not match.
+The checksum is the CRC-32 of every byte from the previous `Checksum` directive, or the start of the file, up to the line before this one.
+
+== Export Behaviour and Interchange
+
+The exporter starts with `Format:WidgetExchange version=2.0`, writes an `Info` directive when the session has metadata, and then writes records in time order.
+Batches are preserved when the source tool recorded them; otherwise every record is written as a single record.
+
+[source,text]
+----
+Record time=3000000 id=40 kind=housing size=120 colour=grey station=4 operator="M. Diaz" grade=a note="first article"
+----
+
+Long records are written on one line.
+Readers must accept lines of at least 64 KiB.
+
+== Troubleshooting
+
+Format errors generally include a line number.
+A record is finalised when the next directive starts, so an error reported on one line can come from the record above it.
+
+[cols="35%,65%",options="header"]
+|===
+|Message or symptom |Action
+|Unknown directive |Check the spelling and the case of the directive name, and that the previous quoted value was closed.
+|Time goes backwards |Sort the records by time, or move them into a batch with its own time base.
+|Checksum mismatch |Regenerate the checksum after editing the file by hand, or remove the `Checksum` directive.
+|Unknown field |Upgrade the reading tool, or remove the field if it is not needed.
+|===
+
+See <<common-fields>> for the list of fields every record must carry.

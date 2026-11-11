@@ -153,31 +153,28 @@ public class TrueTypeFontTests
 
         Assert.That(glyphToUnicode.Count, Is.GreaterThan(0), "ToUnicode CMap must have entries");
 
-        // Now find hex-encoded text in the content stream: <XXXX XXXX ...> Tj
-        // and verify each glyph ID maps to a valid character via ToUnicode
-        int searchPos = 0;
+        // Now find hex-encoded text in the content stream — "<XXXX ...> Tj", or kerned
+        // "[<XXXX> -12 <XXXX>] TJ" arrays (themed output) — and verify each glyph ID maps to a
+        // valid character via ToUnicode
         int hexStringsFound = 0;
-        while ((searchPos = pdfText.IndexOf("> Tj", searchPos, StringComparison.Ordinal)) >= 0)
+        var shown = new List<string>();
+        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(pdfText, @"<([0-9A-Fa-f]+)>\s*Tj"))
+            shown.Add(m.Groups[1].Value);
+        foreach (System.Text.RegularExpressions.Match array in System.Text.RegularExpressions.Regex.Matches(pdfText, @"\[([^\]]*)\]\s*TJ"))
+            foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(array.Groups[1].Value, @"<([0-9A-Fa-f]+)>"))
+                shown.Add(m.Groups[1].Value);
+        foreach (var hexContent in shown)
         {
-            // Walk back to find the opening <
-            int openBracket = pdfText.LastIndexOf('<', searchPos);
-            if (openBracket >= 0 && openBracket < searchPos)
+            if (hexContent.Length < 4 || hexContent.Length % 4 != 0) continue;
+            hexStringsFound++;
+            // Each 4-char group is a glyph ID
+            for (int i = 0; i < hexContent.Length; i += 4)
             {
-                string hexContent = pdfText.Substring(openBracket + 1, searchPos - openBracket - 1).Trim();
-                if (hexContent.Length >= 4 && hexContent.Length % 4 == 0)
-                {
-                    hexStringsFound++;
-                    // Each 4-char group is a glyph ID
-                    for (int i = 0; i < hexContent.Length; i += 4)
-                    {
-                        string glyphHex = hexContent.Substring(i, 4);
-                        Assert.That(glyphToUnicode.ContainsKey(glyphHex), Is.True,
-                            $"Glyph ID <{glyphHex}> in content stream has no ToUnicode mapping — " +
-                            $"this means the text will render as garbled characters");
-                    }
-                }
+                string glyphHex = hexContent.Substring(i, 4);
+                Assert.That(glyphToUnicode.ContainsKey(glyphHex), Is.True,
+                    $"Glyph ID <{glyphHex}> in content stream has no ToUnicode mapping — " +
+                    $"this means the text will render as garbled characters");
             }
-            searchPos++;
         }
 
         Assert.That(hexStringsFound, Is.GreaterThan(0),
@@ -270,5 +267,27 @@ public class TrueTypeFontTests
         var bytes2 = new PdfRenderer().RenderToBytes(doc, options);
 
         Assert.That(bytes1, Is.EqualTo(bytes2), "Embedded font renders must be byte-identical");
+    }
+
+    private static string RepoFile(params string[] parts)
+    {
+        var dir = TestContext.CurrentContext.TestDirectory;
+        while (dir is not null && !File.Exists(Path.Combine(dir, "AdocNet.slnx")))
+            dir = Path.GetDirectoryName(dir);
+        return Path.Combine(new[] { dir! }.Concat(parts).ToArray());
+    }
+
+    [Test]
+    public void Kern_table_pairs_tighten_measured_and_drawn_text()
+    {
+        var path = RepoFile("src", "AdocNet.Converters.Pdf", "Resources", "DejaVuSans.ttf");
+        var font = TrueTypeFont.Parse(File.ReadAllBytes(path));
+        Assert.That(font.HasKerning, Is.True);
+        Assert.That(font.MeasureText("AVA", 10, kerning: true), Is.LessThan(font.MeasureText("AVA", 10)));
+
+        // Themed (embedded body font) output draws kerned text as TJ arrays.
+        var doc = AdocParser.Parse("AVA WAVE").Document;
+        var pdf = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc, new PdfRenderOptions { FontPath = path }));
+        Assert.That(pdf, Does.Match(@"\[<[0-9A-F]+> [\d.]+ <[0-9A-F]+>.*\] TJ"));
     }
 }

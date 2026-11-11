@@ -14,13 +14,23 @@ public static class PdfThemeLoader
     /// </summary>
     /// <param name="themePath">Path to the YAML theme file.</param>
     /// <param name="fontsDir">Base directory for resolving font file paths. Null = same directory as theme file.</param>
-    public static PdfRenderOptions Load(string themePath, string? fontsDir = null)
+    public static PdfRenderOptions Load(string themePath, string? fontsDir = null) =>
+        Load(themePath, fontsDir, baseDirectory: null);
+
+    /// <summary>
+    /// Loads a theme file and returns configured <see cref="PdfRenderOptions"/> whose
+    /// <see cref="PdfRenderOptions.BaseDirectory"/> (where document images resolve) is set.
+    /// </summary>
+    /// <param name="themePath">Path to the YAML theme file.</param>
+    /// <param name="fontsDir">Base directory for resolving font file paths. Null = same directory as theme file.</param>
+    /// <param name="baseDirectory">Directory document image paths are relative to (usually the document's folder).</param>
+    public static PdfRenderOptions Load(string themePath, string? fontsDir, string? baseDirectory)
     {
         var themeDir = Path.GetDirectoryName(Path.GetFullPath(themePath)) ?? ".";
         fontsDir ??= themeDir;
         var lines = File.ReadAllLines(themePath);
         var props = ParseYaml(lines);
-        return BuildOptions(props, fontsDir, themeDir);
+        return BuildOptions(props, fontsDir, themeDir, baseDirectory);
     }
 
     /// <summary>
@@ -110,7 +120,8 @@ public static class PdfThemeLoader
     /// <summary>
     /// Builds PdfRenderOptions from parsed theme properties.
     /// </summary>
-    internal static PdfRenderOptions BuildOptions(Dictionary<string, string> props, string fontsDir, string? themeDir = null)
+    internal static PdfRenderOptions BuildOptions(Dictionary<string, string> props, string fontsDir, string? themeDir = null,
+        string? baseDirectory = null)
     {
         // Resolve font paths from the font catalog
         string? fontRegular = ResolveFontPath(props, "base.font-family", "normal", fontsDir);
@@ -128,6 +139,8 @@ public static class PdfThemeLoader
         if (props.TryGetValue("page.margin", out var marginStr))
             ParseMargins(marginStr, ref marginTop, ref marginRight, ref marginBottom, ref marginLeft);
 
+        var pageSize = ParsePageSize(GetString(props, "page.size"));
+
         var options = new PdfRenderOptions
         {
             // Fonts
@@ -140,7 +153,9 @@ public static class PdfThemeLoader
             MonoBoldItalicFontPath = fontMonoBoldItalic,
             HeadingFontPath = fontHeading,
 
-            // Page geometry
+            // Page geometry (asciidoctor-pdf default page.size: A4 = 595.28 x 841.89)
+            PageWidth = pageSize.Width,
+            PageHeight = pageSize.Height,
             MarginTop = marginTop,
             MarginRight = marginRight,
             MarginBottom = marginBottom,
@@ -154,7 +169,8 @@ public static class PdfThemeLoader
             TitleFontSize = GetFloat(props, "heading.h1-font-size")
                           ?? GetFloat(props, "heading-h1.font-size")
                           ?? GetFloat(props, "title-page.title.font-size") ?? 24f,
-            LineSpacing = GetFloat(props, "base.line-height") ?? 1.35f,
+            // asciidoctor-pdf default theme: $base_line_height_length / $base_font_size = 12 / 10.5.
+            LineSpacing = GetFloat(props, "base.line-height") ?? 12f / 10.5f,
             TitleLineHeight = GetFloat(props, "heading.h1-line-height") ?? GetFloat(props, "heading-h1.line-height"),
 
             // Per-heading sizes
@@ -240,7 +256,7 @@ public static class PdfThemeLoader
             ParagraphSpacingAfter = GetFloat(props, "block.margin-bottom")
                                   ?? GetFloat(props, "prose.margin-bottom")
                                   ?? GetFloat(props, "base.margin-bottom")
-                                  ?? 8f,
+                                  ?? 12f, // default theme: $block_margin_bottom = $vertical_rhythm
 
             // Section spacing — empirically calibrated against asciidoctor-pdf:
             // body→heading baseline-to-baseline is ~43pt (vs 33pt with raw theme value).
@@ -255,9 +271,166 @@ public static class PdfThemeLoader
             // ≈ 10.8pt) applies. Our 16pt fallback was too generous.
             TitleMarginTop = GetFloat(props, "heading-h1.margin-top") ?? 0f,
             TitleMarginBottom = GetFloat(props, "heading-h1.margin-bottom") ?? GetFloat(props, "heading.margin-bottom") ?? 16f,
+
+            TitlePage = BuildTitlePage(props, fontsDir, themeDir ?? fontsDir),
+            HeadingLineHeight = GetFloat(props, "heading.line-height"),
+            CodeLineHeight = GetFloat(props, "code.line-height"),
+            CodePadding = GetFloat(props, "code.padding"),
+            TocLineHeight = GetFloat(props, "toc.line-height"),
+            ListIndent = GetFloat(props, "list.indent"),
+            Heading2FontPath = ResolveHeadingLevelFontPath(props, 2, fontsDir),
+            Heading3FontPath = ResolveHeadingLevelFontPath(props, 3, fontsDir),
+            Heading4FontPath = ResolveHeadingLevelFontPath(props, 4, fontsDir),
+            Heading5FontPath = ResolveHeadingLevelFontPath(props, 5, fontsDir),
+            JustifyText = GetString(props, "base.text-align") is { } textAlign
+                ? textAlign.Trim().Equals("justify", StringComparison.OrdinalIgnoreCase)
+                : null,
+            TableLineHeight = GetFloat(props, "table.line-height"),
+            TableCellPadding = ParseBox(GetString(props, "table.cell-padding")),
+            TableGridWidth = GetFloat(props, "table.grid-width") ?? GetFloat(props, "table.border-width"),
+            TableHeadBorderBottomWidth = GetFloat(props, "table.head.border-bottom-width"),
+            TocIndent = GetFloat(props, "toc.indent"),
+            TocDotLeaderColor = ParseColor(GetString(props, "toc.dot-leader.font-color")),
+            HeadingMarginTop = GetFloat(props, "heading.margin-top"),
+            HeadingMarginBottom = GetFloat(props, "heading.margin-bottom"),
+            Heading2MarginTop = GetFloat(props, "heading.h2-margin-top") ?? GetFloat(props, "heading-h2.margin-top"),
+            Heading3MarginTop = GetFloat(props, "heading.h3-margin-top") ?? GetFloat(props, "heading-h3.margin-top"),
+            Heading4MarginTop = GetFloat(props, "heading.h4-margin-top") ?? GetFloat(props, "heading-h4.margin-top"),
+            Heading5MarginTop = GetFloat(props, "heading.h5-margin-top") ?? GetFloat(props, "heading-h5.margin-top"),
+            BaseDirectory = baseDirectory,
         };
 
         return options;
+    }
+
+    /// <summary>
+    /// Parses a CSS-like box value: <c>3</c>, <c>[1, 4]</c>, <c>[1, 4, 2]</c> or <c>[1, 2, 3, 4]</c>
+    /// into [top, right, bottom, left]. Null when absent or unparsable.
+    /// </summary>
+    internal static float[]? ParseBox(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var parts = value!.Trim().TrimStart('[').TrimEnd(']').Split(',');
+        var n = new List<float>();
+        foreach (var part in parts)
+        {
+            if (ParseLength(part) is not { } v) return null;
+            n.Add(v);
+        }
+        return n.Count switch
+        {
+            1 => new[] { n[0], n[0], n[0], n[0] },
+            2 => new[] { n[0], n[1], n[0], n[1] },
+            3 => new[] { n[0], n[1], n[2], n[1] },
+            4 => n.ToArray(),
+            _ => null,
+        };
+    }
+
+    /// <summary>Theme <c>page.size</c>: A4 (default), Letter, Legal, or <c>[width, height]</c> lengths.</summary>
+    private static (float Width, float Height) ParsePageSize(string? value)
+    {
+        switch (value?.Trim().ToUpperInvariant())
+        {
+            case null or "" or "A4": return (595.28f, 841.89f);
+            case "LETTER": return (612f, 792f);
+            case "LEGAL": return (612f, 1008f);
+        }
+        var parts = value!.Trim().TrimStart('[').TrimEnd(']').Split(',');
+        if (parts.Length == 2 && ParseLength(parts[0]) is { } w && ParseLength(parts[1]) is { } h)
+            return (w, h);
+        return (595.28f, 841.89f);
+    }
+
+    // ── Title page ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Maps the <c>title-page</c> keys, falling back to asciidoctor-pdf's default theme
+    /// (which <c>extends: default</c> themes inherit) for anything the theme omits.
+    /// </summary>
+    private static PdfTitlePageOptions BuildTitlePage(Dictionary<string, string> props, string fontsDir, string themeDir)
+    {
+        float baseSize = GetFloat(props, "base.font-size") ?? 10.5f;
+        float baseLineHeight = GetFloat(props, "base.line-height") ?? 12f / 10.5f;
+        var align = ParseAlignment(GetString(props, "title-page.text-align")) ?? PdfAlignment.Right;
+
+        PdfTitlePageText Text(string part, float size, PdfColor? color, string style, float lineHeight,
+            float marginTop, string? top = null)
+        {
+            string prefix = $"title-page.{part}.";
+            var fontStyle = (GetString(props, prefix + "font-style") ?? style).Replace('-', '_');
+            var family = GetString(props, prefix + "font-family");
+            return new PdfTitlePageText
+            {
+                FontPath = family is null ? null : ResolveFontCatalogPath(props, family, fontStyle, fontsDir),
+                FontSize = GetFloat(props, prefix + "font-size") ?? size,
+                Color = ParseColor(GetString(props, prefix + "font-color")) ?? color,
+                Bold = fontStyle is "bold" or "bold_italic",
+                Italic = fontStyle is "italic" or "bold_italic",
+                LineHeight = GetFloat(props, prefix + "line-height") ?? lineHeight,
+                MarginTop = GetFloat(props, prefix + "margin-top") ?? marginTop,
+                MarginBottom = GetFloat(props, prefix + "margin-bottom") ?? 0f,
+                Top = GetString(props, prefix + "top") ?? top,
+            };
+        }
+
+        var logo = GetString(props, "title-page.logo.image");
+        var background = GetString(props, "title-page.background-image");
+        return new PdfTitlePageOptions
+        {
+            Alignment = align,
+            BackgroundImagePath = ResolveThemeImage(background, themeDir),
+            LogoImagePath = ResolveThemeImage(logo, themeDir),
+            LogoTop = GetString(props, "title-page.logo.top") ?? "10%",
+            LogoAlignment = ParseAlignment(GetString(props, "title-page.logo.align")),
+            LogoWidth = logo is null ? null : ParseLength(ImageMacroAttribute(logo, "pdfwidth")),
+            Title = Text("title",
+                GetFloat(props, "heading-h1.font-size") ?? (float)Math.Floor(baseSize * 2.6f),
+                ParseColor(GetString(props, "role.subtitle.font-color")) ?? ParseColor("999999"),
+                "normal", 0.9f, 0f, top: "55%"),
+            Subtitle = Text("subtitle",
+                GetFloat(props, "heading-h3.font-size") ?? (float)Math.Round(baseSize * 1.7f, MidpointRounding.AwayFromZero),
+                null, "bold_italic", 1f, 0f),
+            Authors = Text("authors", (float)Math.Round(baseSize * 1.25f, MidpointRounding.AwayFromZero),
+                ParseColor("181818"), "normal", baseLineHeight, baseSize * 1.25f),
+            Revision = Text("revision", baseSize, null, "normal", baseLineHeight, baseSize * 1.25f),
+        };
+    }
+
+    private static string? ResolveThemeImage(string? value, string themeDir)
+    {
+        if (value is null) return null;
+        var path = ExtractImageMacroPath(value) ?? value;
+        var full = Path.IsPathRooted(path) ? path : Path.Combine(themeDir, path);
+        return File.Exists(full) ? Path.GetFullPath(full) : null;
+    }
+
+    private static string? ImageMacroAttribute(string value, string name)
+    {
+        int open = value.IndexOf('['), close = value.LastIndexOf(']');
+        if (open < 0 || close <= open) return null;
+        foreach (var part in value[(open + 1)..close].Split(','))
+        {
+            var kv = part.Split(new[] { '=' }, 2);
+            if (kv.Length == 2 && kv[0].Trim().Equals(name, StringComparison.OrdinalIgnoreCase))
+                return kv[1].Trim();
+        }
+        return null;
+    }
+
+    /// <summary>Parses a length such as <c>180</c>, <c>2.5in</c>, <c>6cm</c>, <c>50mm</c> or <c>96px</c> into points.</summary>
+    internal static float? ParseLength(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var v = value!.Trim();
+        (string Suffix, float Factor)[] units = { ("in", 72f), ("cm", 72f / 2.54f), ("mm", 72f / 25.4f), ("px", 0.75f), ("pt", 1f) };
+        foreach (var (suffix, factor) in units)
+        {
+            if (v.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+                && float.TryParse(v[..^suffix.Length], NumberStyles.Float, CultureInfo.InvariantCulture, out var n))
+                return n * factor;
+        }
+        return float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out var pts) ? pts : null;
     }
 
     // ── Font resolution ──────────────────────────────────────────────────
@@ -287,7 +460,26 @@ public static class PdfThemeLoader
                          ?? GetString(props, "heading-h1.font-family");
         if (headingFamily is null) return null;
 
-        return ResolveFontCatalogPath(props, headingFamily, "normal", fontsDir);
+        // Headings default to bold (asciidoctor-pdf heading.font-style: bold).
+        var style = (GetString(props, "heading-h2.font-style") ?? GetString(props, "heading.font-style") ?? "bold")
+            .Replace('-', '_');
+        return ResolveFontCatalogPath(props, headingFamily, style, fontsDir)
+            ?? ResolveFontCatalogPath(props, headingFamily, "normal", fontsDir);
+    }
+
+    /// <summary>
+    /// Font of one heading level as asciidoctor-pdf resolves it: heading-hN family/style, then
+    /// heading's, then the base family; style defaults to bold. Null when not in the catalog.
+    /// </summary>
+    private static string? ResolveHeadingLevelFontPath(Dictionary<string, string> props, int level, string fontsDir)
+    {
+        var family = GetString(props, $"heading-h{level}.font-family") ?? GetString(props, $"heading.h{level}-font-family")
+                  ?? GetString(props, "heading.font-family") ?? GetString(props, "base.font-family");
+        if (family is null) return null;
+        var style = (GetString(props, $"heading-h{level}.font-style") ?? GetString(props, $"heading.h{level}-font-style")
+                  ?? GetString(props, "heading.font-style") ?? "bold").Replace('-', '_');
+        return ResolveFontCatalogPath(props, family, style, fontsDir)
+            ?? ResolveFontCatalogPath(props, family, "normal", fontsDir);
     }
 
     private static string? ResolveAbsoluteFontPath(string relativePath, string fontsDir)

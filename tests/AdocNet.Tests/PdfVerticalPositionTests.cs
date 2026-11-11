@@ -198,4 +198,54 @@ public class PdfVerticalPositionTests
         Assert.That(countAtFirstLine, Is.GreaterThanOrEqualTo(2),
             "Expected first-line position to repeat across pages (page break baseline reset)");
     }
+
+    // ── Embedded fonts: asciidoctor-pdf (Prawn) line metrics ───────────
+
+    private static string RepoFont(string fileName)
+    {
+        var dir = TestContext.CurrentContext.TestDirectory;
+        while (dir is not null && !File.Exists(Path.Combine(dir, "AdocNet.slnx")))
+            dir = Path.GetDirectoryName(dir);
+        return Path.Combine(dir!, "src", "AdocNet.Converters.Epub", "Resources", fileName);
+    }
+
+    [Test]
+    public void Embedded_font_places_lines_with_prawn_metrics()
+    {
+        // Noto Serif: ascender 2189, descender -600, line gap 0, 2048 units/em, kept as
+        // whole thousandths of an em like Prawn (1068, 292).
+        const float size = 10.5f, lineHeight = 12f / 10.5f;
+        float asc = 1.068f * size, desc = 0.292f * size, half = (lineHeight - 1) * size / 2;
+        float hAsc = 1.068f * 16, hDesc = 0.292f * 16;
+        var opts = new PdfRenderOptions
+        {
+            FontPath = RepoFont("notoserif-regular-latin.ttf"),
+            BoldFontPath = RepoFont("notoserif-bold-latin.ttf"),
+            HeadingFontPath = RepoFont("notoserif-bold-latin.ttf"),
+            FontSize = size, LineSpacing = lineHeight, MarginTop = 64,
+            ParagraphSpacingAfter = 12, Heading2FontSize = 16, Heading2MarginTop = 14, Heading2MarginBottom = 8,
+            ShowPageNumbers = false,
+        };
+        // Td order: heading, a paragraph wrapping to two lines, one-line paragraph, heading, paragraph.
+        // (Left-aligned last line; the wrapped first line may be justified word by word, so match the
+        // Td of the first word on each line.)
+        var twoLines = string.Join(" ", Enumerable.Repeat("word", 26));
+        var ys = ParseTdYValues(RenderToPdfText($"== First\n\n{twoLines}\n\nTwo.\n\n== Second\n\nAfter.\n", opts))
+            .Distinct().ToList();
+
+        float advance = asc + desc + 2 * half;
+        float h1 = 842 - 64 - hAsc; // heading margin-top is dropped at the page top; heading line height 1
+        float l1 = h1 - hDesc - 8 - (half + asc);
+        float two = l1 - advance - advance - 12;
+        float h2 = two - desc - half - 12 - 14 - hAsc;
+        float after = h2 - hDesc - 8 - (half + asc);
+
+        Assert.That(ys, Has.Count.EqualTo(6), string.Join(", ", ys));
+        Assert.That(ys[0], Is.EqualTo(h1).Within(0.02f), "heading at page top");
+        Assert.That(ys[1], Is.EqualTo(l1).Within(0.02f), "first body line below the heading");
+        Assert.That(ys[1] - ys[2], Is.EqualTo(advance).Within(0.02f), "body line advance");
+        Assert.That(ys[3], Is.EqualTo(two).Within(0.02f), "paragraph margin-bottom");
+        Assert.That(ys[4], Is.EqualTo(h2).Within(0.02f), "heading margin-top below content");
+        Assert.That(ys[5], Is.EqualTo(after).Within(0.02f), "heading margin-bottom");
+    }
 }

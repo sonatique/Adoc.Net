@@ -160,12 +160,22 @@ internal sealed partial class PdfWriter
             for (int i = 0; i < words.Length; i++)
             {
                 var word = words[i];
+                // A segment opening with a space (" holds" after a codespan) splits into an
+                // empty first word that already produced the separator: don't add a second.
+                bool bufferEndsWithSpace = wordBuffer.Length > 0 && wordBuffer[^1] == ' ';
                 float wordWidth = MeasureText(word, seg.Font, seg.FontSize);
-                float neededWidth = wordBuffer.Length > 0 || currentWidth > 0
+                float neededWidth = (wordBuffer.Length > 0 && !bufferEndsWithSpace) || (wordBuffer.Length == 0 && currentWidth > 0)
                     ? spaceWidth + wordWidth
                     : wordWidth;
 
-                if (currentWidth + neededWidth > maxWidth && (currentLine.Count > 0 || wordBuffer.Length > 0))
+                // Text glued to the previous segment ("LAP" + ".") is not a break opportunity:
+                // lines only break at whitespace, so it stays on the line. Legacy layout only
+                // treats closing punctuation that way (it inserts a space before other words).
+                bool glued = i == 0 && wordBuffer.Length == 0 && currentLine.Count > 0
+                    && currentLine[^1].Text.Length > 0 && currentLine[^1].Text[^1] != ' '
+                    && word.Length > 0 && (!SynthesizeSegmentSpaces || IsTightFollowingPunctuation(word[0]));
+                if (glued) neededWidth = wordWidth;
+                if (!glued && currentWidth + neededWidth > maxWidth && (currentLine.Count > 0 || wordBuffer.Length > 0))
                 {
                     // Flush word buffer as a segment on the current line
                     if (wordBuffer.Length > 0)
@@ -181,7 +191,10 @@ internal sealed partial class PdfWriter
                 }
 
                 if (wordBuffer.Length > 0)
-                    wordBuffer.Append(' ');
+                {
+                    if (!bufferEndsWithSpace)
+                        wordBuffer.Append(' ');
+                }
                 else if (currentWidth > 0 && i == 0)
                 {
                     // Add space between previous segment and this one, but only
@@ -193,7 +206,7 @@ internal sealed partial class PdfWriter
                         && currentLine[^1].Text.Length > 0
                         && currentLine[^1].Text[^1] == ' ';
                     bool startsWithTightPunct = word.Length > 0 && IsTightFollowingPunctuation(word[0]);
-                    if (!prevEndsWithSpace && !startsWithTightPunct)
+                    if (!prevEndsWithSpace && !startsWithTightPunct && !glued)
                         wordBuffer.Append(' ');
                     else
                         neededWidth = wordWidth; // No space needed, recalculate
@@ -265,6 +278,7 @@ internal sealed partial class PdfWriter
     /// </summary>
     internal float WriteWrappedSegments(List<TextSegment> segments, float leading, bool justify = true)
     {
+        justify &= JustifyText;
         // Route characters the segment fonts can't show (✓, arrows, …) onto a
         // Unicode fallback font, splitting affected segments. Downstream wrapping
         // and the per-segment embedded-font emission then handle them as usual (#52).
@@ -324,7 +338,7 @@ internal sealed partial class PdfWriter
             {
                 const float pad = 1.5f;
                 _currentStream!.Append("q\n");
-                _currentStream.Append($"{Fmt(bg.R)} {Fmt(bg.G)} {Fmt(bg.B)} rg\n");
+                _currentStream.Append($"{FmtColor(bg.R)} {FmtColor(bg.G)} {FmtColor(bg.B)} rg\n");
                 _currentStream.Append($"{Fmt(bgX - pad)} {Fmt(y - 2f)} {Fmt(adjW + pad * 2)} {Fmt(seg.FontSize + 3f)} re f\n");
                 _currentStream.Append("Q\n");
             }
@@ -364,14 +378,12 @@ internal sealed partial class PdfWriter
             if (activeColor is not null)
             {
                 var c = activeColor.Value;
-                _currentStream.Append($"{Fmt(c.R)} {Fmt(c.G)} {Fmt(c.B)} rg\n");
+                _currentStream.Append($"{FmtColor(c.R)} {FmtColor(c.G)} {FmtColor(c.B)} rg\n");
             }
             if (_embeddedFonts.TryGetValue(seg.Font, out var ttFont))
             {
                 TrackCodePoints(seg.Font, seg.Text);
-                _currentStream.Append('<');
-                _currentStream.Append(EncodeTextAsGlyphIds(seg.Text, ttFont));
-                _currentStream.Append("> Tj\n");
+                AppendGlyphShow(seg.Text, ttFont);
             }
             else
             {
@@ -382,7 +394,7 @@ internal sealed partial class PdfWriter
             if (activeColor is not null)
             {
                 if (BodyColor is { } bc)
-                    _currentStream.Append($"{Fmt(bc.R)} {Fmt(bc.G)} {Fmt(bc.B)} rg\n");
+                    _currentStream.Append($"{FmtColor(bc.R)} {FmtColor(bc.G)} {FmtColor(bc.B)} rg\n");
                 else
                     _currentStream.Append("0 0 0 rg\n");
             }

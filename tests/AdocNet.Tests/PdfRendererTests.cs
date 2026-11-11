@@ -1196,6 +1196,86 @@ public class PdfRendererTests
     }
 
     [Test]
+    public void Hard_line_breaks_start_new_lines()
+    {
+        var doc = AdocParser.Parse("Intro words +\nStation one +\nStation two\n").Document;
+        var text = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc));
+
+        var shown = Regex.Matches(text, @"([\d.]+) ([\d.]+) Td\s*(?:/\S+ [\d.]+ Tf\s*)?\(([^)]*)\) Tj")
+            .Select(m => (Y: float.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture), Text: m.Groups[3].Value))
+            .ToList();
+        var ys = shown.Where(t => t.Text is "Intro words" or "Station one" or "Station two").ToList();
+        Assert.That(ys.Select(t => t.Text).ToList(), Is.EqualTo(new[] { "Intro words", "Station one", "Station two" }),
+            string.Join(" | ", shown.Select(t => $"{t.Y}:{t.Text}")));
+        Assert.That(ys[0].Y, Is.GreaterThan(ys[1].Y));
+        Assert.That(ys[1].Y, Is.GreaterThan(ys[2].Y));
+        Assert.That(text, Does.Not.Contain("+) Tj"));
+    }
+
+    [Test]
+    public void Title_page_partitions_title_and_keeps_body_on_next_page()
+    {
+        var doc = AdocParser.Parse(
+            ":main: Alpha + \\\nBeta\n= {main}: Sub Line\nAuthor Name\nv1.0\n:title-page:\n\n<<<\n\nBody text.\n").Document;
+        var text = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc, PdfRenderOptions.A4));
+
+        Assert.That(Regex.Matches(text, "/Type /Page ").Count, Is.EqualTo(2), "title page + body page; the <<< on a fresh page is a no-op");
+        foreach (var line in new[] { "Alpha", "Beta", "Sub Line", "Author Name", "Version 1.0", "Body text." })
+            Assert.That(text, Does.Contain($"({line}) Tj"), line);
+        Assert.That(text, Does.Not.Contain("+) Tj"), "the hard break marker is not printed");
+    }
+
+    [Test]
+    public void Running_content_skips_title_and_toc_pages_and_numbers_after_title_page()
+    {
+        var doc = AdocParser.Parse(
+            "= Doc\n:title-page:\n:toc: macro\n\n<<<\ntoc::[]\n\n<<<\n== Alpha\n\nOne.\n\n<<<\n== Beta\n\nTwo.\n").Document;
+        var opts = new PdfRenderOptions { FooterText = "{page-number} of {page-count}", RunningContentStartAt = "after-toc" };
+        var text = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc, opts));
+
+        Assert.That(Regex.Matches(text, "/Type /Page ").Count, Is.EqualTo(4), "title, TOC, Alpha, Beta");
+        var footers = Regex.Matches(text, @"\((\d+) of (\d+)\s*\) Tj").Select(m => $"{m.Groups[1]} of {m.Groups[2]}").ToList();
+        Assert.That(footers, Is.EqualTo(new[] { "2 of 3", "3 of 3" }),
+            "no footer on the title or TOC page; numbering starts after the title page");
+    }
+
+    [Test]
+    public void Wrapped_segments_keep_single_space_and_glued_punctuation()
+    {
+        var w = new PdfWriter();
+        var segs = new List<TextSegment> { new("Each ", "F1", 10), new("code", "F4", 10), new(" holds", "F1", 10), new("x", "F1", 10) };
+        var line = string.Concat(w.WrapSegments(segs, 1000)[0].Select(s => s.Text));
+        Assert.That(line, Does.Contain("code holds"), "one space after a segment that opens with a space");
+
+        // "word" + "." must not split even when the period overflows the line.
+        var glued = new List<TextSegment> { new("word", "F1", 10), new(".", "F1", 10) };
+        float width = w.MeasureText("word", "F1", 10);
+        Assert.That(w.WrapSegments(glued, width + 0.1f), Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void Toc_page_numbers_follow_display_numbering_and_duplicate_titles()
+    {
+        // Two subsections share a title; each TOC entry must point at its own page.
+        var doc = AdocParser.Parse(
+            "= Doc\n:title-page:\n:toc: macro\n\n<<<\ntoc::[]\n\n<<<\n== Alpha\n\n=== Field\n\nOne.\n\n<<<\n== Beta\n\n=== Field\n\nTwo.\n").Document;
+        var text = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc, PdfRenderOptions.A4));
+
+        int tocStart = text.IndexOf("(Table of Contents) Tj", StringComparison.Ordinal);
+        int tocEnd = text.IndexOf("endstream", tocStart, StringComparison.Ordinal);
+        var numbers = Regex.Matches(text[tocStart..tocEnd], @"\((\d+)\) Tj").Select(m => m.Groups[1].Value);
+        Assert.That(numbers, Is.EqualTo(new[] { "2", "2", "3", "3" }), "Alpha, Field, Beta, Field (title page excluded)");
+    }
+
+    [Test]
+    public void No_title_page_without_attribute()
+    {
+        var doc = AdocParser.Parse("= Main: Sub\n\nBody text.\n").Document;
+        var text = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc, PdfRenderOptions.A4));
+        Assert.That(Regex.Matches(text, "/Type /Page ").Count, Is.EqualTo(1));
+    }
+
+    [Test]
     public void Page_break_starts_new_page_without_losing_content()
     {
         var doc = AdocParser.Parse("Para one\n\n<<<\n\nPara two\n\n<<<\n\nPara three\n").Document;

@@ -35,6 +35,65 @@ public class PdfThemeLoaderTests
         Assert.That(props["key"], Is.EqualTo("value"));
     }
 
+    // ── Title page ────────────────────────────────────────────────────
+
+    [Test]
+    public void Title_page_keys_map_with_default_theme_fallbacks()
+    {
+        var tp = BuildFromYaml(
+            "base:", "  font-size: 10", "  font-color: #000000",
+            "title-page:", "  text-align: left",
+            "  title:", "    font-color: #2e6b4f", "    font-size: 30", "    top: 280", "    margin-bottom: 50",
+            "  subtitle:", "    font-style: normal", "    margin-bottom: 14",
+            "  revision:", "    font-style: bold",
+            "  logo:", "    top: 130", "    align: right", "    image: image:logo.svg[pdfwidth=2.5in]").TitlePage!;
+
+        Assert.That(tp.Alignment, Is.EqualTo(PdfAlignment.Left));
+        Assert.That(tp.Title.FontSize, Is.EqualTo(30f));
+        Assert.That(tp.Title.Color, Is.EqualTo(PdfThemeLoader.ParseColor("#2e6b4f")));
+        Assert.That(tp.Title.Top, Is.EqualTo("280"));
+        Assert.That(tp.Title.MarginBottom, Is.EqualTo(50f));
+        Assert.That(tp.Title.LineHeight, Is.EqualTo(0.9f), "default theme title line height");
+        Assert.That(tp.Subtitle.Bold || tp.Subtitle.Italic, Is.False);
+        Assert.That(tp.Subtitle.LineHeight, Is.EqualTo(1f));
+        Assert.That(tp.Revision.Bold, Is.True);
+        Assert.That(tp.Authors.MarginTop, Is.EqualTo(12.5f), "default theme: base size * 1.25");
+        Assert.That(tp.LogoTop, Is.EqualTo("130"));
+        Assert.That(tp.LogoAlignment, Is.EqualTo(PdfAlignment.Right));
+        Assert.That(tp.LogoWidth, Is.EqualTo(180f).Within(0.001f));
+        Assert.That(tp.LogoImagePath, Is.Null, "missing image file resolves to null");
+    }
+
+    [TestCase("2.5in", 180f)]
+    [TestCase("180", 180f)]
+    [TestCase("10mm", 28.3465f)]
+    [TestCase("96px", 72f)]
+    public void ParseLength_converts_units_to_points(string value, float points)
+    {
+        Assert.That(PdfThemeLoader.ParseLength(value), Is.EqualTo(points).Within(0.001f));
+    }
+
+    [Test]
+    public void Heading_fonts_resolve_per_level_with_base_family_fallback()
+    {
+        var dir = TestContext.CurrentContext.TestDirectory;
+        while (dir is not null && !File.Exists(Path.Combine(dir, "AdocNet.slnx")))
+            dir = Path.GetDirectoryName(dir);
+        var fonts = Path.Combine(dir!, "src", "AdocNet.Converters.Epub", "Resources");
+        var props = PdfThemeLoader.ParseYaml([
+            "font:", "  catalog:",
+            "    Serif:", "      normal: notoserif-regular-latin.ttf", "      bold: notoserif-bold-latin.ttf",
+            "    Light:", "      normal: mplus1p-light-latin.ttf", "      bold: mplus1p-bold-latin.ttf",
+            "base:", "  font-family: Serif",
+            "heading-h2:", "  font-family: Light",
+            "heading-h3:", "  font-family: Light", "  font-style: normal"]);
+        var opts = PdfThemeLoader.BuildOptions(props, fonts);
+
+        Assert.That(Path.GetFileName(opts.Heading2FontPath), Is.EqualTo("mplus1p-bold-latin.ttf"), "bold by default");
+        Assert.That(Path.GetFileName(opts.Heading3FontPath), Is.EqualTo("mplus1p-light-latin.ttf"), "explicit normal style");
+        Assert.That(Path.GetFileName(opts.Heading4FontPath), Is.EqualTo("notoserif-bold-latin.ttf"), "base family, bold");
+    }
+
     // ── Heading sizes ─────────────────────────────────────────────────
 
     [Test]

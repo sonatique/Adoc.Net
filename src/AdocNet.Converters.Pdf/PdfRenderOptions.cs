@@ -286,4 +286,79 @@ public sealed class PdfRenderOptions : RenderOptions
         TitleFontSize = 30f, FontSize = 14f, LineSpacing = 1.5f,
         HeadingColor = new PdfColor(0f, 0f, 0.6f), SectionSpacing = 24f
     };
+
+    /// <summary>
+    /// Title page layout, used when the document sets <c>:title-page:</c> or uses the book
+    /// doctype. Null = asciidoctor-pdf default-theme layout.
+    /// </summary>
+    public PdfTitlePageOptions? TitlePage { get; init; }
+
+    /// <summary>Line height of section headings (theme <c>heading.line-height</c>). Null = 1.</summary>
+    public float? HeadingLineHeight { get; init; }
+
+    /// <summary>Line height of code blocks (theme <c>code.line-height</c>). Null = 1.25.</summary>
+    public float? CodeLineHeight { get; init; }
+
+    /// <summary>Space above section headings (theme <c>heading.margin-top</c>), skipped at the top of a page. Null = 4.8.</summary>
+    public float? HeadingMarginTop { get; init; }
+
+    /// <summary>Space below section headings (theme <c>heading.margin-bottom</c>) when no per-level value is set. Null = 10.8.</summary>
+    public float? HeadingMarginBottom { get; init; }
+
+    /// <summary>Space above H2 headings (section level 1). Null = <see cref="HeadingMarginTop"/>.</summary>
+    public float? Heading2MarginTop { get; init; }
+
+    /// <summary>Space above H3 headings (section level 2). Null = <see cref="HeadingMarginTop"/>.</summary>
+    public float? Heading3MarginTop { get; init; }
+
+    /// <summary>Space above H4 headings (section level 3). Null = <see cref="HeadingMarginTop"/>.</summary>
+    public float? Heading4MarginTop { get; init; }
+
+    /// <summary>Space above H5 headings (section level 4). Null = <see cref="HeadingMarginTop"/>.</summary>
+    public float? Heading5MarginTop { get; init; }
+
+    /// <summary>Inner padding of code blocks (theme <c>code.padding</c>, single value). Null = 11 for themed output.</summary>
+    public float? CodePadding { get; init; }
+
+    /// <summary>TOC entry line height (theme <c>toc.line-height</c>). Null = 1.4 for themed output.</summary>
+    public float? TocLineHeight { get; init; }
+
+    /// <summary>TOC indent per level in points (theme <c>toc.indent</c>). Null = 12 for themed output.</summary>
+    public float? TocIndent { get; init; }
+
+    /// <summary>TOC dot leader colour (theme <c>toc.dot-leader.font-color</c>). Null = #A9A9A9 for themed output.</summary>
+    public PdfColor? TocDotLeaderColor { get; init; }
+
+    /// <summary>Table cell line height (theme <c>table.line-height</c>). Null = <see cref="LineSpacing"/>.</summary>
+    public float? TableLineHeight { get; init; }
+
+    /// <summary>Table cell padding [top, right, bottom, left] (theme <c>table.cell-padding</c>). Null = 3 on every side for themed output.</summary>
+    public float[]? TableCellPadding { get; init; }
+
+    /// <summary>Width of table grid and frame lines (theme <c>table.grid-width</c> / <c>border-width</c>). Null = 0.5 for themed output.</summary>
+    public float? TableGridWidth { get; init; }
+
+    /// <summary>Width of the rule under a table header row (theme <c>table.head.border-bottom-width</c>). Null = 1.25 for themed output.</summary>
+    public float? TableHeadBorderBottomWidth { get; init; }
+
+    /// <summary>
+    /// Justify wrapped paragraphs and table cells (theme <c>base.text-align</c>: <c>justify</c>).
+    /// Null = justify (the default theme's alignment).
+    /// </summary>
+    public bool? JustifyText { get; init; }
+
+    /// <summary>List item text indent (theme <c>list.indent</c>). Null = 18 for themed output.</summary>
+    public float? ListIndent { get; init; }
+
+    /// <summary>TrueType font for H2 headings (section level 1). Null = <see cref="HeadingFontPath"/>.</summary>
+    public string? Heading2FontPath { get; init; }
+
+    /// <summary>TrueType font for H3 headings (section level 2). Null = <see cref="HeadingFontPath"/>.</summary>
+    public string? Heading3FontPath { get; init; }
+
+    /// <summary>TrueType font for H4 headings (section level 3). Null = <see cref="HeadingFontPath"/>.</summary>
+    public string? Heading4FontPath { get; init; }
+
+    /// <summary>TrueType font for H5 headings (section level 4). Null = <see cref="HeadingFontPath"/>.</summary>
+    public string? Heading5FontPath { get; init; }
 }

@@ -1,0 +1,137 @@
+# Made-up theme for PDF parity measurement (tools/pdf-parity.py).
+# Mirrors the key set of a typical corporate manual theme: title page with
+# background and logo, running content after the TOC, header/footer with the
+# section title and "page of pages", coloured headings and table head, and a
+# custom font catalog. Fonts are the repo's bundled EPUB fonts, so both
+# renderers load the same files (pass --pdf-fontsdir to them).
+extends: default
+font:
+  catalog:
+    merge: true
+    Parity Serif:
+      normal: notoserif-regular-latin.ttf
+      italic: notoserif-italic-latin.ttf
+      bold: notoserif-bold-latin.ttf
+      bold_italic: notoserif-bolditalic-latin.ttf
+    Parity Light:
+      normal: mplus1p-light-latin.ttf
+      italic: mplus1p-light-latin.ttf
+      bold: mplus1p-bold-latin.ttf
+      bold_italic: mplus1p-bold-latin.ttf
+    Parity Mono:
+      normal: mplus1mn-regular-ascii-conums.ttf
+      italic: mplus1mn-italic-ascii.ttf
+      bold: mplus1mn-bold-ascii.ttf
+      bold_italic: mplus1mn-bolditalic-ascii.ttf
+base:
+  text-align: left
+  font-family: Parity Serif
+  font-color: #000000
+  font-size: 10.5
+title-page:
+  text-align: left
+  font-style: normal
+  title:
+    font-family: Parity Light
+    font-color: #2e6b4f
+    font-size: 34
+    font-style: normal
+    top: 280
+    margin-bottom: 50
+  subtitle:
+    font-family: Parity Serif
+    font-color: #000000
+    font-size: 10.5
+    font-style: normal
+    margin-top: 0
+    margin-bottom: 14
+  authors:
+    font-size: 10.5
+    font-style: normal
+    margin-top: 0
+    margin-bottom: 4
+  revision:
+    font-size: 10.5
+    font-style: bold
+    margin-top: 0
+    margin-bottom: 0
+  background-image: image:media/cover-bg.svg[]
+  logo:
+    top: 130
+    align: right
+    image: image:media/logo.svg[pdfwidth=2.5in]
+heading-h1:
+  font-family: Parity Light
+  font-color: #2e6b4f
+  font-size: 34
+  text-align: left
+  margin-bottom: 0
+  line-height: 1
+heading-h2:
+  font-family: Parity Light
+  font-color: #2e6b4f
+  font-size: 16
+  margin-top: 14
+  margin-bottom: 8
+heading-h3:
+  font-family: Parity Light
+  font-size: 13
+  margin-bottom: 4
+heading-h4:
+  font-color: #2e6b4f
+  font-size: 10.5
+  margin-bottom: 4
+code:
+  font-family: Parity Mono
+  font-color: #000000
+  font-size: 9
+codespan:
+  font-family: Parity Mono
+  font-color: #000000
+  font-size: 9
+running-content:
+  start-at: after-toc
+page:
+  margin: [64, 48, 68, 48]
+header:
+  height: 64
+  border-width: 0
+  recto:
+    right:
+      content: '{header-title}'
+      font-color: #909090
+      font-size: 10.5
+  verso:
+    right:
+      content: $header-recto-right-content
+      font-color: #909090
+      font-size: 10.5
+footer:
+  height: 48
+  border-width: 0
+  background-image: image:media/footer-mark.svg[fit=none,pdfwidth=64,position=top left]
+  recto:
+    left:
+      content: ''
+    right:
+      content: '{section-title} | {page-number} of {page-count}'
+      font-color: #909090
+      font-size: 10.5
+  verso:
+    left:
+      content: ''
+    right:
+      content: '{section-title} | {page-number} of {page-count}'
+      font-color: #909090
+      font-size: 10.5
+table:
+  border-color: #3a8a66
+  border-width: 1
+  cell-padding: [1, 4]
+  line-height: 1
+  grid-color: #3a8a66
+  grid-width: 1
+  head:
+    background-color: #3a8a66
+    font-color: #FFFFFF
+    font-style: bold
