@@ -52,6 +52,49 @@ public sealed class AvaloniaRenderTheme
         level >= 1 && level <= HeadingFontSizes.Count ? HeadingFontSizes[level - 1] : FallbackHeadingFontSize;
 
     /// <summary>
+    /// Font family for body text. Null (the default) inherits the host's font.
+    /// </summary>
+    public FontFamily? BodyFont { get; set; }
+
+    /// <summary>
+    /// Foreground brush for body text. Null (the default) inherits the host's foreground.
+    /// Links, code labels, admonition labels and description terms keep their own brushes.
+    /// </summary>
+    public IBrush? BodyForeground { get; set; }
+
+    /// <summary>
+    /// Font family for the document title and section headings. Null (the default)
+    /// uses the body font.
+    /// </summary>
+    public FontFamily? HeadingFont { get; set; }
+
+    /// <summary>
+    /// Foreground brushes for heading levels 1..N (index 0 = level 1); a null entry,
+    /// or a level beyond the list, falls back to <see cref="FallbackHeadingForeground"/>.
+    /// Empty by default.
+    /// </summary>
+    public IReadOnlyList<IBrush?> HeadingForegrounds { get; set; } = Array.Empty<IBrush?>();
+
+    /// <summary>
+    /// Foreground brush for the document title and for heading levels not covered by
+    /// <see cref="HeadingForegrounds"/>. Null (the default) uses the body foreground.
+    /// </summary>
+    public IBrush? FallbackHeadingForeground { get; set; }
+
+    /// <summary>
+    /// Returns the foreground brush for the given 1-based heading level (0 = document
+    /// title), or null to use the body foreground.
+    /// </summary>
+    public IBrush? HeadingForeground(int level) =>
+        (level >= 1 && level <= HeadingForegrounds.Count ? HeadingForegrounds[level - 1] : null)
+        ?? FallbackHeadingForeground;
+
+    /// <summary>
+    /// Foreground brush for table header cells. Null (the default) uses the body foreground.
+    /// </summary>
+    public IBrush? TableHeaderForeground { get; set; }
+
+    /// <summary>
     /// Reference body font size used to size superscript/subscript runs (including
     /// footnote markers). Body text itself inherits its size from the host container
     /// (so the host stays in control); set this to match when the host uses a

@@ -75,20 +75,11 @@ public class AvaloniaRenderer
         var panel = new StackPanel { Margin = new Thickness(16) };
 
         if (!string.IsNullOrEmpty(document.Title))
-        {
-            panel.Children.Add(new TextBlock
-            {
-                Text = document.Title,
-                FontSize = Theme.DocumentTitleFontSize,
-                FontWeight = FontWeight.Bold,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 12),
-            });
-        }
+            panel.Children.Add(CreateTitleBlock(document.Title!));
 
         foreach (var block in document.Children)
         {
-            var control = RenderBlock(block);
+            var control = Render(block);
             if (control != null)
             {
                 panel.Children.Add(control);
@@ -111,7 +102,44 @@ public class AvaloniaRenderer
     /// individual top-level blocks without re-rendering the whole document.
     /// Returns null when the block kind is not recognised.
     /// </summary>
-    public Control? Render(BlockLayout block) => RenderBlock(block);
+    public Control? Render(BlockLayout block) => ApplyBodyStyle(RenderBlock(block));
+
+    /// <summary>
+    /// Builds the document-title block (shared by the full, paged and incremental renderers).
+    /// </summary>
+    internal TextBlock CreateTitleBlock(string title)
+    {
+        var textBlock = new TextBlock
+        {
+            Text = title,
+            FontSize = Theme.DocumentTitleFontSize,
+            FontWeight = FontWeight.Bold,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 12),
+        };
+        ApplyBodyStyle(textBlock);
+        ApplyHeadingStyle(textBlock, 0);
+        return textBlock;
+    }
+
+    // Set on each top-level block (not the page/panel) so blocks measured before
+    // they join the visual tree (paged rendering) already carry the body style.
+    private Control? ApplyBodyStyle(Control? control)
+    {
+        if (control is null) return null;
+        // A block that sets its own value (a heading is its own root) keeps it.
+        if (Theme.BodyFont is { } font && !control.IsSet(TextElement.FontFamilyProperty))
+            TextElement.SetFontFamily(control, font);
+        if (Theme.BodyForeground is { } fg && !control.IsSet(TextElement.ForegroundProperty))
+            TextElement.SetForeground(control, fg);
+        return control;
+    }
+
+    private void ApplyHeadingStyle(TextBlock textBlock, int level)
+    {
+        if (Theme.HeadingFont is { } font) textBlock.FontFamily = font;
+        if (Theme.HeadingForeground(level) is { } fg) textBlock.Foreground = fg;
+    }
 
     /// <summary>
     /// Dispatches a block layout to its renderer. Override to render custom
@@ -165,6 +193,7 @@ public class AvaloniaRenderer
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 12, 0, 4),
         };
+        ApplyHeadingStyle(textBlock, heading.Level);
         AddInlines(textBlock.Inlines!, heading.Inlines);
         return textBlock;
     }
@@ -428,6 +457,8 @@ public class AvaloniaRenderer
             TextWrapping = TextWrapping.Wrap,
             FontWeight = cell.IsHeader ? FontWeight.Bold : FontWeight.Normal,
         };
+        if (cell.IsHeader && Theme.TableHeaderForeground is { } headerFg)
+            textBlock.Foreground = headerFg;
         AddInlines(textBlock.Inlines!, cell.Inlines);
 
         return new Border
