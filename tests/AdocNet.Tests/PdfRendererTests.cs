@@ -1223,6 +1223,20 @@ public class PdfRendererTests
     }
 
     [Test]
+    public void Toc_page_numbers_follow_display_numbering_and_duplicate_titles()
+    {
+        // Two subsections share a title; each TOC entry must point at its own page.
+        var doc = AdocParser.Parse(
+            "= Doc\n:title-page:\n:toc: macro\n\n<<<\ntoc::[]\n\n<<<\n== Alpha\n\n=== Field\n\nOne.\n\n<<<\n== Beta\n\n=== Field\n\nTwo.\n").Document;
+        var text = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc, PdfRenderOptions.A4));
+
+        int tocStart = text.IndexOf("(Table of Contents) Tj", StringComparison.Ordinal);
+        int tocEnd = text.IndexOf("endstream", tocStart, StringComparison.Ordinal);
+        var numbers = Regex.Matches(text[tocStart..tocEnd], @"\((\d+)\) Tj").Select(m => m.Groups[1].Value);
+        Assert.That(numbers, Is.EqualTo(new[] { "2", "2", "3", "3" }), "Alpha, Field, Beta, Field (title page excluded)");
+    }
+
+    [Test]
     public void No_title_page_without_attribute()
     {
         var doc = AdocParser.Parse("= Main: Sub\n\nBody text.\n").Document;

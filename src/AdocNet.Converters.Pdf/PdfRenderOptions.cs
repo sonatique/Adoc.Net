@@ -319,4 +319,13 @@ public sealed class PdfRenderOptions : RenderOptions
 
     /// <summary>Inner padding of code blocks (theme <c>code.padding</c>, single value). Null = 11 for themed output.</summary>
     public float? CodePadding { get; init; }
+
+    /// <summary>TOC entry line height (theme <c>toc.line-height</c>). Null = 1.4 for themed output.</summary>
+    public float? TocLineHeight { get; init; }
+
+    /// <summary>TOC indent per level in points (theme <c>toc.indent</c>). Null = 12 for themed output.</summary>
+    public float? TocIndent { get; init; }
+
+    /// <summary>TOC dot leader colour (theme <c>toc.dot-leader.font-color</c>). Null = #A9A9A9 for themed output.</summary>
+    public PdfColor? TocDotLeaderColor { get; init; }
 }

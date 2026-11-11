@@ -505,13 +505,24 @@ public sealed partial class PdfRenderer : DocumentRendererBase
     {
         // TOC title
         w.EnsurePage();
-        if (_headingColor is { } hc) w.SetFillColor(hc.R, hc.G, hc.B);
-        w.WriteWrappedText("Table of Contents", _fontHeading, _h2FontSize, _headingLeading);
-        if (_headingColor is not null) RestoreBodyFill(w);
-        // Asciidoctor-pdf uses tighter spacing here than after a body paragraph:
-        // ref baseline-to-baseline (TOC heading→first entry) ≈ 30.5pt.
-        // With heading_leading 22pt + this MoveCursor, total ≈ 30.5 ⇒ 8.5pt move.
-        w.MoveCursor(_paragraphSpacingAfter / 2f);
+        if (_prawnMetrics)
+        {
+            // Styled and placed like a level-1 section title (asciidoctor-pdf toc title = h2).
+            if ((_h2Color ?? _headingColor) is { } tc) w.SetFillColor(tc.R, tc.G, tc.B);
+            WritePrawnHeading(w, new List<TextSegment> { new("Table of Contents", _fontHeading, _h2FontSize) },
+                _h2FontSize, 1, () => { });
+            RestoreBodyFill(w);
+        }
+        else
+        {
+            if (_headingColor is { } hc) w.SetFillColor(hc.R, hc.G, hc.B);
+            w.WriteWrappedText("Table of Contents", _fontHeading, _h2FontSize, _headingLeading);
+            if (_headingColor is not null) RestoreBodyFill(w);
+            // Asciidoctor-pdf uses tighter spacing here than after a body paragraph:
+            // ref baseline-to-baseline (TOC heading→first entry) ≈ 30.5pt.
+            // With heading_leading 22pt + this MoveCursor, total ≈ 30.5 ⇒ 8.5pt move.
+            w.MoveCursor(_paragraphSpacingAfter / 2f);
+        }
 
         // Asciidoctor-pdf renders TOC entries in body text color (not link
         // blue). Suppress link coloring for the TOC and restore afterwards.
@@ -520,12 +531,26 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         var savedLinkColor = w.LinkColor;
         w.LinkColor = null;
         RestoreBodyFill(w);
+        if (_prawnMetrics)
+        {
+            // Entries use the TOC line height (default theme 1.4) from the title's bottom.
+            var toc1 = MetricsFor(w, _fontRegular, _bodyFontSize, _tocLineHeight);
+            w.SetCursor(NextBlockTop(w) - toc1.FirstOffset);
+        }
         RenderTocEntries(w, toc.Entries, 0, parentNumber: "");
         w.LinkColor = savedLinkColor;
-        // Trailing space matches asciidoctor-pdf TOC→first-section gap (~19pt).
-        // Combined with RenderSection's _sectionSpacing prefix, this lands near
-        // the REF measurement.
-        w.MoveCursor(_paragraphSpacingAfter);
+        if (_prawnMetrics)
+        {
+            var toc1 = MetricsFor(w, _fontRegular, _bodyFontSize, _tocLineHeight);
+            SetNextBlockTop(w, w.CursorY + toc1.Advance - toc1.Bottom - _paragraphSpacingAfter);
+        }
+        else
+        {
+            // Trailing space matches asciidoctor-pdf TOC→first-section gap (~19pt).
+            // Combined with RenderSection's _sectionSpacing prefix, this lands near
+            // the REF measurement.
+            w.MoveCursor(_paragraphSpacingAfter);
+        }
     }
 
     private void RenderTocEntries(PdfWriter w, IReadOnlyList<TocEntry> entries, int depth, string parentNumber)
@@ -533,7 +558,9 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         // Asciidoctor-pdf TOC line spacing measured at ~18.5pt baseline-to-baseline
         // for 10.5pt body (factor ~1.76). Theme says toc.line-height: 1.4 but the
         // observed visual leading is wider; matches REF measurement.
-        float tocLeading = _bodyFontSize * 1.76f;
+        float tocLeading = _prawnMetrics
+            ? MetricsFor(w, _fontRegular, _bodyFontSize, _tocLineHeight).Advance
+            : _bodyFontSize * 1.76f;
 
         int counter = 0;
         foreach (var entry in entries)
@@ -549,7 +576,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
             w.EnsurePage();
 
-            float indent = depth * ListIndent;
+            float indent = depth * (_prawnMetrics ? _tocIndent : ListIndent);
             float savedIndent = w.PushIndent(indent);
 
             // Asciidoctor-pdf renders TOC entries in regular weight at the body
@@ -565,7 +592,8 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             var displayTitle = numberPrefix + entry.Title;
             if (page is int pageNum)
             {
-                var pageText = pageNum.ToString();
+                // Displayed numbers count from the page after the title page, like the footer.
+                var pageText = (pageNum - w.PageNumberOffset).ToString(System.Globalization.CultureInfo.InvariantCulture);
                 float titleWidth = w.MeasureText(displayTitle, font, fontSize);
                 float pageWidth = w.MeasureText(pageText, _fontRegular, fontSize);
                 float spaceWidth = w.MeasureText(" ", _fontRegular, fontSize);
@@ -609,7 +637,10 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                     // Dot leader ending just before the page number (so the dots lead
                     // up to it and any rounding remainder sits next to the title).
                     float gapStart = titleEnd + spaceWidth;
-                    float gapEnd = pageX - spaceWidth;
+                    // asciidoctor-pdf ends the leader at a quarter-size no-break space before the number.
+                    float gapEnd = _prawnMetrics
+                        ? pageX - w.MeasureText(" ", _fontRegular, fontSize * 0.25f)
+                        : pageX - spaceWidth;
                     if (gapEnd > gapStart && unitWidth > 0)
                     {
                         int dots = (int)((gapEnd - gapStart) / unitWidth);
@@ -617,7 +648,9 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                         {
                             var leader = string.Concat(System.Linq.Enumerable.Repeat(". ", dots));
                             float leaderWidth = w.MeasureText(leader, _fontRegular, fontSize);
+                            if (_prawnMetrics) w.SetFillColor(_tocDotLeaderColor.R, _tocDotLeaderColor.G, _tocDotLeaderColor.B);
                             w.WriteText(leader, _fontRegular, fontSize, gapEnd - leaderWidth, y);
+                            if (_prawnMetrics) RestoreBodyFill(w);
                         }
                     }
 

@@ -435,6 +435,14 @@ public class BlockParserTests
     }
 
     [Test]
+    public void Duplicate_section_titles_get_unique_generated_ids()
+    {
+        var doc = BlockParser.Parse("== A\n\n=== Field\n\n== B\n\n=== Field\n\n=== Field\n").Document;
+        var ids = doc.Children.OfType<SectionNode>().SelectMany(s => s.Children.OfType<SectionNode>()).Select(s => s.Id);
+        Assert.That(ids, Is.EqualTo(new[] { "_field", "_field_2", "_field_3" }));
+    }
+
+    [Test]
     public void Attribute_continuation_after_plus_keeps_hard_line_break()
     {
         var doc = BlockParser.Parse(":hard: Alpha + \\\nBeta\n:soft: Gamma \\\nDelta\n\nBody").Document;

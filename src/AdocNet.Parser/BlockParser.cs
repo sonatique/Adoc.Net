@@ -540,9 +540,13 @@ internal static class BlockParser
                         $"Duplicate anchor ID '{pendingBlockId}'",
                         new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length))));
                 }
-                else if (pendingBlockId is null)
+                else if (pendingBlockId is null && !seenIds.Add(sectionId))
                 {
-                    seenIds.Add(sectionId);
+                    // Asciidoctor dedupes generated ids: _title, _title_2, _title_3, ...
+                    var sep = document.Attributes.TryGetValue("idseparator", out var idsep) ? idsep : "_";
+                    int n = 2;
+                    while (!seenIds.Add($"{sectionId}{sep}{n}")) n++;
+                    sectionId = $"{sectionId}{sep}{n}";
                 }
                 var section = new SectionNode
                 {

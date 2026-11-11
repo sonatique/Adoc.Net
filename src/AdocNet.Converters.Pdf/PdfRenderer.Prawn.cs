@@ -16,6 +16,9 @@ public sealed partial class PdfRenderer
     private float _headingLineHeight = 1f;
     private float _codeLineHeight = 1.25f;
     private float _codePadding = 11f;
+    private float _tocLineHeight = 1.4f;
+    private float _tocIndent = 12f;
+    private PdfColor _tocDotLeaderColor = new(169 / 255f, 169 / 255f, 169 / 255f);
     private readonly float[] _headingMarginTops = new float[4];
     private readonly float[] _headingMarginBottoms = new float[4];
 
@@ -48,6 +51,9 @@ public sealed partial class PdfRenderer
         _codeLineHeight = options.CodeLineHeight ?? 1.25f;
         _codeLeading = MetricsFor(writer, _fontMono, _codeFontSize, _codeLineHeight).Advance;
         _codePadding = options.CodePadding ?? 11f;
+        _tocLineHeight = options.TocLineHeight ?? 1.4f;
+        _tocIndent = options.TocIndent ?? 12f;
+        _tocDotLeaderColor = options.TocDotLeaderColor ?? new PdfColor(169 / 255f, 169 / 255f, 169 / 255f);
         _headingLineHeight = options.HeadingLineHeight ?? 1f;
 
         float defaultTop = options.HeadingMarginTop ?? 4.8f;
