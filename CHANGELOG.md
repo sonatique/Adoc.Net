@@ -5,6 +5,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.25] - 2026-11-11
+
+### Fixed
+
+- **Avalonia: live preview re-rendered everything when a second ticked over.**
+  Every parse stamps `docyear`, `docdate`, `doctime`, `docdatetime` and their
+  `local*` counterparts from the clock. `IncrementalAvaloniaRenderer` compared
+  them as header attributes, so two parses in different seconds forced a full
+  re-render instead of an incremental update. Those attributes are now ignored
+  in that check; adding or removing one still counts as a change.
+
+### Changed
+
+- **Releases publish through NuGet trusted publishing** (GitHub OIDC) instead of
+  a long-lived API key.
+
 ## [1.0.24] - 2026-11-10
 
 ### Fixed
