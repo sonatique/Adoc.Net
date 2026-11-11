@@ -328,4 +328,25 @@ public sealed class PdfRenderOptions : RenderOptions
 
     /// <summary>TOC dot leader colour (theme <c>toc.dot-leader.font-color</c>). Null = #A9A9A9 for themed output.</summary>
     public PdfColor? TocDotLeaderColor { get; init; }
+
+    /// <summary>Table cell line height (theme <c>table.line-height</c>). Null = <see cref="LineSpacing"/>.</summary>
+    public float? TableLineHeight { get; init; }
+
+    /// <summary>Table cell padding [top, right, bottom, left] (theme <c>table.cell-padding</c>). Null = 3 on every side for themed output.</summary>
+    public float[]? TableCellPadding { get; init; }
+
+    /// <summary>Width of table grid and frame lines (theme <c>table.grid-width</c> / <c>border-width</c>). Null = 0.5 for themed output.</summary>
+    public float? TableGridWidth { get; init; }
+
+    /// <summary>Width of the rule under a table header row (theme <c>table.head.border-bottom-width</c>). Null = 1.25 for themed output.</summary>
+    public float? TableHeadBorderBottomWidth { get; init; }
+
+    /// <summary>
+    /// Justify wrapped paragraphs and table cells (theme <c>base.text-align</c>: <c>justify</c>).
+    /// Null = justify (the default theme's alignment).
+    /// </summary>
+    public bool? JustifyText { get; init; }
+
+    /// <summary>List item text indent (theme <c>list.indent</c>). Null = 18 for themed output.</summary>
+    public float? ListIndent { get; init; }
 }

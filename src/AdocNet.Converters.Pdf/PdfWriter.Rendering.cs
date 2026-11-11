@@ -26,6 +26,18 @@ internal sealed partial class PdfWriter
         {
             int remaining = text.Length - pos;
             int lineLen = Math.Min(remaining, charsPerLine);
+            int skip = 0;
+            // Themed output wraps code like Prawn: at the last space that fits (the space is
+            // dropped), falling back to a hard break inside a token longer than the line.
+            if (VerbatimWrapAtSpaces && lineLen < remaining)
+            {
+                int space = text.LastIndexOf(' ', pos + lineLen, lineLen + 1);
+                if (space > pos)
+                {
+                    lineLen = space - pos;
+                    skip = 1;
+                }
+            }
             string line = text.Substring(pos, lineLen);
 
             EnsurePage();
@@ -34,7 +46,7 @@ internal sealed partial class PdfWriter
             WriteText(line, font, fontSize, MarginLeftValue, _cursorY);
             _cursorY -= leading;
             consumed += leading;
-            pos += lineLen;
+            pos += lineLen + skip;
         }
         return consumed;
     }

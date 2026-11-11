@@ -109,6 +109,12 @@ internal sealed partial class PdfWriter
     /// area instead of climbing into the top margin (matches Asciidoctor PDF behavior).</summary>
     internal float BodyLeading { get; set; }
 
+    /// <summary>Wrap long code lines at spaces (Prawn) instead of at the character limit.</summary>
+    internal bool VerbatimWrapAtSpaces { get; set; }
+
+    /// <summary>Justify wrapped body text and table cells (theme base.text-align: justify).</summary>
+    internal bool JustifyText { get; set; } = true;
+
     /// <summary>
     /// Distance from the content top to the first body baseline. Null = <see cref="BodyLeading"/>
     /// (legacy). Set from font metrics (Prawn's half leading + line gap + ascender) for embedded fonts.
@@ -133,10 +139,14 @@ internal sealed partial class PdfWriter
     /// the page, or the section that carried over from the previous page).</summary>
     internal void SetSectionTitleForPage(string title)
     {
+        _latestSectionTitle = title;
         if (_sectionTitleSetThisPage) return;
         CurrentSectionTitle = title;
         _sectionTitleSetThisPage = true;
     }
+
+    // Last section started so far: a page with no section of its own shows it (asciidoctor-pdf).
+    private string? _latestSectionTitle;
     internal string? DocumentTitle { get; set; }
     /// <summary>Optional override for {header-title} template token. Falls back to DocumentTitle.</summary>
     internal string? HeaderTitle { get; set; }
@@ -163,8 +173,9 @@ internal sealed partial class PdfWriter
     private float? PrawnRunningBaseline(bool header, float fontSize)
     {
         if (FirstLineOffset is null || GetEmbeddedFont(ResolveFontKey("F1")) is not { } f) return null;
-        float em = f.UnitsPerEm;
-        float asc = f.Ascender / em * fontSize, desc = Math.Abs(f.Descender) / em * fontSize, gap = f.LineGap / em * fontSize;
+        // Whole 1/1000 em, truncated, as Prawn keeps them.
+        float Milli(int units) => (int)(units * 1000.0 / f.UnitsPerEm) / 1000f * fontSize;
+        float asc = Milli(f.Ascender), desc = Math.Abs(Milli(f.Descender)), gap = Milli(f.LineGap);
         if (header)
             return HeaderHeight > 0 ? _pageHeight - ((HeaderHeight - (asc + desc + gap)) / 2 + gap + asc) : null;
         return FooterHeight > 0 ? FooterHeight - 6f - gap - asc : null;
@@ -377,7 +388,10 @@ internal sealed partial class PdfWriter
     private float _contentLeftIndent;
 
     /// <summary>Effective content width accounting for indent.</summary>
-    internal float ContentWidth => _contentWidth - _contentLeftIndent;
+    internal float ContentWidth => _contentWidth - _contentLeftIndent - ContentRightIndent;
+
+    /// <summary>Right inset of the content area (admonition padding); running content ignores it.</summary>
+    internal float ContentRightIndent { get; set; }
 
     internal float CursorY => _cursorY;
     internal float PageHeight => _pageHeight;
@@ -514,6 +528,8 @@ internal sealed partial class PdfWriter
         // Allow the next section on this page to set the {section-title} for footer/header.
         // CurrentSectionTitle carries over from the previous page until then.
         _sectionTitleSetThisPage = false;
+        if (_latestSectionTitle is not null)
+            CurrentSectionTitle = _latestSectionTitle;
     }
 
     /// <summary>

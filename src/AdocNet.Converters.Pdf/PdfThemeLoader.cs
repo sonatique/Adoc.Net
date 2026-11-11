@@ -277,6 +277,14 @@ public static class PdfThemeLoader
             CodeLineHeight = GetFloat(props, "code.line-height"),
             CodePadding = GetFloat(props, "code.padding"),
             TocLineHeight = GetFloat(props, "toc.line-height"),
+            ListIndent = GetFloat(props, "list.indent"),
+            JustifyText = GetString(props, "base.text-align") is { } textAlign
+                ? textAlign.Trim().Equals("justify", StringComparison.OrdinalIgnoreCase)
+                : null,
+            TableLineHeight = GetFloat(props, "table.line-height"),
+            TableCellPadding = ParseBox(GetString(props, "table.cell-padding")),
+            TableGridWidth = GetFloat(props, "table.grid-width") ?? GetFloat(props, "table.border-width"),
+            TableHeadBorderBottomWidth = GetFloat(props, "table.head.border-bottom-width"),
             TocIndent = GetFloat(props, "toc.indent"),
             TocDotLeaderColor = ParseColor(GetString(props, "toc.dot-leader.font-color")),
             HeadingMarginTop = GetFloat(props, "heading.margin-top"),
@@ -289,6 +297,30 @@ public static class PdfThemeLoader
         };
 
         return options;
+    }
+
+    /// <summary>
+    /// Parses a CSS-like box value: <c>3</c>, <c>[1, 4]</c>, <c>[1, 4, 2]</c> or <c>[1, 2, 3, 4]</c>
+    /// into [top, right, bottom, left]. Null when absent or unparsable.
+    /// </summary>
+    internal static float[]? ParseBox(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var parts = value!.Trim().TrimStart('[').TrimEnd(']').Split(',');
+        var n = new List<float>();
+        foreach (var part in parts)
+        {
+            if (ParseLength(part) is not { } v) return null;
+            n.Add(v);
+        }
+        return n.Count switch
+        {
+            1 => new[] { n[0], n[0], n[0], n[0] },
+            2 => new[] { n[0], n[1], n[0], n[1] },
+            3 => new[] { n[0], n[1], n[2], n[1] },
+            4 => n.ToArray(),
+            _ => null,
+        };
     }
 
     /// <summary>Theme <c>page.size</c>: A4 (default), Letter, Legal, or <c>[width, height]</c> lengths.</summary>

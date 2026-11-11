@@ -212,10 +212,11 @@ public class PdfVerticalPositionTests
     [Test]
     public void Embedded_font_places_lines_with_prawn_metrics()
     {
-        // Noto Serif: ascender 2189, descender -600, line gap 0, 2048 units/em.
+        // Noto Serif: ascender 2189, descender -600, line gap 0, 2048 units/em, kept as
+        // whole thousandths of an em like Prawn (1068, 292).
         const float size = 10.5f, lineHeight = 12f / 10.5f;
-        float asc = 2189f / 2048 * size, desc = 600f / 2048 * size, half = (lineHeight - 1) * size / 2;
-        float hAsc = 2189f / 2048 * 16, hDesc = 600f / 2048 * 16;
+        float asc = 1.068f * size, desc = 0.292f * size, half = (lineHeight - 1) * size / 2;
+        float hAsc = 1.068f * 16, hDesc = 0.292f * 16;
         var opts = new PdfRenderOptions
         {
             FontPath = RepoFont("notoserif-regular-latin.ttf"),

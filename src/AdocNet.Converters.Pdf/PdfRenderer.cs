@@ -288,6 +288,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
         // Typography options
         writer.HyphenationEnabled = pdfOptions.EnableHyphenation;
+        writer.JustifyText = pdfOptions.JustifyText ?? true;
         _paragraphSpacingBefore = pdfOptions.ParagraphSpacingBefore;
         _paragraphSpacingAfter = pdfOptions.ParagraphSpacingAfter;
         float defaultHeadingMarginBottom = _paragraphSpacingAfter / 2;
@@ -817,7 +818,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         void RegisterHeading()
         {
             w.AddOutlineEntry(outlineTitle, section.Level, section.Id);
-            if (_prawnMetrics || section.Level == 1)
+            if (_prawnMetrics ? section.Level <= 2 : section.Level == 1)
                 w.SetSectionTitleForPage(outlineTitle);
         }
         // The themed path registers after its keep-with-next page break so the outline,
@@ -913,12 +914,28 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 }
 
                 var segments = BuildInlineSegments(item.Inlines, item.Text, _fontRegular, _bodyFontSize, footnotes);
-                if (segments.Count > 0)
+                if (_prawnMetrics)
                 {
-                    segments.Insert(0, new TextSegment(prefix, _fontRegular, _bodyFontSize));
+                    // asciidoctor-pdf: item text indented by list.indent; the marker sits to the
+                    // left of the text, separated by the width of an "x".
+                    float itemIndent = w.PushIndent(w.MarginLeftValue - w.MarginLeftBase + _listIndent);
+                    var marker = prefix.TrimEnd();
+                    float markerX = w.MarginLeftValue - w.MeasureText(marker, _fontRegular, _bodyFontSize)
+                        - w.MeasureText("x", _fontRegular, _bodyFontSize);
+                    w.EnsurePage();
+                    w.WriteText(marker, _fontRegular, _bodyFontSize, markerX, w.CursorY);
+                    w.WriteWrappedSegments(segments, _bodyLeading);
+                    w.PopIndent(itemIndent);
                 }
+                else
+                {
+                    if (segments.Count > 0)
+                    {
+                        segments.Insert(0, new TextSegment(prefix, _fontRegular, _bodyFontSize));
+                    }
 
-                w.WriteWrappedSegments(segments, _bodyLeading);
+                    w.WriteWrappedSegments(segments, _bodyLeading);
+                }
                 // Asciidoctor-pdf adds vertical breathing room between list
                 // items (matches its block.margin_bottom = vertical_rhythm).
                 // Without this each bullet runs straight into the next.
@@ -1023,6 +1040,10 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         // language hint. Emitting the label takes a line of vertical space
         // and adds visual noise that doesn't appear in the asciidoctor PDF.
 
+        // Themed output: the code box is padded on the right too.
+        float savedRightIndent = w.ContentRightIndent;
+        if (_prawnMetrics) w.ContentRightIndent = savedRightIndent + _codePadding;
+
         // Render content: highlighted if supported, plain monospace otherwise
         if (_syntaxColors is not null && block.BlockKind == DelimitedBlockKind.Source
             && block.Language is not null
@@ -1037,6 +1058,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         }
 
         float lastCodeBaseline = w.CursorY + _codeLeading; // before End*, which steps down by the padding
+        w.ContentRightIndent = savedRightIndent;
         w.EndCodeBlockBackground();
         if (_prawnMetrics)
         {

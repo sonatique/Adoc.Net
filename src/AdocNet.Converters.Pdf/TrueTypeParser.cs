@@ -44,13 +44,15 @@ internal sealed class TrueTypeFont
     /// </summary>
     public float MeasureText(string text, float fontSize)
     {
-        float totalWidth = 0;
+        // Widths in whole 1/1000 em, truncated: exactly what the embedded font's /W array
+        // tells the viewer (PdfFontEmbedder) and what Prawn measures with.
+        int total = 0;
         foreach (var ch in text)
         {
             var gid = GetGlyphId(ch);
-            totalWidth += GetGlyphWidth(gid) * fontSize / UnitsPerEm;
+            total += (int)(GetGlyphWidth(gid) * 1000.0 / UnitsPerEm);
         }
-        return totalWidth;
+        return total * fontSize / 1000f;
     }
 
     /// <summary>

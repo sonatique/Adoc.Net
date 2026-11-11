@@ -1223,6 +1223,20 @@ public class PdfRendererTests
     }
 
     [Test]
+    public void Wrapped_segments_keep_single_space_and_glued_punctuation()
+    {
+        var w = new PdfWriter();
+        var segs = new List<TextSegment> { new("Each ", "F1", 10), new("code", "F4", 10), new(" holds", "F1", 10), new("x", "F1", 10) };
+        var line = string.Concat(w.WrapSegments(segs, 1000)[0].Select(s => s.Text));
+        Assert.That(line, Does.Contain("code holds"), "one space after a segment that opens with a space");
+
+        // "word" + "." must not split even when the period overflows the line.
+        var glued = new List<TextSegment> { new("word", "F1", 10), new(".", "F1", 10) };
+        float width = w.MeasureText("word", "F1", 10);
+        Assert.That(w.WrapSegments(glued, width + 0.1f), Has.Count.EqualTo(1));
+    }
+
+    [Test]
     public void Toc_page_numbers_follow_display_numbering_and_duplicate_titles()
     {
         // Two subsections share a title; each TOC entry must point at its own page.

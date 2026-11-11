@@ -4680,6 +4680,8 @@ internal static class BlockParser
         }
 
         int width = 1;
+        // "20%" is a percentage width; Asciidoctor uses the number as the column's weight.
+        if (widthStr.EndsWith("%")) widthStr = widthStr[..^1];
         if (widthStr.Length > 0 && int.TryParse(widthStr, out int parsed) && parsed > 0)
             width = parsed;
 

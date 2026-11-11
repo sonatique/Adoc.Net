@@ -42,7 +42,7 @@ public sealed partial class PdfRenderer
 
         // Build column widths array (proportional)
         float[] colWidths = new float[colCount];
-        float cellPadding = 4f;
+        float cellPadding = _prawnMetrics ? _tableCellPadding[3] : 4f;
 
         // Lay cells out on a grid, tracking rowspan occupancy so each cell knows
         // the column it truly starts in (rows beneath a rowspan shift right past
@@ -186,11 +186,20 @@ public sealed partial class PdfRenderer
 
             // A body row is the table's first row only when there is no header.
             bool firstRow = startRow == 0 && i == 0;
+            // Themed output repeats the header after a page break inside the row renderer
+            // (prawn-table repeats header rows by default).
+            _repeatHeaderAfterBreak = _prawnMetrics && table.HasHeader && grid.Count > 0
+                ? () => RenderTableHeader(w, grid[0], colWidths, cellPadding, effFontSize, table.Columns, gridOpts, isLastRow: false)
+                : null;
             RenderTableRow(w, grid[i], colWidths, cellPadding, _fontRegular, effFontSize, table.Columns,
                 gridOpts, isFirstRow: firstRow, isLastRow: i == grid.Count - 1);
+            _repeatHeaderAfterBreak = null;
         }
 
-        w.MoveCursor(_paragraphSpacingAfter);
+        if (_prawnMetrics)
+            SetNextBlockTop(w, NextBlockTop(w) - _paragraphSpacingAfter);
+        else
+            w.MoveCursor(_paragraphSpacingAfter);
     }
 
     /// <summary>
@@ -517,8 +526,8 @@ public sealed partial class PdfRenderer
         var headerFontSize = fontSize;
         float rowHeight = MeasureRowHeight(w, headerRow, colWidths, cellPadding, headerFont, headerFontSize);
 
-        // Draw header background if configured
-        if (_tableHeaderBackground is { } bg)
+        // Draw header background if configured (themed output fills the row rect in RenderTableRow)
+        if (_tableHeaderBackground is { } bg && !_prawnMetrics)
         {
             w.SetFillColor(bg.R, bg.G, bg.B);
             w.DrawRect(w.MarginLeftValue, w.CursorY - rowHeight + headerFontSize * 0.75f,
@@ -535,7 +544,8 @@ public sealed partial class PdfRenderer
         // rule beneath it, drawn as the next row's top rule) are emitted by
         // RenderTableRow / DrawRowBorders, so no separate underline is needed (#59).
         RenderTableRow(w, headerRow, colWidths, cellPadding, headerFont, headerFontSize, columns,
-            gridOpts, isFirstRow: true, isLastRow: isLastRow);
+            gridOpts, isFirstRow: true, isLastRow: isLastRow, isHeaderRow: true,
+            headerBackground: _tableHeaderBackground, headerTextColor: headerFontColor);
 
         if (headerFontColor is not null) w.SetFillColor(0, 0, 0);
     }
@@ -550,7 +560,7 @@ public sealed partial class PdfRenderer
             for (int s = 0; s < p.ColSpan && p.Col + s < colWidths.Length; s++)
                 cellWidth += colWidths[p.Col + s];
             string text = p.Text;
-            var lines = w.WrapText(text, font, fontSize, cellWidth - 2 * cellPadding);
+            var lines = w.WrapText(text, font, fontSize, cellWidth - 2 * cellPadding + CellWrapTolerance);
             if (lines.Count > maxLines) maxLines = lines.Count;
         }
         return maxLines * _bodyLeading;
@@ -558,8 +568,16 @@ public sealed partial class PdfRenderer
 
     private void RenderTableRow(PdfWriter w, List<PlacedCell> placed, float[] colWidths,
         float cellPadding, string font, float fontSize, IReadOnlyList<TableColumnSpec>? columns,
-        TableGrid gridOpts, bool isFirstRow, bool isLastRow)
+        TableGrid gridOpts, bool isFirstRow, bool isLastRow, bool isHeaderRow = false,
+        PdfColor? headerBackground = null, PdfColor? headerTextColor = null)
     {
+        if (_prawnMetrics)
+        {
+            RenderPrawnTableRow(w, placed, colWidths, cellPadding, font, fontSize, columns, gridOpts,
+                isFirstRow, isLastRow, isHeaderRow, headerBackground, headerTextColor);
+            return;
+        }
+
         // First pass: wrap text, and resolve each cell's absolute x from its column.
         var cellWrapped = new List<(PlacedCell Cell, List<string> Lines, float X, float CellWidth, TableAlignment? Align)>();
 
@@ -575,7 +593,7 @@ public sealed partial class PdfRenderer
             for (int s = 0; s < p.ColSpan && p.Col + s < colWidths.Length; s++)
                 cellWidth += colWidths[p.Col + s];
 
-            var lines = w.WrapText(text, font, fontSize, cellWidth - 2 * cellPadding);
+            var lines = w.WrapText(text, font, fontSize, cellWidth - 2 * cellPadding + CellWrapTolerance);
 
             var align = p.Cell.Alignment;
             if (align is null && columns is not null && p.Col < columns.Count)
@@ -587,19 +605,47 @@ public sealed partial class PdfRenderer
         // Row height = max number of lines * leading
         int maxLines = cellWrapped.Count > 0 ? cellWrapped.Max(c => c.Lines.Count) : 1;
         float rowHeight = maxLines * _bodyLeading;
+        float lineStep = _bodyLeading;
+        float baseY, topRuleY, bottomRuleY;
 
-        // Check if we need a page break for this row
-        if (w.CursorY - rowHeight < w.MarginBottomValue)
+        if (_prawnMetrics)
         {
-            w.EnsurePage(); // Force new page
+            // asciidoctor-pdf cell: padding, then lines with the table's line metrics.
+            var m = MetricsFor(w, font, fontSize, _tableLineHeight);
+            lineStep = m.Advance;
+            rowHeight = _tableCellPadding[0] + m.FirstOffset + (maxLines - 1) * m.Advance + m.Bottom + _tableCellPadding[2];
+            float rowTop = NextBlockTop(w);
+            if (rowTop - rowHeight < w.MarginBottomValue && w.PageHasContent)
+            {
+                w.FinishPage();
+                w.StartPage();
+                rowTop = NextBlockTop(w);
+            }
+            topRuleY = rowTop;
+            bottomRuleY = rowTop - rowHeight;
+            baseY = rowTop - _tableCellPadding[0] - m.FirstOffset;
+            if (headerBackground is { } hbg)
+            {
+                w.SetFillColor(hbg.R, hbg.G, hbg.B);
+                w.DrawRect(w.MarginLeftValue, bottomRuleY, w.ContentWidth, rowHeight, fill: true);
+                if (headerTextColor is { } htc) w.SetFillColor(htc.R, htc.G, htc.B); else RestoreBodyFill(w);
+            }
         }
+        else
+        {
+            // Check if we need a page break for this row
+            if (w.CursorY - rowHeight < w.MarginBottomValue)
+            {
+                w.EnsurePage(); // Force new page
+            }
 
-        // Second pass: render each cell's lines at its own column x.
-        float baseY = w.CursorY;
-        // Row border extents: the top rule sits where the previous row's bottom rule
-        // sat (so rows share a boundary), the bottom rule one row-height below.
-        float topRuleY = baseY + _bodyLeading - 2;
-        float bottomRuleY = topRuleY - rowHeight;
+            // Second pass: render each cell's lines at its own column x.
+            baseY = w.CursorY;
+            // Row border extents: the top rule sits where the previous row's bottom rule
+            // sat (so rows share a boundary), the bottom rule one row-height below.
+            topRuleY = baseY + _bodyLeading - 2;
+            bottomRuleY = topRuleY - rowHeight;
+        }
 
         foreach (var (cell, lines, x, cellWidth, align) in cellWrapped)
         {
@@ -607,12 +653,12 @@ public sealed partial class PdfRenderer
             // is a superscript clickable link, like body text (#69).
             if (cell.HasFootnote)
             {
-                RenderCellSegments(w, cell, x, cellWidth, baseY, cellPadding, font, fontSize, align);
+                RenderCellSegments(w, cell, x, cellWidth, baseY, cellPadding, font, fontSize, align, lineStep);
                 continue;
             }
 
             float lineY = baseY;
-            float availWidth = cellWidth - 2 * cellPadding;
+            float availWidth = cellWidth - 2 * cellPadding + CellWrapTolerance;
             for (int li = 0; li < lines.Count; li++)
             {
                 var line = lines[li];
@@ -627,7 +673,7 @@ public sealed partial class PdfRenderer
                 };
 
                 // Justify non-last lines in left-aligned cells
-                if (align is null or TableAlignment.Left && !isLastLine && lines.Count > 1)
+                if (w.JustifyText && align is null or TableAlignment.Left && !isLastLine && lines.Count > 1)
                 {
                     int spaceCount = 0;
                     foreach (var ch in line)
@@ -639,23 +685,26 @@ public sealed partial class PdfRenderer
                         if (extraSpacing > 0 && extraSpacing <= maxTableSpacing)
                         {
                             w.WriteJustifiedText(line, font, fontSize, x + cellPadding, lineY, extraSpacing);
-                            lineY -= _bodyLeading;
+                            lineY -= lineStep;
                             continue;
                         }
                     }
                 }
 
                 w.WriteText(line, font, fontSize, textX, lineY);
-                lineY -= _bodyLeading;
+                lineY -= lineStep;
             }
         }
 
         // Move cursor past the entire row
-        w.MoveCursor(rowHeight);
+        if (_prawnMetrics)
+            SetNextBlockTop(w, bottomRuleY);
+        else
+            w.MoveCursor(rowHeight);
 
         // Draw this row's grid/frame lines now (while on the correct page — a table
         // may span page breaks), span-aware: verticals fall on actual cell edges.
-        DrawRowBorders(w, placed, colWidths, topRuleY, bottomRuleY, gridOpts, isFirstRow, isLastRow);
+        DrawRowBorders(w, placed, colWidths, topRuleY, bottomRuleY, gridOpts, isFirstRow, isLastRow, isHeaderRow);
     }
 
     /// <summary>
@@ -667,9 +716,9 @@ public sealed partial class PdfRenderer
     /// the smaller marker only ever leaves the cell with a little slack.
     /// </summary>
     private void RenderCellSegments(PdfWriter w, PlacedCell cell, float x, float cellWidth,
-        float baseY, float cellPadding, string font, float fontSize, TableAlignment? align)
+        float baseY, float cellPadding, string font, float fontSize, TableAlignment? align, float lineStep)
     {
-        float availWidth = cellWidth - 2 * cellPadding;
+        float availWidth = cellWidth - 2 * cellPadding + CellWrapTolerance;
 
         var segments = new List<TextSegment>(cell.Runs.Count);
         foreach (var run in cell.Runs)
@@ -701,7 +750,7 @@ public sealed partial class PdfRenderer
             };
 
             w.WriteTextSegments(line, textX, lineY);
-            lineY -= _bodyLeading;
+            lineY -= lineStep;
         }
     }
 
@@ -736,21 +785,23 @@ public sealed partial class PdfRenderer
     /// row rule otherwise), and the bottom frame rule for the last row.
     /// </summary>
     private void DrawRowBorders(PdfWriter w, List<PlacedCell> placed, float[] colWidths,
-        float topY, float bottomY, TableGrid g, bool isFirstRow, bool isLastRow)
+        float topY, float bottomY, TableGrid g, bool isFirstRow, bool isLastRow, bool isHeaderRow = false)
     {
         if (!g.Any) return;
 
         float left = w.MarginLeftValue;
         float right = w.MarginLeftValue + w.ContentWidth;
-        const float lw = 0.5f;
+        float lw = _prawnMetrics ? _tableGridWidth : 0.5f;
         if (_tableBorderColor is { } c) w.SetStrokeColor(c.R, c.G, c.B);
         else w.SetStrokeColor(0.8f, 0.8f, 0.8f);
 
-        // Horizontal rules.
+        // Horizontal rules (themed output also draws the head border under a header row).
         if (isFirstRow ? g.FrameTop : g.RowsInternal)
             w.DrawLine(left, topY, right, topY, lw);
         if (isLastRow && g.FrameBottom)
             w.DrawLine(left, bottomY, right, bottomY, lw);
+        if (_prawnMetrics && isHeaderRow && !isLastRow)
+            w.DrawLine(left, bottomY, right, bottomY, _tableHeadBorderBottomWidth);
 
         // Vertical rules.
         if (g.FrameLeft) w.DrawLine(left, topY, left, bottomY, lw);
@@ -919,6 +970,11 @@ public sealed partial class PdfRenderer
     private void RenderAdmonition(PdfWriter w, AdmonitionNode admonition, int indentLevel, FootnoteState footnotes)
     {
         w.EnsurePage();
+        if (_prawnMetrics && !_useIconAdmonitions)
+        {
+            RenderPrawnTextAdmonition(w, admonition, indentLevel, footnotes);
+            return;
+        }
 
         // Asciidoctor-pdf admonition layout (default theme):
         //   admonition.padding = [vertical_rhythm/3, horizontal_rhythm,

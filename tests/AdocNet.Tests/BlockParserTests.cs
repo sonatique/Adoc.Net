@@ -435,6 +435,13 @@ public class BlockParserTests
     }
 
     [Test]
+    public void Percentage_column_widths_are_weights()
+    {
+        var table = BlockParser.Parse("[cols=\"20%,10%,70%\"]\n|===\n|a |b |c\n|===").Document.Children.OfType<TableNode>().Single();
+        Assert.That(table.Columns!.Select(c => c.Width), Is.EqualTo(new[] { 20, 10, 70 }));
+    }
+
+    [Test]
     public void Duplicate_section_titles_get_unique_generated_ids()
     {
         var doc = BlockParser.Parse("== A\n\n=== Field\n\n== B\n\n=== Field\n\n=== Field\n").Document;

@@ -160,12 +160,20 @@ internal sealed partial class PdfWriter
             for (int i = 0; i < words.Length; i++)
             {
                 var word = words[i];
+                // A segment opening with a space (" holds" after a codespan) splits into an
+                // empty first word that already produced the separator: don't add a second.
+                bool bufferEndsWithSpace = wordBuffer.Length > 0 && wordBuffer[^1] == ' ';
                 float wordWidth = MeasureText(word, seg.Font, seg.FontSize);
-                float neededWidth = wordBuffer.Length > 0 || currentWidth > 0
+                float neededWidth = (wordBuffer.Length > 0 && !bufferEndsWithSpace) || (wordBuffer.Length == 0 && currentWidth > 0)
                     ? spaceWidth + wordWidth
                     : wordWidth;
 
-                if (currentWidth + neededWidth > maxWidth && (currentLine.Count > 0 || wordBuffer.Length > 0))
+                // Closing punctuation glued to the previous segment ("LAP" + ".") is not a break
+                // opportunity: lines only break at whitespace, so it stays on the line.
+                bool gluedPunctuation = i == 0 && wordBuffer.Length == 0 && currentLine.Count > 0
+                    && currentLine[^1].Text.Length > 0 && currentLine[^1].Text[^1] != ' '
+                    && word.Length > 0 && IsTightFollowingPunctuation(word[0]);
+                if (!gluedPunctuation && currentWidth + neededWidth > maxWidth && (currentLine.Count > 0 || wordBuffer.Length > 0))
                 {
                     // Flush word buffer as a segment on the current line
                     if (wordBuffer.Length > 0)
@@ -181,7 +189,10 @@ internal sealed partial class PdfWriter
                 }
 
                 if (wordBuffer.Length > 0)
-                    wordBuffer.Append(' ');
+                {
+                    if (!bufferEndsWithSpace)
+                        wordBuffer.Append(' ');
+                }
                 else if (currentWidth > 0 && i == 0)
                 {
                     // Add space between previous segment and this one, but only
@@ -265,6 +276,7 @@ internal sealed partial class PdfWriter
     /// </summary>
     internal float WriteWrappedSegments(List<TextSegment> segments, float leading, bool justify = true)
     {
+        justify &= JustifyText;
         // Route characters the segment fonts can't show (✓, arrows, …) onto a
         // Unicode fallback font, splitting affected segments. Downstream wrapping
         // and the per-segment embedded-font emission then handle them as usual (#52).

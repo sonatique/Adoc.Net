@@ -148,8 +148,9 @@ public sealed partial class PdfRenderer
     {
         if (w.GetEmbeddedFont(w.ResolveFontKey(fontKey)) is { } f)
         {
-            float em = f.UnitsPerEm;
-            return (f.Ascender / em, Math.Abs(f.Descender) / em, f.LineGap / em);
+            // Prawn keeps these as whole 1/1000 em, truncated (Integer(value * 1000 / upem)).
+            static float Milli(int units, int upem) => (int)(units * 1000.0 / upem) / 1000f;
+            return (Milli(f.Ascender, f.UnitsPerEm), Math.Abs(Milli(f.Descender, f.UnitsPerEm)), Milli(f.LineGap, f.UnitsPerEm));
         }
         return (0.718f, 0.207f, 0f); // Helvetica
     }
