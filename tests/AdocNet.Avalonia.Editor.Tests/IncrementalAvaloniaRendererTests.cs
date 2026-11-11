@@ -277,6 +277,21 @@ public class IncrementalAvaloniaRendererTests
         Assert.That(text, Does.Contain("para two"));
     }
 
+    [AvaloniaTest]
+    public void Clock_attributes_changing_between_parses_keep_incremental_update()
+    {
+        // Two parses straddling a second boundary get different doctime/localtime;
+        // simulate that deterministically.
+        var oldDoc = Parse("= Doc Title\n\n== Section A\n\npara one\n");
+        var newDoc = Parse("= Doc Title\n\n== Section A\n\npara one EDITED\n");
+        newDoc.SetAttribute("localtime", "23:59:59 +0000");
+        newDoc.SetAttribute("doctime", "23:59:59 +0000");
+
+        var r = new IncrementalAvaloniaRenderer();
+        var control = r.Render(oldDoc);
+        Assert.That(r.RenderIncremental(oldDoc, newDoc, control), Is.SameAs(control));
+    }
+
     // ── Inline source-range mapping (E3) ──────────────────────────────────
 
     [AvaloniaTest]

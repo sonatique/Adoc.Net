@@ -225,10 +225,19 @@ public sealed class IncrementalAvaloniaRenderer
         foreach (var kvp in newDoc.Attributes)
         {
             if (!oldDoc.Attributes.TryGetValue(kvp.Key, out var oldVal)) return true;
+            if (ClockAttributes.Contains(kvp.Key)) continue;
             if (!string.Equals(oldVal, kvp.Value, StringComparison.Ordinal)) return true;
         }
         return false;
     }
+
+    // Stamped from the clock (or file mtime) on every parse, so two parses of the
+    // same source differ once a second ticks over; they must not force a full re-render.
+    private static readonly HashSet<string> ClockAttributes = new(StringComparer.Ordinal)
+    {
+        "docyear", "docdate", "doctime", "docdatetime",
+        "localyear", "localdate", "localtime", "localdatetime",
+    };
 
     private static bool HasStructuralChange(IReadOnlyList<AstDiffEntry> diff)
     {
