@@ -20,6 +20,11 @@ public sealed partial class PdfRenderer
     private float _codePadding = 11f;
     private float _tocLineHeight = 1.4f;
     private float _listIndent = 18f;
+    private readonly string[] _headingFonts = new string[4];
+
+    /// <summary>Font key for a section level's heading (per-level theme font in themed output).</summary>
+    private string HeadingFont(int level) =>
+        _prawnMetrics ? _headingFonts[Math.Min(Math.Max(level, 1), 4) - 1] : _fontHeading;
     private float _tableLineHeight = 1.15f;
     private float[] _tableCellPadding = { 3, 3, 3, 3 };
     private float _tableGridWidth = 0.5f;
@@ -71,6 +76,13 @@ public sealed partial class PdfRenderer
         _codePadding = options.CodePadding ?? 11f;
         _tocLineHeight = options.TocLineHeight ?? 1.4f;
         _listIndent = options.ListIndent ?? 18f;
+        // Reuse fonts already embedded under another role instead of embedding the file twice.
+        if (options.HeadingFontPath is { } headingPath) _fontKeysByPath.TryAdd(headingPath, _fontHeading);
+        if (options.BoldFontPath is { } boldPath) _fontKeysByPath.TryAdd(boldPath, _fontBold);
+        if (options.FontPath is { } bodyPath) _fontKeysByPath.TryAdd(bodyPath, _fontRegular);
+        string?[] headingPaths = { options.Heading2FontPath, options.Heading3FontPath, options.Heading4FontPath, options.Heading5FontPath };
+        for (int i = 0; i < 4; i++)
+            _headingFonts[i] = headingPaths[i] is { } hp ? FontKeyForPath(writer, hp) : _fontHeading;
         _tableLineHeight = options.TableLineHeight ?? options.LineSpacing;
         _tableCellPadding = options.TableCellPadding is { Length: 4 } pad ? pad : new float[] { 3, 3, 3, 3 };
         _tableGridWidth = options.TableGridWidth ?? 0.5f;
@@ -99,7 +111,7 @@ public sealed partial class PdfRenderer
     private void WritePrawnHeading(PdfWriter w, List<TextSegment> segments, float fontSize, int level, Action register)
     {
         int i = Math.Min(Math.Max(level, 1), 4) - 1;
-        var m = MetricsFor(w, _fontHeading, fontSize, _headingLineHeight);
+        var m = MetricsFor(w, HeadingFont(level), fontSize, _headingLineHeight);
 
         float top = NextBlockTop(w);
         if (w.PageHasContent)

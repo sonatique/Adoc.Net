@@ -349,4 +349,16 @@ public sealed class PdfRenderOptions : RenderOptions
 
     /// <summary>List item text indent (theme <c>list.indent</c>). Null = 18 for themed output.</summary>
     public float? ListIndent { get; init; }
+
+    /// <summary>TrueType font for H2 headings (section level 1). Null = <see cref="HeadingFontPath"/>.</summary>
+    public string? Heading2FontPath { get; init; }
+
+    /// <summary>TrueType font for H3 headings (section level 2). Null = <see cref="HeadingFontPath"/>.</summary>
+    public string? Heading3FontPath { get; init; }
+
+    /// <summary>TrueType font for H4 headings (section level 3). Null = <see cref="HeadingFontPath"/>.</summary>
+    public string? Heading4FontPath { get; init; }
+
+    /// <summary>TrueType font for H5 headings (section level 4). Null = <see cref="HeadingFontPath"/>.</summary>
+    public string? Heading5FontPath { get; init; }
 }

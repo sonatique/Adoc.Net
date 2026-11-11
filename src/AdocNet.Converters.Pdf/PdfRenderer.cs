@@ -510,7 +510,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         {
             // Styled and placed like a level-1 section title (asciidoctor-pdf toc title = h2).
             if ((_h2Color ?? _headingColor) is { } tc) w.SetFillColor(tc.R, tc.G, tc.B);
-            WritePrawnHeading(w, new List<TextSegment> { new("Table of Contents", _fontHeading, _h2FontSize) },
+            WritePrawnHeading(w, new List<TextSegment> { new("Table of Contents", HeadingFont(1), _h2FontSize) },
                 _h2FontSize, 1, () => { });
             RestoreBodyFill(w);
         }
@@ -828,9 +828,10 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
         // Render section title with heading font, per-level color
         if (color is { } hc) w.SetFillColor(hc.R, hc.G, hc.B);
-        var segments = BuildInlineSegments(section.TitleInlines, section.Title, _fontHeading, fontSize, footnotes);
+        var headingFont = HeadingFont(section.Level);
+        var segments = BuildInlineSegments(section.TitleInlines, section.Title, headingFont, fontSize, footnotes);
         if (secNumPrefix is not null)
-            segments.Insert(0, new TextSegment(secNumPrefix, _fontHeading, fontSize));
+            segments.Insert(0, new TextSegment(secNumPrefix, headingFont, fontSize));
         if (_prawnMetrics)
         {
             WritePrawnHeading(w, segments, fontSize, section.Level, RegisterHeading);
@@ -855,9 +856,40 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
         // Body color is set globally at start of document; no per-paragraph
         // override needed unless we change colors mid-paragraph.
-        var segments = BuildInlineSegments(paragraph.Inlines, paragraph.Text, _fontRegular, _bodyFontSize, footnotes);
-        w.WriteWrappedSegments(segments, _bodyLeading);
+        if (paragraph.HasHardbreaks)
+        {
+            // " +" line ends (or hardbreaks): each piece starts a new line; a broken line is
+            // never justified, like the last line of a paragraph.
+            _keepHardBreaks = true;
+            var pieces = BuildInlineSegments(paragraph.Inlines, paragraph.Text.Replace('\n', ' '), _fontRegular, _bodyFontSize, footnotes);
+            _keepHardBreaks = false;
+            foreach (var line in SplitAtHardBreaks(pieces))
+                w.WriteWrappedSegments(line, _bodyLeading);
+        }
+        else
+        {
+            var segments = BuildInlineSegments(paragraph.Inlines, paragraph.Text, _fontRegular, _bodyFontSize, footnotes);
+            w.WriteWrappedSegments(segments, _bodyLeading);
+        }
         w.MoveCursor(_paragraphSpacingAfter);
+    }
+
+    private bool _keepHardBreaks;
+
+    /// <summary>Splits segments at the newlines kept for hard breaks: one segment list per line.</summary>
+    private static List<List<TextSegment>> SplitAtHardBreaks(List<TextSegment> segments)
+    {
+        var lines = new List<List<TextSegment>> { new() };
+        foreach (var seg in segments)
+        {
+            var parts = seg.Text.Split('\n');
+            for (int i = 0; i < parts.Length; i++)
+            {
+                if (i > 0) lines.Add(new List<TextSegment>());
+                if (parts[i].Length > 0) lines[^1].Add(seg with { Text = parts[i] });
+            }
+        }
+        return lines;
     }
 
     private void RenderList(PdfWriter w, ListNode list, int indentLevel, FootnoteState footnotes)

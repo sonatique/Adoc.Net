@@ -1202,8 +1202,9 @@ public sealed partial class PdfRenderer
         switch (node)
         {
             case TextInlineNode text:
-                // Replace newlines with spaces — PDF text operators can't render \n
-                string value = text.Value.Contains('\n') ? text.Value.Replace('\n', ' ') : text.Value;
+                // Replace newlines with spaces — PDF text operators can't render \n. In a paragraph
+                // with hard breaks they are kept here and split into lines by the caller.
+                string value = text.Value.Contains('\n') && !_keepHardBreaks ? text.Value.Replace('\n', ' ') : text.Value;
                 segments.Add(new TextSegment(value, defaultFont, defaultFontSize, Background: background, Color: color));
                 break;
 

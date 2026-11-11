@@ -278,6 +278,10 @@ public static class PdfThemeLoader
             CodePadding = GetFloat(props, "code.padding"),
             TocLineHeight = GetFloat(props, "toc.line-height"),
             ListIndent = GetFloat(props, "list.indent"),
+            Heading2FontPath = ResolveHeadingLevelFontPath(props, 2, fontsDir),
+            Heading3FontPath = ResolveHeadingLevelFontPath(props, 3, fontsDir),
+            Heading4FontPath = ResolveHeadingLevelFontPath(props, 4, fontsDir),
+            Heading5FontPath = ResolveHeadingLevelFontPath(props, 5, fontsDir),
             JustifyText = GetString(props, "base.text-align") is { } textAlign
                 ? textAlign.Trim().Equals("justify", StringComparison.OrdinalIgnoreCase)
                 : null,
@@ -461,6 +465,21 @@ public static class PdfThemeLoader
             .Replace('-', '_');
         return ResolveFontCatalogPath(props, headingFamily, style, fontsDir)
             ?? ResolveFontCatalogPath(props, headingFamily, "normal", fontsDir);
+    }
+
+    /// <summary>
+    /// Font of one heading level as asciidoctor-pdf resolves it: heading-hN family/style, then
+    /// heading's, then the base family; style defaults to bold. Null when not in the catalog.
+    /// </summary>
+    private static string? ResolveHeadingLevelFontPath(Dictionary<string, string> props, int level, string fontsDir)
+    {
+        var family = GetString(props, $"heading-h{level}.font-family") ?? GetString(props, $"heading.h{level}-font-family")
+                  ?? GetString(props, "heading.font-family") ?? GetString(props, "base.font-family");
+        if (family is null) return null;
+        var style = (GetString(props, $"heading-h{level}.font-style") ?? GetString(props, $"heading.h{level}-font-style")
+                  ?? GetString(props, "heading.font-style") ?? "bold").Replace('-', '_');
+        return ResolveFontCatalogPath(props, family, style, fontsDir)
+            ?? ResolveFontCatalogPath(props, family, "normal", fontsDir);
     }
 
     private static string? ResolveAbsoluteFontPath(string relativePath, string fontsDir)

@@ -181,6 +181,13 @@ Tools that number stations from 0 internally must add one when they write a file
 Grades are written in lower case.
 A record without a `grade` field is treated as ungraded; it is still imported but is excluded from quality reports.
 
+==== Station Roles
+
+Each station has a fixed role, listed on the floor plan as one line per station: +
+Station 1: press +
+Station 2: grinder +
+Station 3: inspection and grading
+
 IMPORTANT: The `reject` grade removes the widget from the default views.
 Reading tools must still keep the record, so that a later import of the same file can restore it.
 

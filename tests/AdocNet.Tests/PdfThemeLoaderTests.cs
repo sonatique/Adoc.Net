@@ -73,6 +73,27 @@ public class PdfThemeLoaderTests
         Assert.That(PdfThemeLoader.ParseLength(value), Is.EqualTo(points).Within(0.001f));
     }
 
+    [Test]
+    public void Heading_fonts_resolve_per_level_with_base_family_fallback()
+    {
+        var dir = TestContext.CurrentContext.TestDirectory;
+        while (dir is not null && !File.Exists(Path.Combine(dir, "AdocNet.slnx")))
+            dir = Path.GetDirectoryName(dir);
+        var fonts = Path.Combine(dir!, "src", "AdocNet.Converters.Epub", "Resources");
+        var props = PdfThemeLoader.ParseYaml([
+            "font:", "  catalog:",
+            "    Serif:", "      normal: notoserif-regular-latin.ttf", "      bold: notoserif-bold-latin.ttf",
+            "    Light:", "      normal: mplus1p-light-latin.ttf", "      bold: mplus1p-bold-latin.ttf",
+            "base:", "  font-family: Serif",
+            "heading-h2:", "  font-family: Light",
+            "heading-h3:", "  font-family: Light", "  font-style: normal"]);
+        var opts = PdfThemeLoader.BuildOptions(props, fonts);
+
+        Assert.That(Path.GetFileName(opts.Heading2FontPath), Is.EqualTo("mplus1p-bold-latin.ttf"), "bold by default");
+        Assert.That(Path.GetFileName(opts.Heading3FontPath), Is.EqualTo("mplus1p-light-latin.ttf"), "explicit normal style");
+        Assert.That(Path.GetFileName(opts.Heading4FontPath), Is.EqualTo("notoserif-bold-latin.ttf"), "base family, bold");
+    }
+
     // ── Heading sizes ─────────────────────────────────────────────────
 
     [Test]

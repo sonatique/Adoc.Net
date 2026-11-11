@@ -1196,6 +1196,23 @@ public class PdfRendererTests
     }
 
     [Test]
+    public void Hard_line_breaks_start_new_lines()
+    {
+        var doc = AdocParser.Parse("Intro words +\nStation one +\nStation two\n").Document;
+        var text = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc));
+
+        var shown = Regex.Matches(text, @"([\d.]+) ([\d.]+) Td\s*(?:/\S+ [\d.]+ Tf\s*)?\(([^)]*)\) Tj")
+            .Select(m => (Y: float.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture), Text: m.Groups[3].Value))
+            .ToList();
+        var ys = shown.Where(t => t.Text is "Intro words" or "Station one" or "Station two").ToList();
+        Assert.That(ys.Select(t => t.Text).ToList(), Is.EqualTo(new[] { "Intro words", "Station one", "Station two" }),
+            string.Join(" | ", shown.Select(t => $"{t.Y}:{t.Text}")));
+        Assert.That(ys[0].Y, Is.GreaterThan(ys[1].Y));
+        Assert.That(ys[1].Y, Is.GreaterThan(ys[2].Y));
+        Assert.That(text, Does.Not.Contain("+) Tj"));
+    }
+
+    [Test]
     public void Title_page_partitions_title_and_keeps_body_on_next_page()
     {
         var doc = AdocParser.Parse(
