@@ -109,7 +109,7 @@ public class PagedAvaloniaRendererTests
         Assert.That(((TextBlock)first[0]).Text, Is.EqualTo("The Title"));
     }
 
-    [Test]
+    [AvaloniaTest]
     public void FromPdfPoints_converts_points_to_dips()
     {
         // A4 in points (595 × 842 @72dpi) → DIPs (@96dpi) is a 4/3 scale.
@@ -120,7 +120,7 @@ public class PagedAvaloniaRendererTests
         Assert.That(options.PageMargin.Left, Is.EqualTo(96).Within(0.001));
     }
 
-    [Test]
+    [AvaloniaTest]
     public void Degenerate_margins_are_rejected()
     {
         var options = new PageLayoutOptions
