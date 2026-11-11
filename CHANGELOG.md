@@ -5,6 +5,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.28] - 2026-11-12
+
+### Fixed
+
+- **PDF footers printed "N of ___TOTAL__"** with kerned themed output (1.0.27).
+  The page count was a placeholder patched into the finished file by searching
+  for its glyphs as one run; kerning split the run. Running content is now a
+  second content stream per page, written once the page count is known.
+- **Themed PDF**, found by comparing the text layer with asciidoctor-pdf:
+  lines break after a hyphen inside a word; a separator was counted twice
+  before a segment following one that ends in a space (lines wrapped early);
+  admonitions split across pages draw their rule per page and the label on the
+  first part; table header text keeps its colour after a leading codespan;
+  heading levels without a colour use `heading.font-color` (else #333333), links
+  default to #428BCA, code blocks to F5F5F5 with a 0.75pt border; TOC dot
+  leaders are counted from the title's end and page numbers are links; the
+  outline shows the main title, a Table of Contents entry and sections up to
+  `toclevels`; list markers get the 0.5pt correction.
+- **PDF page labels**: a title page is labelled i, numbering starts at 1 after it.
+
+### Changed
+
+- `tools/pdf-parity.py` compares words, positions, fonts, sizes and colours,
+  page labels, outline, links, images, title metadata and graphics colours; any
+  mismatch fails the run. The pixel score is a secondary signal.
+
 ## [1.0.27] - 2026-11-11
 
 Themed PDF output now matches asciidoctor-pdf. A made-up manual and theme in

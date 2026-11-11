@@ -14,7 +14,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.27</Version>
+    <Version>1.0.28</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) Sylvain Fasel</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -23,7 +23,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;docx;word;import;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.27: themed PDF output now matches asciidoctor-pdf. With an asciidoctor-pdf YAML theme and embedded fonts, AdocNet draws the title page (background, logo, title/subtitle, authors, revision), uses Prawn line metrics, kerning and the default theme fallbacks, places headers and footers and numbers pages like asciidoctor-pdf (running content after the TOC), and lays out the TOC, tables (prawn-table geometry, column percentages, repeated header), admonitions, lists and code blocks the same way. Also: unique ids for sections with the same title (TOC and xref page numbers), percentage column widths, hard line breaks in PDF paragraphs, per-level heading fonts, and PdfThemeLoader.Load(theme, fontsDir, baseDirectory). See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.28: fixes a 1.0.27 regression where kerned themed PDF footers printed "N of ___TOTAL__" instead of the page count (running content is now written once the page count is known). Also, from comparing the text layer with asciidoctor-pdf: line breaks after hyphens, wrapping that broke some lines one word early, admonitions split across pages, table header text colour after a codespan, default heading/link/code-block colours, TOC dot leaders and page-number links, outline entries and roman page labels for the title page. See CHANGELOG.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->
