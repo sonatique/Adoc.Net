@@ -14,7 +14,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.25</Version>
+    <Version>1.0.26</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) Sylvain Fasel</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -23,7 +23,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;docx;word;import;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.25: Avalonia live preview fix. IncrementalAvaloniaRenderer no longer falls back to a full re-render when two parses straddle a second boundary: the clock-stamped doc*/local* date and time attributes are ignored when checking for header changes. Release publishing now uses NuGet trusted publishing. See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.26: styling hooks for applying one theme across outputs. AvaloniaRenderTheme gains BodyFont, BodyForeground, HeadingFont, HeadingForegrounds with FallbackHeadingForeground and HeadingForeground(level), and TableHeaderForeground (all null by default: the host style applies), honoured by the full, paged and incremental Avalonia renderers. New EpubRenderOptions.CustomCss appends CSS to the EPUB stylesheet. New TrueTypeFontInfo.ReadFamilyName returns a font file's family name for CSS and Avalonia font references. See CHANGELOG.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->

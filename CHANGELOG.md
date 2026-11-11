@@ -5,6 +5,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.26] - 2026-11-11
+
+Styling hooks so a host can apply one theme (for example an asciidoctor-pdf
+YAML theme read with `PdfThemeLoader`) to the Avalonia preview and to EPUB
+export, as it already could for PDF and HTML.
+
+### Added
+
+- **Avalonia: heading, body and table-header styling.** `AvaloniaRenderTheme`
+  gains `BodyFont`, `BodyForeground`, `HeadingFont`, `HeadingForegrounds`
+  (per level, index 0 = level 1) with `FallbackHeadingForeground` and the
+  `HeadingForeground(level)` resolver (level 0 = document title), and
+  `TableHeaderForeground`. All are null or empty by default, so the host's
+  font and foreground still apply. `AvaloniaRenderer`, `PagedAvaloniaRenderer`
+  and `IncrementalAvaloniaRenderer` honour them.
+- **EPUB: `EpubRenderOptions.CustomCss`.** Appended to the end of
+  `styles/epub3.css`, mirroring `HtmlRenderOptions.CustomCss`.
+- **PDF: `TrueTypeFontInfo.ReadFamilyName(path)`.** Returns a font file's
+  family name (name ID 1, English when available), the name CSS and Avalonia
+  font references need; null for missing or malformed files.
+
+### Fixed
+
+- **Avalonia: the incremental renderer's document title ignored the theme.**
+  It used a hard-coded 28 instead of `DocumentTitleFontSize`.
+- **Tests: two paged-preview tests ran off the Avalonia UI thread** and failed
+  intermittently with "Call from invalid thread".
+
 ## [1.0.25] - 2026-11-11
 
 ### Fixed
