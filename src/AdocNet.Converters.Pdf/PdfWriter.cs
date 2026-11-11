@@ -109,6 +109,15 @@ internal sealed partial class PdfWriter
     /// area instead of climbing into the top margin (matches Asciidoctor PDF behavior).</summary>
     internal float BodyLeading { get; set; }
 
+    /// <summary>
+    /// Insert a space between wrapped segments that don't already have one (legacy layout).
+    /// Themed output keeps the source spacing, as asciidoctor-pdf does.
+    /// </summary>
+    internal bool SynthesizeSegmentSpaces { get; set; } = true;
+
+    /// <summary>Apply the fonts' 'kern' pairs when measuring and drawing embedded-font text (Prawn default).</summary>
+    internal bool Kerning { get; set; }
+
     /// <summary>Wrap long code lines at spaces (Prawn) instead of at the character limit.</summary>
     internal bool VerbatimWrapAtSpaces { get; set; }
 
@@ -177,8 +186,8 @@ internal sealed partial class PdfWriter
         float Milli(int units) => (int)(units * 1000.0 / f.UnitsPerEm) / 1000f * fontSize;
         float asc = Milli(f.Ascender), desc = Math.Abs(Milli(f.Descender)), gap = Milli(f.LineGap);
         if (header)
-            return HeaderHeight > 0 ? _pageHeight - ((HeaderHeight - (asc + desc + gap)) / 2 + gap + asc) : null;
-        return FooterHeight > 0 ? FooterHeight - 6f - gap - asc : null;
+            return HeaderHeight > 0 ? _pageHeight - ((HeaderHeight - (asc + desc + gap)) / 2 + asc) : null;
+        return FooterHeight > 0 ? FooterHeight - 6f - asc : null;
     }
 
     // ── Hyphenation ──────────────────────────────────────────────────────
@@ -722,9 +731,7 @@ internal sealed partial class PdfWriter
         if (_embeddedFonts.TryGetValue(font, out var ttFont))
         {
             TrackCodePoints(font, text);
-            _currentStream.Append('<');
-            _currentStream.Append(EncodeTextAsGlyphIds(text, ttFont));
-            _currentStream.Append("> Tj\n");
+            AppendGlyphShow(text, ttFont);
         }
         else
         {
@@ -829,9 +836,7 @@ internal sealed partial class PdfWriter
         if (_embeddedFonts.TryGetValue(font, out var ttFont))
         {
             TrackCodePoints(font, text);
-            _currentStream!.Append('<');
-            _currentStream.Append(EncodeTextAsGlyphIds(text, ttFont));
-            _currentStream.Append("> Tj\n");
+            AppendGlyphShow(text, ttFont);
         }
         else
         {
@@ -922,9 +927,7 @@ internal sealed partial class PdfWriter
             if (_embeddedFonts.TryGetValue(seg.Font, out var ttFont))
             {
                 TrackCodePoints(seg.Font, seg.Text);
-                _currentStream.Append('<');
-                _currentStream.Append(EncodeTextAsGlyphIds(seg.Text, ttFont));
-                _currentStream.Append("> Tj\n");
+                AppendGlyphShow(seg.Text, ttFont);
             }
             else
             {

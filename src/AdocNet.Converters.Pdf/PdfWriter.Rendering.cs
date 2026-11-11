@@ -334,7 +334,7 @@ internal sealed partial class PdfWriter
     {
         if (_embeddedFonts.TryGetValue(font, out var ttFont))
         {
-            return ttFont.MeasureText(text, fontSize);
+            return ttFont.MeasureText(text, fontSize, Kerning);
         }
 
         return MeasureStandardText(text, font, fontSize);
@@ -756,6 +756,32 @@ internal sealed partial class PdfWriter
 
     private static string EncodeTextAsGlyphIds(string text, TrueTypeFont font) =>
         PdfFontEmbedder.EncodeTextAsGlyphIds(text, font);
+
+    /// <summary>
+    /// Appends a show-text operator for an embedded font: <c>&lt;glyphs&gt; Tj</c>, or with
+    /// <see cref="Kerning"/> a <c>[&lt;glyphs&gt; adj &lt;glyphs&gt;] TJ</c> array carrying the 'kern'
+    /// adjustments (positive numbers move the next glyph left, in 1/1000 em).
+    /// </summary>
+    private void AppendGlyphShow(string text, TrueTypeFont font)
+    {
+        if (!Kerning || !font.HasKerning || text.Length < 2)
+        {
+            _currentStream!.Append('<').Append(EncodeTextAsGlyphIds(text, font)).Append("> Tj\n");
+            return;
+        }
+        var sb = _currentStream!;
+        sb.Append('[');
+        int start = 0;
+        for (int i = 1; i < text.Length; i++)
+        {
+            short kern = font.GetKerning(font.GetGlyphId(text[i - 1]), font.GetGlyphId(text[i]));
+            if (kern == 0) continue;
+            sb.Append('<').Append(EncodeTextAsGlyphIds(text.Substring(start, i - start), font)).Append('>');
+            sb.Append(' ').Append(Fmt(-kern * 1000f / font.UnitsPerEm)).Append(' ');
+            start = i;
+        }
+        sb.Append('<').Append(EncodeTextAsGlyphIds(text.Substring(start), font)).Append(">] TJ\n");
+    }
 
     private void EmbedRegisteredFonts() =>
         PdfFontEmbedder.EmbedFonts(_embeddedFonts, _usedCodePoints, _embeddedFontPlaceholders,

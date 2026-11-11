@@ -168,12 +168,14 @@ internal sealed partial class PdfWriter
                     ? spaceWidth + wordWidth
                     : wordWidth;
 
-                // Closing punctuation glued to the previous segment ("LAP" + ".") is not a break
-                // opportunity: lines only break at whitespace, so it stays on the line.
-                bool gluedPunctuation = i == 0 && wordBuffer.Length == 0 && currentLine.Count > 0
+                // Text glued to the previous segment ("LAP" + ".") is not a break opportunity:
+                // lines only break at whitespace, so it stays on the line. Legacy layout only
+                // treats closing punctuation that way (it inserts a space before other words).
+                bool glued = i == 0 && wordBuffer.Length == 0 && currentLine.Count > 0
                     && currentLine[^1].Text.Length > 0 && currentLine[^1].Text[^1] != ' '
-                    && word.Length > 0 && IsTightFollowingPunctuation(word[0]);
-                if (!gluedPunctuation && currentWidth + neededWidth > maxWidth && (currentLine.Count > 0 || wordBuffer.Length > 0))
+                    && word.Length > 0 && (!SynthesizeSegmentSpaces || IsTightFollowingPunctuation(word[0]));
+                if (glued) neededWidth = wordWidth;
+                if (!glued && currentWidth + neededWidth > maxWidth && (currentLine.Count > 0 || wordBuffer.Length > 0))
                 {
                     // Flush word buffer as a segment on the current line
                     if (wordBuffer.Length > 0)
@@ -204,7 +206,7 @@ internal sealed partial class PdfWriter
                         && currentLine[^1].Text.Length > 0
                         && currentLine[^1].Text[^1] == ' ';
                     bool startsWithTightPunct = word.Length > 0 && IsTightFollowingPunctuation(word[0]);
-                    if (!prevEndsWithSpace && !startsWithTightPunct)
+                    if (!prevEndsWithSpace && !startsWithTightPunct && !glued)
                         wordBuffer.Append(' ');
                     else
                         neededWidth = wordWidth; // No space needed, recalculate
@@ -381,9 +383,7 @@ internal sealed partial class PdfWriter
             if (_embeddedFonts.TryGetValue(seg.Font, out var ttFont))
             {
                 TrackCodePoints(seg.Font, seg.Text);
-                _currentStream.Append('<');
-                _currentStream.Append(EncodeTextAsGlyphIds(seg.Text, ttFont));
-                _currentStream.Append("> Tj\n");
+                AppendGlyphShow(seg.Text, ttFont);
             }
             else
             {

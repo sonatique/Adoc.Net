@@ -22,6 +22,17 @@ internal sealed class TrueTypeFont
     // Maps glyph ID -> advance width (in font units)
     private readonly Dictionary<ushort, int> _glyphWidths;
 
+    // Kerning pairs from the 'kern' table (first format-0 subtable, as Prawn/ttfunk read it):
+    // (left glyph << 16 | right glyph) -> adjustment in font units.
+    private readonly Dictionary<uint, short> _kernPairs = new();
+
+    /// <summary>True when the font has 'kern' table pairs.</summary>
+    public bool HasKerning => _kernPairs.Count > 0;
+
+    /// <summary>Kerning adjustment between two glyphs, in font units (0 when none).</summary>
+    public short GetKerning(ushort left, ushort right) =>
+        _kernPairs.TryGetValue(((uint)left << 16) | right, out var k) ? k : (short)0;
+
     private TrueTypeFont(string fontName, int unitsPerEm, int ascender, int descender, int lineGap,
         byte[] fontData, Dictionary<int, ushort> cmapTable, Dictionary<ushort, int> glyphWidths)
     {
@@ -42,7 +53,24 @@ internal sealed class TrueTypeFont
     /// <summary>
     /// Measures text width in PDF points at the given font size.
     /// </summary>
-    public float MeasureText(string text, float fontSize)
+    public float MeasureText(string text, float fontSize) => MeasureText(text, fontSize, kerning: false);
+
+    /// <summary>
+    /// Measures text width in PDF points; with <paramref name="kerning"/>, adds the 'kern'
+    /// table adjustments between consecutive glyphs (scaled to 1/1000 em, as Prawn does).
+    /// </summary>
+    public float MeasureText(string text, float fontSize, bool kerning)
+    {
+        float kern = 0;
+        if (kerning && _kernPairs.Count > 0)
+        {
+            for (int i = 1; i < text.Length; i++)
+                kern += GetKerning(GetGlyphId(text[i - 1]), GetGlyphId(text[i])) * 1000f / UnitsPerEm;
+        }
+        return MeasureUnkerned(text, fontSize) + kern * fontSize / 1000f;
+    }
+
+    private float MeasureUnkerned(string text, float fontSize)
     {
         // Widths in whole 1/1000 em, truncated: exactly what the embedded font's /W array
         // tells the viewer (PdfFontEmbedder) and what Prawn measures with.
@@ -147,7 +175,31 @@ internal sealed class TrueTypeFont
             fontName = ParseName(data, nameTable.Offset, nameId: 6) ?? fontName;
         }
 
-        return new TrueTypeFont(fontName, unitsPerEm, ascender, descender, lineGap, data, cmapTable2, glyphWidths);
+        var font = new TrueTypeFont(fontName, unitsPerEm, ascender, descender, lineGap, data, cmapTable2, glyphWidths);
+        if (tables.TryGetValue("kern", out var kernTable))
+            font.ParseKern(data, kernTable.Offset, kernTable.Length);
+        return font;
+    }
+
+    /// <summary>
+    /// Reads the first subtable of a Microsoft 'kern' table (version 0) when it is format 0
+    /// (sorted pair list). Other layouts are ignored, as in ttfunk.
+    /// </summary>
+    private void ParseKern(byte[] data, int offset, int length)
+    {
+        int end = Math.Min(data.Length, offset + length);
+        if (offset + 4 > end || ReadUInt16(data, offset) != 0 || ReadUInt16(data, offset + 2) == 0) return;
+        int sub = offset + 4;
+        if (sub + 14 > end) return;
+        int coverage = ReadUInt16(data, sub + 4);
+        if ((coverage >> 8) != 0 || (coverage & 1) == 0) return; // format 0, horizontal
+        int nPairs = ReadUInt16(data, sub + 6);
+        int pair = sub + 14;
+        for (int i = 0; i < nPairs && pair + 6 <= end; i++, pair += 6)
+        {
+            uint key = ((uint)ReadUInt16(data, pair) << 16) | ReadUInt16(data, pair + 2);
+            _kernPairs[key] = ReadInt16(data, pair + 4);
+        }
     }
 
     private static void ParseCmap(byte[] data, int cmapOffset, Dictionary<int, ushort> result)

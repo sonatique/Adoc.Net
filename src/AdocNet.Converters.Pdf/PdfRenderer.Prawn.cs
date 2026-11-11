@@ -53,6 +53,8 @@ public sealed partial class PdfRenderer
         {
             writer.FirstLineOffset = null;
             writer.VerbatimWrapAtSpaces = false;
+            writer.Kerning = false;
+            writer.SynthesizeSegmentSpaces = true;
             return;
         }
 
@@ -62,6 +64,8 @@ public sealed partial class PdfRenderer
         writer.BodyLeading = body.Advance;
         writer.FirstLineOffset = body.FirstOffset;
         writer.VerbatimWrapAtSpaces = true;
+        writer.Kerning = true; // asciidoctor-pdf: base.font-kerning defaults to normal
+        writer.SynthesizeSegmentSpaces = false;
         _codeLineHeight = options.CodeLineHeight ?? 1.25f;
         _codeLeading = MetricsFor(writer, _fontMono, _codeFontSize, _codeLineHeight).Advance;
         _codePadding = options.CodePadding ?? 11f;
@@ -214,26 +218,32 @@ public sealed partial class PdfRenderer
             var lines = w.WrapSegments(segments, width - 2 * cellPadding + CellWrapTolerance);
             if (lines.Count == 0) lines.Add(new List<TextSegment>());
 
-            // prawn-table cell (measured with Noto Serif, line gap 0, and Calibri, gap 0.221 em):
-            // first baseline = top + the cell font's line gap + the line's ascender; each following
-            // line adds its height (max of the fonts' ascender - descender + gap) plus leading;
-            // content height = that gap + the line heights. Metrics[i] = (ascender, descender, height).
+            // prawn-table cell (measured with Noto Serif, line gap 0, Calibri, gap 0.221 em, and
+            // Courier New lines inside Calibri cells):
+            //   first baseline = top + the cell font's line gap + the first line's ascender;
+            //   each following line adds its height (max of its fonts' ascender + descender + gap)
+            //   plus leading; the content ends at the last line's descender + gap.
+            // Metrics[i] = (ascender, descender + gap, height).
             var metrics = new List<(float, float, float)>();
             float cellGap = FontMetrics(w, font).Gap * fontSize;
             float height = cellGap;
             for (int li = 0; li < lines.Count; li++)
             {
+                // Whitespace-only fragments left at a wrap point don't size the line.
                 var line = lines[li];
-                float asc = 0, desc = 0, lineHeight = 0;
-                foreach (var seg in line.Count > 0 ? line : new List<TextSegment> { new("", font, fontSize) })
+                var sizing = line.Where(sg => !string.IsNullOrWhiteSpace(sg.Text)).ToList();
+                if (sizing.Count == 0) sizing.Add(new TextSegment("", font, fontSize));
+                float asc = 0, below = 0, lineHeight = 0;
+                foreach (var seg in sizing)
                 {
                     var (a, d, g) = FontMetrics(w, seg.Font);
                     asc = Math.Max(asc, a * seg.FontSize);
-                    desc = Math.Max(desc, d * seg.FontSize);
+                    below = Math.Max(below, (d + g) * seg.FontSize);
                     lineHeight = Math.Max(lineHeight, (a + d + g) * seg.FontSize);
                 }
-                metrics.Add((asc, desc, lineHeight));
-                height += lineHeight + (li == 0 ? 0 : leading);
+                metrics.Add((asc, below, lineHeight));
+                height += li == 0 ? asc : lineHeight + leading;
+                if (li == lines.Count - 1) height += below;
             }
 
             var align = p.Cell.Alignment;

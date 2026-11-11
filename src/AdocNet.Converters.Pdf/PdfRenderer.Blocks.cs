@@ -1182,6 +1182,15 @@ public sealed partial class PdfRenderer
             segments.Add(new TextSegment(fallbackText, defaultFont, defaultFontSize));
         }
 
+        // Themed output drops zero-width spaces (Asciidoctor puts one after "..." -> ellipsis):
+        // routed to a fallback font they only enlarged the line; asciidoctor-pdf output has none.
+        if (_prawnMetrics)
+        {
+            for (int i = 0; i < segments.Count; i++)
+                if (segments[i].Text.Contains('\u200B'))
+                    segments[i] = segments[i] with { Text = segments[i].Text.Replace("\u200B", "") };
+        }
+
         return segments;
     }
 
