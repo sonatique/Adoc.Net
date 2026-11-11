@@ -90,7 +90,7 @@ public sealed class EpubRenderer : DocumentRendererBase
         // Bundled fonts/CSS/images + iBooks display options. Asset paths inside
         // the EPUB match asciidoctor-epub3 conventions so manifest item href
         // attributes resolve correctly.
-        WriteAssets(archive);
+        WriteAssets(archive, (context.Options as EpubRenderOptions)?.CustomCss);
         foreach (var ch in chapters)
             WriteChapterXhtml(archive, ch);
     }
@@ -508,7 +508,7 @@ public sealed class EpubRenderer : DocumentRendererBase
     /// canonical paths. The resources are bundled with the assembly via
     /// &lt;EmbeddedResource&gt; in the csproj.
     /// </summary>
-    private static void WriteAssets(ZipArchive archive)
+    private static void WriteAssets(ZipArchive archive, string? customCss)
     {
         // (assembly resource name, archive path) tuples. Resource names follow
         // the .NET convention: {RootNamespace}.{folder}.{file}.
@@ -561,6 +561,12 @@ public sealed class EpubRenderer : DocumentRendererBase
             entry.LastWriteTime = DeterministicTimestamp;
             using var stream = entry.Open();
             resource.CopyTo(stream);
+            // Custom CSS goes last in the main stylesheet so its rules win (cf. HtmlRenderOptions.CustomCss).
+            if (archivePath == "EPUB/styles/epub3.css" && !string.IsNullOrWhiteSpace(customCss))
+            {
+                var bytes = Encoding.UTF8.GetBytes("\n" + customCss + "\n");
+                stream.Write(bytes, 0, bytes.Length);
+            }
         }
     }
 

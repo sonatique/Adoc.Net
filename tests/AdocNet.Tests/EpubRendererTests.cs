@@ -104,6 +104,26 @@ public class EpubRendererTests
     }
 
     [Test]
+    public void Custom_css_is_appended_to_main_stylesheet()
+    {
+        static string MainCss(byte[] epub)
+        {
+            using var zip = new ZipArchive(new MemoryStream(epub), ZipArchiveMode.Read);
+            using var reader = new StreamReader(zip.GetEntry("EPUB/styles/epub3.css")!.Open());
+            return reader.ReadToEnd();
+        }
+
+        var doc = BlockParser.Parse("= Title\n\nHello").Document;
+        const string css = "h2 { color: #365f91; }";
+        var plain = MainCss(new EpubRenderer().RenderToBytes(doc));
+        var styled = MainCss(new EpubRenderer().RenderToBytes(doc, new EpubRenderOptions { CustomCss = css }));
+
+        Assert.That(plain, Does.Not.Contain(css));
+        Assert.That(styled, Does.StartWith(plain));
+        Assert.That(styled.TrimEnd(), Does.EndWith(css));
+    }
+
+    [Test]
     public void Output_is_deterministic()
     {
         var doc = BlockParser.Parse("= Title\n\n== Section\n\nContent").Document;

@@ -117,14 +117,7 @@ public sealed class PagedAvaloniaRenderer
     {
         if (!string.IsNullOrEmpty(document.Title))
         {
-            yield return new TextBlock
-            {
-                Text = document.Title,
-                FontSize = _renderer.Theme.DocumentTitleFontSize,
-                FontWeight = FontWeight.Bold,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 12),
-            };
+            yield return _renderer.CreateTitleBlock(document.Title!);
         }
 
         foreach (var block in document.Children)

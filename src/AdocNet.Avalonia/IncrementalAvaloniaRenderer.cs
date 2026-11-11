@@ -70,7 +70,7 @@ public sealed class IncrementalAvaloniaRenderer
         // across incremental updates and containers are always located by
         // tag rather than by absolute position.
         if (!string.IsNullOrEmpty(document.Title))
-            panel.Children.Add(CreateTitleBlock(document.Title!));
+            panel.Children.Add(_renderer.CreateTitleBlock(document.Title!));
 
         for (int i = 0; i < document.Children.Count; i++)
         {
@@ -168,20 +168,6 @@ public sealed class IncrementalAvaloniaRenderer
         }
         return container;
     }
-
-    /// <summary>
-    /// Builds the leading document-title block, mirroring the styling used
-    /// by <see cref="AvaloniaRenderer.Render(DocumentLayout)"/> so the
-    /// incremental output is visually identical to a full render.
-    /// </summary>
-    private static TextBlock CreateTitleBlock(string title) => new()
-    {
-        Text = title,
-        FontSize = 28,
-        FontWeight = FontWeight.Bold,
-        TextWrapping = TextWrapping.Wrap,
-        Margin = new Thickness(0, 0, 0, 12),
-    };
 
     private static void TagControl(Control c, int index, int hash)
     {
