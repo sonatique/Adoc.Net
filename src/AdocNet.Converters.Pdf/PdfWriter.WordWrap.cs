@@ -160,21 +160,56 @@ internal sealed partial class PdfWriter
             for (int i = 0; i < words.Length; i++)
             {
                 var word = words[i];
-                // A segment opening with a space (" holds" after a codespan) splits into an
-                // empty first word that already produced the separator: don't add a second.
                 bool bufferEndsWithSpace = wordBuffer.Length > 0 && wordBuffer[^1] == ' ';
-                float wordWidth = MeasureText(word, seg.Font, seg.FontSize);
-                float neededWidth = (wordBuffer.Length > 0 && !bufferEndsWithSpace) || (wordBuffer.Length == 0 && currentWidth > 0)
-                    ? spaceWidth + wordWidth
-                    : wordWidth;
+                bool prevEndsWithSpace = currentLine.Count > 0
+                    && currentLine[^1].Text.Length > 0 && currentLine[^1].Text[^1] == ' ';
 
                 // Text glued to the previous segment ("LAP" + ".") is not a break opportunity:
                 // lines only break at whitespace, so it stays on the line. Legacy layout only
                 // treats closing punctuation that way (it inserts a space before other words).
-                bool glued = i == 0 && wordBuffer.Length == 0 && currentLine.Count > 0
-                    && currentLine[^1].Text.Length > 0 && currentLine[^1].Text[^1] != ' '
+                bool glued = i == 0 && wordBuffer.Length == 0 && currentLine.Count > 0 && !prevEndsWithSpace
                     && word.Length > 0 && (!SynthesizeSegmentSpaces || IsTightFollowingPunctuation(word[0]));
-                if (glued) neededWidth = wordWidth;
+
+                // Separator before this word, decided once for both the fit check and the output:
+                // inside a segment it is the space the split removed; before a segment's first word
+                // the legacy layout synthesizes one unless the previous text already ends with a
+                // space or this word opens with closing punctuation (issue #64).
+                bool separator = i > 0
+                    ? (wordBuffer.Length > 0 ? !bufferEndsWithSpace : currentWidth > 0 && !prevEndsWithSpace)
+                    : wordBuffer.Length == 0 && currentWidth > 0 && SynthesizeSegmentSpaces && !prevEndsWithSpace
+                      && !glued && !(word.Length > 0 && IsTightFollowingPunctuation(word[0]));
+                float wordWidth = MeasureText(word, seg.Font, seg.FontSize);
+                float neededWidth = separator ? spaceWidth + wordWidth : wordWidth;
+
+                // Prawn also breaks after a hyphen inside a word ("non-byte-" / "aligned"): put the
+                // longest prefix ending in '-' that still fits on this line, wrap the rest.
+                while (BreakAfterHyphens && !glued && currentWidth + neededWidth > maxWidth && word.IndexOf('-', 1) > 0)
+                {
+                    float lead = neededWidth - wordWidth; // separator space before the word, if any
+                    int cut = -1;
+                    for (int k = word.Length - 2; k >= 1; k--)
+                    {
+                        if (word[k] == '-' && currentWidth + lead + MeasureText(word.Substring(0, k + 1), seg.Font, seg.FontSize) <= maxWidth)
+                        {
+                            cut = k;
+                            break;
+                        }
+                    }
+                    if (cut < 0) break;
+                    if (separator)
+                        wordBuffer.Append(' ');
+                    wordBuffer.Append(word, 0, cut + 1);
+                    currentLine.Add(seg with { Text = wordBuffer.ToString() });
+                    wordBuffer.Clear();
+                    result.Add(currentLine);
+                    currentLine = [];
+                    currentWidth = 0;
+                    word = word.Substring(cut + 1);
+                    wordWidth = MeasureText(word, seg.Font, seg.FontSize);
+                    neededWidth = wordWidth;
+                    separator = false;
+                }
+
                 if (!glued && currentWidth + neededWidth > maxWidth && (currentLine.Count > 0 || wordBuffer.Length > 0))
                 {
                     // Flush word buffer as a segment on the current line
@@ -188,30 +223,11 @@ internal sealed partial class PdfWriter
                     currentLine = [];
                     currentWidth = 0;
                     neededWidth = wordWidth;
+                    separator = false;
                 }
 
-                if (wordBuffer.Length > 0)
-                {
-                    if (!bufferEndsWithSpace)
-                        wordBuffer.Append(' ');
-                }
-                else if (currentWidth > 0 && i == 0)
-                {
-                    // Add space between previous segment and this one, but only
-                    // if the previous segment didn't already end with whitespace
-                    // and this one doesn't open with punctuation that hugs the
-                    // preceding text. Without the punctuation guard, a footnote
-                    // marker followed by a period reads as "word [1] ." (issue #64).
-                    bool prevEndsWithSpace = currentLine.Count > 0
-                        && currentLine[^1].Text.Length > 0
-                        && currentLine[^1].Text[^1] == ' ';
-                    bool startsWithTightPunct = word.Length > 0 && IsTightFollowingPunctuation(word[0]);
-                    if (!prevEndsWithSpace && !startsWithTightPunct && !glued)
-                        wordBuffer.Append(' ');
-                    else
-                        neededWidth = wordWidth; // No space needed, recalculate
-                }
-
+                if (separator)
+                    wordBuffer.Append(' ');
                 wordBuffer.Append(word);
                 currentWidth += neededWidth;
             }
