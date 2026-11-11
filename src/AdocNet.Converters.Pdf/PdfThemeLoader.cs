@@ -139,6 +139,8 @@ public static class PdfThemeLoader
         if (props.TryGetValue("page.margin", out var marginStr))
             ParseMargins(marginStr, ref marginTop, ref marginRight, ref marginBottom, ref marginLeft);
 
+        var pageSize = ParsePageSize(GetString(props, "page.size"));
+
         var options = new PdfRenderOptions
         {
             // Fonts
@@ -151,7 +153,9 @@ public static class PdfThemeLoader
             MonoBoldItalicFontPath = fontMonoBoldItalic,
             HeadingFontPath = fontHeading,
 
-            // Page geometry
+            // Page geometry (asciidoctor-pdf default page.size: A4 = 595.28 x 841.89)
+            PageWidth = pageSize.Width,
+            PageHeight = pageSize.Height,
             MarginTop = marginTop,
             MarginRight = marginRight,
             MarginBottom = marginBottom,
@@ -282,6 +286,21 @@ public static class PdfThemeLoader
         };
 
         return options;
+    }
+
+    /// <summary>Theme <c>page.size</c>: A4 (default), Letter, Legal, or <c>[width, height]</c> lengths.</summary>
+    private static (float Width, float Height) ParsePageSize(string? value)
+    {
+        switch (value?.Trim().ToUpperInvariant())
+        {
+            case null or "" or "A4": return (595.28f, 841.89f);
+            case "LETTER": return (612f, 792f);
+            case "LEGAL": return (612f, 1008f);
+        }
+        var parts = value!.Trim().TrimStart('[').TrimEnd(']').Split(',');
+        if (parts.Length == 2 && ParseLength(parts[0]) is { } w && ParseLength(parts[1]) is { } h)
+            return (w, h);
+        return (595.28f, 841.89f);
     }
 
     // ── Title page ───────────────────────────────────────────────────────

@@ -324,7 +324,7 @@ internal sealed partial class PdfWriter
             {
                 const float pad = 1.5f;
                 _currentStream!.Append("q\n");
-                _currentStream.Append($"{Fmt(bg.R)} {Fmt(bg.G)} {Fmt(bg.B)} rg\n");
+                _currentStream.Append($"{FmtColor(bg.R)} {FmtColor(bg.G)} {FmtColor(bg.B)} rg\n");
                 _currentStream.Append($"{Fmt(bgX - pad)} {Fmt(y - 2f)} {Fmt(adjW + pad * 2)} {Fmt(seg.FontSize + 3f)} re f\n");
                 _currentStream.Append("Q\n");
             }
@@ -364,7 +364,7 @@ internal sealed partial class PdfWriter
             if (activeColor is not null)
             {
                 var c = activeColor.Value;
-                _currentStream.Append($"{Fmt(c.R)} {Fmt(c.G)} {Fmt(c.B)} rg\n");
+                _currentStream.Append($"{FmtColor(c.R)} {FmtColor(c.G)} {FmtColor(c.B)} rg\n");
             }
             if (_embeddedFonts.TryGetValue(seg.Font, out var ttFont))
             {
@@ -382,7 +382,7 @@ internal sealed partial class PdfWriter
             if (activeColor is not null)
             {
                 if (BodyColor is { } bc)
-                    _currentStream.Append($"{Fmt(bc.R)} {Fmt(bc.G)} {Fmt(bc.B)} rg\n");
+                    _currentStream.Append($"{FmtColor(bc.R)} {FmtColor(bc.G)} {FmtColor(bc.B)} rg\n");
                 else
                     _currentStream.Append("0 0 0 rg\n");
             }

@@ -34,9 +34,10 @@ public sealed partial class PdfRenderer
     {
         var tp = _titlePage ?? new PdfTitlePageOptions();
         w.EnsurePage();
-        // No running content on the title page.
+        // No running content on the title page, and page numbering starts after it.
         if (w.RunningContentStartPage <= w.CurrentPageNumber)
             w.RunningContentStartPage = w.CurrentPageNumber + 1;
+        w.PageNumberOffset = w.CurrentPageNumber;
 
         float pageHeight = w.PageHeight;
         float left = w.MarginLeftValue, width = w.ContentWidth, pageWidth = w.PageWidth;

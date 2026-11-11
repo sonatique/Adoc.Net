@@ -456,8 +456,11 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         }
 
         // If running-content starts after-toc, suppress headers/footers until now
+        // (on the page after the TOC: asciidoctor-pdf never puts running content on a TOC page)
         if (_runningContentStartAt == "after-toc")
-            w.RunningContentStartPage = w.CurrentPageNumber;
+            w.RunningContentStartPage = tocNode is not null && tocNode.Entries.Count > 0
+                ? w.CurrentPageNumber + 1
+                : w.CurrentPageNumber;
 
         foreach (var child in document.Children)
         {
@@ -771,15 +774,23 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         // Register as outline entry and named destination for bookmarks/cross-refs.
         // Include section number prefix in outline title when sectnums is enabled.
         string outlineTitle = secNumPrefix is not null ? $"{secNumPrefix}{section.Title}" : section.Title;
-        w.AddOutlineEntry(outlineTitle, section.Level, section.Id);
 
         // Track section title for header/footer {section-title} placeholder.
-        // Only level-1 sections (== headings) are tracked, matching Asciidoctor behavior.
         // Include the section number prefix when sectnums is enabled.
-        // SetSectionTitleForPage only takes effect on the FIRST level-1 section per page;
+        // SetSectionTitleForPage only takes effect on the FIRST section per page;
         // subsequent sections on the same page don't override (matches Asciidoctor).
-        if (section.Level == 1)
-            w.SetSectionTitleForPage(secNumPrefix is not null ? $"{secNumPrefix}{section.Title}" : section.Title);
+        // The legacy layout tracks level-1 sections only; themed (Prawn) output tracks
+        // every level, as asciidoctor-pdf does.
+        void RegisterHeading()
+        {
+            w.AddOutlineEntry(outlineTitle, section.Level, section.Id);
+            if (_prawnMetrics || section.Level == 1)
+                w.SetSectionTitleForPage(outlineTitle);
+        }
+        // The themed path registers after its keep-with-next page break so the outline,
+        // cross-reference destination and running section title land on the heading's page.
+        if (!_prawnMetrics)
+            RegisterHeading();
 
         // Render section title with heading font, per-level color
         if (color is { } hc) w.SetFillColor(hc.R, hc.G, hc.B);
@@ -788,7 +799,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             segments.Insert(0, new TextSegment(secNumPrefix, _fontHeading, fontSize));
         if (_prawnMetrics)
         {
-            WritePrawnHeading(w, segments, fontSize, section.Level);
+            WritePrawnHeading(w, segments, fontSize, section.Level, RegisterHeading);
         }
         else
         {

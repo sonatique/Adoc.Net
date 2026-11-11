@@ -146,6 +146,30 @@ internal sealed partial class PdfWriter
     /// <summary>Page number from which headers/footers start appearing (1-based). Default: 1 (all pages).</summary>
     internal int RunningContentStartPage { get; set; } = 1;
 
+    /// <summary>
+    /// Pages before numbering starts (the title page): {page-number} and {page-count}
+    /// count from the page after them, as asciidoctor-pdf does.
+    /// </summary>
+    internal int PageNumberOffset { get; set; }
+
+    private string DisplayPageNumber =>
+        (_currentPageNumber - PageNumberOffset).ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Baseline of running content when the body font is embedded (asciidoctor-pdf placement):
+    /// header text centred in the header height (line height 1), footer text top-aligned below
+    /// its 6pt top padding. Null for built-in fonts (legacy calibration).
+    /// </summary>
+    private float? PrawnRunningBaseline(bool header, float fontSize)
+    {
+        if (FirstLineOffset is null || GetEmbeddedFont(ResolveFontKey("F1")) is not { } f) return null;
+        float em = f.UnitsPerEm;
+        float asc = f.Ascender / em * fontSize, desc = Math.Abs(f.Descender) / em * fontSize, gap = f.LineGap / em * fontSize;
+        if (header)
+            return HeaderHeight > 0 ? _pageHeight - ((HeaderHeight - (asc + desc + gap)) / 2 + gap + asc) : null;
+        return FooterHeight > 0 ? FooterHeight - 6f - gap - asc : null;
+    }
+
     // ── Hyphenation ──────────────────────────────────────────────────────
     internal bool HyphenationEnabled { get; set; }
 
@@ -235,14 +259,14 @@ internal sealed partial class PdfWriter
                 {
                     // Multi-page: plain rect on this (last) page
                     bgCmd.Append("q\n");
-                    bgCmd.Append($"{Fmt(bg.R)} {Fmt(bg.G)} {Fmt(bg.B)} rg\n");
+                    bgCmd.Append($"{FmtColor(bg.R)} {FmtColor(bg.G)} {FmtColor(bg.B)} rg\n");
                     bgCmd.Append($"{Fmt(rx)} {Fmt(bottom)} {Fmt(rw)} {Fmt(rh)} re f\n");
                     bgCmd.Append("Q\n");
                     if (_codeBlockBorderColor is { } bc)
                     {
                         bgCmd.Append("q\n");
                         bgCmd.Append($"{Fmt(CodeBlockBorderWidth)} w\n");
-                        bgCmd.Append($"{Fmt(bc.R)} {Fmt(bc.G)} {Fmt(bc.B)} RG\n");
+                        bgCmd.Append($"{FmtColor(bc.R)} {FmtColor(bc.G)} {FmtColor(bc.B)} RG\n");
                         bgCmd.Append($"{Fmt(rx)} {Fmt(bottom)} {Fmt(rw)} {Fmt(rh)} re S\n");
                         bgCmd.Append("Q\n");
                     }
@@ -280,14 +304,14 @@ internal sealed partial class PdfWriter
 
             // Continuation page: simple rect (no rounded corners at page boundary)
             bgCmd.Append("q\n");
-            bgCmd.Append($"{Fmt(bg.R)} {Fmt(bg.G)} {Fmt(bg.B)} rg\n");
+            bgCmd.Append($"{FmtColor(bg.R)} {FmtColor(bg.G)} {FmtColor(bg.B)} rg\n");
             bgCmd.Append($"{Fmt(rx)} {Fmt(bottom)} {Fmt(rw)} {Fmt(rh)} re f\n");
             bgCmd.Append("Q\n");
             if (_codeBlockBorderColor is { } bc)
             {
                 bgCmd.Append("q\n");
                 bgCmd.Append($"{Fmt(CodeBlockBorderWidth)} w\n");
-                bgCmd.Append($"{Fmt(bc.R)} {Fmt(bc.G)} {Fmt(bc.B)} RG\n");
+                bgCmd.Append($"{FmtColor(bc.R)} {FmtColor(bc.G)} {FmtColor(bc.B)} RG\n");
                 bgCmd.Append($"{Fmt(rx)} {Fmt(bottom)} {Fmt(rw)} {Fmt(rh)} re S\n");
                 bgCmd.Append("Q\n");
             }
@@ -307,7 +331,7 @@ internal sealed partial class PdfWriter
         r = Math.Min(r, Math.Min(w / 2, h / 2));
         float k = r * 0.5523f;
         sb.Append("q\n");
-        sb.Append($"{Fmt(color.R)} {Fmt(color.G)} {Fmt(color.B)} rg\n");
+        sb.Append($"{FmtColor(color.R)} {FmtColor(color.G)} {FmtColor(color.B)} rg\n");
         AppendRoundedRectPath(sb, x, y, w, h, r, k);
         sb.Append("f\n");
         sb.Append("Q\n");
@@ -321,7 +345,7 @@ internal sealed partial class PdfWriter
         float k = r * 0.5523f;
         sb.Append("q\n");
         sb.Append($"{Fmt(CodeBlockBorderWidth)} w\n");
-        sb.Append($"{Fmt(color.R)} {Fmt(color.G)} {Fmt(color.B)} RG\n");
+        sb.Append($"{FmtColor(color.R)} {FmtColor(color.G)} {FmtColor(color.B)} RG\n");
         AppendRoundedRectPath(sb, x, y, w, h, r, k);
         sb.Append("S\n");
         sb.Append("Q\n");
@@ -603,10 +627,13 @@ internal sealed partial class PdfWriter
             // Match Asciidoctor PDF: text is top-aligned in the footer area (Y=0 to Y=footerHeight).
             // Baseline = footerHeight - font_size * 1.30 (accounts for font ascent + line spacing).
             // Verified against Asciidoctor: footer.height=48, font=11pt => Y=33.75 ≈ 48 - 11*1.295.
-            float footerY = FooterHeight > 0
-                ? FooterHeight - FooterFontSize * 1.30f
-                : _marginBottom - 20;
-            AppendHeaderFooterText(footer, footerY, FooterFontSize, FooterFontColor, FooterAlignment);
+            float footerY = PrawnRunningBaseline(header: false, FooterFontSize)
+                ?? (FooterHeight > 0
+                    ? FooterHeight - FooterFontSize * 1.30f
+                    : _marginBottom - 20);
+            // asciidoctor-pdf footer padding [6, 1, 0, 1]: 1pt horizontal inset in themed output.
+            AppendHeaderFooterText(footer, footerY, FooterFontSize, FooterFontColor, FooterAlignment,
+                inset: FirstLineOffset is null ? 0f : 1f);
         }
 
         // Render footer image (e.g., SVG logo) in the bottom-left corner
@@ -629,19 +656,21 @@ internal sealed partial class PdfWriter
             // Position header text within the header area (centered, matching Asciidoctor PDF default valign:middle).
             // Baseline = pageTop - headerHeight/2 - fontSize * 0.15 places the text visually centered in the area.
             // Verified against Asciidoctor: header.height=64, font=11pt, page=842 => Y=808.35.
-            float headerY = HeaderHeight > 0
-                ? _pageHeight - HeaderHeight / 2 - HeaderFontSize * 0.15f
-                : _pageHeight - _marginTop / 2;
+            float headerY = PrawnRunningBaseline(header: true, HeaderFontSize)
+                ?? (HeaderHeight > 0
+                    ? _pageHeight - HeaderHeight / 2 - HeaderFontSize * 0.15f
+                    : _pageHeight - _marginTop / 2);
             AppendHeaderFooterText(HeaderTemplate, headerY, HeaderFontSize, HeaderFontColor, HeaderAlignment);
         }
     }
 
-    private void AppendHeaderFooterText(string template, float y, float fontSize, PdfColor? fontColor, PdfAlignment alignment)
+    private void AppendHeaderFooterText(string template, float y, float fontSize, PdfColor? fontColor, PdfAlignment alignment,
+        float inset = 0f)
     {
         string text = template
-            .Replace("{page}", _currentPageNumber.ToString(CultureInfo.InvariantCulture))
+            .Replace("{page}", DisplayPageNumber)
             .Replace("{pages}", TotalPagesPlaceholder)
-            .Replace("{page-number}", _currentPageNumber.ToString(CultureInfo.InvariantCulture))
+            .Replace("{page-number}", DisplayPageNumber)
             .Replace("{page-count}", TotalPagesPlaceholder)
             .Replace("{section-title}", CurrentSectionTitle ?? "")
             .Replace("{document-title}", DocumentTitle ?? "")
@@ -660,14 +689,14 @@ internal sealed partial class PdfWriter
 
         float x = alignment switch
         {
-            PdfAlignment.Left => _marginLeft,
-            PdfAlignment.Right => _marginLeft + _contentWidth - textWidth,
+            PdfAlignment.Left => _marginLeft + inset,
+            PdfAlignment.Right => _marginLeft + _contentWidth - inset - textWidth,
             _ => _marginLeft + (_contentWidth - textWidth) / 2,
         };
 
         if (fontColor is { } fc)
         {
-            _currentStream!.Append($"{Fmt(fc.R)} {Fmt(fc.G)} {Fmt(fc.B)} rg\n");
+            _currentStream!.Append($"{FmtColor(fc.R)} {FmtColor(fc.G)} {FmtColor(fc.B)} rg\n");
         }
 
         _currentStream!.Append("BT\n");
@@ -845,7 +874,7 @@ internal sealed partial class PdfWriter
             {
                 const float pad = 1.5f;
                 _currentStream!.Append("q\n");
-                _currentStream.Append($"{Fmt(bg.R)} {Fmt(bg.G)} {Fmt(bg.B)} rg\n");
+                _currentStream.Append($"{FmtColor(bg.R)} {FmtColor(bg.G)} {FmtColor(bg.B)} rg\n");
                 _currentStream.Append($"{Fmt(bgX - pad)} {Fmt(y - 2f)} {Fmt(segW + pad * 2)} {Fmt(seg.FontSize + 3f)} re f\n");
                 _currentStream.Append("Q\n");
             }
@@ -872,7 +901,7 @@ internal sealed partial class PdfWriter
             if (activeColor is not null)
             {
                 var c = activeColor.Value;
-                _currentStream.Append($"{Fmt(c.R)} {Fmt(c.G)} {Fmt(c.B)} rg\n");
+                _currentStream.Append($"{FmtColor(c.R)} {FmtColor(c.G)} {FmtColor(c.B)} rg\n");
             }
             if (_embeddedFonts.TryGetValue(seg.Font, out var ttFont))
             {
@@ -890,7 +919,7 @@ internal sealed partial class PdfWriter
             if (activeColor is not null)
             {
                 if (BodyColor is { } bc)
-                    _currentStream.Append($"{Fmt(bc.R)} {Fmt(bc.G)} {Fmt(bc.B)} rg\n");
+                    _currentStream.Append($"{FmtColor(bc.R)} {FmtColor(bc.G)} {FmtColor(bc.B)} rg\n");
                 else
                     _currentStream.Append("0 0 0 rg\n");
             }

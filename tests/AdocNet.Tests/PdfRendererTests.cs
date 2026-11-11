@@ -1209,6 +1209,20 @@ public class PdfRendererTests
     }
 
     [Test]
+    public void Running_content_skips_title_and_toc_pages_and_numbers_after_title_page()
+    {
+        var doc = AdocParser.Parse(
+            "= Doc\n:title-page:\n:toc: macro\n\n<<<\ntoc::[]\n\n<<<\n== Alpha\n\nOne.\n\n<<<\n== Beta\n\nTwo.\n").Document;
+        var opts = new PdfRenderOptions { FooterText = "{page-number} of {page-count}", RunningContentStartAt = "after-toc" };
+        var text = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc, opts));
+
+        Assert.That(Regex.Matches(text, "/Type /Page ").Count, Is.EqualTo(4), "title, TOC, Alpha, Beta");
+        var footers = Regex.Matches(text, @"\((\d+) of (\d+)\s*\) Tj").Select(m => $"{m.Groups[1]} of {m.Groups[2]}").ToList();
+        Assert.That(footers, Is.EqualTo(new[] { "2 of 3", "3 of 3" }),
+            "no footer on the title or TOC page; numbering starts after the title page");
+    }
+
+    [Test]
     public void No_title_page_without_attribute()
     {
         var doc = AdocParser.Parse("= Main: Sub\n\nBody text.\n").Document;

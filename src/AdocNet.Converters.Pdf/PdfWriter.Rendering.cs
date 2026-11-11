@@ -117,12 +117,12 @@ internal sealed partial class PdfWriter
 
     internal void SetFillColor(float r, float g, float b)
     {
-        _currentStream!.Append($"{Fmt(r)} {Fmt(g)} {Fmt(b)} rg\n");
+        _currentStream!.Append($"{FmtColor(r)} {FmtColor(g)} {FmtColor(b)} rg\n");
     }
 
     internal void SetStrokeColor(float r, float g, float b)
     {
-        _currentStream!.Append($"{Fmt(r)} {Fmt(g)} {Fmt(b)} RG\n");
+        _currentStream!.Append($"{FmtColor(r)} {FmtColor(g)} {FmtColor(b)} RG\n");
     }
 
     // ── Link annotations ─────────────────────────────────────────────────
@@ -440,10 +440,11 @@ internal sealed partial class PdfWriter
         byte[] result = ms.ToArray();
 
         // Replace total page count placeholders with actual count (same byte length)
-        ReplaceTotalPagesPlaceholder(result, _pageObjectIds.Count);
+        int pageCount = _pageObjectIds.Count - PageNumberOffset;
+        ReplaceTotalPagesPlaceholder(result, pageCount);
         // Also replace placeholders encoded as TrueType glyph IDs (when using embedded fonts)
         foreach (var ttFont in _embeddedFonts.Values)
-            ReplaceTotalPagesPlaceholderTrueType(result, _pageObjectIds.Count, ttFont);
+            ReplaceTotalPagesPlaceholderTrueType(result, pageCount, ttFont);
 
         return result;
     }
@@ -731,6 +732,10 @@ internal sealed partial class PdfWriter
 
     private static string Fmt(float value) =>
         value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    // Colour components need ~1/255 resolution; two decimals shifted #909090 to #8f8f8f.
+    private static string FmtColor(float value) =>
+        value.ToString("0.####", CultureInfo.InvariantCulture);
 
     // ── Embedded font helpers ───────────────────────────────────────────
 

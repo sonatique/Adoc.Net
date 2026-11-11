@@ -67,7 +67,7 @@ public sealed partial class PdfRenderer
     /// <summary>Moves the cursor so the next block's top edge is <paramref name="top"/>.</summary>
     private void SetNextBlockTop(PdfWriter w, float top) => w.SetCursor(top - _bodyFirstOffset);
 
-    private void WritePrawnHeading(PdfWriter w, List<TextSegment> segments, float fontSize, int level)
+    private void WritePrawnHeading(PdfWriter w, List<TextSegment> segments, float fontSize, int level, Action register)
     {
         int i = Math.Min(Math.Max(level, 1), 4) - 1;
         var m = MetricsFor(w, _fontHeading, fontSize, _headingLineHeight);
@@ -85,6 +85,7 @@ public sealed partial class PdfRenderer
         }
 
         w.SetCursor(top - m.FirstOffset);
+        register();
         w.WriteWrappedSegments(segments, m.Advance);
         float lastBaseline = w.CursorY + m.Advance;
         SetNextBlockTop(w, lastBaseline - m.Bottom - _headingMarginBottoms[i]);
