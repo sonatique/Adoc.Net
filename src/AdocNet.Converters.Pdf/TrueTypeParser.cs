@@ -134,7 +134,7 @@ internal sealed class TrueTypeFont
         string fontName = "UnknownFont";
         if (tables.TryGetValue("name", out var nameTable))
         {
-            fontName = ParsePostScriptName(data, nameTable.Offset) ?? fontName;
+            fontName = ParseName(data, nameTable.Offset, nameId: 6) ?? fontName;
         }
 
         return new TrueTypeFont(fontName, unitsPerEm, ascender, descender, data, cmapTable2, glyphWidths);
@@ -281,41 +281,66 @@ internal sealed class TrueTypeFont
         }
     }
 
-    private static string? ParsePostScriptName(byte[] data, int nameOffset)
+    /// <summary>
+    /// Reads the legacy family name (name ID 1, e.g. "Calibri Light") of the first
+    /// font in a TrueType/OpenType file or collection. Null when absent.
+    /// </summary>
+    internal static string? ReadFamilyName(byte[] data)
+    {
+        // A collection ('ttcf') lists font offsets after its 12-byte header; table
+        // offsets inside each font are file-absolute, so only the directory moves.
+        int fontOffset = Encoding.ASCII.GetString(data, 0, 4) == "ttcf" ? (int)ReadUInt32(data, 12) : 0;
+        int numTables = ReadUInt16(data, fontOffset + 4);
+        for (int i = 0; i < numTables; i++)
+        {
+            int entryOffset = fontOffset + 12 + i * 16;
+            if (Encoding.ASCII.GetString(data, entryOffset, 4) == "name")
+                return ParseName(data, (int)ReadUInt32(data, entryOffset + 8), nameId: 1);
+        }
+        return null;
+    }
+
+    private static string? ParseName(byte[] data, int nameOffset, int nameId)
     {
         int count = ReadUInt16(data, nameOffset + 2);
         int stringOffset = ReadUInt16(data, nameOffset + 4);
+        string? firstWindowsMatch = null;
 
         for (int i = 0; i < count; i++)
         {
             int recordOffset = nameOffset + 6 + i * 12;
             int platformId = ReadUInt16(data, recordOffset);
             int encodingId = ReadUInt16(data, recordOffset + 2);
-            int nameId = ReadUInt16(data, recordOffset + 6);
+            int languageId = ReadUInt16(data, recordOffset + 4);
+            int recordNameId = ReadUInt16(data, recordOffset + 6);
             int length = ReadUInt16(data, recordOffset + 8);
             int offset = ReadUInt16(data, recordOffset + 10);
 
-            // nameID 6 = PostScript name, platform 3 encoding 1 = Windows Unicode BMP
-            if (nameId == 6 && platformId == 3 && encodingId == 1)
+            // Platform 3 encoding 1 = Windows Unicode BMP. Prefer en-US (0x0409):
+            // records are sorted by language, so a localized name can come first.
+            if (recordNameId == nameId && platformId == 3 && encodingId == 1)
             {
                 int strStart = nameOffset + stringOffset + offset;
                 if (strStart + length <= data.Length)
                 {
-                    return Encoding.BigEndianUnicode.GetString(data, strStart, length);
+                    var name = Encoding.BigEndianUnicode.GetString(data, strStart, length);
+                    if (languageId == 0x0409) return name;
+                    firstWindowsMatch ??= name;
                 }
             }
         }
+        if (firstWindowsMatch is not null) return firstWindowsMatch;
 
         // Fallback: try platform 1 (Macintosh)
         for (int i = 0; i < count; i++)
         {
             int recordOffset = nameOffset + 6 + i * 12;
             int platformId = ReadUInt16(data, recordOffset);
-            int nameId = ReadUInt16(data, recordOffset + 6);
+            int recordNameId = ReadUInt16(data, recordOffset + 6);
             int length = ReadUInt16(data, recordOffset + 8);
             int offset = ReadUInt16(data, recordOffset + 10);
 
-            if (nameId == 6 && platformId == 1)
+            if (recordNameId == nameId && platformId == 1)
             {
                 int strStart = nameOffset + stringOffset + offset;
                 if (strStart + length <= data.Length)
