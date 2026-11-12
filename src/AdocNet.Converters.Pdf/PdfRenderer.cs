@@ -197,6 +197,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         writer.HeaderHeight = pdfOptions.HeaderHeight;
         writer.FooterHeight = pdfOptions.FooterHeight;
         writer.DocumentTitle = context.Document.Title is { } docTitle ? PlainTitle(docTitle) : null;
+        writer.MetadataTitle = pdfOptions.MetadataTitle;
         if (context.Document.Attributes.TryGetValue("header-title", out var ht))
             writer.HeaderTitle = ht;
 
