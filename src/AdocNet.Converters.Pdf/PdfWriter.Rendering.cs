@@ -408,8 +408,8 @@ internal sealed partial class PdfWriter
 
         // Info dictionary (deterministic) — include document title if set
         var infoDict = "<< /Producer (AdocNet PDF Renderer) /CreationDate (D:20260101000000+00'00')";
-        if (DocumentTitle is not null)
-            infoDict += $" /Title ({EscapePdfString(DocumentTitle)})";
+        if ((MetadataTitle ?? DocumentTitle) is { } infoTitle)
+            infoDict += $" /Title {PdfTextString(infoTitle)}";
         infoDict += " >>";
         int infoId = AllocObject(new PdfObject(infoDict));
 
@@ -544,7 +544,7 @@ internal sealed partial class PdfWriter
                 ? _pageObjectIds[entry.PageIndex] : _pageObjectIds[^1];
 
             var sb = new StringBuilder();
-            sb.Append($"<< /Title ({EscapePdfString(entry.Title)}) ");
+            sb.Append($"<< /Title {PdfTextString(entry.Title)} ");
             sb.Append($"/Parent {parentId} 0 R ");
             sb.Append($"/Dest [{pageObjId} 0 R /XYZ 0 {Fmt(entry.Y + 10)} null] ");
 
@@ -616,6 +616,23 @@ internal sealed partial class PdfWriter
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// A PDF text string (document information, outline titles): a literal string for ASCII,
+    /// otherwise UTF-16BE with a byte-order mark as a hex string, so any Unicode text survives
+    /// (ISO 32000-1 7.9.2.2).
+    /// </summary>
+    internal static string PdfTextString(string text)
+    {
+        bool ascii = true;
+        foreach (var ch in text)
+            if (ch > 0x7E || (ch < 0x20 && ch != '\t')) { ascii = false; break; }
+        if (ascii) return "(" + EscapePdfString(text) + ")";
+        var sb = new StringBuilder("<FEFF", 6 + text.Length * 4);
+        foreach (var ch in text)
+            sb.Append(((int)ch).ToString("X4", CultureInfo.InvariantCulture)); // UTF-16 code units, surrogates included
+        return sb.Append('>').ToString();
+    }
 
     private static string EscapePdfString(string text)
     {

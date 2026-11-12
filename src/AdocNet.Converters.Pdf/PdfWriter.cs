@@ -160,6 +160,8 @@ internal sealed partial class PdfWriter
     // Last section started so far: a page with no section of its own shows it (asciidoctor-pdf).
     private string? _latestSectionTitle;
     internal string? DocumentTitle { get; set; }
+    /// <summary>Overrides the document information /Title only (running content keeps DocumentTitle).</summary>
+    internal string? MetadataTitle { get; set; }
     /// <summary>Optional override for {header-title} template token. Falls back to DocumentTitle.</summary>
     internal string? HeaderTitle { get; set; }
     internal SvgParser.SvgDocument? FooterImage { get; set; }

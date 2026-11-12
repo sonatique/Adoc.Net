@@ -25,6 +25,28 @@ public sealed class PdfRenderOptions : RenderOptions
     /// <summary>A shared default instance (A4 page, 1-inch margins, no header/footer).</summary>
     public static new PdfRenderOptions Default { get; } = new();
 
+    /// <summary>Creates options with the defaults.</summary>
+    public PdfRenderOptions() { }
+
+    /// <summary>
+    /// Copies <paramref name="source"/> (for instance options from <see cref="PdfThemeLoader.Load(string, string?)"/>)
+    /// so a few values can be changed with an object initializer, leaving the source untouched:
+    /// <code>new PdfRenderOptions(theme) { PageWidth = theme.PageHeight, PageHeight = theme.PageWidth, MetadataTitle = "…" }</code>
+    /// Every option is copied, including ones added in later versions. The copy is shallow: nested
+    /// objects (<see cref="TitlePage"/>, arrays) are shared, so replace them rather than modify them.
+    /// </summary>
+    public PdfRenderOptions(PdfRenderOptions source)
+    {
+        if (source is null) throw new ArgumentNullException(nameof(source));
+        // Field-wise so options added later are never missed (a hand-written list was, in the CLI).
+        for (var type = typeof(PdfRenderOptions); type is not null && type != typeof(object); type = type.BaseType)
+        {
+            foreach (var field in type.GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public
+                         | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.DeclaredOnly))
+                field.SetValue(this, field.GetValue(source));
+        }
+    }
+
     // ── Page geometry ────────────────────────────────────────────────────
 
     /// <summary>Page width in points (72 points = 1 inch). Default: 595 (A4).</summary>
@@ -370,4 +392,12 @@ public sealed class PdfRenderOptions : RenderOptions
     /// (asciidoctor-pdf default theme) for themed output.
     /// </summary>
     public PdfColor? HeadingFontColor { get; init; }
+
+    /// <summary>
+    /// Title written to the PDF's document information (/Title), as shown in a viewer's title bar
+    /// and file properties. Null = the document title. Only the metadata changes: the title page,
+    /// the outline and <c>{document-title}</c> / <c>{header-title}</c> in running content still use
+    /// the document title.
+    /// </summary>
+    public string? MetadataTitle { get; init; }
 }

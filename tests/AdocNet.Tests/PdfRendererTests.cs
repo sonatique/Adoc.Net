@@ -1239,6 +1239,65 @@ public class PdfRendererTests
             "no footer on the title or TOC page; numbering starts after the title page");
     }
 
+    // ── Metadata title and options copy ─────────────────────────────────
+
+    private static string InfoTitle(string pdf) =>
+        Regex.Match(pdf, @"/Producer \(AdocNet PDF Renderer\)[^\n]*?/Title (\([^)]*\)|<[0-9A-F]+>)").Groups[1].Value;
+
+    [Test]
+    public void MetadataTitle_replaces_only_the_info_title()
+    {
+        var doc = AdocParser.Parse("= Product Guide: Full Subtitle\n\n== One\n\nText.\n").Document;
+        var options = new PdfRenderOptions { FooterText = "{document-title}", MetadataTitle = "Product Guide" };
+        var pdf = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc, options));
+
+        Assert.That(InfoTitle(pdf), Is.EqualTo("(Product Guide)"));
+        Assert.That(pdf, Does.Contain("(Product Guide: Full Subtitle) Tj"), "running content keeps the document title");
+        Assert.That(pdf, Does.Contain("/Title (Product Guide: Full Subtitle) /Parent"), "outline keeps the document title");
+
+        var defaultPdf = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc, new PdfRenderOptions()));
+        Assert.That(InfoTitle(defaultPdf), Is.EqualTo("(Product Guide: Full Subtitle)"), "null keeps today's behaviour");
+    }
+
+    [Test]
+    public void Non_ascii_titles_are_utf16_text_strings()
+    {
+        const string title = "Café Ünïcode – ✓ 𝄞";
+        var doc = AdocParser.Parse("= Plain\n\n== Section\n\nText.\n").Document;
+        var pdf = Encoding.ASCII.GetString(new PdfRenderer().RenderToBytes(doc, new PdfRenderOptions { MetadataTitle = title }));
+
+        var hex = InfoTitle(pdf);
+        Assert.That(hex, Does.StartWith("<FEFF"));
+        var bytes = Enumerable.Range(0, (hex.Length - 6) / 2).Select(i => Convert.ToByte(hex.Substring(5 + 2 * i, 2), 16)).ToArray();
+        Assert.That(Encoding.BigEndianUnicode.GetString(bytes), Is.EqualTo(title));
+        Assert.That(PdfRenderOptions.Default.MetadataTitle, Is.Null);
+    }
+
+    [Test]
+    public void Copy_constructor_copies_every_option_and_leaves_the_source_unchanged()
+    {
+        var source = new PdfRenderOptions
+        {
+            PageWidth = 595.28f, PageHeight = 841.89f, FooterText = "{page}", TableCellPadding = new[] { 1f, 4f, 1f, 4f },
+            TitlePage = new PdfTitlePageOptions { LogoTop = "130" }, BaseDirectory = "base",
+        };
+        var copy = new PdfRenderOptions(source) { PageWidth = source.PageHeight, PageHeight = source.PageWidth, MetadataTitle = "M" };
+
+        Assert.That((source.PageWidth, source.PageHeight, source.MetadataTitle), Is.EqualTo((595.28f, 841.89f, (string?)null)));
+        Assert.That((copy.PageWidth, copy.PageHeight, copy.MetadataTitle), Is.EqualTo((841.89f, 595.28f, "M")));
+        foreach (var property in typeof(PdfRenderOptions).GetProperties().Where(p => p.GetMethod is { IsStatic: false }))
+        {
+            if (property.Name is nameof(PdfRenderOptions.PageWidth) or nameof(PdfRenderOptions.PageHeight) or nameof(PdfRenderOptions.MetadataTitle))
+                continue;
+            Assert.That(property.GetValue(copy), Is.EqualTo(property.GetValue(source)), property.Name);
+        }
+
+        // Shared statics stay untouched.
+        var landscape = new PdfRenderOptions(PdfRenderOptions.A4) { PageWidth = 842f, PageHeight = 595f };
+        Assert.That((PdfRenderOptions.A4.PageWidth, PdfRenderOptions.A4.PageHeight), Is.EqualTo((595f, 842f)));
+        Assert.That(landscape.PageWidth, Is.EqualTo(842f));
+    }
+
     [Test]
     public void Wrapped_segments_keep_single_space_and_glued_punctuation()
     {
