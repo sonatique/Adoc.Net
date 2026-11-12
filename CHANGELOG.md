@@ -5,6 +5,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.29] - 2026-11-12
+
+### Added
+
+- **`PdfRenderOptions.MetadataTitle`**: the PDF document information `/Title`
+  (viewer title bar, file properties), set independently of the document title.
+  The title page, outline and `{document-title}` / `{header-title}` in running
+  content keep the document title. Null keeps the previous behaviour.
+- **`new PdfRenderOptions(source)`**: copies every option so an instance (for
+  example from `PdfThemeLoader.Load`) can be adjusted with an object initializer,
+  e.g. `new PdfRenderOptions(theme) { PageWidth = theme.PageHeight, PageHeight =
+  theme.PageWidth }`, leaving the source and shared statics unchanged.
+
+### Fixed
+
+- **Non-ASCII PDF titles**: document information and outline titles are written
+  as UTF-16BE text strings with a byte-order mark; accented and non-BMP
+  characters were octal-escaped or replaced before.
+
 ## [1.0.28] - 2026-11-12
 
 ### Fixed
