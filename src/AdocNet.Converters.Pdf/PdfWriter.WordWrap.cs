@@ -396,6 +396,7 @@ internal sealed partial class PdfWriter
                 var c = activeColor.Value;
                 _currentStream.Append($"{FmtColor(c.R)} {FmtColor(c.G)} {FmtColor(c.B)} rg\n");
             }
+            RecordText(seg.Text, seg.Font, seg.FontSize, currentX, y + rise, isMonospaceFnt ? 0 : extraSpacing * seg.Text.Count(c => c == ' '), activeColor);
             if (_embeddedFonts.TryGetValue(seg.Font, out var ttFont))
             {
                 TrackCodePoints(seg.Font, seg.Text);
@@ -413,6 +414,7 @@ internal sealed partial class PdfWriter
                     _currentStream.Append($"{FmtColor(bc.R)} {FmtColor(bc.G)} {FmtColor(bc.B)} rg\n");
                 else
                     _currentStream.Append("0 0 0 rg\n");
+                _fill = BodyColor ?? new PdfColor(0, 0, 0);
             }
             if (rise != 0f)
                 _currentStream.Append("0 Ts\n");

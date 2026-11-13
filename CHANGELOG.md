@@ -5,6 +5,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **`PdfRenderer.LayoutPages(document, options)`**: the page structure of a PDF
+  render without the bytes. It returns `PdfPageLayout` with:
+  - page labels (`i` for a title page, then `1`, `2`…);
+  - the page and top offset where each top-level block starts;
+  - the title page, table of contents and running content as positioned text
+    and image items (PNG/JPEG paths, SVG as filled paths).
+- **Themed page preview in AdocNet.Avalonia**:
+  `PagedAvaloniaRenderer.RenderPages(layout, pdfPages, PageLayoutOptions.FromPdf(pdfOptions))`
+  draws the PDF's pages, page for page:
+  - title page, TOC with leaders and page numbers, and header/footer come from
+    the PDF layout, text fitted to the PDF's widths;
+  - each body block starts on the page where the PDF starts it;
+  - a block that doesn't fit continues on the next page, cut between text lines.
+
+  AdocNet.Avalonia now depends on AdocNet.Converters.Pdf (pure managed). SVG
+  images need no extra package.
+
 ## [1.0.29] - 2026-11-12
 
 ### Added

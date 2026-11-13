@@ -43,6 +43,17 @@ public sealed class PageLayoutOptions
     public static PageLayoutOptions Letter => new() { PageWidth = 816, PageHeight = 1056 };
 
     /// <summary>
+    /// Page size and margins of a PDF option set (for instance one from
+    /// <c>PdfThemeLoader.Load</c>), for <see cref="PagedAvaloniaRenderer.RenderPages(AdocNet.Layout.DocumentLayout, AdocNet.Converters.Pdf.PdfPageLayout, PageLayoutOptions)"/>.
+    /// </summary>
+    public static PageLayoutOptions FromPdf(AdocNet.Converters.Pdf.PdfRenderOptions options)
+    {
+        if (options is null) throw new ArgumentNullException(nameof(options));
+        return FromPdfPoints(options.PageWidth, options.PageHeight,
+            options.MarginLeft, options.MarginTop, options.MarginRight, options.MarginBottom);
+    }
+
+    /// <summary>
     /// Build options from a page geometry expressed in PostScript points
     /// (72/inch) — the unit of <c>PdfRenderOptions</c> — so a paged preview
     /// can mirror the PDF export's page setup.

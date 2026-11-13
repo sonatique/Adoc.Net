@@ -68,12 +68,14 @@ internal sealed partial class PdfWriter
 
     internal void DrawLine(float x1, float y1, float x2, float y2, float lineWidth = 0.5f)
     {
+        Ink(Math.Max(y1, y2));
         _currentStream!.Append($"{Fmt(lineWidth)} w\n");
         _currentStream.Append($"{Fmt(x1)} {Fmt(y1)} m {Fmt(x2)} {Fmt(y2)} l S\n");
     }
 
     internal void DrawRect(float x, float y, float w, float h, bool fill = false)
     {
+        Ink(y + h);
         _currentStream!.Append($"{Fmt(x)} {Fmt(y)} {Fmt(w)} {Fmt(h)} re ");
         _currentStream.Append(fill ? "f\n" : "S\n");
     }
@@ -84,6 +86,7 @@ internal sealed partial class PdfWriter
     internal void DrawRoundedRect(float x, float y, float w, float h, float r, string mode = "S")
     {
         // Clamp radius to half the smaller dimension
+        Ink(y + h);
         r = Math.Min(r, Math.Min(w / 2, h / 2));
         // Bezier control point offset for quarter-circle approximation
         float k = r * 0.5523f;
@@ -116,6 +119,7 @@ internal sealed partial class PdfWriter
     /// </summary>
     internal void DrawCircle(float cx, float cy, float r, string mode = "f")
     {
+        Ink(cy + r);
         // 4-segment Bezier circle approximation. Magic constant ≈ 0.5523.
         float k = r * 0.5523f;
         var s = _currentStream!;
@@ -129,6 +133,7 @@ internal sealed partial class PdfWriter
 
     internal void SetFillColor(float r, float g, float b)
     {
+        _fill = new PdfColor(r, g, b);
         _currentStream!.Append($"{FmtColor(r)} {FmtColor(g)} {FmtColor(b)} rg\n");
     }
 
@@ -276,6 +281,7 @@ internal sealed partial class PdfWriter
     /// </summary>
     internal void DrawImage(string imageRef, float x, float y, float width, float height)
     {
+        Ink(y + height);
         _currentStream!.Append("q\n");
         _currentStream.Append($"{Fmt(width)} 0 0 {Fmt(height)} {Fmt(x)} {Fmt(y)} cm\n");
         _currentStream.Append($"/{imageRef} Do\n");
@@ -292,6 +298,12 @@ internal sealed partial class PdfWriter
     {
         float scaleX = width / svg.ViewBoxWidth;
         float scaleY = height / svg.ViewBoxHeight;
+        Ink(y + height);
+        if (Recorder is { Capturing: true } recorder)
+            recorder.Add(_currentPageNumber, new PdfPageImage(null,
+                svg.Shapes.Select(s => new PdfPageShape(s.Fill, s.PathData)).ToList(),
+                svg.ViewBoxWidth, svg.ViewBoxHeight, x, _pageHeight - y - height, width, height));
+        var savedFill = _fill;
 
         _currentStream!.Append("q\n"); // Save graphics state
 
@@ -311,6 +323,7 @@ internal sealed partial class PdfWriter
         }
 
         _currentStream.Append("Q\n"); // Restore graphics state
+        _fill = savedFill;
     }
 
     // ── Text measurement ────────────────────────────────────────────────

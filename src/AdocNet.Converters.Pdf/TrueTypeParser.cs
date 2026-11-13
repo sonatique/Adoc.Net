@@ -15,6 +15,8 @@ internal sealed class TrueTypeFont
     /// <summary>Line gap in font units (OS/2 typo line gap when non-zero, else hhea), as Prawn uses it.</summary>
     public int LineGap { get; }
     public byte[] FontData { get; }
+    /// <summary>head.macStyle: bit 0 bold, bit 1 italic.</summary>
+    public int MacStyle { get; private set; }
 
     // Maps Unicode code point -> glyph ID
     private readonly Dictionary<int, ushort> _cmapTable;
@@ -176,6 +178,8 @@ internal sealed class TrueTypeFont
         }
 
         var font = new TrueTypeFont(fontName, unitsPerEm, ascender, descender, lineGap, data, cmapTable2, glyphWidths);
+        if (tables.TryGetValue("head", out var head) && head.Length >= 46)
+            font.MacStyle = ReadUInt16(data, head.Offset + 44);
         if (tables.TryGetValue("kern", out var kernTable))
             font.ParseKern(data, kernTable.Offset, kernTable.Length);
         return font;

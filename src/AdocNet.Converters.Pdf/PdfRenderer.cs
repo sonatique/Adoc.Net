@@ -141,6 +141,37 @@ public sealed partial class PdfRenderer : DocumentRendererBase
     // ── Image resolution state ─────────────────────────────────────────
     private string? _baseDirectory;
 
+    // Set by LayoutPages for the duration of one render; each pass records afresh.
+    private PdfPageRecorder? _recorder;
+    private PdfPageLayout? _recordedLayout;
+    // Nesting depth inside RenderBlock (sections don't count): 0 = a top-level block.
+    private int _blockDepth;
+
+    /// <summary>
+    /// Lays the document out exactly as <see cref="DocumentRendererBase.Render"/> would and returns
+    /// its page structure instead of the PDF bytes: page labels, the page each top-level block
+    /// starts on, and the title page, table of contents and running content as positioned items.
+    /// A paged preview uses it to match the PDF page for page.
+    /// </summary>
+    public PdfPageLayout LayoutPages(DocumentNode document, PdfRenderOptions? options = null)
+    {
+        if (document is null) throw new ArgumentNullException(nameof(document));
+        lock (_renderLock)
+        {
+            _recorder = new PdfPageRecorder();
+            try
+            {
+                Render(document, Stream.Null, options ?? PdfRenderOptions.Default);
+                return _recordedLayout!;
+            }
+            finally
+            {
+                _recorder = null;
+                _recordedLayout = null;
+            }
+        }
+    }
+
     protected override void RenderDocument(RenderContext context, Stream output)
     {
         lock (_renderLock)
@@ -173,6 +204,9 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             pdfOptions.MarginLeft, pdfOptions.MarginRight, pdfOptions.MarginTop, pdfOptions.MarginBottom);
         if (seedDestinations is not null)
             writer.SeedDestinations(seedDestinations);
+        if (_recorder is not null)
+            writer.Recorder = _recorder = new PdfPageRecorder(); // the last pass is the one returned
+        _blockDepth = 0;
 
         writer.ShowPageNumbers = pdfOptions.ShowPageNumbers;
         writer.HeaderTemplate = pdfOptions.HeaderText;
@@ -395,11 +429,14 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         // instead of falling back to pure black after a heading reset.
         RestoreBodyFill(writer);
         RenderDocumentContent(writer, context.Document, footnotes);
+        writer.Recorder?.EndBlocks();
         RenderFootnotesSection(writer, footnotes);
 
         capturedPages = writer.CaptureDestinationPages();
         byte[] bytes = writer.ToBytes();
         output.Write(bytes, 0, bytes.Length);
+        if (_recorder is not null)
+            _recordedLayout = _recorder.Build(pdfOptions.PageWidth, pdfOptions.PageHeight, writer.PageCount, writer.PageNumberOffset);
     }
 
     // ── Document rendering ──────────────────────────────────────────────
@@ -411,7 +448,9 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         if (WantsTitlePage(document))
         {
             w.AddOutlineEntry(PlainTitle(_prawnMetrics ? PartitionTitle(document, document.Title!).Main : document.Title!), 1, "_document_title");
+            if (w.Recorder is { } r) { r.HasTitlePage = true; r.Capturing = true; }
             RenderTitlePage(w, document);
+            if (w.Recorder is { } r2) r2.Capturing = false;
             w.FinishPage();
             w.StartPage();
         }
@@ -439,6 +478,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             // Register document title as outline entry. Use level 1 so it appears
             // as a sibling of top-level sections (matches Asciidoctor's flat outline).
             w.AddOutlineEntry(PlainTitle(document.Title), 1, "_document_title");
+            w.Recorder?.BeginBlock(SourceRange.None);
             if (_headingColor is { } hc) w.SetFillColor(hc.R, hc.G, hc.B);
             w.WriteWrappedText(PlainTitle(document.Title), _fontHeading, _titleFontSize, _titleLeading, _titleAlignment);
             if (_headingColor is not null) RestoreBodyFill(w);
@@ -456,7 +496,9 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         // Render TOC placeholder or actual TOC
         if (tocNode is not null && tocNode.Entries.Count > 0)
         {
+            if (w.Recorder is { } r) { r.TocSource = tocNode.Source; r.BeginBlock(tocNode.Source); r.Capturing = true; }
             RenderToc(w, tocNode, footnotes);
+            if (w.Recorder is { } r2) r2.Capturing = false;
         }
 
         // If running-content starts after-toc, suppress headers/footers until now
@@ -693,6 +735,19 @@ public sealed partial class PdfRenderer : DocumentRendererBase
     // ── Block rendering ─────────────────────────────────────────────────
 
     private void RenderBlock(PdfWriter w, AstNode node, int indentLevel, FootnoteState footnotes)
+    {
+        if (_blockDepth == 0 && w.Recorder is { } recorder && node is not (TocNode or PageBreakNode))
+            recorder.BeginBlock(node.Source);
+        // A section's children are top-level blocks too, and so are those of example, quote, sidebar
+        // and open blocks: the layout model flattens all of them.
+        bool nests = node is not (SectionNode or DelimitedBlockNode { BlockKind: DelimitedBlockKind.Example
+            or DelimitedBlockKind.Quote or DelimitedBlockKind.Sidebar or DelimitedBlockKind.Open });
+        if (nests) _blockDepth++;
+        try { RenderBlockCore(w, node, indentLevel, footnotes); }
+        finally { if (nests) _blockDepth--; }
+    }
+
+    private void RenderBlockCore(PdfWriter w, AstNode node, int indentLevel, FootnoteState footnotes)
     {
         switch (node)
         {

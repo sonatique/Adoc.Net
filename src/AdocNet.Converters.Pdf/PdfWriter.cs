@@ -165,6 +165,60 @@ internal sealed partial class PdfWriter
     /// <summary>Optional override for {header-title} template token. Falls back to DocumentTitle.</summary>
     internal string? HeaderTitle { get; set; }
     internal SvgParser.SvgDocument? FooterImage { get; set; }
+
+    /// <summary>Records the page structure (<see cref="PdfRenderer.LayoutPages"/>); null when not requested.</summary>
+    internal PdfPageRecorder? Recorder { get; set; }
+
+    /// <summary>Pages finished so far.</summary>
+    internal int PageCount => _pageObjectIds.Count;
+
+    // Current non-stroking colour, tracked for the recorder (the stream is the source of truth).
+    private PdfColor _fill = new(0, 0, 0);
+    private readonly Dictionary<string, (string? Family, bool Bold, bool Italic, bool Mono)> _faces = [];
+
+    /// <summary>The first mark of a pending top-level block places it (<paramref name="topY"/> in PDF space).</summary>
+    private void Ink(float topY) => Recorder?.Ink(_currentPageNumber, _pageHeight, topY);
+
+    private float AscentPerEm(string font) =>
+        GetEmbeddedFont(font) is { } f && f.UnitsPerEm > 0 ? f.Ascender / (float)f.UnitsPerEm
+        : font is "F4" or "F5" or "F6" or "F7" ? 0.629f : 0.718f;
+
+    /// <summary>Marks a text run as ink and, while page furniture is being captured, records it.</summary>
+    private void RecordText(string text, string font, float fontSize, float x, float baseline, float extraWidth, PdfColor? color)
+    {
+        if (Recorder is null) return;
+        Ink(baseline + AscentPerEm(font) * fontSize);
+        if (Recorder is not { Capturing: true } recorder || text.Length == 0) return;
+        var (family, bold, italic, mono) = Face(font);
+        recorder.Add(_currentPageNumber, new PdfPageText(text, x, _pageHeight - baseline,
+            MeasureText(text, font, fontSize) + extraWidth, fontSize, family, bold, italic, mono, color ?? _fill));
+    }
+
+    private (string? Family, bool Bold, bool Italic, bool Mono) Face(string font)
+    {
+        if (_faces.TryGetValue(font, out var face)) return face;
+        face = GetEmbeddedFont(font) is { } f
+            ? (TrueTypeFont.ReadFamilyName(f.FontData), (f.MacStyle & 1) != 0, (f.MacStyle & 2) != 0, _monospaceFonts.Contains(font))
+            : font switch
+            {
+                "F2" => (null, true, false, false),
+                "F3" => (null, false, true, false),
+                "F4" => (null, false, false, true),
+                "F5" => (null, true, false, true),
+                "F6" => (null, false, true, true),
+                "F7" => (null, true, true, true),
+                _ => (null, false, false, false),
+            };
+        return _faces[font] = face;
+    }
+
+    /// <summary>Records a raster image drawn as page furniture (the stream holds only its XObject).</summary>
+    internal void RecordImage(string path, float x, float y, float width, float height)
+    {
+        Ink(y + height);
+        if (Recorder is { Capturing: true } recorder)
+            recorder.Add(_currentPageNumber, new PdfPageImage(path, null, 0, 0, x, _pageHeight - y - height, width, height));
+    }
     internal float FooterImageWidth { get; set; } = 64f;
 
     /// <summary>Page number from which headers/footers start appearing (1-based). Default: 1 (all pages).</summary>
@@ -659,6 +713,7 @@ internal sealed partial class PdfWriter
         _finalPageCount = _pageObjectIds.Count - PageNumberOffset;
         int savedPage = _currentPageNumber;
         string? savedTitle = CurrentSectionTitle;
+        if (Recorder is not null) { Recorder.EndBlocks(); Recorder.Capturing = true; }
         foreach (var page in _deferredRunningContent)
         {
             _currentPageNumber = page.PageNumber;
@@ -669,6 +724,7 @@ internal sealed partial class PdfWriter
             SetObject(page.ObjectId, new PdfObject(
                 $"<< /Length {Encoding.ASCII.GetByteCount(content)} >>\nstream\n{content}endstream"));
         }
+        if (Recorder is not null) Recorder.Capturing = false;
         _currentStream = null;
         _currentPageNumber = savedPage;
         CurrentSectionTitle = savedTitle;
@@ -757,6 +813,7 @@ internal sealed partial class PdfWriter
             _currentStream!.Append($"{FmtColor(fc.R)} {FmtColor(fc.G)} {FmtColor(fc.B)} rg\n");
         }
 
+        RecordText(text, font, fontSize, x, y, 0, fontColor ?? BodyColor ?? new PdfColor(0, 0, 0));
         _currentStream!.Append("BT\n");
         _currentStream.Append($"/{font} {Fmt(fontSize)} Tf\n");
         _currentStream.Append($"{Fmt(x)} {Fmt(y)} Td\n");
@@ -778,6 +835,7 @@ internal sealed partial class PdfWriter
         if (fontColor is not null)
         {
             _currentStream.Append("0 0 0 rg\n"); // Reset to black
+            _fill = new PdfColor(0, 0, 0);
         }
     }
 
@@ -834,6 +892,7 @@ internal sealed partial class PdfWriter
     /// <summary>Font identifiers: F1=Helvetica, F2=Helvetica-Bold, F3=Helvetica-Oblique, F4=Courier.</summary>
     internal void WriteText(string text, string font, float fontSize, float x, float y)
     {
+        RecordText(text, font, fontSize, x, y, 0, null);
         var runs = SplitFontRuns(text, font);
         _currentStream!.Append("BT\n");
 
@@ -884,6 +943,7 @@ internal sealed partial class PdfWriter
     /// </summary>
     internal void WriteJustifiedText(string text, string font, float fontSize, float x, float y, float wordSpacing)
     {
+        RecordText(text, font, fontSize, x, y, wordSpacing * text.Count(c => c == ' '), null);
         var runs = SplitFontRuns(text, font);
         _currentStream!.Append("BT\n");
 
@@ -957,6 +1017,7 @@ internal sealed partial class PdfWriter
                 var c = activeColor.Value;
                 _currentStream.Append($"{FmtColor(c.R)} {FmtColor(c.G)} {FmtColor(c.B)} rg\n");
             }
+            RecordText(seg.Text, seg.Font, seg.FontSize, currentX, y + rise, 0, activeColor);
             if (_embeddedFonts.TryGetValue(seg.Font, out var ttFont))
             {
                 TrackCodePoints(seg.Font, seg.Text);
@@ -974,6 +1035,7 @@ internal sealed partial class PdfWriter
                     _currentStream.Append($"{FmtColor(bc.R)} {FmtColor(bc.G)} {FmtColor(bc.B)} rg\n");
                 else
                     _currentStream.Append("0 0 0 rg\n");
+                _fill = BodyColor ?? new PdfColor(0, 0, 0);
             }
             if (rise != 0f)
                 _currentStream.Append("0 Ts\n");
