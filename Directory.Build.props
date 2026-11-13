@@ -16,7 +16,7 @@
   <PropertyGroup>
     <Version>1.0.30</Version>
     <Authors>Sylvain Fasel</Authors>
-    <Copyright>Copyright (c) 2026 Sylvain Fasel (sylvain@sonatique.net)</Copyright>
+    <Copyright>Copyright (c) 2026 sylvain@sonatique.net</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/sonatique/Adoc.Net</PackageProjectUrl>
     <RepositoryUrl>https://github.com/sonatique/Adoc.Net</RepositoryUrl>
