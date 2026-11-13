@@ -14,7 +14,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.29</Version>
+    <Version>1.0.30</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) Sylvain Fasel</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -23,7 +23,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;docx;word;import;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.29: PdfRenderOptions.MetadataTitle sets the PDF document information /Title without changing the title page, outline or running content; new PdfRenderOptions(source) copies options (e.g. a theme-loaded instance) so values can be changed with an object initializer; document information and outline titles are written as Unicode text strings, so accented and non-BMP titles survive. See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.30: PdfRenderer.LayoutPages returns the page structure of a PDF render (page labels, block placements, title page, TOC and running content as positioned items); PagedAvaloniaRenderer.RenderPages(layout, pdfPages, PageLayoutOptions.FromPdf(options)) draws a print preview that follows the PDF page for page. AdocNet.Avalonia now depends on AdocNet.Converters.Pdf. See CHANGELOG.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->

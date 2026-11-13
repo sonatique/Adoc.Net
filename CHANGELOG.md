@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.30] - 2026-11-13
+
 ### Added
 
 - **`PdfRenderer.LayoutPages(document, options)`**: the page structure of a PDF
