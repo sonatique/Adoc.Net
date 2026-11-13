@@ -23,7 +23,7 @@ namespace AdocNet.Avalonia;
 /// metrics by design. Inline <see cref="AvaloniaRenderer.SourceRangeProperty"/>
 /// stamps are preserved, so source mapping keeps working inside pages.</para>
 /// </summary>
-public sealed class PagedAvaloniaRenderer
+public sealed partial class PagedAvaloniaRenderer
 {
     private readonly AvaloniaRenderer _renderer;
 

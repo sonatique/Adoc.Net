@@ -196,6 +196,7 @@ public sealed partial class PdfRenderer
         }
         else if ((ImageParser.TryParseJpeg(data) ?? ImageParser.TryParsePng(data)) is { } img)
         {
+            w.RecordImage(path, x, y, width, height);
             w.DrawImage(w.EmbedImage(img), x, y, width, height);
         }
     }
