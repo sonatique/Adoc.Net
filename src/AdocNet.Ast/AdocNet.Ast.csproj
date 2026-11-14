@@ -21,6 +21,7 @@
     <InternalsVisibleTo Include="AdocNet.Converters.Epub" />
     <InternalsVisibleTo Include="AdocNet.Emitter" />
     <InternalsVisibleTo Include="AdocNet.Importers.Docx" />
+    <InternalsVisibleTo Include="AdocNet.Importers" />
     <InternalsVisibleTo Include="AdocNet.Layout" />
     <InternalsVisibleTo Include="AdocNet" />
     <InternalsVisibleTo Include="AdocNet.Tests" />

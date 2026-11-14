@@ -50,6 +50,7 @@ For library use, reference the package for the output you want. (The `AdocNet.Pd
 | Avalonia UI renderer | `AdocNet.Avalonia` |
 | Emit AsciiDoc from an AST | `AdocNet.Emitter` |
 | Import Word `.docx` | `AdocNet.Importers.Docx` |
+| Import Markdown, HTML, PDF | `AdocNet.Importers` |
 
 ### Command-line tools
 
@@ -158,6 +159,25 @@ Structure, lists, tables, images, links, notes and formatting are mapped;
 anything AsciiDoc cannot express (page geometry, tab stops, shapes) is listed in
 the report rather than dropped silently. See
 [docs/DOCX_IMPORT.md](docs/DOCX_IMPORT.md).
+
+### Import Markdown, HTML or PDF
+
+```csharp
+// dotnet add package AdocNet.Importers
+using AdocNet.Importers;
+
+var md = new MarkdownImporter().ImportFile("README.md");   // CommonMark + GFM, front matter
+var html = new HtmlImporter().ImportString("<h1>Doc</h1><p>Text</p>");
+var pdf = new PdfImporter().ConvertFile("manual.pdf", "manual.adoc"); // also writes media/
+
+Console.Write(pdf.Report.ToSummary());   // what was approximated or dropped
+string adoc = md.AsciiDoc;               // also: md.Document (AST), md.Media (images)
+```
+
+Markdown and HTML map structure and formatting directly. PDF import recovers
+structure from fonts and positions (headings, paragraphs, lists, tables, code,
+images; running headers and footers dropped) and is approximate by nature.
+Uses Markdig (BSD-2-Clause), AngleSharp (MIT) and PdfPig (Apache-2.0).
 
 ### Parse with includes
 
