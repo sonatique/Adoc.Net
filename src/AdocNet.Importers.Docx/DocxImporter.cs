@@ -241,7 +241,7 @@ public sealed class DocxImporter
 
     private void ApplyDocumentHeader(DocumentNode document, CoreProperties properties, ConversionContext context)
     {
-        document.Title ??= properties.Title;
+        document.Title ??= properties.Title is { } coreTitle ? System.Text.RegularExpressions.Regex.Replace(coreTitle, @"\s*\r?\n\s*", " ") : null;
 
         if (_options.ImportCoreProperties)
         {
@@ -261,5 +261,7 @@ public sealed class DocxImporter
 
         if (context.SawTableOfContents && _options.ConvertTocFieldToAttribute)
             document.SetAttribute("toc", string.Empty);
+        if (context.SawNumberedHeading)
+            document.SetAttribute("sectnums", string.Empty);
     }
 }

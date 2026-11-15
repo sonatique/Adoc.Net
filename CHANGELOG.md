@@ -5,6 +5,38 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`PdfImporter`**: importing PDFs whose tables have a line wrapped into an
+  empty cell no longer throws `ArgumentOutOfRangeException`. This affected
+  most real-world PDFs with tables.
+- **`PdfImporter`**: tables drawn with rules are rebuilt from those rules:
+  narrow columns no longer merge, cells take their column and row spans, a
+  table continued on the next page stays one table (its repeated header row
+  dropped), and a header row near the top of many pages is no longer taken
+  for a running header. Tables with column rules only split rows by spacing.
+  On a corpus of 20 real documents exported by AdocNet, tables recovered went
+  from 78 of 153 to 151 of 153 (the other two are nested tables the PDF shows
+  as text).
+- **`PdfImporter`**: a list or paragraph no longer absorbs the table rows that
+  follow it, and a bold heading slightly larger than the body (a 12pt level-5
+  heading on a 10.5pt body) is a heading again.
+- **`HtmlImporter`**: HTML in Asciidoctor's layout (AdocNet's own HTML export
+  included) comes back as AsciiDoc structure: section numbers become
+  `:sectnums:`, the generated table of contents `:toc:`, the header details
+  line `:author:`, `:email:`, `:revnumber:` and `:revdate:`, admonition tables
+  admonition blocks, `#footnotes` real `footnote:[]` macros, horizontal
+  description lists `[horizontal]` lists, and "Table 1." caption labels are
+  dropped from block titles.
+- **`DocxImporter`**: numbered headings (a heading style with Word numbering)
+  are sections again, not one-item ordered lists, and set `:sectnums:`;
+  Word's table of contents (`TOC Heading` and `toc 1`-`toc 9` paragraphs with
+  their page numbers) is dropped for `:toc:`; a title with a line break stays
+  on one line (its second line was read as the author line); and a
+  password-protected document is reported as such.
+- **`MarkdownImporter`, `HtmlImporter`, `PdfImporter`**: an apostrophe inside
+  a word is written plainly (`Don't`), not as a passthrough.
+
 ## [1.0.31] - 2026-11-15
 
 ### Added

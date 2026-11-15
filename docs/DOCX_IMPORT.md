@@ -47,8 +47,8 @@ docx2adoc handbook.docx -o handbook.adoc --report
 
 | Word | AsciiDoc |
 |------|----------|
-| Heading 1–9 (by style name, `w:outlineLvl`, or a `w:basedOn` ancestor) | Section levels 1–5, normalised so no level is skipped |
-| `Title` / `Subtitle` styles, `dc:title` | `= Document Title: Subtitle` |
+| Heading 1–9 (by style name, `w:outlineLvl`, or a `w:basedOn` ancestor) | Section levels 1–5, normalised so no level is skipped; numbered headings set `:sectnums:` |
+| `Title` / `Subtitle` styles, `dc:title` | `= Document Title: Subtitle` (line breaks become spaces) |
 | Paragraphs | Paragraphs; explicit line breaks become `[%hardbreaks]` |
 | Numbered/bulleted lists (`numbering.xml`, including `lvlOverride` and `numStyleLink`) | `*` / `.` lists with nesting; `[loweralpha]`, `[upperroman]`, … and `start=` |
 | A `ListParagraph` paragraph after a list item | List item continuation |
@@ -67,7 +67,7 @@ docx2adoc handbook.docx -o handbook.adoc --report
 | Bold, italic, monospace fonts/styles, highlight, super/subscript | `*`, `_`, `` ` ``, `#`, `^`, `~` — unconstrained forms when the span starts or ends mid-word |
 | Underline, strikethrough, small caps, all caps, font colour | Roles: `[.underline]`, `[.line-through]`, `[.small-caps]`, `[.uppercase]`, `[.color-rrggbb]` |
 | Tracked changes | Revised text by default, original with `--reject-revisions` |
-| `TOC` field | `:toc:` attribute (the cached entries are dropped; the backend regenerates them) |
+| `TOC` field, `TOC Heading` and `toc 1`–`toc 9` paragraphs | `:toc:` attribute (the cached entries are dropped; the backend regenerates them) |
 | Content controls (`w:sdt`), smart tags, markup-compatibility alternates | Unwrapped to their content |
 | Core properties | `:author:`, `:description:`, `:keywords:`, `:revnumber:`, `:revdate:` |
 

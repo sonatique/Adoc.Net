@@ -508,4 +508,37 @@ public class StructureTests
         using var stream = new MemoryStream(new byte[] { 1, 2, 3, 4, 5 });
         Assert.Throws<DocxImportException>(() => new DocxImporter().Import(stream));
     }
+
+    [Test]
+    public void PasswordProtectedDocumentSaysSo()
+    {
+        // Word stores an encrypted document as an OLE compound file.
+        var bytes = new byte[512];
+        new byte[] { 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1 }.CopyTo(bytes, 0);
+        using var stream = new MemoryStream(bytes);
+        var ex = Assert.Throws<DocxImportException>(() => new DocxImporter().Import(stream));
+        Assert.That(ex!.Message, Does.Contain("password-protected"));
+    }
+
+    private static string NumberedHeading(int level, string text) =>
+        $"<w:p><w:pPr><w:pStyle w:val=\"Heading{level}\"/><w:numPr><w:ilvl w:val=\"{level - 1}\"/><w:numId w:val=\"2\"/></w:numPr></w:pPr>" +
+        $"<w:r><w:t>{text}</w:t></w:r></w:p>";
+
+    [Test]
+    public void NumberedHeadingsAreSectionsWithSectnumsAndTheWordTocIsDropped()
+    {
+        var adoc = ImportHarness.ToAsciiDoc(new DocxBuilder().Numbering(DocxBuilder.DefaultNumbering).Body(
+            "<w:p><w:pPr><w:pStyle w:val=\"Title\"/></w:pPr><w:r><w:t>Module</w:t><w:br/><w:t>Registers</w:t></w:r></w:p>" +
+            DocxBuilder.Paragraph("Contents", "TOCHeading") +
+            DocxBuilder.Paragraph("1 Introduction 3", "TOC1") +
+            DocxBuilder.Paragraph("1.1 Scope 3", "TOC2") +
+            NumberedHeading(1, "Introduction") +
+            NumberedHeading(2, "Scope") +
+            DocxBuilder.Paragraph("Body text.")));
+
+        Assert.That(adoc, Does.StartWith("= Module Registers\n"), adoc);
+        Assert.That(adoc, Does.Contain(":toc:").And.Contain(":sectnums:"), adoc);
+        Assert.That(adoc, Does.Contain("== Introduction\n\n=== Scope\n\nBody text."), adoc);
+        Assert.That(adoc, Does.Not.Contain("Contents").And.Not.Contain("Introduction 3"), adoc);
+    }
 }

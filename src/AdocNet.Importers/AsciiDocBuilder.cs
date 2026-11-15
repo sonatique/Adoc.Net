@@ -63,8 +63,12 @@ internal sealed class AsciiDocBuilder
 
     // ── Text helpers ────────────────────────────────────────────────────
 
-    /// <summary>Literal text, neutralised so AsciiDoc shows exactly these characters.</summary>
-    public static string Inline(string text, bool inTableCell = false) => AsciidocText.EscapeInline(text, inTableCell);
+    /// <summary>
+    /// Literal text, neutralised so AsciiDoc shows these characters. One exception: an apostrophe
+    /// inside a word stays plain (<c>Don't</c>, not the Word importer's <c>Don+++'+++t</c>) and so
+    /// renders typographic.
+    /// </summary>
+    public static string Inline(string text, bool inTableCell = false) => AsciidocText.EscapeInline(text, inTableCell).Replace("+++'+++", "'");
 
     /// <summary>Block text whose first line must not read as a block marker.</summary>
     public static string BlockStart(string text) => AsciidocText.EscapeBlockStart(text);

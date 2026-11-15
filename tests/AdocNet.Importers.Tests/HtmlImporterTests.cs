@@ -86,4 +86,52 @@ public class HtmlImporterTests
         }
         finally { Directory.Delete(dir, true); }
     }
+
+    [Test]
+    public void Asciidoctor_layout_comes_back_as_asciidoc_structure()
+    {
+        const string source = """
+            = Widget Guide
+            Ada Writer <ada@example.com>
+            v1.3, 2026-01-02
+            :toc:
+            :sectnums:
+
+            == Intro
+
+            Text with a note.footnote:[The footnote text.]
+
+            NOTE: Remember this.
+
+            === Details
+
+            .Limits
+            [cols="1,1"]
+            |===
+            | Name | Value
+            | max | 10
+            |===
+
+            [horizontal]
+            CPU:: The processor
+            RAM:: The memory
+
+            == Last
+
+            End.
+            """;
+        var doc = AdocNet.Parser.AdocParser.Parse(source).Document;
+        var html = new AdocNet.Converters.Html.HtmlRenderer().RenderToString(doc, new AdocNet.Converters.Html.HtmlRenderOptions { FullDocument = true });
+
+        var r = Import(html);
+
+        Assert.That(r.AsciiDoc, Does.Contain(":toc:").And.Contain(":sectnums:").And.Contain(":revnumber: 1.3").And.Contain(":author: Ada Writer"), r.AsciiDoc);
+        Assert.That(r.AsciiDoc, Does.Contain("== Intro").And.Contain("=== Details"), r.AsciiDoc);
+        Assert.That(r.AsciiDoc, Does.Not.Contain("Table of Contents").And.Not.Contain("1. Intro").And.Not.Contain("_footnote"), r.AsciiDoc);
+        Assert.That(r.AsciiDoc, Does.Contain("note.footnote:[The footnote text.]"), r.AsciiDoc);
+        Assert.That(r.AsciiDoc, Does.Contain("[NOTE]\n====\nRemember this.\n===="), r.AsciiDoc);
+        Assert.That(r.AsciiDoc, Does.Contain(".Limits\n[cols"), r.AsciiDoc);
+        Assert.That(r.AsciiDoc, Does.Contain("[horizontal]\nCPU:: The processor\nRAM:: The memory"), r.AsciiDoc);
+        Assert.That(r.AsciiDoc, Does.Not.Contain("version"), r.AsciiDoc);
+    }
 }
