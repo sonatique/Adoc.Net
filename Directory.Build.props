@@ -14,7 +14,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.31</Version>
+    <Version>1.0.32</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) 2026 sylvain@sonatique.net</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -23,7 +23,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;docx;word;import;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.31: new AdocNet.Importers package with MarkdownImporter (CommonMark + GFM, front matter), HtmlImporter (semantic HTML, data-URI images) and PdfImporter (approximate structure recovery from the text layer), sharing ImportResult (AsciiDoc, Document, Media, Report). See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.32: importer fixes. PdfImporter no longer crashes on PDFs with tables and rebuilds ruled tables (spans, page breaks); HtmlImporter reads Asciidoctor's HTML layout (sectnums, toc, admonitions, footnotes); DocxImporter keeps numbered headings as sections and drops Word's TOC entries. See CHANGELOG.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->

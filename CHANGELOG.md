@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.32] - 2026-11-15
+
 ### Fixed
 
 - **`PdfImporter`**: importing PDFs whose tables have a line wrapped into an
