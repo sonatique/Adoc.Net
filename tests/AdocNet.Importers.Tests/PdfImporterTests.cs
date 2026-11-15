@@ -115,6 +115,131 @@ public class PdfImporterTests
     {
         Assert.Throws<ImportException>(() => new PdfImporter().Import(new MemoryStream("not a pdf"u8.ToArray())));
     }
+
+    [Test]
+    public void Wrapped_line_into_an_empty_table_cell_is_kept()
+    {
+        // Row 2 leaves column 1 empty; the close line below fills only column 1.
+        var builder = new UglyToad.PdfPig.Writer.PdfDocumentBuilder();
+        var font = builder.AddStandard14Font(UglyToad.PdfPig.Fonts.Standard14Fonts.Standard14Font.Helvetica);
+        var page = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
+        void Text(string s, double x, double y) => page.AddText(s, 10, new UglyToad.PdfPig.Core.PdfPoint(x, y), font);
+        Text("Name", 72, 700); Text("Value", 300, 700);
+        Text("alpha", 72, 688);
+        Text("late", 300, 676);
+        Text("beta", 72, 664); Text("two", 300, 664);
+
+        var r = new PdfImporter().Import(new MemoryStream(builder.Build()));
+        Assert.That(r.AsciiDoc, Does.Contain("late").And.Contain("beta"));
+    }
+
+    private static int Tables(AdocNet.Ast.AstNode node) => (node is AdocNet.Ast.TableNode ? 1 : 0) + node.Children.Sum(Tables);
+    private static int Tables(ImportResult r) => Tables(r.Document);
+
+    [Test]
+    public void Narrow_ruled_columns_come_back_cell_by_cell()
+    {
+        var r = RoundTrip("""
+            == Registers
+
+            [%autowidth,cols="<,,,,>",options="header"]
+            |===
+            | Bit | Len | Type | Reset | Description
+
+            | 11 | 21 | ro | 0 | Reserved
+            | 10 | 1 | rw | 0 | Enables the output stage when set, which takes effect after the next frame boundary.
+            | 9 | 1 | rw | | Empty reset cell
+            5+| Spanning note across every column
+            |===
+
+            * First point
+            * Second point
+
+            [cols="1,1"]
+            |===
+            | left | right
+            |===
+            """);
+        Assert.That(Tables(r), Is.EqualTo(2), r.AsciiDoc);
+        Assert.That(r.AsciiDoc, Does.Contain("|Bit\n|Len\n|Type\n|Reset\n|Description\n"));
+        Assert.That(r.AsciiDoc, Does.Contain("|9\n|1\n|rw\n|\n|Empty reset cell\n"));
+        Assert.That(r.AsciiDoc, Does.Contain("5+|Spanning note across every column"));
+        Assert.That(r.AsciiDoc, Does.Contain("* Second point\n\n["), "the list does not swallow the table after it");
+    }
+
+    [Test]
+    public void Ruled_table_across_a_page_break_stays_one_table_without_the_repeated_header()
+    {
+        var rows = string.Concat(Enumerable.Range(1, 80).Select(i => $"| row {i} | value {i}\n"));
+        var r = RoundTrip($"== Long\n\n[cols=\"1,1\",options=\"header\"]\n|===\n| Key | Value\n\n{rows}|===\n\n== After\n\nText.\n");
+        Assert.That(Tables(r), Is.EqualTo(1), r.AsciiDoc);
+        Assert.That(Regex.Matches(r.AsciiDoc, @"^\|Key$", RegexOptions.Multiline), Has.Count.EqualTo(1));
+        Assert.That(r.AsciiDoc, Does.Contain("|row 80\n|value 80\n|==="));
+    }
+
+    [Test]
+    public void Level_five_heading_is_a_section()
+    {
+        var r = RoundTrip("= Doc\n\n== One\n\n=== Two\n\n==== Three\n\n===== Five\n\nBody text under the fifth level.\n\n== Last\n\nEnd.\n");
+        Assert.That(r.AsciiDoc, Does.Match(@"\n=+ Five\n\nBody text under the fifth level\."), r.AsciiDoc);
+    }
+
+    [Test]
+    public void Table_with_column_rules_only_splits_rows_by_spacing()
+    {
+        var r = RoundTrip("""
+            [cols="1,3",grid=cols]
+            |===
+            | alpha | first row text that is long enough to wrap onto a second line inside its narrow cell of the table
+            | beta | second
+            | gamma | third
+            |===
+            """);
+        Assert.That(Tables(r), Is.EqualTo(1), r.AsciiDoc);
+        Assert.That(r.AsciiDoc, Does.Contain("|beta\n|second\n\n|gamma\n|third\n"), r.AsciiDoc);
+    }
+
+    [Test]
+    public void Missing_row_rule_under_a_cell_is_a_row_span()
+    {
+        // 2×3 grid; the rule between rows 1 and 2 is drawn only under column 1, so column 0 spans both rows.
+        var builder = new UglyToad.PdfPig.Writer.PdfDocumentBuilder();
+        var font = builder.AddStandard14Font(UglyToad.PdfPig.Fonts.Standard14Fonts.Standard14Font.Helvetica);
+        var page = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
+        static UglyToad.PdfPig.Core.PdfPoint P(double x, double y) => new(x, y);
+        foreach (var x in new[] { 72.0, 200, 400 }) page.DrawLine(P(x, 720), P(x, 640), 0.5);
+        foreach (var y in new[] { 720.0, 640 }) page.DrawLine(P(72, y), P(400, y), 0.5);
+        page.DrawLine(P(72, 693), P(400, 693), 0.5);
+        page.DrawLine(P(200, 667), P(400, 667), 0.5);
+        void Text(string s, double x, double y) => page.AddText(s, 10, P(x, y), font);
+        Text("Key", 76, 703); Text("Value", 204, 703);
+        Text("merged", 76, 676); Text("one", 204, 676);
+        Text("two", 204, 650);
+
+        var r = new PdfImporter().Import(new MemoryStream(builder.Build()));
+        Assert.That(r.AsciiDoc, Does.Contain(".2+|merged\n|one\n\n|two\n"), r.AsciiDoc);
+    }
+
+    [Test]
+    public void Page_border_does_not_turn_the_page_into_a_table()
+    {
+        var builder = new UglyToad.PdfPig.Writer.PdfDocumentBuilder();
+        var font = builder.AddStandard14Font(UglyToad.PdfPig.Fonts.Standard14Fonts.Standard14Font.Helvetica);
+        var page = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
+        static UglyToad.PdfPig.Core.PdfPoint P(double x, double y) => new(x, y);
+        page.DrawRectangle(P(20, 20), 555, 802, 0.5); // the border
+        foreach (var x in new[] { 72.0, 200, 400 }) page.DrawLine(P(x, 660), P(x, 610), 0.5);
+        foreach (var y in new[] { 660.0, 635, 610 }) page.DrawLine(P(72, y), P(400, y), 0.5);
+        void Text(string s, double x, double y) => page.AddText(s, 10, P(x, y), font);
+        Text("Before the table.", 72, 700);
+        Text("Key", 76, 643); Text("Value", 204, 643);
+        Text("a", 76, 618); Text("b", 204, 618);
+        Text("After the table.", 72, 580);
+
+        var r = new PdfImporter().Import(new MemoryStream(builder.Build()));
+        Assert.That(Tables(r), Is.EqualTo(1), r.AsciiDoc);
+        Assert.That(r.AsciiDoc, Does.Contain("Before the table.\n\n[").And.Contain("|===\n\nAfter the table."), r.AsciiDoc);
+    }
 }
 
 /// <summary>Parity check on the themed fixture: structure recovered from the themed PDF matches its source.</summary>

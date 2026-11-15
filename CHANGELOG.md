@@ -5,6 +5,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`PdfImporter`**: importing PDFs whose tables have a line wrapped into an
+  empty cell no longer throws `ArgumentOutOfRangeException`. This affected
+  most real-world PDFs with tables.
+- **`PdfImporter`**: tables drawn with rules are rebuilt from those rules:
+  narrow columns no longer merge, cells take their column and row spans, a
+  table continued on the next page stays one table (its repeated header row
+  dropped), and a header row near the top of many pages is no longer taken
+  for a running header. Tables with column rules only split rows by spacing.
+  On a corpus of 20 real documents exported by AdocNet, tables recovered went
+  from 78 of 153 to 151 of 153 (the other two are nested tables the PDF shows
+  as text).
+- **`PdfImporter`**: a list or paragraph no longer absorbs the table rows that
+  follow it, and a bold heading slightly larger than the body (a 12pt level-5
+  heading on a 10.5pt body) is a heading again.
+
 ## [1.0.31] - 2026-11-15
 
 ### Added

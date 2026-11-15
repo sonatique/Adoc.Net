@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Content;
+using UglyToad.PdfPig.Core;
 
 namespace AdocNet.Importers;
 
@@ -74,7 +75,24 @@ internal sealed class PdfStructure
         public string Text => string.Join(" ", Words.Select(w => w.Text));
         public string? ImagePath; // an image placeholder line
         public string? Admonition; // NOTE, TIP, IMPORTANT, WARNING or CAUTION label found on this line
+        public double[]? Grid; // x of the drawn vertical rules crossing this line, when it sits between two or more
     }
+
+    /// <summary>A drawn straight rule, in top-down page coordinates: <c>At</c> is x for a vertical rule, y for a horizontal one.</summary>
+    private readonly record struct Rule(double At, double From, double To);
+
+    /// <summary>A ruled-table row: per column, the cell's words, its column span (0 inside a spanned cell),
+    /// its row span, and the cell above it continues (a row span from above).</summary>
+    private sealed class TableRow(int columns, bool startsPage)
+    {
+        public readonly List<Word>[] Cells = Enumerable.Range(0, columns).Select(_ => new List<Word>()).ToArray();
+        public readonly int[] Spans = new int[columns];
+        public readonly int[] RowSpans = Enumerable.Repeat(1, columns).ToArray();
+        public readonly TableRow?[] Owner = new TableRow?[columns];
+        public readonly bool StartsPage = startsPage;
+    }
+
+    private readonly Dictionary<int, (List<Rule> Vertical, List<Rule> Horizontal)> _rules = [];
 
     private static readonly Regex Bullet = new(@"^([•◦▪▫‣⁃●○■□➢►▸–\-*·])$", RegexOptions.CultureInvariant);
     private static readonly Regex Number = new(@"^(\d{1,3}|[a-zA-Z]|[ivxIVX]{1,5})[.)]$", RegexOptions.CultureInvariant);
@@ -227,6 +245,18 @@ internal sealed class PdfStructure
             }
         }
 
+        (List<Rule> Vertical, List<Rule> Horizontal) rules;
+        try { rules = Rules(page); }
+        catch (Exception ex) when (ex is not OutOfMemoryException) { rules = ([], []); } // unreadable drawing: no ruled tables, text kept
+        _rules[page.Number] = rules;
+        foreach (var line in lines)
+        {
+            double mid = (line.Top + line.Bottom) / 2;
+            // A rule taller than most of the page is a page border, not a table's.
+            var grid = Merge(rules.Vertical.Where(v => v.From - 1 <= mid && mid <= v.To + 1 && v.To - v.From < 0.8 * page.Height).Select(v => v.At));
+            if (grid.Length >= 2 && line.Left >= grid[0] - 1 && line.Right <= grid[^1] + 1) line.Grid = grid;
+        }
+
         int imageIndex = 0;
         foreach (var image in page.GetImages())
         {
@@ -292,7 +322,7 @@ internal sealed class PdfStructure
     /// <summary>Drops lines (and images) in the top or bottom margin that repeat across pages, and lone page numbers there.</summary>
     private void DropRunningContent(List<(Page Page, List<Line> Lines)> pages)
     {
-        bool InMargin(Line l, Page p) => l.Bottom < p.Height * 0.12 || l.Top > p.Height * 0.88;
+        bool InMargin(Line l, Page p) => l.Grid is null && (l.Bottom < p.Height * 0.12 || l.Top > p.Height * 0.88); // a table row is not a running header
         string Key(Line l) => l.ImagePath ?? Regex.Replace(l.Text, @"\d+", "#").ToLowerInvariant();
         var counts = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var (page, lines) in pages)
@@ -346,12 +376,14 @@ internal sealed class PdfStructure
 
     // ── Blocks ──────────────────────────────────────────────────────────
 
-    // Headings are larger than the body text, or bold in a font other than the body's (a theme's
-    // heading font at body size). A bold line in the body font stays a bold paragraph: in a PDF it
+    // Headings are larger than the body text (bold: slightly larger, as a 12pt h5 on a 10.5pt body),
+    // or bold in a font other than the body's (a theme's heading font at body size). A bold line in
+    // the body font at body size stays a bold paragraph: in a PDF it
     // is as often emphasis as a run-in heading, and keeping it inline loses nothing.
     private bool IsHeading(Line l) =>
-        l.ImagePath is null && !l.Mono && l.Text.Length < 160 && l.Segments.Count == 1
+        l.ImagePath is null && l.Grid is not { Length: >= 3 } && !l.Mono && l.Text.Length < 160 && l.Segments.Count == 1
         && (l.Size >= _bodySize * 1.15
+            || l.Bold && l.Size >= _bodySize * 1.1 && !Regex.IsMatch(l.Text, "[.:;,]$")
             || l.Bold && l.Size >= _bodySize * 0.95 && !Regex.IsMatch(l.Text, "[.:;,]$")
                && (l.Family != _bodyFamily || Regex.IsMatch(l.Text, @"^\d+(\.\d+)+\.?\s")));
 
@@ -395,6 +427,12 @@ internal sealed class PdfStructure
         for (int i = titleSkip; i < lines.Count;)
         {
             var line = lines[i];
+            if (RuledTable(lines, i) is { } ruled)
+            {
+                blocks.Add(ruled.Text);
+                i += ruled.Count;
+                continue;
+            }
             if (line.ImagePath is not null)
             {
                 R.Images++;
@@ -473,6 +511,9 @@ internal sealed class PdfStructure
     }
 
     /// <summary>Distance between consecutive baselines, in body leadings (large across pages).</summary>
+    /// <summary>False when one line sits between drawn rules (a table or a frame) and the other does not.</summary>
+    private static bool SameFrame(Line a, Line b) => (a.Grid is null) == (b.Grid is null);
+
     private double Gap(Line a, Line b) => a.Page != b.Page ? 100 : (b.Baseline - a.Baseline) / _leading;
 
     private static string MonoText(Line l)
@@ -488,7 +529,7 @@ internal sealed class PdfStructure
 
     private bool Continues(Line prev, Line next)
     {
-        if (next.ImagePath is not null || IsHeading(next) || next.Mono || StartsItem(next)) return false;
+        if (next.ImagePath is not null || IsHeading(next) || next.Mono || StartsItem(next) || !SameFrame(prev, next)) return false;
         if (Math.Abs(next.Size - prev.Size) > 0.6) return false;
         if (prev.Page != next.Page)
             return !Regex.IsMatch(prev.Text, @"[.!?:]$") || prev.Right > _contentRight - 2 * prev.Size;
@@ -516,6 +557,11 @@ internal sealed class PdfStructure
 
     private void Join(List<Word> words, List<Word> next)
     {
+        if (words.Count == 0)
+        {
+            words.AddRange(next);
+            return;
+        }
         var last = words[^1];
         if (last.Text.Length > 1 && last.Text.EndsWith("-", StringComparison.Ordinal) && char.IsLetter(last.Text[^2])
             && next.Count > 0 && next[0].Text.Length > 0 && char.IsLower(next[0].Text[0]))
@@ -600,7 +646,7 @@ internal sealed class PdfStructure
             }
             // Continuation: indented past the marker, close below the previous line.
             var prev = lines[i - 1];
-            if (items.Count > 0 && line.ImagePath is null && !IsHeading(line) && !line.Mono
+            if (items.Count > 0 && line.ImagePath is null && !IsHeading(line) && !line.Mono && SameFrame(prev, line)
                 && line.Left > items[^1].Indent - 1 && (Gap(prev, line) < 1.35 && Gap(prev, line) > 0 || prev.Page != line.Page && line.Left > _contentLeft + 4))
             {
                 Join(items[^1].Words, line.Words);
@@ -640,7 +686,7 @@ internal sealed class PdfStructure
         {
             var l = lines[start + n];
             var prev = lines[start + n - 1];
-            if (l.ImagePath is not null || IsHeading(l) || l.Page != prev.Page) break;
+            if (l.ImagePath is not null || IsHeading(l) || l.Page != prev.Page || !SameFrame(prev, l)) break;
             var cols = l.Segments.Select(seg => Column(seg, l.Size)).ToList();
             if (cols.Any(c => c < 0)) break;
             double gap = Gap(prev, l);
@@ -676,6 +722,185 @@ internal sealed class PdfStructure
                 R.TableCells++;
                 R.Mapped();
                 var text = cell.Count == 0 ? "" : Render(header && r == 0 ? cell.Select(w => new Word { Text = w.Text, Mono = w.Mono, Link = w.Link }).ToList() : cell);
+                sb.Append('|').Append(text.Replace("|", "\\|")).Append('\n');
+            }
+            if (r < rows.Count - 1) sb.Append('\n');
+        }
+        sb.Append("|===");
+        return (sb.ToString(), n);
+    }
+
+    // ── Ruled tables ────────────────────────────────────────────────────
+
+    /// <summary>Straight rules drawn on the page: stroked line segments and hairline filled rectangles.</summary>
+    private static (List<Rule> Vertical, List<Rule> Horizontal) Rules(Page page)
+    {
+        var vertical = new List<Rule>();
+        var horizontal = new List<Rule>();
+        double height = page.Height;
+        void Add(double x1, double y1, double x2, double y2)
+        {
+            if (Math.Abs(x1 - x2) < 0.5 && Math.Abs(y1 - y2) > 2)
+                vertical.Add(new Rule((x1 + x2) / 2, height - Math.Max(y1, y2), height - Math.Min(y1, y2)));
+            else if (Math.Abs(y1 - y2) < 0.5 && Math.Abs(x1 - x2) > 2)
+                horizontal.Add(new Rule(height - (y1 + y2) / 2, Math.Min(x1, x2), Math.Max(x1, x2)));
+        }
+        foreach (var path in page.Paths)
+        {
+            if (path.IsClipping) continue;
+            foreach (var sub in path)
+            {
+                if (path.IsStroked)
+                    foreach (var line in sub.Commands.OfType<PdfSubpath.Line>())
+                        Add(line.From.X, line.From.Y, line.To.X, line.To.Y);
+                if (path.IsFilled && sub.GetBoundingRectangle() is { } box)
+                {
+                    if (box.Width <= 2 && box.Height > 2) Add(box.Centroid.X, box.Bottom, box.Centroid.X, box.Top);
+                    else if (box.Height <= 2 && box.Width > 2) Add(box.Left, box.Centroid.Y, box.Right, box.Centroid.Y);
+                }
+            }
+        }
+        return (vertical, horizontal);
+    }
+
+    /// <summary>Sorted positions, those closer than 1.5pt taken as one.</summary>
+    private static double[] Merge(IEnumerable<double> xs)
+    {
+        var merged = new List<double>();
+        foreach (var x in xs.OrderBy(x => x))
+            if (merged.Count == 0 || x - merged[^1] > 1.5) merged.Add(x);
+        return merged.ToArray();
+    }
+
+    /// <summary>True when vertical rules at <paramref name="x"/> run unbroken from <paramref name="y1"/> down to <paramref name="y2"/>.</summary>
+    private bool Covered(int page, double x, double y1, double y2)
+    {
+        double reached = y1;
+        foreach (var v in _rules[page].Vertical.Where(v => Math.Abs(v.At - x) < 1.5).OrderBy(v => v.From))
+            if (v.From <= reached + 3) reached = Math.Max(reached, v.To); // small breaks: double rules under a header
+        return reached >= y2 - 1;
+    }
+
+    /// <summary>
+    /// A table drawn with rules: lines crossed by vertical rules, at least one by three or more; one table while its
+    /// outer rules continue (also onto the next page). Horizontal rules separate the rows, the
+    /// vertical rules the cells; an inner rule missing from a row makes a spanned cell.
+    /// </summary>
+    private (string Text, int Count)? RuledTable(List<Line> lines, int start)
+    {
+        var first = lines[start];
+        if (first.Grid is null) return null;
+        double left = first.Grid[0], right = first.Grid[^1];
+        static double Mid(Line l) => (l.Top + l.Bottom) / 2;
+        int n = 1;
+        while (start + n < lines.Count)
+        {
+            var l = lines[start + n];
+            var prev = lines[start + n - 1];
+            if (l.Grid is null || Math.Abs(l.Grid[0] - left) > 2 || Math.Abs(l.Grid[^1] - right) > 2) break;
+            if (l.Page == prev.Page ? !Covered(l.Page, left, Mid(prev), Mid(l))
+                : l.Page != prev.Page + 1 || !l.Grid.All(x => lines.Skip(start).Take(n).Any(t => t.Grid!.Any(c => Math.Abs(c - x) < 1.5))))
+                break; // onto the next page only with the same column rules: else it is the next table
+            n++;
+        }
+        var table = lines.GetRange(start, n);
+        if (table.All(l => l.Grid!.Length < 3)) return null; // a framed block, not a table
+        var merged = Merge(table.SelectMany(l => l.Grid!));
+        // Outer rules a little apart from line to line are still the table's edges, not a column.
+        var columns = merged.Where((x, k) => k == 0 || k == merged.Length - 1 || x - merged[0] > 3 && merged[^1] - x > 3).ToArray();
+        bool AtColumn(double x) => columns.Any(c => Math.Abs(c - x) < 3);
+        int Index(double x)
+        {
+            int best = 0;
+            for (int k = 1; k < columns.Length; k++)
+                if (Math.Abs(columns[k] - x) < Math.Abs(columns[best] - x)) best = k;
+            return best;
+        }
+
+        // Rules between two lines, running from column rule to column rule (an underline does not).
+        List<Rule> RowRules(Line above, Line below) => above.Page != below.Page ? [] : _rules[below.Page].Horizontal
+            .Where(h => h.At > above.Baseline && h.At < below.Top + 1 && AtColumn(h.From) && AtColumn(h.To) && h.To - h.From > 3).ToList();
+        bool ruledRows = Enumerable.Range(1, table.Count - 1).Any(k => RowRules(table[k - 1], table[k]).Count > 0);
+        // Without row rules, rows are told apart by spacing: wider than the table's line spacing, or every line a row.
+        var gaps = Enumerable.Range(1, table.Count - 1).Where(k => table[k].Page == table[k - 1].Page).Select(k => Gap(table[k - 1], table[k])).ToList();
+        double lineGap = gaps.Count > 0 ? gaps.Min() * 1.15 : 0;
+        bool lineRows = gaps.Count == 0 || gaps.Max() <= lineGap;
+
+        var rows = new List<TableRow>();
+        Line? previous = null;
+        foreach (var l in table)
+        {
+            bool pageBreak = previous is not null && l.Page != previous.Page;
+            var between = previous is null ? [] : RowRules(previous, l);
+            if (previous is null || pageBreak || (ruledRows ? between.Count > 0 : lineRows || Gap(previous, l) > lineGap))
+            {
+                var row = new TableRow(columns.Length - 1, pageBreak);
+                for (int k = 0; k + 1 < l.Grid!.Length; k++)
+                {
+                    int from = k == 0 ? 0 : Index(l.Grid[k]), to = k + 2 == l.Grid.Length ? columns.Length - 1 : Index(l.Grid[k + 1]);
+                    if (to > from) row.Spans[from] = to - from;
+                }
+                // A column with no rule above it continues the cell above (a row span).
+                if (ruledRows && !pageBreak && rows.Count > 0)
+                {
+                    var above = rows[^1];
+                    for (int c = 0; c < row.Spans.Length; c++)
+                    {
+                        if (row.Spans[c] == 0 || above.Spans[c] != row.Spans[c]) continue;
+                        double x1 = columns[c] + 3, x2 = columns[c + row.Spans[c]] - 3, reached = x1;
+                        foreach (var h in between.OrderBy(h => h.From))
+                            if (h.From <= reached + 1) reached = Math.Max(reached, h.To);
+                        if (reached >= x2) continue;
+                        var owner = above.Owner[c] ?? above;
+                        owner.RowSpans[c]++;
+                        row.Owner[c] = owner;
+                    }
+                }
+                rows.Add(row);
+            }
+            var current = rows[^1];
+            var parts = new List<Word>[current.Spans.Length];
+            foreach (var w in l.Words)
+            {
+                double center = (w.Left + w.Right) / 2;
+                int c = 0;
+                while (c + 1 < current.Spans.Length && columns[c + 1] <= center) c++;
+                while (c > 0 && current.Spans[c] == 0) c--; // inside a spanned cell: the cell starts further left
+                (parts[c] ??= []).Add(w);
+            }
+            for (int c = 0; c < parts.Length; c++)
+                if (parts[c] is { } part) Join((current.Owner[c] ?? current).Cells[c], part);
+            previous = l;
+        }
+
+        static string Key(TableRow r) => string.Join("|", r.Cells.Select(c => string.Join(" ", c.Select(w => w.Text))));
+        static bool Bold(TableRow r) => r.Cells.Any(c => c.Count > 0) && r.Cells.All(c => c.All(w => w.Bold));
+        if (Bold(rows[0])) // a header row repeated at the top of a continuation page
+            rows.RemoveAll(r => r.StartsPage && Key(r) == Key(rows[0]) && !rows.Any(o => o.Owner.Contains(r)));
+        bool header = rows.Count > 1 && Bold(rows[0]) && !Bold(rows[1]);
+
+        R.Tables++;
+        R.Approximated("pdf.table.ruled", "A table was rebuilt from its drawn rules.");
+        double width = right - left;
+        var sb = new StringBuilder("[cols=\"");
+        sb.Append(string.Join(",", Enumerable.Range(0, columns.Length - 1)
+            .Select(k => Math.Max(1, (int)Math.Round(100 * (columns[k + 1] - columns[k]) / width)).ToString(CultureInfo.InvariantCulture))));
+        sb.Append('"');
+        if (header) sb.Append(",options=\"header\"");
+        sb.Append("]\n|===\n");
+        for (int r = 0; r < rows.Count; r++)
+        {
+            for (int c = 0; c < rows[r].Spans.Length; c++)
+            {
+                int span = rows[r].Spans[c], rowSpan = rows[r].RowSpans[c];
+                if (span == 0 || rows[r].Owner[c] is not null) continue;
+                R.TableCells++;
+                R.Mapped();
+                var cell = rows[r].Cells[c];
+                var text = cell.Count == 0 ? "" : Render(header && r == 0 ? cell.Select(w => new Word { Text = w.Text, Mono = w.Mono, Link = w.Link }).ToList() : cell);
+                if (span > 1) sb.Append(span.ToString(CultureInfo.InvariantCulture));
+                if (rowSpan > 1) sb.Append('.').Append(rowSpan.ToString(CultureInfo.InvariantCulture));
+                if (span > 1 || rowSpan > 1) sb.Append('+');
                 sb.Append('|').Append(text.Replace("|", "\\|")).Append('\n');
             }
             if (r < rows.Count - 1) sb.Append('\n');

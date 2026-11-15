@@ -175,8 +175,9 @@ string adoc = md.AsciiDoc;               // also: md.Document (AST), md.Media (i
 ```
 
 Markdown and HTML map structure and formatting directly. PDF import recovers
-structure from fonts and positions (headings, paragraphs, lists, tables, code,
-images; running headers and footers dropped) and is approximate by nature.
+structure from fonts and positions (headings, paragraphs, lists, code, images;
+tables from their drawn rules, with column and row spans, or from aligned
+columns; running headers and footers dropped) and is approximate by nature.
 Uses Markdig (BSD-2-Clause), AngleSharp (MIT) and PdfPig (Apache-2.0).
 
 ### Parse with includes
