@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.33] - 2026-11-16
+
 ### Fixed
 
 - **Tables**: cells written on separate lines that make exactly one row (for
