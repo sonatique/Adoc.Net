@@ -34,6 +34,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   their page numbers) is dropped for `:toc:`; a title with a line break stays
   on one line (its second line was read as the author line); and a
   password-protected document is reported as such.
+- **`MarkdownImporter`, `HtmlImporter`, `PdfImporter`**: an apostrophe inside
+  a word is written plainly (`Don't`), not as a passthrough.
 
 ## [1.0.31] - 2026-11-15
 

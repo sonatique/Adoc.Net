@@ -11,6 +11,12 @@ public class MarkdownImporterTests
     private static string Adoc(string markdown) => new MarkdownImporter().ImportString(markdown).AsciiDoc;
 
     [Test]
+    public void Apostrophe_inside_a_word_stays_plain()
+    {
+        Assert.That(Adoc("Don't stop, it's fine.\n"), Does.Contain("Don't stop, it's fine."));
+    }
+
+    [Test]
     public void A_lone_first_h1_becomes_the_title()
     {
         var adoc = Adoc("# Guide\n\nIntro.\n\n## Part\n\nText.\n");
