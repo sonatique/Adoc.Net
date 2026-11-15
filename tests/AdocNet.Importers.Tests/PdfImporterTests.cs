@@ -133,6 +133,73 @@ public class PdfImporterTests
         Assert.That(r.AsciiDoc, Does.Contain("late").And.Contain("beta"));
     }
 
+    private static string PdfWords(string asciidoc)
+    {
+        var pdf = new PdfRenderer().RenderToBytes(AdocNet.Parser.AdocParser.Parse(asciidoc).Document, new PdfRenderOptions());
+        using var document = UglyToad.PdfPig.PdfDocument.Open(pdf);
+        return string.Join(" ", document.GetPages().SelectMany(p => p.GetWords()).Select(w => w.Text));
+    }
+
+    [Test]
+    public void Pdf_converter_prints_monospace_passthrough_in_cells_and_keeps_bold_glued()
+    {
+        var words = PdfWords("[cols=\"1,1\"]\n|===\n|Lead `+Mixed mono pass+` tail |plain\n|===\n\n*Name*- x and *Bold*, y.\n");
+        Assert.That(words, Does.Contain("Lead Mixed mono pass tail"));
+        Assert.That(words, Does.Contain("Name- x and Bold, y."));
+    }
+
+    [Test]
+    public void Pdf_converter_prints_asciidoc_cell_blocks_not_their_source()
+    {
+        var words = PdfWords("[cols=\"1,1a\"]\n|===\n|Outer\n|\nBefore nested.\n\n* item\n\n!===\n!In1 !In2\n!===\n|===\n");
+        Assert.That(words, Does.Contain("Before nested.").And.Contain("item").And.Contain("In1 | In2"));
+        Assert.That(words, Does.Not.Contain("!===").And.Not.Contain("* item"));
+    }
+
+    [Test]
+    public void Admonition_label_beside_a_multi_line_paragraph_marks_it()
+    {
+        // The label sits in its own column, vertically centred on four lines of text.
+        var builder = new UglyToad.PdfPig.Writer.PdfDocumentBuilder();
+        var font = builder.AddStandard14Font(UglyToad.PdfPig.Fonts.Standard14Fonts.Standard14Font.Helvetica);
+        var bold = builder.AddStandard14Font(UglyToad.PdfPig.Fonts.Standard14Fonts.Standard14Font.HelveticaBold);
+        var page = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
+        static UglyToad.PdfPig.Core.PdfPoint P(double x, double y) => new(x, y);
+        page.AddText("Some body text before the note, long enough to read as a paragraph.", 10, P(72, 760), font);
+        string[] note = ["The bytes use the importer's order, which differs from the", "displayed order. Bytes 0 and 1 are the first part; byte 2 is the",
+                         "middle part; bytes 3 through 5 are the last part, least", "significant first. Colons do not change this order."];
+        for (int i = 0; i < note.Length; i++) page.AddText(note[i], 10, P(160, 720 - 12 * i), font);
+        page.AddText("IMPORTANT", 10, P(72, 702), bold);
+        page.AddText("After the note.", 10, P(72, 650), font);
+
+        var r = new PdfImporter().Import(new MemoryStream(builder.Build()));
+        Assert.That(r.AsciiDoc, Does.Contain("IMPORTANT: The bytes use the importer's order, which differs from the displayed order. Bytes 0 and 1 are the first part; byte 2 is the middle part;"), r.AsciiDoc);
+        Assert.That(r.AsciiDoc, Does.Not.Contain("== IMPORTANT").And.Not.Contain("=== IMPORTANT").And.Not.Contain("==== IMPORTANT"), r.AsciiDoc);
+    }
+
+    [Test]
+    public void Cover_title_keeps_the_space_a_metadata_title_lost()
+    {
+        var builder = new UglyToad.PdfPig.Writer.PdfDocumentBuilder();
+        builder.DocumentInformation.Title = "Packet FormatUser Manual";
+        var font = builder.AddStandard14Font(UglyToad.PdfPig.Fonts.Standard14Fonts.Standard14Font.Helvetica);
+        var cover = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
+        cover.AddText("Packet Format", 30, new UglyToad.PdfPig.Core.PdfPoint(72, 500), font);
+        cover.AddText("User Manual", 30, new UglyToad.PdfPig.Core.PdfPoint(72, 460), font);
+        var body = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
+        body.AddText("Body text on the second page.", 10, new UglyToad.PdfPig.Core.PdfPoint(72, 700), font);
+
+        var r = new PdfImporter().Import(new MemoryStream(builder.Build()));
+        Assert.That(r.AsciiDoc, Does.StartWith("= Packet Format User Manual\n"), r.AsciiDoc);
+    }
+
+    [Test]
+    public void Font_family_ignores_lowercase_subset_tags()
+    {
+        Assert.That(PdfStructure.Family("4fd136+Calibri-Bold"), Is.EqualTo(PdfStructure.Family("c0f016+Calibri")));
+        Assert.That(PdfStructure.Family("ABCDEF+NotoSerif-Bold"), Is.EqualTo("notoserif"));
+    }
+
     private static int Tables(AdocNet.Ast.AstNode node) => (node is AdocNet.Ast.TableNode ? 1 : 0) + node.Children.Sum(Tables);
     private static int Tables(ImportResult r) => Tables(r.Document);
 
