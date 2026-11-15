@@ -58,6 +58,9 @@ public sealed class HighlightInlineNode : InlineNode
                 case TextInlineNode text:
                     sb.Append(text.Value);
                     break;
+                case PassthroughInlineNode passthrough:
+                    sb.Append(passthrough.Content);
+                    break;
                 case StrongInlineNode strong:
                     AppendPlainText(sb, strong.Children);
                     break;

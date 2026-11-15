@@ -284,7 +284,10 @@ public sealed partial class PdfRenderer
                 // footnote markers as styled spans so they can render superscript and
                 // clickable like body markers (#69); Text is the plain concatenation
                 // used by the (string-based) width/height measurement passes.
-                var runs = BuildCellRuns(cell.Inlines, cell.Text ?? string.Empty, footnotes);
+                // An AsciiDoc ("a") cell holds blocks: its text is their lines, one per "\n".
+                var runs = cell.ContentStyle == TableCellStyle.AsciiDoc && cell.Children.Count > 0
+                    ? [new CellRun(string.Join("\n", CellBlockLines(cell.Children, footnotes)))]
+                    : BuildCellRuns(cell.Inlines, cell.Text ?? string.Empty, footnotes);
                 string text = string.Concat(runs.Select(r => r.Text));
                 placed.Add(new PlacedCell(cell, col, span, text, runs));
 
@@ -301,6 +304,64 @@ public sealed partial class PdfRenderer
                 if (rowsLeft[c] > 0) rowsLeft[c]--;
         }
         return grid;
+    }
+
+    /// <summary>Wraps cell text; a "\n" (only in an AsciiDoc cell's block lines) always starts a new line.</summary>
+    private static List<string> WrapCellText(PdfWriter w, string text, string font, float fontSize, float maxWidth) =>
+        text.IndexOf('\n') < 0
+            ? w.WrapText(text, font, fontSize, maxWidth)
+            : text.Split('\n').SelectMany(part => part.Length == 0 ? [""] : w.WrapText(part, font, fontSize, maxWidth)).ToList();
+
+    /// <summary>
+    /// The blocks of an AsciiDoc ("a") table cell as plain lines: paragraphs, list items with a
+    /// bullet, code lines, a nested table's rows with " | " between cells. The PDF lays a cell out
+    /// as wrapped lines, not blocks, so this keeps the content readable instead of its source.
+    /// </summary>
+    private List<string> CellBlockLines(IEnumerable<AstNode> blocks, FootnoteState footnotes, string indent = "")
+    {
+        var lines = new List<string>();
+        foreach (var block in blocks)
+        {
+            switch (block)
+            {
+                case ParagraphNode para:
+                    lines.Add(indent + GetPlainText(para.Inlines, para.Text, footnotes).Replace('\n', ' '));
+                    break;
+                case SectionNode section:
+                    lines.Add(indent + section.Title);
+                    lines.AddRange(CellBlockLines(section.Children, footnotes, indent));
+                    break;
+                case ListNode list:
+                    int number = 0;
+                    foreach (var item in list.Children.OfType<ListItemNode>())
+                    {
+                        // Standard PDF fonts lack the bullet glyph (as in body lists).
+                        string marker = list.ListKind != ListKind.Unordered ? $"{++number}. " : _hasTrueTypeBodyFont ? "\u2022 " : "- ";
+                        lines.Add(indent + marker + GetPlainText(item.Inlines, item.Text, footnotes).Replace('\n', ' '));
+                        lines.AddRange(CellBlockLines(item.Children, footnotes, indent + "  "));
+                    }
+                    break;
+                case TableNode nested:
+                    foreach (var row in nested.Children.OfType<TableRowNode>())
+                        lines.Add(indent + string.Join(" | ", row.Children.OfType<TableCellNode>().Select(c =>
+                            c.ContentStyle == TableCellStyle.AsciiDoc && c.Children.Count > 0
+                                ? string.Join(" ", CellBlockLines(c.Children, footnotes))
+                                : GetPlainText(c.Inlines, c.Text ?? string.Empty, footnotes).Replace('\n', ' '))));
+                    break;
+                case DelimitedBlockNode { Content: { } content } when block.Children.Count == 0:
+                    lines.AddRange(content.Replace("\r", "").Split('\n').Select(l => indent + l));
+                    break;
+                case AdmonitionNode admonition:
+                    var inner = CellBlockLines(admonition.Children, footnotes, indent);
+                    if (inner.Count > 0) inner[0] = $"{admonition.AdmonitionType.ToUpperInvariant()}: {inner[0].TrimStart()}";
+                    lines.AddRange(inner);
+                    break;
+                default:
+                    lines.AddRange(CellBlockLines(block.Children, footnotes, indent));
+                    break;
+            }
+        }
+        return lines;
     }
 
     /// <summary>
@@ -378,9 +439,9 @@ public sealed partial class PdfRenderer
             foreach (var p in grid[ri])
             {
                 string text = p.Text;
-                float full = w.MeasureText(text, font, _bodyFontSize) + 2 * cellPadding;
+                float full = text.Split('\n').Max(part => w.MeasureText(part, font, _bodyFontSize)) + 2 * cellPadding;
                 float word = 0;
-                foreach (var wd in text.Split(' '))
+                foreach (var wd in text.Split(' ', '\n'))
                 {
                     if (wd.Length == 0) continue;
                     float ww = w.MeasureText(wd, font, _bodyFontSize) + 2 * cellPadding;
@@ -502,7 +563,7 @@ public sealed partial class PdfRenderer
                 if (avail <= 0f) continue;
 
                 string text = p.Text;
-                foreach (var word in text.Split(' '))
+                foreach (var word in text.Split(' ', '\n'))
                 {
                     if (word.Length == 0) continue;
                     float ww = w.MeasureText(word, font, _bodyFontSize);
@@ -559,8 +620,7 @@ public sealed partial class PdfRenderer
             float cellWidth = 0;
             for (int s = 0; s < p.ColSpan && p.Col + s < colWidths.Length; s++)
                 cellWidth += colWidths[p.Col + s];
-            string text = p.Text;
-            var lines = w.WrapText(text, font, fontSize, cellWidth - 2 * cellPadding + CellWrapTolerance);
+            var lines = WrapCellText(w, p.Text, font, fontSize, cellWidth - 2 * cellPadding + CellWrapTolerance);
             if (lines.Count > maxLines) maxLines = lines.Count;
         }
         return maxLines * _bodyLeading;
@@ -593,7 +653,7 @@ public sealed partial class PdfRenderer
             for (int s = 0; s < p.ColSpan && p.Col + s < colWidths.Length; s++)
                 cellWidth += colWidths[p.Col + s];
 
-            var lines = w.WrapText(text, font, fontSize, cellWidth - 2 * cellPadding + CellWrapTolerance);
+            var lines = WrapCellText(w, text, font, fontSize, cellWidth - 2 * cellPadding + CellWrapTolerance);
 
             var align = p.Cell.Alignment;
             if (align is null && columns is not null && p.Col < columns.Count)

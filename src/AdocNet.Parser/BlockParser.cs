@@ -4279,7 +4279,7 @@ internal static class BlockParser
 
         // Use column-aware row grouping when column count is known
         // and cell count doesn't already divide evenly into rows by line count.
-        bool useColumnGrouping = colCount > 0 && allCells.Count > colCount;
+        bool useColumnGrouping = colCount > 0 && allCells.Count >= colCount;
 
         if (useColumnGrouping)
         {

@@ -104,9 +104,9 @@ internal sealed class PdfStructure
     private double _bodySize = 10, _leading = 12, _contentLeft, _contentRight;
     private string _bodyFamily = "";
 
-    /// <summary>A font's family: subset tag and style suffixes removed (<c>ABCDEF+NotoSerif-Bold</c> → <c>notoserif</c>).</summary>
-    private static string Family(string font) =>
-        Regex.Replace(Regex.Replace(font, @"^[A-Z]{6}\+", ""), @"[-,_ ]?(Bold|Italic|Oblique|Regular|Medium|Semibold|Light|Black|Heavy|BI|MT|PS).*$", "", RegexOptions.IgnoreCase)
+    /// <summary>A font's family: subset tag and style suffixes removed (<c>ABCDEF+NotoSerif-Bold</c>, <c>4fd136+NotoSerif-Bold</c> → <c>notoserif</c>).</summary>
+    internal static string Family(string font) =>
+        Regex.Replace(Regex.Replace(font, @"^[A-Za-z0-9]{6}\+", ""), @"[-,_ ]?(Bold|Italic|Oblique|Regular|Medium|Semibold|Light|Black|Heavy|BI|MT|PS).*$", "", RegexOptions.IgnoreCase)
              .ToLowerInvariant();
 
     public PdfStructure(PdfDocument pdf, AsciiDocBuilder builder, ImportOptions options)
@@ -163,10 +163,39 @@ internal sealed class PdfStructure
             _contentLeft = body.Min(l => l.Left);
             _contentRight = body.Max(l => l.Right);
         }
+        AttachAdmonitionLabels(all);
         R.Add(ImportIssueSeverity.Info, "pdf.structure.inferred", "Structure was inferred from fonts and positions; check headings, lists and tables.");
         TitlePage(all, pages.Count);
         Toc(all);
         return Blocks(all);
+    }
+
+    /// <summary>
+    /// An admonition label alone on its line, left of a paragraph and centred beside it (a label
+    /// column next to several lines of text), marks that paragraph; the label line itself goes.
+    /// </summary>
+    private void AttachAdmonitionLabels(List<Line> lines)
+    {
+        foreach (var label in lines.Where(l => l.ImagePath is null && l.Grid is null && l.Words.Count == 1
+                     && Regex.IsMatch(l.Text, "^(NOTE|TIP|IMPORTANT|WARNING|CAUTION)$")).ToList())
+        {
+            double mid = (label.Top + label.Bottom) / 2;
+            var beside = lines.Where(l => l != label && l.Page == label.Page && l.ImagePath is null && l.Admonition is null
+                    && l.Left > label.Right + 2 && Math.Abs((l.Top + l.Bottom) / 2 - mid) < 3 * _leading)
+                .OrderBy(l => Math.Abs((l.Top + l.Bottom) / 2 - mid)).FirstOrDefault();
+            if (beside is null) continue;
+            // Walk up to the paragraph's first line: same left edge, close above.
+            var first = beside;
+            for (int i = lines.IndexOf(first) - 1; i >= 0; i--)
+            {
+                var prev = lines[i];
+                if (prev == label) continue;
+                if (prev.Page != first.Page || Math.Abs(prev.Left - first.Left) > 2 || Gap(prev, first) > 1.35 || Gap(prev, first) <= 0) break;
+                first = prev;
+            }
+            first.Admonition = label.Text;
+            lines.Remove(label);
+        }
     }
 
     // ── Lines ───────────────────────────────────────────────────────────
@@ -352,7 +381,9 @@ internal sealed class PdfStructure
         double max = lines.Where(l => l.ImagePath is null).Max(l => l.Size);
         if (page1.Max(l => l.Size) < max - 0.1 || max < _bodySize * 1.5) return;
         var titleLines = page1.Where(l => l.Size >= max - 0.1).ToList();
-        _b.Title ??= string.Join(" ", titleLines.Select(l => l.Text));
+        var coverTitle = string.Join(" ", titleLines.Select(l => l.Text));
+        // A metadata title can lose the cover's line break ("FormatUser Manual"): the same letters take the cover's spacing.
+        if (_b.Title is null || Regex.Replace(_b.Title, @"\s+", "") == Regex.Replace(coverTitle, @"\s+", "")) _b.Title = coverTitle;
         var rest = page1.Except(titleLines).Select(l => l.Text).ToList();
         lines.RemoveAll(l => l.Page == 1);
         R.Add(ImportIssueSeverity.Warning, "pdf.title-page", rest.Count == 0

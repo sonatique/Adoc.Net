@@ -5,6 +5,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Tables**: cells written on separate lines that make exactly one row (for
+  example `|Outer` then `a|...` in a two-column table) form one row again,
+  and the column's style (such as `a`) applies to them. They used to become
+  one row per line, losing the column style.
+- **PDF**: an AsciiDoc (`a`) table cell prints its content (paragraphs, list
+  items, code lines, nested-table rows as `cell | cell`) instead of its
+  source text; `` `+text+` `` in a table cell is no longer blank; and with the
+  standard fonts a bold or italic run is no longer followed by a space before
+  the text glued to it (`*Name*- x` printed `Name - x`).
+- **AST**: `Content` of strong, emphasis, monospace and highlight nodes
+  includes passthrough text.
+- **`PdfImporter`**: an admonition label in its own column, centred beside a
+  paragraph of several lines, marks that paragraph instead of splitting it
+  with a heading; a cover title keeps the spaces a metadata title lost
+  (`FormatUser Manual`); and fonts with lowercase subset tags
+  (`4fd136+Calibri-Bold`) are recognised as the body family, so bold body
+  text is no longer taken for a heading.
+
 ## [1.0.32] - 2026-11-15
 
 ### Fixed
