@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.31] - 2026-11-15
+
 ### Added
 
 - **`AdocNet.Importers`**: Markdown, HTML and PDF importers with one shared
