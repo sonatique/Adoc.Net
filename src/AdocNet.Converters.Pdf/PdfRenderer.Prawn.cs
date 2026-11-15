@@ -60,7 +60,7 @@ public sealed partial class PdfRenderer
             writer.FirstLineOffset = null;
             writer.VerbatimWrapAtSpaces = false;
             writer.Kerning = false;
-            writer.SynthesizeSegmentSpaces = true;
+            writer.SynthesizeSegmentSpaces = false;
             writer.BreakAfterHyphens = false;
             return;
         }
@@ -261,7 +261,12 @@ public sealed partial class PdfRenderer
             if (headerTextColor is { } headerColor)
                 segments = segments.Select(sg => sg.Color is null ? sg with { Color = headerColor } : sg).ToList();
             segments = w.ExpandSegmentsForFallback(segments);
-            var lines = w.WrapSegments(segments, width - 2 * cellPadding + CellWrapTolerance);
+            float wrapWidth = width - 2 * cellPadding + CellWrapTolerance;
+            // An AsciiDoc cell's block lines ("\n"-separated) each start a new line.
+            var lines = p.Text.IndexOf('\n') >= 0 && p.Cell.ContentStyle == TableCellStyle.AsciiDoc
+                ? p.Text.Split('\n').SelectMany(part => w.WrapSegments(w.ExpandSegmentsForFallback([new TextSegment(part, font, fontSize, Color: segments.FirstOrDefault().Color)]), wrapWidth)
+                    is { Count: > 0 } l ? l : [new List<TextSegment>()]).ToList()
+                : w.WrapSegments(segments, wrapWidth);
             if (lines.Count == 0) lines.Add(new List<TextSegment>());
 
             // prawn-table cell (measured with Noto Serif, line gap 0, Calibri, gap 0.221 em, and

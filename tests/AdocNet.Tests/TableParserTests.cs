@@ -33,6 +33,20 @@ public class TableParserTests
         Assert.That(html, Does.Contain("<li>"));
     }
 
+    [Test]
+    public void One_row_of_cells_on_separate_lines_fills_the_declared_columns()
+    {
+        // Exactly one row's worth of cells: still one row, and the column style applies.
+        var result = BlockParser.Parse("[cols=\"1,1a\"]\n|===\n|Outer\n|\n* one\n|===");
+        var table = (TableNode)result.Document.Children[0];
+        var rows = table.Children.OfType<TableRowNode>().ToList();
+        Assert.That(rows, Has.Count.EqualTo(1));
+        var cells = rows[0].Children.OfType<TableCellNode>().ToList();
+        Assert.That(cells, Has.Count.EqualTo(2));
+        Assert.That(cells[1].ContentStyle, Is.EqualTo(TableCellStyle.AsciiDoc));
+        Assert.That(cells[1].Children.OfType<ListNode>().Count(), Is.EqualTo(1));
+    }
+
     // ── Basic table parsing ──────────────────────────────────────────────
 
     [Test]
