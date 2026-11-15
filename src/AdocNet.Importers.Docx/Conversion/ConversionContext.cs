@@ -30,6 +30,9 @@ internal sealed class ConversionContext
     /// <summary>Comment bodies keyed by <c>w:id</c>.</summary>
     public Dictionary<string, XElement> Comments { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>Set when a heading carried Word numbering, so the header can carry <c>:sectnums:</c>.</summary>
+    public bool SawNumberedHeading { get; set; }
+
     /// <summary>Set when a TOC field was seen, so the header can carry <c>:toc:</c>.</summary>
     public bool SawTableOfContents { get; set; }
 

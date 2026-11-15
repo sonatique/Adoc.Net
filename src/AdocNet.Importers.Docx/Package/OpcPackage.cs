@@ -52,6 +52,17 @@ internal sealed class OpcPackage : IDisposable
         }
     }
 
+    private static bool IsCompoundFile(Stream stream)
+    {
+        if (!stream.CanSeek) return false;
+        var header = new byte[8];
+        stream.Position = 0;
+        int read = 0;
+        while (read < header.Length && stream.Read(header, read, header.Length - read) is int n && n > 0) read += n;
+        return read == 8 && header[0] == 0xD0 && header[1] == 0xCF && header[2] == 0x11 && header[3] == 0xE0
+            && header[4] == 0xA1 && header[5] == 0xB1 && header[6] == 0x1A && header[7] == 0xE1;
+    }
+
     public static OpcPackage Open(Stream stream, bool leaveOpen = true)
     {
         if (stream is null) throw new ArgumentNullException(nameof(stream));
@@ -62,6 +73,9 @@ internal sealed class OpcPackage : IDisposable
         }
         catch (InvalidDataException ex)
         {
+            // Word saves a password-protected document as an encrypted OLE compound file, not a ZIP.
+            if (IsCompoundFile(stream))
+                throw new DocxImportException("The document is password-protected (encrypted); remove the password in Word and import it again.", ex);
             throw new DocxImportException("The input is not a readable ZIP/OPC container (a .docx file is a ZIP archive).", ex);
         }
 

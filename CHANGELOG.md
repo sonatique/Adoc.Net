@@ -28,6 +28,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   admonition blocks, `#footnotes` real `footnote:[]` macros, horizontal
   description lists `[horizontal]` lists, and "Table 1." caption labels are
   dropped from block titles.
+- **`DocxImporter`**: numbered headings (a heading style with Word numbering)
+  are sections again, not one-item ordered lists, and set `:sectnums:`;
+  Word's table of contents (`TOC Heading` and `toc 1`-`toc 9` paragraphs with
+  their page numbers) is dropped for `:toc:`; a title with a line break stays
+  on one line (its second line was read as the author line); and a
+  password-protected document is reported as such.
 
 ## [1.0.31] - 2026-11-15
 

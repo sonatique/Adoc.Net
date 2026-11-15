@@ -174,6 +174,15 @@ internal sealed class BlockConverter
         var pPr = paragraph.Element(Ns.W + "pPr");
         var styleId = pPr?.Element(Ns.W + "pStyle").WVal();
 
+        // Word's table of contents: entries styled "toc 1".."toc 9" under a "TOC Heading". A renderer
+        // regenerates it from :toc:, so the cached entries (with their page numbers) are dropped.
+        if (!_nested && IsTocStyle(styleId))
+        {
+            _ctx.SawTableOfContents = true;
+            _ctx.Report.Count(mapped: true);
+            return;
+        }
+
         if (pPr?.Element(Ns.W + "pageBreakBefore").IsToggleOn() == true)
         {
             FlushAll();
@@ -200,7 +209,10 @@ internal sealed class BlockConverter
         EmitPendingComments(converter);
         _pendingTextBoxes.AddRange(converter.PendingTextBoxes);
 
-        var headingLevel = numbering is null ? _ctx.Styles.HeadingLevel(styleId) : null;
+        // A heading style wins over the numbering it carries: "1 Introduction" is a numbered heading
+        // (its number becomes :sectnums:), not a one-item ordered list.
+        var headingLevel = _ctx.Styles.HeadingLevel(styleId);
+        if (headingLevel is not null && numbering is not null) _ctx.SawNumberedHeading = true;
         var blockId = HoistAnchor(inlines.Inlines) ?? TakePendingBlockId();
 
         if (inlines.IsEmpty && inlines.Inlines.Count == 0)
@@ -233,7 +245,7 @@ internal sealed class BlockConverter
         if (_ctx.Styles.IsOrDerivesFrom(styleId, "Title") && !_nested)
         {
             FlushAll();
-            _root.Title = InlineMarkupWriter.Write(inlines.Inlines).Trim();
+            _root.Title = OneLine(InlineMarkupWriter.Write(inlines.Inlines));
             _ctx.Report.Count(mapped: true);
             _sawFirstBlock = true;
             return;
@@ -242,7 +254,7 @@ internal sealed class BlockConverter
         if (_ctx.Styles.IsOrDerivesFrom(styleId, "Subtitle") && !_nested && _root.Title is not null)
         {
             // AsciiDoc spells a subtitle as "Title: Subtitle".
-            _root.Title += ": " + InlineMarkupWriter.Write(inlines.Inlines).Trim();
+            _root.Title += ": " + OneLine(InlineMarkupWriter.Write(inlines.Inlines));
             _ctx.Report.Count(mapped: true);
             return;
         }
@@ -330,9 +342,19 @@ internal sealed class BlockConverter
         return node;
     }
 
+    /// <summary>A title on one line: AsciiDoc reads a title's second line as the author line.</summary>
+    private static string OneLine(string title) =>
+        System.Text.RegularExpressions.Regex.Replace(title, @"\s*( \+)?\r?\n\s*", " ").Trim();
+
+    private bool IsTocStyle(string? styleId)
+    {
+        var name = StyleTable.Squash(_ctx.Styles.CanonicalName(styleId) ?? "");
+        return System.Text.RegularExpressions.Regex.IsMatch(name, @"^toc[1-9]$|^tocheading$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    }
+
     private void AddHeading(int level, InlineResult inlines, string? id)
     {
-        var title = InlineMarkupWriter.Write(inlines.Inlines).Trim();
+        var title = OneLine(InlineMarkupWriter.Write(inlines.Inlines));
 
         if (!_nested && _root.Title is null && !_sawFirstBlock
             && level == 1 && _ctx.CoreTitle is null
