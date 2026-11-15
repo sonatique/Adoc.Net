@@ -21,6 +21,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **`PdfImporter`**: a list or paragraph no longer absorbs the table rows that
   follow it, and a bold heading slightly larger than the body (a 12pt level-5
   heading on a 10.5pt body) is a heading again.
+- **`HtmlImporter`**: HTML in Asciidoctor's layout (AdocNet's own HTML export
+  included) comes back as AsciiDoc structure: section numbers become
+  `:sectnums:`, the generated table of contents `:toc:`, the header details
+  line `:author:`, `:email:`, `:revnumber:` and `:revdate:`, admonition tables
+  admonition blocks, `#footnotes` real `footnote:[]` macros, horizontal
+  description lists `[horizontal]` lists, and "Table 1." caption labels are
+  dropped from block titles.
 
 ## [1.0.31] - 2026-11-15
 

@@ -41,6 +41,13 @@ internal sealed class HtmlConverter
     private IElement? _promotedHeading;
     private int _headingShift;
     private int _lastSectionLevel;
+    private bool _numberedSections;
+
+    /// <summary>A section number before a heading's title, as Asciidoctor's <c>:sectnums:</c> renders it (<c>4.3.1. </c>).</summary>
+    private static readonly Regex SectionNumber = new(@"^(\d+\.)+\s+", RegexOptions.CultureInvariant);
+    /// <summary>The caption label Asciidoctor puts before a block title (<c>Table 1. </c>).</summary>
+    private static readonly Regex CaptionLabel = new(@"^(Table|Figure|Example|Listing)\s+\d+\.\s+", RegexOptions.CultureInvariant);
+    private static readonly string[] AdmonitionLabels = ["note", "tip", "important", "warning", "caution"];
 
     private HtmlConverter(AsciiDocBuilder builder, ImportOptions options)
     {
@@ -66,12 +73,28 @@ internal sealed class HtmlConverter
             foreach (var li in container.QuerySelectorAll("li[id]"))
                 _footnotes[li.Id!] = li;
         }
+        // Asciidoctor: <div id="footnotes"><div class="footnote" id="_footnotedef_1"><a href="#_footnoteref_1">1</a>. Text</div>
+        foreach (var container in root.QuerySelectorAll("div#footnotes"))
+        {
+            _footnoteContainers.Add(container);
+            foreach (var note in container.QuerySelectorAll("div.footnote[id]"))
+                _footnotes[note.Id!] = note;
+        }
+        AsciidoctorHeader(root);
         foreach (var a in root.QuerySelectorAll("a[href^='#']"))
             _linkTargets.Add(a.GetAttribute("href")!.Substring(1));
 
         var headings = root.QuerySelectorAll("h1, h2, h3, h4, h5, h6")
             .Where(h => !_footnoteContainers.Any(c => c.Contains(h))).ToList();
         if (headings.Count == 0) return;
+        // Numbered headings (most below the title start with "1.", "2.3."): the numbers become :sectnums:.
+        var sections = headings.Where(h => Level(h) > 1).ToList();
+        if (sections.Count > 0 && sections.Count(h => SectionNumber.IsMatch(Normalize(h.TextContent).TrimStart())) >= 0.6 * sections.Count)
+        {
+            _numberedSections = true;
+            _b.SetAttribute("sectnums", "");
+            R.Approximated("html.sectnums", "Section numbers in the headings were replaced by :sectnums:.");
+        }
         int top = headings.Min(Level);
         var first = headings[0];
         if (_options.PromoteFirstHeadingToTitle && _b.Title is null && top == 1 && Level(first) == top
@@ -88,6 +111,32 @@ internal sealed class HtmlConverter
     }
 
     private static int Level(IElement heading) => heading.LocalName[1] - '0';
+
+    /// <summary>
+    /// Asciidoctor's generated header parts: the details line (author, email, version, date, remark)
+    /// becomes attributes and the table of contents becomes <c>:toc:</c>; both are then removed.
+    /// </summary>
+    private void AsciidoctorHeader(IElement root)
+    {
+        foreach (var details in root.QuerySelectorAll("#header > div.details").ToList())
+        {
+            foreach (var id in new[] { "author", "email", "revnumber", "revdate", "revremark" })
+            {
+                if (details.QuerySelector("#" + id) is not { } span) continue;
+                var value = Normalize(span.TextContent).Trim().TrimEnd(',').Trim();
+                if (id == "revnumber") value = Regex.Replace(value, @"^(version|v)\s*", "", RegexOptions.IgnoreCase);
+                if (value.Length > 0) _b.SetAttribute(id, value);
+            }
+            details.Remove();
+            R.Mapped();
+        }
+        foreach (var toc in root.QuerySelectorAll("div#toc, nav#toc, nav#TOC, [role=doc-toc]").ToList())
+        {
+            toc.Remove();
+            _b.SetAttribute("toc", "");
+            R.Approximated("html.toc", "The table of contents was replaced by a generated one (:toc:).");
+        }
+    }
 
     private static bool HasTextBefore(IElement root, IElement target)
     {
@@ -152,6 +201,11 @@ internal sealed class HtmlConverter
             return [];
         }
 
+        if (name == "div" && e.ClassList.Contains("admonitionblock") && Admonition(e, listDepth) is { } admonition)
+            return [WithAnchor(e, admonition)];
+        if (name == "div" && e.ClassList.Contains("hdlist") && HorizontalList(e) is { } horizontal)
+            return [WithAnchor(e, horizontal)];
+
         string? block = name switch
         {
             "h1" or "h2" or "h3" or "h4" or "h5" or "h6" => Heading(e),
@@ -171,6 +225,35 @@ internal sealed class HtmlConverter
         if (block is not null) return [WithAnchor(e, block)];
         // Containers (div, section, article, main, header, footer, aside, nav, center, address, li outside a list…).
         return Blocks(e, listDepth);
+    }
+
+    /// <summary>Asciidoctor's <c>div.admonitionblock</c> (label cell + content cell) as an AsciiDoc admonition block.</summary>
+    private string? Admonition(IElement e, int listDepth)
+    {
+        var label = AdmonitionLabels.FirstOrDefault(e.ClassList.Contains);
+        if (label is null || e.QuerySelector("td.content") is not { } content) return null;
+        var body = string.Join("\n\n", Blocks(content, listDepth));
+        R.Mapped();
+        var d = AsciiDocBuilder.Delimiter('=', body);
+        return $"[{label.ToUpperInvariant()}]\n{d}\n{body}\n{d}";
+    }
+
+    /// <summary>Asciidoctor's horizontal description list (a table of <c>td.hdlist1</c> terms and <c>td.hdlist2</c> texts).</summary>
+    private string? HorizontalList(IElement e)
+    {
+        var dl = e.Owner!.CreateElement("dl");
+        foreach (var row in e.QuerySelectorAll("tr"))
+        {
+            if (row.QuerySelector("td.hdlist1") is not { } term) continue;
+            var dt = e.Owner.CreateElement("dt");
+            foreach (var n in term.ChildNodes.ToList()) dt.AppendChild(n.Clone());
+            dl.AppendChild(dt);
+            var dd = e.Owner.CreateElement("dd");
+            if (row.QuerySelector("td.hdlist2") is { } text)
+                foreach (var n in text.ChildNodes.ToList()) dd.AppendChild(n.Clone());
+            dl.AppendChild(dd);
+        }
+        return DescriptionList(dl, 1) is { } list ? "[horizontal]\n" + list : null;
     }
 
     private string Mapped(string block)
@@ -197,6 +280,7 @@ internal sealed class HtmlConverter
         level = Math.Min(level, 5);
         _lastSectionLevel = level;
         var text = Render(Inlines(e.ChildNodes), blockStart: false).Replace(" +\n", " ").Trim();
+        if (_numberedSections) text = SectionNumber.Replace(text, "");
         if (text.Length == 0) return null;
         R.Headings++;
         R.Mapped();
@@ -531,7 +615,7 @@ internal sealed class HtmlConverter
         if (headRows.Count > 0) options.Add("header");
         if (footRows.Count > 0) options.Add("footer");
         var sb = new StringBuilder();
-        if (table.QuerySelector("caption") is { } caption && caption.Closest("table") == table && Normalize(caption.TextContent).Trim() is { Length: > 0 } ct)
+        if (table.QuerySelector("caption") is { } caption && caption.Closest("table") == table && CaptionLabel.Replace(Normalize(caption.TextContent).Trim(), "") is { Length: > 0 } ct)
             sb.Append('.').Append(AsciiDocBuilder.BlockStart(AsciiDocBuilder.Inline(ct))).Append('\n');
         sb.Append("[cols=\"").Append(string.Join(",", align.Select(a => a is null ? "1" : a == "^" ? "^1" : a == ">" ? ">1" : "1")))
           .Append('"');
@@ -725,13 +809,15 @@ internal sealed class HtmlConverter
     /// <summary>A footnote reference (Markdig, pandoc, DPUB roles) rendered as <c>footnote:[…]</c>; null otherwise.</summary>
     private string? FootnoteRef(IElement e)
     {
-        var a = e.LocalName == "a" ? e : e.Children.Length == 1 && e.Children[0].LocalName == "a" && string.IsNullOrWhiteSpace(e.TextContent.Replace(e.Children[0].TextContent, "")) ? e.Children[0] : null;
+        var a = e.LocalName == "a" ? e : e.Children.Length == 1 && e.Children[0].LocalName == "a" && e.TextContent.Replace(e.Children[0].TextContent, "").Trim().Trim('[', ']').Length == 0 ? e.Children[0] : null;
         if (a?.GetAttribute("href") is not { Length: > 1 } href || href[0] != '#') return null;
         if (!_footnotes.TryGetValue(href.Substring(1), out var li)) return null;
         R.Footnotes++;
         R.Mapped();
-        var nodes = li.Children.Length == 1 && li.Children[0].LocalName == "p" ? li.Children[0].ChildNodes : li.ChildNodes;
-        var text = Render(Inlines(nodes), blockStart: false).Trim();
+        IEnumerable<INode> nodes = li.Children.Length == 1 && li.Children[0].LocalName == "p" ? li.Children[0].ChildNodes : li.ChildNodes;
+        // Asciidoctor's footnote body starts with its back link and ". ".
+        nodes = nodes.Where(n => !(n is IElement { LocalName: "a" } back && back.GetAttribute("href") is { } h && h.StartsWith("#_footnoteref_", StringComparison.Ordinal)));
+        var text = Regex.Replace(Render(Inlines(nodes), blockStart: false).Trim(), @"^\.\s*", "");
         return $"footnote:[{TrimBreaks(text).Replace("]", "\\]")}]";
     }
 
