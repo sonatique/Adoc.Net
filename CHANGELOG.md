@@ -5,6 +5,44 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **`AdocNet.Importers`**: Markdown, HTML and PDF importers with one shared
+  result shape: `ImportResult` holds the `AsciiDoc` text, the parsed
+  `Document`, the extracted `Media`, and a `Report` with fidelity and issues.
+  Each importer has `Import(stream)`, `ImportFile(path)` and
+  `ConvertFile(input, adoc)`; the Markdown and HTML importers also have
+  `ImportString(text)`.
+  - `MarkdownImporter`: CommonMark plus GFM.
+    - Pipe tables with alignment, task lists, strikethrough, autolinks and
+      footnotes.
+    - YAML front matter becomes header attributes; a front matter `title`
+      becomes the document title.
+    - Raw HTML blocks become `++++` passthrough; `<script>` and `<style>`
+      blocks are dropped.
+    - A lone `#` heading becomes the document title.
+  - `HtmlImporter`: the semantic subset of HTML.
+    - Headings, inline formatting, code with a `language-xx` class, quotes,
+      nested and task lists, description lists, and tables with spans,
+      alignment and captions.
+    - Links (`#id` links become cross references), images, and Markdig- or
+      pandoc-style footnotes.
+    - `<title>` and `<meta>` become header attributes; data-URI images become
+      media files.
+    - Scripts, styles and form controls are dropped and reported.
+  - `PdfImporter`: approximate recovery from the text layer.
+    - Paragraphs are rebuilt by joining lines (undoing hyphenation and
+      continuing across pages); headings come from font size and heading
+      fonts, with section numbers turned into `:sectnums:`.
+    - Lists come from bullets and numbering; code from monospaced lines;
+      tables from aligned columns, including wrapped cells; admonitions from
+      their labels; links from link annotations.
+    - Embedded images become media files.
+    - The title page becomes the document title and the table of contents
+      becomes `:toc:`; running headers and footers are dropped.
+  - Dependencies: Markdig (BSD-2-Clause), AngleSharp (MIT) and PdfPig
+    (Apache-2.0).
+
 ## [1.0.30] - 2026-11-13
 
 ### Added
