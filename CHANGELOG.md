@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.37] - 2026-11-17
+
 ### Added
 
 - **Accessible PDF (PDF/UA-1, ISO 14289-1)**: `PdfRenderOptions.Accessibility`
