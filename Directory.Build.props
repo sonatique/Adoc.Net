@@ -14,7 +14,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.35</Version>
+    <Version>1.0.36</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) 2026 sylvain@sonatique.net</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -23,7 +23,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;docx;word;import;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.35: PdfImporter brings code blocks back as written: lines the PDF wrapped at the code box edge are rejoined, a listing continued on the next page stays one listing, and code lines near a page margin are kept. See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.36: PdfImporter no longer joins separate code lines that were never wrapped (a 1.0.35 regression); the PDF converter expands tabs in listings to the next tab stop (:tabsize:, default 4). See CHANGELOG.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->
