@@ -119,7 +119,14 @@ using AdocNet.Converters.Pdf;
 
 byte[] pdf = new PdfRenderer().RenderToBytes(result.Document);
 File.WriteAllBytes("output.pdf", pdf);
+
+// Accessible PDF (PDF/UA-1): tagged structure, artifacts, embedded fonts, document language.
+byte[] accessible = new PdfRenderer().RenderToBytes(result.Document, new PdfRenderOptions { Accessibility = true });
 ```
+
+Accessible output can also be turned on with the `:pdf-ua:` document attribute
+(`adocnet -b pdf -a pdf-ua doc.adoc`). It is validated with veraPDF in CI; see
+[docs/PDF_RENDERER.md](docs/PDF_RENDERER.md#accessible-pdf-pdfua).
 
 ### Render to DocBook
 

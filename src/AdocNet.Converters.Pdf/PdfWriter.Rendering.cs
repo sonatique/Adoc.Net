@@ -69,15 +69,19 @@ internal sealed partial class PdfWriter
     internal void DrawLine(float x1, float y1, float x2, float y2, float lineWidth = 0.5f)
     {
         Ink(Math.Max(y1, y2));
+        BeginDecoration();
         _currentStream!.Append($"{Fmt(lineWidth)} w\n");
         _currentStream.Append($"{Fmt(x1)} {Fmt(y1)} m {Fmt(x2)} {Fmt(y2)} l S\n");
+        EndDecoration();
     }
 
     internal void DrawRect(float x, float y, float w, float h, bool fill = false)
     {
         Ink(y + h);
+        BeginDecoration();
         _currentStream!.Append($"{Fmt(x)} {Fmt(y)} {Fmt(w)} {Fmt(h)} re ");
         _currentStream.Append(fill ? "f\n" : "S\n");
+        EndDecoration();
     }
 
     /// <summary>
@@ -91,6 +95,7 @@ internal sealed partial class PdfWriter
         // Bezier control point offset for quarter-circle approximation
         float k = r * 0.5523f;
 
+        BeginDecoration();
         var s = _currentStream!;
         // Start at bottom-left, just above the corner
         s.Append($"{Fmt(x)} {Fmt(y + r)} m\n");
@@ -110,6 +115,7 @@ internal sealed partial class PdfWriter
         s.Append($"{Fmt(x + r - k)} {Fmt(y + h)} {Fmt(x)} {Fmt(y + h - r + k)} {Fmt(x)} {Fmt(y + h - r)} c\n");
         // Close and paint
         s.Append($"h {mode}\n");
+        EndDecoration();
     }
 
     /// <summary>
@@ -122,6 +128,7 @@ internal sealed partial class PdfWriter
         Ink(cy + r);
         // 4-segment Bezier circle approximation. Magic constant ≈ 0.5523.
         float k = r * 0.5523f;
+        BeginDecoration();
         var s = _currentStream!;
         s.Append($"{Fmt(cx - r)} {Fmt(cy)} m\n");
         s.Append($"{Fmt(cx - r)} {Fmt(cy + k)} {Fmt(cx - k)} {Fmt(cy + r)} {Fmt(cx)} {Fmt(cy + r)} c\n");
@@ -129,6 +136,7 @@ internal sealed partial class PdfWriter
         s.Append($"{Fmt(cx + r)} {Fmt(cy - k)} {Fmt(cx + k)} {Fmt(cy - r)} {Fmt(cx)} {Fmt(cy - r)} c\n");
         s.Append($"{Fmt(cx - k)} {Fmt(cy - r)} {Fmt(cx - r)} {Fmt(cy - k)} {Fmt(cx - r)} {Fmt(cy)} c\n");
         s.Append($"h {mode}\n");
+        EndDecoration();
     }
 
     internal void SetFillColor(float r, float g, float b)
@@ -282,10 +290,12 @@ internal sealed partial class PdfWriter
     internal void DrawImage(string imageRef, float x, float y, float width, float height)
     {
         Ink(y + height);
+        BeginDecoration();
         _currentStream!.Append("q\n");
         _currentStream.Append($"{Fmt(width)} 0 0 {Fmt(height)} {Fmt(x)} {Fmt(y)} cm\n");
         _currentStream.Append($"/{imageRef} Do\n");
         _currentStream.Append("Q\n");
+        EndDecoration();
     }
 
     // ── SVG rendering ────────────────────────────────────────────────────
@@ -305,6 +315,7 @@ internal sealed partial class PdfWriter
                 svg.ViewBoxWidth, svg.ViewBoxHeight, x, _pageHeight - y - height, width, height));
         var savedFill = _fill;
 
+        BeginDecoration();
         _currentStream!.Append("q\n"); // Save graphics state
 
         foreach (var shape in svg.Shapes)
@@ -323,6 +334,7 @@ internal sealed partial class PdfWriter
         }
 
         _currentStream.Append("Q\n"); // Restore graphics state
+        EndDecoration();
         _fill = savedFill;
     }
 
@@ -416,19 +428,28 @@ internal sealed partial class PdfWriter
         if (_pageObjectIds.Count > 0)
             catalogSb.Append($" /OpenAction [{_pageObjectIds[0]} 0 R /FitH {Fmt(_pageHeight)}]");
         catalogSb.Append(" /ViewerPreferences << /DisplayDocTitle true >>");
+        if (Tagged)
+        {
+            catalogSb.Append($" /StructTreeRoot {WriteStructTree()} 0 R /MarkInfo << /Marked true >>");
+            string accessibleTitle = MetadataTitle ?? DocumentTitle ?? _outlineEntries.FirstOrDefault()?.Title ?? "Untitled document";
+            catalogSb.Append($" /Lang {PdfTextString(Lang)} /Metadata {WriteXmpMetadata(accessibleTitle)} 0 R");
+        }
         catalogSb.Append(" >>");
         int catalogId = AllocObject(new PdfObject(catalogSb.ToString()));
 
         // Info dictionary (deterministic) — include document title if set
         var infoDict = "<< /Producer (AdocNet PDF Renderer) /CreationDate (D:20260101000000+00'00')";
-        if ((MetadataTitle ?? DocumentTitle) is { } infoTitle)
+        if ((MetadataTitle ?? DocumentTitle ?? (Tagged ? _outlineEntries.FirstOrDefault()?.Title ?? "Untitled document" : null)) is { } infoTitle)
             infoDict += $" /Title {PdfTextString(infoTitle)}";
         infoDict += " >>";
         int infoId = AllocObject(new PdfObject(infoDict));
 
         // Serialize
         using var ms = new MemoryStream();
-        ms.Write(PdfHeader);
+        // Tagged output declares PDF 1.7 (PDF/UA-1 is based on ISO 32000-1).
+        var fileHeader = (byte[])PdfHeader.Clone();
+        if (Tagged) fileHeader[7] = (byte)'7';
+        ms.Write(fileHeader);
 
         var offsets = new long[_objects.Count];
         for (int i = 0; i < _objects.Count; i++)
@@ -484,7 +505,7 @@ internal sealed partial class PdfWriter
                 SetObject(deferred.PlaceholderObjId, new PdfObject(
                     $"<< /Type /Annot /Subtype /Link " +
                     $"/Rect [{Fmt(link.X)} {Fmt(link.Y)} {Fmt(link.X + link.Width)} {Fmt(link.Y + link.Height)}] " +
-                    $"/Border [0 0 0] " +
+                    $"/Border [0 0 0] {AnnotTagging(deferred)}" +
                     $"/Dest [{targetPageObjId} 0 R /XYZ 0 {Fmt(dest.Y + 10)} null] >>"));
             }
             else
@@ -492,7 +513,7 @@ internal sealed partial class PdfWriter
                 // Destination not found — render as invisible annotation (no action)
                 SetObject(deferred.PlaceholderObjId, new PdfObject(
                     $"<< /Type /Annot /Subtype /Link " +
-                    $"/Rect [0 0 0 0] /Border [0 0 0] >>"));
+                    $"/Rect [0 0 0 0] /Border [0 0 0] {AnnotTagging(deferred)}>>"));
             }
         }
     }
@@ -722,6 +743,7 @@ internal sealed partial class PdfWriter
     /// </summary>
     private void AppendGlyphShow(string text, TrueTypeFont font)
     {
+        if (Tagged) text = Showable(text, font);
         if (!Kerning || !font.HasKerning || text.Length < 2)
         {
             _currentStream!.Append('<').Append(EncodeTextAsGlyphIds(text, font)).Append("> Tj\n");

@@ -173,6 +173,7 @@ public sealed partial class PdfRenderer
         float labelHeight = (asc + desc + gap) * _bodyFontSize;
         float partTop = top;
         bool labelDrawn = false;
+        var labelElem = AdmonitionLabel(w, admonition);
         void ClosePart(float partBottom)
         {
             w.SetStrokeColor(0xEE / 255f, 0xEE / 255f, 0xEE / 255f);
@@ -182,7 +183,7 @@ public sealed partial class PdfRenderer
             labelDrawn = true;
             float labelTop = (partTop + partBottom) / 2 + labelHeight / 2;
             RestoreBodyFill(w);
-            w.WriteText(label, _fontBold, _bodyFontSize, left + padH, labelTop - (gap + asc) * _bodyFontSize);
+            w.InElement(labelElem, () => w.WriteText(label, _fontBold, _bodyFontSize, left + padH, labelTop - (gap + asc) * _bodyFontSize));
         }
         var outerHook = w.BeforeFinishPage;
         w.BeforeFinishPage = () =>
@@ -208,7 +209,7 @@ public sealed partial class PdfRenderer
         {
             var segments = BuildInlineSegments(admonition.Inlines, admonition.Text ?? string.Empty,
                 _fontRegular, _bodyFontSize, footnotes);
-            w.WriteWrappedSegments(segments, _bodyLeading);
+            w.Tag("P", () => w.WriteWrappedSegments(segments, _bodyLeading));
             contentBottom = w.CursorY + _bodyLeading - body.Bottom;
         }
         w.ContentRightIndent = savedRight;
@@ -329,8 +330,10 @@ public sealed partial class PdfRenderer
         else RestoreBodyFill(w);
 
         float firstGap = FontMetrics(w, font).Gap * fontSize;
-        foreach (var (_, lines, metrics, x, width, align, _) in cells)
+        var rowTag = w.BeginTag("TR");
+        foreach (var (cell, lines, metrics, x, width, align, _) in cells)
         {
+            var cellTag = w.BeginTag(isHeaderRow ? "TH" : "TD", attributes: CellAttributes(cell, isHeaderRow));
             float baseline = rowTop - _tableCellPadding[0] - firstGap;
             for (int li = 0; li < lines.Count; li++)
             {
@@ -347,7 +350,10 @@ public sealed partial class PdfRenderer
                 };
                 if (line.Count > 0) w.WriteTextSegments(line, textX, baseline);
             }
+            w.EndTag(cellTag);
         }
+        TagMissingCells(w, placed, isHeaderRow);
+        w.EndTag(rowTag);
         if (headerTextColor is not null) RestoreBodyFill(w);
 
         SetNextBlockTop(w, rowBottom);

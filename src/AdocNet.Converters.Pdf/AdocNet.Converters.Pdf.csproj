@@ -35,6 +35,11 @@
          only embedded when actually used. Public domain (George Douros); see
          NOTICES.md. -->
     <EmbeddedResource Include="Resources\Symbola.ttf" />
+    <!-- Noto Serif (Latin) and M+ 1mn (ASCII), the asciidoctor-pdf default theme fonts: the
+         embedded fonts of accessible (PDF/UA) output when no theme fonts are configured, as
+         PDF/UA forbids the non-embedded standard fonts. Apache 2.0 / M+ FONTS License; see NOTICES.md. -->
+    <EmbeddedResource Include="Resources\notoserif-*.ttf" />
+    <EmbeddedResource Include="Resources\mplus1mn-*.ttf" />
   </ItemGroup>
 
   <ItemGroup>

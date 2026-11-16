@@ -76,15 +76,19 @@ public sealed partial class PdfRenderer
 
         var (main, subtitle) = PartitionTitle(document, document.Title!);
         float y = tp.Title.Top is { } titleTop ? ResolveTop(titleTop) : contentTop;
+        var titleTag = w.BeginTag("H1");
         y = TitlePageBlock(w, main, tp.Title, tp.Alignment, y);
         if (subtitle is not null)
             y = TitlePageBlock(w, subtitle, tp.Subtitle, tp.Alignment, y);
+        w.EndTag(titleTag);
 
         if (document.Attributes.TryGetValue("author", out var author) && !string.IsNullOrWhiteSpace(author))
         {
             var authors = new List<string> { author };
             for (int i = 2; document.Attributes.TryGetValue($"author_{i}", out var more); i++) authors.Add(more);
+            var authorTag = w.BeginTag("P");
             y = TitlePageBlock(w, string.Join(", ", authors), tp.Authors, tp.Alignment, y);
+            w.EndTag(authorTag);
         }
 
         var revision = new List<string>();
@@ -98,7 +102,7 @@ public sealed partial class PdfRenderer
         {
             var text = string.Join(", ", revision);
             if (document.Attributes.TryGetValue("revremark", out var remark) && remark.Length > 0) text += ": " + remark;
-            TitlePageBlock(w, text, tp.Revision, tp.Alignment, y);
+            w.Tag("P", () => TitlePageBlock(w, text, tp.Revision, tp.Alignment, y));
         }
 
         RestoreBodyFill(w);

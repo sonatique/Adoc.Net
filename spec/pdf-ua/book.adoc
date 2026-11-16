@@ -1,0 +1,68 @@
+= Accessible Book: With a Subtitle
+Ada Writer
+v2.0, 2026-11-16
+:doctype: book
+:toc:
+:sectnums:
+:pdf-ua:
+
+[preface]
+== Preface
+
+A book with a title page, a table of contents, and a table long enough to
+continue on the next page, where its header row repeats as an artifact.
+
+== Reference
+
+.Long register table
+[cols="1,2,4",options="header"]
+|===
+|Offset |Name |Description
+
+|0x00 |Control |Enables the device and selects its mode of operation.
+|0x04 |Status |Reports the device state, errors and pending events.
+|0x08 |Config |Holds the configuration loaded at reset.
+|0x0C |Data |The data register, read and written by the host.
+|0x10 |Mask |Interrupt mask bits, one per event.
+|0x14 |Events |Pending events, cleared by writing ones.
+|0x18 |Timer |A free-running timer in microseconds.
+|0x1C |Compare |Raises an event when the timer reaches it.
+|0x20 |Scratch |A general-purpose register for the host.
+|0x24 |Version |The hardware version, read-only.
+|0x28 |Control 2 |Further control bits.
+|0x2C |Status 2 |Further status bits.
+|0x30 |Config 2 |Further configuration bits.
+|0x34 |Data 2 |A second data register.
+|0x38 |Mask 2 |Further interrupt mask bits.
+|0x3C |Events 2 |Further pending events.
+|0x40 |Timer 2 |A second timer.
+|0x44 |Compare 2 |A second compare register.
+|0x48 |Scratch 2 |A second scratch register.
+|0x4C |Version 2 |A second version register.
+|0x50 |Control 3 |More control bits.
+|0x54 |Status 3 |More status bits.
+|0x58 |Config 3 |More configuration bits.
+|0x5C |Data 3 |A third data register.
+|0x60 |Mask 3 |More interrupt mask bits.
+|0x64 |Events 3 |More pending events.
+|0x68 |Timer 3 |A third timer.
+|0x6C |Compare 3 |A third compare register.
+|0x70 |Scratch 3 |A third scratch register.
+|0x74 |Version 3 |A third version register.
+|0x78 |Control 4 |Yet more control bits.
+|0x7C |Status 4 |Yet more status bits.
+|0x80 |Config 4 |Yet more configuration bits.
+|0x84 |Data 4 |A fourth data register.
+|0x88 |Mask 4 |Yet more interrupt mask bits.
+|0x8C |Events 4 |Yet more pending events.
+|0x90 |Timer 4 |A fourth timer.
+|0x94 |Compare 4 |A fourth compare register.
+|0x98 |Scratch 4 |A fourth scratch register.
+|0x9C |Version 4 |A fourth version register.
+|===
+
+== Appendix material
+
+=== Notes
+
+A closing section with a link to https://asciidoc.org[AsciiDoc].
