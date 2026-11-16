@@ -383,8 +383,36 @@ internal sealed class PdfStructure
         var titleLines = page1.Where(l => l.Size >= max - 0.1).ToList();
         var coverTitle = string.Join(" ", titleLines.Select(l => l.Text));
         // A metadata title can lose the cover's line break ("FormatUser Manual"): the same letters take the cover's spacing.
-        if (_b.Title is null || Regex.Replace(_b.Title, @"\s+", "") == Regex.Replace(coverTitle, @"\s+", "")) _b.Title = coverTitle;
-        var rest = page1.Except(titleLines).Select(l => l.Text).ToList();
+        bool coverWins = _b.Title is null || Regex.Replace(_b.Title, @"\s+", "") == Regex.Replace(coverTitle, @"\s+", "");
+        if (coverWins) _b.Title = coverTitle;
+
+        var others = page1.Except(titleLines).OrderBy(l => l.Baseline).ToList();
+        // "Version 1.0" / "Revision 2.1, March 2026" / "v1.0": the revision line.
+        foreach (var line in others.ToList())
+        {
+            var m = Regex.Match(line.Text, @"^(?:Version|Revision|Rev\.?|v)\s*(\d[\w.\-]*)\s*(?:[,–—-]\s*(.+))?$", RegexOptions.IgnoreCase);
+            if (!m.Success) continue;
+            _b.SetAttribute("revnumber", m.Groups[1].Value);
+            if (m.Groups[2].Success) _b.SetAttribute("revdate", m.Groups[2].Value.Trim());
+            others.Remove(line);
+        }
+        // The lines right under the title, up to the first wider gap, are its subtitle, unless they are
+        // the author the PDF information already gave.
+        var author = _pdf.Information.Author is { } a ? Squash(a) : null;
+        var subtitle = new List<Line>();
+        foreach (var line in others)
+        {
+            if (author is not null && Squash(line.Text) == author) break;
+            if (subtitle.Count > 0 && line.Baseline - subtitle[^1].Baseline > 1.5 * line.Size) break;
+            subtitle.Add(line);
+        }
+        if (coverWins && subtitle.Count > 0)
+        {
+            _b.Title += ": " + string.Join(" ", subtitle.Select(l => l.Text));
+            others = others.Except(subtitle).ToList();
+        }
+        if (author is not null) others.RemoveAll(l => Squash(l.Text) == author);
+        var rest = others.Select(l => l.Text).ToList();
         lines.RemoveAll(l => l.Page == 1);
         R.Add(ImportIssueSeverity.Warning, "pdf.title-page", rest.Count == 0
             ? "The title page became the document title."
@@ -541,10 +569,10 @@ internal sealed class PdfStructure
         return (string.Join(" ", lines.Skip(start).Take(n).Select(l => l.Text)), n);
     }
 
-    /// <summary>Distance between consecutive baselines, in body leadings (large across pages).</summary>
     /// <summary>False when one line sits between drawn rules (a table or a frame) and the other does not.</summary>
     private static bool SameFrame(Line a, Line b) => (a.Grid is null) == (b.Grid is null);
 
+    /// <summary>Distance between consecutive baselines, in body leadings (large across pages).</summary>
     private double Gap(Line a, Line b) => a.Page != b.Page ? 100 : (b.Baseline - a.Baseline) / _leading;
 
     private static string MonoText(Line l)

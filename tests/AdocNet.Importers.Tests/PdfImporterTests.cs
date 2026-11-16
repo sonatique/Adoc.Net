@@ -194,6 +194,45 @@ public class PdfImporterTests
     }
 
     [Test]
+    public void Cover_subtitle_and_version_line_are_kept()
+    {
+        var builder = new UglyToad.PdfPig.Writer.PdfDocumentBuilder();
+        builder.DocumentInformation.Author = "Ada Writer";
+        var font = builder.AddStandard14Font(UglyToad.PdfPig.Fonts.Standard14Fonts.Standard14Font.Helvetica);
+        var cover = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
+        static UglyToad.PdfPig.Core.PdfPoint P(double x, double y) => new(x, y);
+        cover.AddText("Packet Format", 30, P(72, 500), font);
+        cover.AddText("A text format for importing and exporting", 10, P(72, 440), font);
+        cover.AddText("packets with timestamps.", 10, P(72, 427), font);
+        cover.AddText("Ada Writer", 10, P(72, 395), font);
+        cover.AddText("Version 2.1", 10, P(72, 375), font);
+        var body = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
+        body.AddText("Body text on the second page.", 10, P(72, 700), font);
+
+        var r = new PdfImporter().Import(new MemoryStream(builder.Build()));
+        Assert.That(r.AsciiDoc, Does.StartWith("= Packet Format: A text format for importing and exporting packets with timestamps.\n"), r.AsciiDoc);
+        Assert.That(r.AsciiDoc, Does.Contain(":revnumber: 2.1"), r.AsciiDoc);
+        Assert.That(r.AsciiDoc, Does.Not.Contain("Ada Writer\n\n"), r.AsciiDoc);
+    }
+
+    [Test]
+    public void Pdf_converter_keeps_a_wrapped_heading_on_one_page()
+    {
+        // Whatever the filler, a two-line heading never starts at a page bottom and ends on the next page.
+        const string heading = "A deliberately long section heading that has to wrap onto a second line of the page";
+        for (int filler = 40; filler <= 90; filler++)
+        {
+            var source = "= Doc\n\n" + string.Concat(Enumerable.Range(0, filler).Select(i => $"Filler line {i}.\n\n")) + $"== {heading}\n\nAfter.\n";
+            var pdf = new PdfRenderer().RenderToBytes(AdocNet.Parser.AdocParser.Parse(source).Document, new PdfRenderOptions());
+            using var document = UglyToad.PdfPig.PdfDocument.Open(pdf);
+            var pages = document.GetPages().Select(p => (p.Number, Text: string.Join(" ", p.GetWords().Select(w => w.Text)))).ToList();
+            var first = pages.First(p => p.Text.Contains("deliberately")).Number;
+            var last = pages.First(p => p.Text.Contains("second line of the page")).Number;
+            Assert.That(last, Is.EqualTo(first), $"filler {filler}");
+        }
+    }
+
+    [Test]
     public void Font_family_ignores_lowercase_subset_tags()
     {
         Assert.That(PdfStructure.Family("4fd136+Calibri-Bold"), Is.EqualTo(PdfStructure.Family("c0f016+Calibri")));

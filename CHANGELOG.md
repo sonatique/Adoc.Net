@@ -5,6 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **PDF**: with the standard fonts, a section heading that wraps onto two
+  lines is kept on one page (its outline entry follows it); it could start at
+  the bottom of one page and end on the next.
+- **`PdfImporter`**: a cover page's subtitle (the lines right under the
+  title) is appended to the title as `Title: Subtitle`, and its version line
+  (`Version 1.0`, `Revision 2.1, March 2026`) becomes `:revnumber:` (and
+  `:revdate:`).
+
 ## [1.0.33] - 2026-11-16
 
 ### Fixed
