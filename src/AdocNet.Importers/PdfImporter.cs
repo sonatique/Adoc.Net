@@ -94,6 +94,17 @@ internal sealed class PdfStructure
 
     private readonly Dictionary<int, (List<Rule> Vertical, List<Rule> Horizontal)> _rules = [];
 
+    /// <summary>A drawn rectangle (a code block's background or frame), in top-down page coordinates.</summary>
+    private readonly record struct Box(int Page, double Left, double Top, double Right, double Bottom);
+
+    private readonly Dictionary<int, List<Box>> _boxes = [];
+
+    /// <summary>
+    /// Per code box left edge (rounded): the furthest right any code line in such a box reaches, and whether
+    /// some line ran past its box's padded edge (the producer wraps at a fixed width, not at the box).
+    /// </summary>
+    private readonly Dictionary<long, (double MaxRight, bool PastBox)> _codeFill = [];
+
     private static readonly Regex Bullet = new(@"^([•◦▪▫‣⁃●○■□➢►▸–\-*·])$", RegexOptions.CultureInvariant);
     private static readonly Regex Number = new(@"^(\d{1,3}|[a-zA-Z]|[ivxIVX]{1,5})[.)]$", RegexOptions.CultureInvariant);
 
@@ -278,6 +289,8 @@ internal sealed class PdfStructure
         try { rules = Rules(page); }
         catch (Exception ex) when (ex is not OutOfMemoryException) { rules = ([], []); } // unreadable drawing: no ruled tables, text kept
         _rules[page.Number] = rules;
+        try { _boxes[page.Number] = Boxes(page); }
+        catch (Exception ex) when (ex is not OutOfMemoryException) { _boxes[page.Number] = []; }
         foreach (var line in lines)
         {
             double mid = (line.Top + line.Bottom) / 2;
@@ -351,7 +364,8 @@ internal sealed class PdfStructure
     /// <summary>Drops lines (and images) in the top or bottom margin that repeat across pages, and lone page numbers there.</summary>
     private void DropRunningContent(List<(Page Page, List<Line> Lines)> pages)
     {
-        bool InMargin(Line l, Page p) => l.Grid is null && (l.Bottom < p.Height * 0.12 || l.Top > p.Height * 0.88); // a table row is not a running header
+        // A table row or a code line is not a running header, however alike its neighbours across pages.
+        bool InMargin(Line l, Page p) => l.Grid is null && CodeBox(l) is null && (l.Bottom < p.Height * 0.12 || l.Top > p.Height * 0.88);
         string Key(Line l) => l.ImagePath ?? Regex.Replace(l.Text, @"\d+", "#").ToLowerInvariant();
         var counts = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var (page, lines) in pages)
@@ -481,6 +495,15 @@ internal sealed class PdfStructure
         bool numbered = headingTexts.Count > 0 && headingTexts.Count(t => SectionNumber.IsMatch(t)) >= 0.6 * headingTexts.Count;
         if (numbered) _b.SetAttribute("sectnums", "");
 
+        foreach (var l in lines.Where(l => l.Mono && l.ImagePath is null))
+        {
+            if (CodeBox(l) is not { } b) continue;
+            long key = (long)Math.Round(b.Left);
+            var fill = _codeFill.TryGetValue(key, out var f) ? f : (0, false);
+            double padding = l.Left - b.Left;
+            _codeFill[key] = (Math.Max(fill.MaxRight, l.Right), fill.PastBox || l.Right > b.Right - padding + 1);
+        }
+
         var blocks = new List<string>();
         int lastLevel = 0;
         for (int i = titleSkip; i < lines.Count;)
@@ -516,13 +539,45 @@ internal sealed class PdfStructure
             {
                 int j = i;
                 var code = new StringBuilder();
-                double charWidth = line.Size * 0.6;
-                double left = lines.Skip(i).TakeWhile(l => l.Mono && l.ImagePath is null).Min(l => l.Left);
-                while (j < lines.Count && lines[j].Mono && lines[j].ImagePath is null && (j == i || Gap(lines[j - 1], lines[j]) < 2.5))
+                var box = CodeBox(line);
+                double charWidth = CharWidth(line);
+                double left = lines.Skip(i).TakeWhile(l => l.Mono && l.ImagePath is null && l.Page == line.Page && CodeBox(l) == box).Min(l => l.Left);
+                while (j < lines.Count && lines[j].Mono && lines[j].ImagePath is null)
                 {
-                    if (j > i && Gap(lines[j - 1], lines[j]) > 1.4) code.Append('\n');
-                    code.Append(new string(' ', Math.Max(0, (int)Math.Round((lines[j].Left - left) / charWidth))))
-                        .Append(MonoText(lines[j])).Append('\n');
+                    var current = lines[j];
+                    if (j > i)
+                    {
+                        var prev = lines[j - 1];
+                        var currentBox = CodeBox(current);
+                        if (current.Page == prev.Page)
+                        {
+                            if (Gap(prev, current) >= 2.5 || currentBox != box) break; // another listing
+                            // A line the PDF wrapped at the box edge continues the previous one.
+                            if (box is { } b && Gap(prev, current) <= 1.2 && Wrapped(prev, current, b, left, charWidth) is { } joiner)
+                            {
+                                code.Length--; // the previous line's '\n'
+                                code.Append(joiner).Append(MonoText(current)).Append('\n');
+                                j++;
+                                continue;
+                            }
+                            if (Gap(prev, current) > 1.4) code.Append('\n');
+                        }
+                        else if (current.Page == prev.Page + 1 && box is { } b && currentBox is { } nb && Math.Abs(nb.Left - b.Left) < 2)
+                        {
+                            box = nb; // the same listing, continued on the next page
+                            if (Wrapped(prev, current, b, left, charWidth) is { } pageJoiner)
+                            {
+                                code.Length--;
+                                code.Append(pageJoiner).Append(MonoText(current)).Append('\n');
+                                j++;
+                                continue;
+                            }
+                            left = Math.Min(left, current.Left);
+                        }
+                        else break;
+                    }
+                    code.Append(new string(' ', Math.Max(0, (int)Math.Round((current.Left - left) / charWidth))))
+                        .Append(MonoText(current)).Append('\n');
                     j++;
                 }
                 var text = code.ToString().TrimEnd('\n');
@@ -574,6 +629,63 @@ internal sealed class PdfStructure
 
     /// <summary>Distance between consecutive baselines, in body leadings (large across pages).</summary>
     private double Gap(Line a, Line b) => a.Page != b.Page ? 100 : (b.Baseline - a.Baseline) / _leading;
+
+    /// <summary>The smallest drawn rectangle around a line (a code block's background), if any.</summary>
+    private Box? CodeBox(Line l)
+    {
+        double mid = (l.Top + l.Bottom) / 2;
+        return _boxes.TryGetValue(l.Page, out var boxes)
+            ? boxes.Where(b => b.Left <= l.Left + 1 && l.Right <= b.Right + 1 && b.Top <= mid && mid <= b.Bottom)
+                   .OrderBy(b => (b.Right - b.Left) * (b.Bottom - b.Top)).Cast<Box?>().FirstOrDefault()
+            : null;
+    }
+
+    /// <summary>A monospaced line's character advance, measured from its glyphs.</summary>
+    private static double CharWidth(Line l)
+    {
+        int chars = MonoText(l).Length;
+        return chars > 0 && l.Right > l.Left ? (l.Right - l.Left) / chars : l.Size * 0.6;
+    }
+
+    /// <summary>
+    /// When <paramref name="current"/> continues <paramref name="prev"/> because the PDF wrapped a long
+    /// code line at the box edge, the text joining them: "" for a break inside a word, " " for a break at a
+    /// space. Null for a line of its own. A wrapped line leaves too little room before the box's inner edge
+    /// for a space and the next line's first word, and its continuation starts at the listing's left edge.
+    /// A line holds as much as the box minus its left padding on the right; when the producer wraps at a fixed
+    /// width instead (some line ran past that edge), as far as the furthest code line in such a box. The room
+    /// left is counted in characters: none means a break inside a word, some means the break took a space. A
+    /// continuation starting one character in carries the space it broke at.
+    /// </summary>
+    private string? Wrapped(Line prev, Line current, Box box, double left, double charWidth)
+    {
+        if (current.Words.Count == 0 || current.Left < left - charWidth / 2 || current.Left > left + 1.5 * charWidth) return null;
+        bool carriedSpace = current.Left > left + charWidth / 2;
+        double innerRight = _codeFill.TryGetValue((long)Math.Round(box.Left), out var fill) && fill.PastBox
+            ? fill.MaxRight
+            : box.Right - (left - box.Left);
+        int room = (int)Math.Round((innerRight - prev.Right) / charWidth);
+        if (room >= 1 + current.Words[0].Text.Length + (carriedSpace ? 1 : 0)) return null;
+        return room <= 0 && !carriedSpace ? "" : " ";
+    }
+
+    /// <summary>Drawn rectangles larger than a rule and smaller than the page: code block backgrounds and frames.</summary>
+    private static List<Box> Boxes(Page page)
+    {
+        var boxes = new List<Box>();
+        double height = page.Height;
+        foreach (var path in page.Paths)
+        {
+            if (path.IsClipping || !path.IsFilled && !path.IsStroked) continue;
+            foreach (var sub in path)
+            {
+                if (sub.GetBoundingRectangle() is not { } r || r.Width < 30 || r.Height < 8) continue;
+                if (r.Width > 0.95 * page.Width && r.Height > 0.9 * height) continue; // a page background
+                boxes.Add(new Box(page.Number, r.Left, height - r.Top, r.Right, height - r.Bottom));
+            }
+        }
+        return boxes;
+    }
 
     private static string MonoText(Line l)
     {

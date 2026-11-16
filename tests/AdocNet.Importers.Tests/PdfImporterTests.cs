@@ -193,6 +193,42 @@ public class PdfImporterTests
         Assert.That(r.AsciiDoc, Does.StartWith("= Packet Format User Manual\n"), r.AsciiDoc);
     }
 
+    private static List<string> Listings(ImportResult r)
+    {
+        static IEnumerable<AdocNet.Ast.AstNode> All(AdocNet.Ast.AstNode n) => new[] { n }.Concat(n.Children.SelectMany(All));
+        return All(r.Document).OfType<AdocNet.Ast.DelimitedBlockNode>().Select(b => b.Content ?? "").ToList();
+    }
+
+    [Test]
+    public void Code_lines_the_pdf_wrapped_come_back_whole()
+    {
+        string[] code =
+        [
+            "FileFormat:Packets version=1.0",
+            "Item time=0 address=0x8E89BED6 channel=0 phy=1Mbps rssi=-40 payload=\"00 06 01 02 03 04 05 06 07 08 09 0A 0B\"",
+            "Item time=1000000 accesscode=\"56 34 12\" encoding=decoded channel=20 rssi=-50 clock=0 payload=\"01 02 AB CD\"",
+            "Item time=2000000 address=0x8E89BED6 channel=13 phy=Coded coding=Coded8 rssi=-65 payloadbytes=\"00060102030405060708\"",
+            "Short line",
+        ];
+        var r = RoundTrip("= Doc\n\n== Code\n\n[source,text]\n----\n" + string.Join("\n", code) + "\n----\n\nAfter.\n");
+        var listing = Listings(r).Single();
+        Assert.That(listing.Split('\n'), Is.EqualTo(code), r.AsciiDoc);
+    }
+
+    [Test]
+    public void Listing_across_a_page_break_stays_one_listing()
+    {
+        var code = Enumerable.Range(0, 30).Select(i => $"Item time={i * 1000} channel={i % 40}").ToList();
+        foreach (int filler in new[] { 30, 38, 45 })
+        {
+            var source = "= Doc\n\n" + string.Concat(Enumerable.Range(0, filler).Select(i => $"Filler line {i}.\n\n"))
+                + "[source,text]\n----\n" + string.Join("\n", code) + "\n----\n\nAfter.\n";
+            var r = RoundTrip(source);
+            Assert.That(Listings(r), Has.Count.EqualTo(1), $"filler {filler}\n{r.AsciiDoc}");
+            Assert.That(Listings(r)[0].Split('\n'), Is.EqualTo(code), $"filler {filler}");
+        }
+    }
+
     [Test]
     public void Cover_subtitle_and_version_line_are_kept()
     {

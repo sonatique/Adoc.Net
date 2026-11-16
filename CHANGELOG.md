@@ -5,6 +5,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`PdfImporter`**: code blocks come back as they were written. A code line
+  the PDF wrapped at the code box edge is rejoined (without a space for a
+  break inside a word, with one for a break at a space), for asciidoctor-pdf's
+  and AdocNet's wrapping alike; a listing continued on the next page stays one
+  listing; and code lines near a page's top or bottom margin are no longer
+  dropped as running headers or footers.
+
 ## [1.0.34] - 2026-11-16
 
 ### Fixed
