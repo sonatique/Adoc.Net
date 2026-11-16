@@ -649,24 +649,36 @@ internal sealed class PdfStructure
 
     /// <summary>
     /// When <paramref name="current"/> continues <paramref name="prev"/> because the PDF wrapped a long
-    /// code line at the box edge, the text joining them: "" for a break inside a word, " " for a break at a
-    /// space. Null for a line of its own. A wrapped line leaves too little room before the box's inner edge
-    /// for a space and the next line's first word, and its continuation starts at the listing's left edge.
-    /// A line holds as much as the box minus its left padding on the right; when the producer wraps at a fixed
-    /// width instead (some line ran past that edge), as far as the furthest code line in such a box. The room
-    /// left is counted in characters: none means a break inside a word, some means the break took a space. A
-    /// continuation starting one character in carries the space it broke at.
+    /// code line, the text joining them: "" for a break inside a word, " " for a break at a space; null for a
+    /// line of its own. A continuation starts exactly at the listing's left edge (or one character in, when
+    /// it carries the space it broke at); an indented line is a line of its own. Two producer styles:
+    /// <list type="bullet">
+    ///   <item><description>Fixed width (some code line ran past its box's padded edge, as AdocNet's
+    ///     character wrap does): a wrapped line ends within a character or so of the furthest any code line
+    ///     reaches, and only a carried space means the break was at a space.</description></item>
+    ///   <item><description>Word wrap at the box (asciidoctor-pdf, padded alike on both sides): a wrapped
+    ///     line leaves too little room for a space and the next line's first word; room for none means a
+    ///     break inside a word.</description></item>
+    /// </list>
     /// </summary>
     private string? Wrapped(Line prev, Line current, Box box, double left, double charWidth)
     {
-        if (current.Words.Count == 0 || current.Left < left - charWidth / 2 || current.Left > left + 1.5 * charWidth) return null;
-        bool carriedSpace = current.Left > left + charWidth / 2;
-        double innerRight = _codeFill.TryGetValue((long)Math.Round(box.Left), out var fill) && fill.PastBox
-            ? fill.MaxRight
-            : box.Right - (left - box.Left);
-        int room = (int)Math.Round((innerRight - prev.Right) / charWidth);
-        if (room >= 1 + current.Words[0].Text.Length + (carriedSpace ? 1 : 0)) return null;
-        return room <= 0 && !carriedSpace ? "" : " ";
+        if (current.Words.Count == 0) return null;
+        double tolerance = 0.2 * charWidth;
+        bool atLeft = Math.Abs(current.Left - left) < tolerance;
+        bool carriedSpace = Math.Abs(current.Left - (left + charWidth)) < tolerance;
+        if (!atLeft && !carriedSpace) return null;
+        if (_codeFill.TryGetValue((long)Math.Round(box.Left), out var fill) && fill.PastBox)
+        {
+            // Ending exactly one character short, the last column held the (invisible) space it broke at.
+            double short_ = (fill.MaxRight - prev.Right) / charWidth;
+            if (short_ >= 1.5) return null;
+            return carriedSpace || Math.Abs(short_ - 1) < 0.1 ? " " : "";
+        }
+        if (carriedSpace) return null;
+        int room = (int)Math.Round((box.Right - (left - box.Left) - prev.Right) / charWidth);
+        if (room >= 1 + current.Words[0].Text.Length) return null;
+        return room <= 0 ? "" : " ";
     }
 
     /// <summary>Drawn rectangles larger than a rule and smaller than the page: code block backgrounds and frames.</summary>

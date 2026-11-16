@@ -216,6 +216,27 @@ public class PdfImporterTests
     }
 
     [Test]
+    public void Long_indented_code_lines_are_not_joined_and_tabs_expand()
+    {
+        // Tab-indented lines close to the wrap width but not wrapped must stay separate; the
+        // genuinely long lines still come back whole.
+        string[] code =
+        [
+            "IF REC_OPTION_ENABLE AND length = LENGTH_IND AND opcode = OPCODE_IND THEN",
+            "\tentry.accessAddress = packet.payload.byte(offset+16..offset+13) XOR 0x02A40000",
+            "\tentry.crcInit.byte(0) = 0x00",
+            "\treminder = packet.payload.byte(2).bit(5..0) //bit 6 and 7 are for AdvMode",
+            "\textHeaderFlags = packet.payload.byte(3).bit(6..0)",
+            "\tIF packet.payload.byte(offset+27).bit(7..5) < PHY_LE_CODED THEN // Only do something when the stream is uncoded",
+            "\t\tentry.linkType = LINK_TYPE_BIS",
+            "ELSE IF REC_OPTION_PERIODIC_ENABLE AND packet.AA = AA_ADV AND adType = AD_TYPE_PERIODIC_ADV_RESP_TIMING_INFO AND adLength = AD_LENGTH_PERIODIC_ADV_RESP_TIMING_INFO THEN",
+        ];
+        var r = RoundTrip("= Doc\n\n== Code\n\n----\n" + string.Join("\n", code) + "\n----\n\nAfter.\n");
+        var expected = code.Select(l => l.Replace("\t", "    ")).ToArray();
+        Assert.That(Listings(r).Single().Split('\n'), Is.EqualTo(expected), r.AsciiDoc);
+    }
+
+    [Test]
     public void Listing_across_a_page_break_stays_one_listing()
     {
         var code = Enumerable.Range(0, 30).Select(i => $"Item time={i * 1000} channel={i % 40}").ToList();

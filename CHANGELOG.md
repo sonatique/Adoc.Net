@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`PdfImporter`**: no longer joins separate code lines that were never
+  wrapped (a long line followed by an indented one came back as one line in
+  1.0.35). A continuation must start exactly at the listing's left edge, or
+  one character in when it carries the space it broke at; with a fixed-width
+  producer such as AdocNet, the wrapped line must also reach the wrap width.
+- **PDF**: tabs in listing, literal and source blocks expand to spaces at the
+  next tab stop (`:tabsize:`, default 4). A raw tab drew as a narrow glyph,
+  misaligning indented code.
+
 ## [1.0.35] - 2026-11-16
 
 ### Fixed
