@@ -21,6 +21,8 @@ public sealed partial class PdfRenderer
     private float _tocLineHeight = 1.4f;
     private float _listIndent = 18f;
     private int _outlineLevels = 2;
+    /// <summary>Tab stop width for verbatim blocks (<c>:tabsize:</c>, default 4).</summary>
+    private int _tabSize = 4;
     private readonly string[] _headingFonts = new string[4];
 
     /// <summary>Font key for a section level's heading (per-level theme font in themed output).</summary>

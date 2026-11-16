@@ -445,6 +445,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
     {
         _outlineLevels = int.TryParse(document.Attributes.TryGetValue("outlinelevels", out var ol) ? ol
                 : document.Attributes.TryGetValue("toclevels", out var tl) ? tl : "2", out var levels) ? levels : 2;
+        _tabSize = document.Attributes.TryGetValue("tabsize", out var ts) && int.TryParse(ts, out var size) && size > 0 ? size : 4;
         if (WantsTitlePage(document))
         {
             w.AddOutlineEntry(PlainTitle(_prawnMetrics ? PartitionTitle(document, document.Title!).Main : document.Title!), 1, "_document_title");
@@ -827,6 +828,29 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         return map;
     }
 
+    /// <summary>Replaces each tab with spaces up to the next tab stop, column by column on each line.</summary>
+    internal static string ExpandTabs(string text, int tabSize)
+    {
+        if (text.IndexOf('\t') < 0) return text;
+        var sb = new System.Text.StringBuilder(text.Length + 16);
+        int column = 0;
+        foreach (char c in text)
+        {
+            if (c == '\t')
+            {
+                int spaces = tabSize - column % tabSize;
+                sb.Append(' ', spaces);
+                column += spaces;
+            }
+            else
+            {
+                sb.Append(c);
+                column = c == '\n' ? 0 : column + 1;
+            }
+        }
+        return sb.ToString();
+    }
+
     private void RenderSection(PdfWriter w, SectionNode section, int indentLevel, FootnoteState footnotes)
     {
         if (!_prawnMetrics)
@@ -1114,7 +1138,8 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
     private void RenderVerbatimBlock(PdfWriter w, DelimitedBlockNode block)
     {
-        var content = block.Content ?? string.Empty;
+        // A PDF has no tab stops: a raw tab drew as a narrow glyph and broke the column alignment.
+        var content = ExpandTabs(block.Content ?? string.Empty, _tabSize);
         w.EnsurePage();
 
         LineMetrics code = default;
