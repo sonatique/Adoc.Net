@@ -292,6 +292,8 @@ internal sealed partial class PdfWriter
         _codeBlockOriginalPage = _currentPageNumber;
 
         // Record stream position so we can insert the background BEFORE the text
+        // (tagged output: between marked-content sequences, never inside one).
+        CloseMarked();
         _codeBlockStreamInsertPos = _currentStream!.Length;
 
         // Push horizontal padding so code text is inset from the background edges
@@ -353,7 +355,7 @@ internal sealed partial class PdfWriter
                 }
 
                 // Insert background at the saved position (before the text)
-                _currentStream!.Insert(_codeBlockStreamInsertPos, bgCmd.ToString());
+                _currentStream!.Insert(_codeBlockStreamInsertPos, AsArtifact(bgCmd.ToString()));
             }
 
             // Add vertical padding after content
@@ -396,7 +398,7 @@ internal sealed partial class PdfWriter
                 bgCmd.Append("Q\n");
             }
 
-            _currentStream!.Insert(_codeBlockStreamInsertPos, bgCmd.ToString());
+            _currentStream!.Insert(_codeBlockStreamInsertPos, AsArtifact(bgCmd.ToString()));
         }
 
         // Clear bg so FinishPage doesn't try to draw it again
@@ -632,6 +634,7 @@ internal sealed partial class PdfWriter
         if (_currentStream is null) return;
         BeforeFinishPage?.Invoke();
 
+        int? structParents = FinishPageTags();
         var streamContent = _currentStream.ToString();
         var streamBytes = Encoding.ASCII.GetByteCount(streamContent);
         int streamObjId = AllocObject(new PdfObject(
@@ -646,10 +649,17 @@ internal sealed partial class PdfWriter
         var annotIds = new List<int>();
         foreach (var annot in _currentAnnotations)
         {
-            int annotId = AllocObject(new PdfObject(
+            int annotId = AllocPlaceholder();
+            string tagging = "";
+            if (Tagged && annot.Owner is { } owner)
+            {
+                var annotRef = new AnnotRef(_currentPageNumber - 1) { ObjectId = annotId };
+                tagging = $"/StructParent {RegisterAnnotationOwner(owner, annotRef)} /Contents {PdfTextString(annot.Contents ?? annot.Uri)} ";
+            }
+            SetObject(annotId, new PdfObject(
                 $"<< /Type /Annot /Subtype /Link " +
                 $"/Rect [{Fmt(annot.X)} {Fmt(annot.Y)} {Fmt(annot.X + annot.Width)} {Fmt(annot.Y + annot.Height)}] " +
-                $"/Border [0 0 0] " +
+                $"/Border [0 0 0] {tagging}" +
                 $"/A << /Type /Action /S /URI /URI ({EscapePdfString(annot.Uri)}) >> >>"));
             annotIds.Add(annotId);
         }
@@ -659,19 +669,26 @@ internal sealed partial class PdfWriter
         foreach (var link in _currentInternalLinks)
         {
             int annotId = AllocPlaceholder(); // will be filled in ToBytes
-            _deferredInternalLinks.Add(new DeferredInternalLink(annotId, link));
+            int? structParent = null;
+            if (Tagged && link.Owner is { } owner)
+                structParent = RegisterAnnotationOwner(owner, new AnnotRef(_currentPageNumber - 1) { ObjectId = annotId });
+            _deferredInternalLinks.Add(new DeferredInternalLink(annotId, link, structParent));
             annotIds.Add(annotId);
         }
         _currentInternalLinks.Clear();
 
         var fontResourcesSb = new StringBuilder();
-        fontResourcesSb.Append($"/F1 {_fontHelveticaId} 0 R ");
-        fontResourcesSb.Append($"/F2 {_fontHelveticaBoldId} 0 R ");
-        fontResourcesSb.Append($"/F3 {_fontHelveticaObliqueId} 0 R ");
-        fontResourcesSb.Append($"/F4 {_fontCourierId} 0 R ");
-        fontResourcesSb.Append($"/F5 {_fontCourierBoldId} 0 R ");
-        fontResourcesSb.Append($"/F6 {_fontCourierObliqueId} 0 R ");
-        fontResourcesSb.Append($"/F7 {_fontCourierBoldObliqueId} 0 R");
+        // Tagged (PDF/UA) output embeds every font: the standard-14 fonts stay out of the resources.
+        if (!Tagged)
+        {
+            fontResourcesSb.Append($"/F1 {_fontHelveticaId} 0 R ");
+            fontResourcesSb.Append($"/F2 {_fontHelveticaBoldId} 0 R ");
+            fontResourcesSb.Append($"/F3 {_fontHelveticaObliqueId} 0 R ");
+            fontResourcesSb.Append($"/F4 {_fontCourierId} 0 R ");
+            fontResourcesSb.Append($"/F5 {_fontCourierBoldId} 0 R ");
+            fontResourcesSb.Append($"/F6 {_fontCourierObliqueId} 0 R ");
+            fontResourcesSb.Append($"/F7 {_fontCourierBoldObliqueId} 0 R");
+        }
         foreach (var (key, placeholderId) in _embeddedFontPlaceholders)
         {
             fontResourcesSb.Append($" /{key} {placeholderId} 0 R");
@@ -686,10 +703,13 @@ internal sealed partial class PdfWriter
             ? $"/XObject << {string.Join(" ", _currentPageImages.Select(kv => $"/{kv.Key} {kv.Value} 0 R"))} >> "
             : "";
 
+        string taggingEntries = structParents is { } sp
+            ? $"/StructParents {sp} " + (annotIds.Count > 0 ? "/Tabs /S " : "")
+            : "";
         int pageId = AllocObject(new PdfObject(
             $"<< /Type /Page /MediaBox [0 0 {Fmt(_pageWidth)} {Fmt(_pageHeight)}] " +
             $"/Contents [{streamObjId} 0 R {runningObjId} 0 R] " +
-            $"{annotsEntry}" +
+            $"{annotsEntry}{taggingEntries}" +
             $"/Resources << /Font << {fontResources} >> {xobjectEntry}>> " +
             $"/Parent {{PAGES}} >>"));
 
@@ -719,7 +739,9 @@ internal sealed partial class PdfWriter
             _currentPageNumber = page.PageNumber;
             CurrentSectionTitle = page.SectionTitle;
             _currentStream = new StringBuilder();
+            BeginArtifact();
             AppendHeaderFooter();
+            EndArtifact();
             var content = _currentStream.ToString();
             SetObject(page.ObjectId, new PdfObject(
                 $"<< /Length {Encoding.ASCII.GetByteCount(content)} >>\nstream\n{content}endstream"));
@@ -892,6 +914,7 @@ internal sealed partial class PdfWriter
     /// <summary>Font identifiers: F1=Helvetica, F2=Helvetica-Bold, F3=Helvetica-Oblique, F4=Courier.</summary>
     internal void WriteText(string text, string font, float fontSize, float x, float y)
     {
+        MarkContent();
         RecordText(text, font, fontSize, x, y, 0, null);
         var runs = SplitFontRuns(text, font);
         _currentStream!.Append("BT\n");
@@ -943,6 +966,7 @@ internal sealed partial class PdfWriter
     /// </summary>
     internal void WriteJustifiedText(string text, string font, float fontSize, float x, float y, float wordSpacing)
     {
+        MarkContent();
         RecordText(text, font, fontSize, x, y, wordSpacing * text.Count(c => c == ' '), null);
         var runs = SplitFontRuns(text, font);
         _currentStream!.Append("BT\n");
@@ -987,21 +1011,36 @@ internal sealed partial class PdfWriter
             if (seg.Background is { } bg)
             {
                 const float pad = 1.5f;
+                BeginArtifact();
                 _currentStream!.Append("q\n");
                 _currentStream.Append($"{FmtColor(bg.R)} {FmtColor(bg.G)} {FmtColor(bg.B)} rg\n");
                 _currentStream.Append($"{Fmt(bgX - pad)} {Fmt(y - 2f)} {Fmt(segW + pad * 2)} {Fmt(seg.FontSize + 3f)} re f\n");
                 _currentStream.Append("Q\n");
+                EndArtifact();
             }
             bgX += segW;
         }
 
         float currentX = x;
-        _currentStream!.Append("BT\n");
-        _currentStream.Append($"{Fmt(x)} {Fmt(y)} Td\n");
+        // Tagged output: each segment is its own text object, so a link's marked content (its
+        // Link element) nests inside it rather than straddling the line's text object.
+        if (!Tagged)
+        {
+            _currentStream!.Append("BT\n");
+            _currentStream.Append($"{Fmt(x)} {Fmt(y)} Td\n");
+        }
 
         foreach (var seg in segments)
         {
-            _currentStream.Append($"/{seg.Font} {Fmt(seg.FontSize)} Tf\n");
+            StructElem? linkElem = null;
+            if (Tagged)
+            {
+                if (seg.LinkUri is not null) linkElem = BeginTag("Link");
+                MarkContent();
+                _currentStream!.Append("BT\n");
+                _currentStream.Append($"{Fmt(currentX)} {Fmt(y)} Td\n");
+            }
+            _currentStream!.Append($"/{seg.Font} {Fmt(seg.FontSize)} Tf\n");
 
             // Raise superscript segments (e.g. footnote markers) above the baseline.
             float rise = seg.Superscript ? seg.FontSize * SuperscriptRiseFactor : 0f;
@@ -1044,18 +1083,20 @@ internal sealed partial class PdfWriter
             float rectY = y - 2 + rise;
             if (seg.DestId is not null)
                 AddNamedDestination(seg.DestId, y + rise);
-            if (seg.LinkUri is not null)
+            if (Tagged) _currentStream.Append("ET\n");
+            if (seg.LinkUri is not null && !(Tagged && linkElem is not { Attached: true }))
             {
                 if (seg.LinkUri.StartsWith("#internal#"))
-                    AddInternalLinkAnnotation(currentX, rectY, segWidth, seg.FontSize + 4,
-                        seg.LinkUri.Substring(10));
+                    _currentInternalLinks.Add(new PdfInternalLink(currentX, rectY, segWidth, seg.FontSize + 4,
+                        seg.LinkUri.Substring(10), linkElem, seg.Text));
                 else
-                    AddLinkAnnotation(currentX, rectY, segWidth, seg.FontSize + 4, seg.LinkUri);
+                    _currentAnnotations.Add(new PdfAnnotation(currentX, rectY, segWidth, seg.FontSize + 4, seg.LinkUri, linkElem, seg.Text));
             }
+            if (linkElem is not null) EndTag(linkElem);
             currentX += segWidth;
         }
 
-        _currentStream.Append("ET\n");
+        if (!Tagged) _currentStream!.Append("ET\n");
     }
 
 }
@@ -1064,13 +1105,15 @@ internal sealed partial class PdfWriter
 internal readonly record struct PdfObject(string Content, byte[]? BinaryStream = null);
 
 /// <summary>A link annotation to be added to a PDF page.</summary>
-internal record struct PdfAnnotation(float X, float Y, float Width, float Height, string Uri);
+internal record struct PdfAnnotation(float X, float Y, float Width, float Height, string Uri,
+    PdfWriter.StructElem? Owner = null, string? Contents = null);
 
 /// <summary>An internal link annotation (GoTo destination within the document).</summary>
-internal record struct PdfInternalLink(float X, float Y, float Width, float Height, string DestinationId);
+internal record struct PdfInternalLink(float X, float Y, float Width, float Height, string DestinationId,
+    PdfWriter.StructElem? Owner = null, string? Contents = null);
 
 /// <summary>Deferred internal link — placeholder object ID + link data, resolved in ToBytes.</summary>
-internal readonly record struct DeferredInternalLink(int PlaceholderObjId, PdfInternalLink Link);
+internal readonly record struct DeferredInternalLink(int PlaceholderObjId, PdfInternalLink Link, int? StructParent = null);
 
 /// <summary>A text segment with font and size info for mixed-style rendering.</summary>
 /// <remarks>

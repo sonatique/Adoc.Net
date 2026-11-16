@@ -149,3 +149,74 @@ jobs:
             parity-sweep-out/*/*/dom.diff
             parity-sweep-out/*/*/canonical.diff
             parity-sweep-out/*/*/normalized.diff
+
+  pdf-ua:
+    # Accessible PDF gate: renders the PDF/UA fixtures (spec/pdf-ua) with the CLI and validates
+    # them with veraPDF, the reference PDF/UA-1 (ISO 14289-1) validator. Any failed rule fails the build.
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-quality: 'ga'
+
+      - name: Setup Java (for veraPDF)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install veraPDF 1.30.4
+        run: |
+          curl -sSL -o verapdf.zip https://software.verapdf.org/releases/1.30/verapdf-greenfield-1.30.4-installer.zip
+          unzip -q verapdf.zip
+          cat > auto-install.xml <<EOF
+          <?xml version="1.0" encoding="UTF-8" standalone="no"?>
+          <AutomatedInstallation langpack="eng">
+            <com.izforge.izpack.panels.htmlhello.HTMLHelloPanel id="welcome"/>
+            <com.izforge.izpack.panels.target.TargetPanel id="install_dir"><installpath>$HOME/verapdf</installpath></com.izforge.izpack.panels.target.TargetPanel>
+            <com.izforge.izpack.panels.packs.PacksPanel id="sdk_pack_select">
+              <pack index="0" name="veraPDF GUI" selected="true"/>
+              <pack index="1" name="veraPDF Batch files" selected="true"/>
+              <pack index="2" name="veraPDF Validation model" selected="false"/>
+              <pack index="3" name="veraPDF Documentation" selected="false"/>
+              <pack index="4" name="veraPDF Sample Plugins" selected="false"/>
+            </com.izforge.izpack.panels.packs.PacksPanel>
+            <com.izforge.izpack.panels.install.InstallPanel id="install"/>
+            <com.izforge.izpack.panels.finish.FinishPanel id="finish"/>
+          </AutomatedInstallation>
+          EOF
+          java -jar verapdf-greenfield-1.30.4/verapdf-izpack-installer-1.30.4.jar auto-install.xml
+          "$HOME/verapdf/verapdf" --version
+
+      - name: Render the PDF/UA fixtures
+        run: |
+          mkdir -p pdf-ua-out
+          dotnet build src/AdocNet.Cli -c Release
+          for f in spec/pdf-ua/*.adoc; do
+            dotnet run --no-build --project src/AdocNet.Cli -c Release -- -b pdf -a pdf-ua -o "pdf-ua-out/$(basename "$f" .adoc).pdf" "$f"
+          done
+          ls -la pdf-ua-out
+
+      - name: Validate with veraPDF (PDF/UA-1)
+        run: |
+          "$HOME/verapdf/verapdf" --flavour ua1 --format text -v pdf-ua-out/*.pdf | tee verapdf.txt
+          if grep -q '^FAIL' verapdf.txt; then
+            "$HOME/verapdf/verapdf" --flavour ua1 --format xml pdf-ua-out/*.pdf > verapdf.xml || true
+            echo "PDF/UA validation failed"; exit 1
+          fi
+
+      - name: Upload PDF/UA outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf-ua
+          path: |
+            pdf-ua-out/*.pdf
+            verapdf.txt
+            verapdf.xml
+          if-no-files-found: ignore

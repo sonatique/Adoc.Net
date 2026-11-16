@@ -51,6 +51,8 @@ and embedded only when a glyph from them is actually used.
 
 | File | Source | License |
 |------|--------|---------|
+| `notoserif-regular-latin.ttf`<br>`notoserif-italic-latin.ttf`<br>`notoserif-bold-latin.ttf` | Google Noto Serif (embedded text font of accessible PDF/UA output) | Apache License 2.0 |
+| `mplus1mn-regular-ascii-conums.ttf`<br>`mplus1mn-italic-ascii.ttf`<br>`mplus1mn-bold-ascii.ttf`<br>`mplus1mn-bolditalic-ascii.ttf` | M+ FONTS (M+ 1mn, ASCII subset; embedded code font of accessible PDF/UA output) | M+ FONTS License |
 | `fa-solid.ttf` | Font Awesome 5 Free (Solid) | SIL Open Font License 1.1 (font); icon designs CC BY 4.0 |
 | `fa-regular.ttf` | Font Awesome 5 Free (Regular) | SIL Open Font License 1.1 (font); icon designs CC BY 4.0 |
 | `DejaVuSans.ttf` | DejaVu Sans (primary Unicode fallback: arrows, check marks, dingbats, geometric shapes, math symbols) | Bitstream Vera Fonts License + public-domain additions |

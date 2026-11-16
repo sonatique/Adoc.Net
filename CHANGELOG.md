@@ -5,6 +5,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **Accessible PDF (PDF/UA-1, ISO 14289-1)**: `PdfRenderOptions.Accessibility`
+  (or the `:pdf-ua:` document attribute) produces a tagged PDF: a structure
+  tree with headings that never skip a level, paragraphs, lists (`L`/`LI`/
+  `Lbl`/`LBody`), tables (`THead`/`TBody`, `TH` with column scope, column and
+  row spans), figures with alternative text, links owning their annotations,
+  code, admonitions with spoken labels, footnotes as notes and the table of
+  contents as `TOC`/`TOCI`; running content, backgrounds, rules, repeated
+  table headers and icons as artifacts; `/Lang` from `:lang:`, XMP with
+  `pdfuaid:part` and `dc:title`, and structure tab order. Only embedded fonts
+  are used: without theme fonts, the bundled asciidoctor-pdf default fonts
+  (Noto Serif, M+ 1mn). `PdfRenderer.Warnings` reports images without alt text.
+  CI validates the `spec/pdf-ua` fixtures with veraPDF.
+
+### Fixed
+
+- **PDF**: with themed (embedded-font) layout, wrapping a table cell whose text
+  contains an empty word no longer throws `ArgumentOutOfRangeException`.
+
 ## [1.0.36] - 2026-11-16
 
 ### Fixed

@@ -204,6 +204,11 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             pdfOptions.MarginLeft, pdfOptions.MarginRight, pdfOptions.MarginTop, pdfOptions.MarginBottom);
         if (seedDestinations is not null)
             writer.SeedDestinations(seedDestinations);
+        writer.Tagged = pdfOptions.Accessibility || context.Document.Attributes.ContainsKey("pdf-ua");
+        writer.Lang = context.Document.Attributes.TryGetValue("lang", out var lang) && !string.IsNullOrWhiteSpace(lang) ? lang : "en";
+        _docTitleTagged = false;
+        _lastHeadingTag = 0;
+        _warnings.Clear();
         if (_recorder is not null)
             writer.Recorder = _recorder = new PdfPageRecorder(); // the last pass is the one returned
         _blockDepth = 0;
@@ -266,7 +271,9 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         // metrics differ), so only apply the factor when an embedded body
         // font is in play. Detected up front by checking the font path —
         // RegisterEmbeddedFont happens later but the option is known now.
-        bool willEmbedBodyFont = pdfOptions.FontPath is not null && File.Exists(pdfOptions.FontPath);
+        // Accessible output may only use embedded fonts: without theme fonts, the bundled ones.
+        bool bundledFonts = writer.Tagged && !(pdfOptions.FontPath is not null && File.Exists(pdfOptions.FontPath));
+        bool willEmbedBodyFont = bundledFonts || pdfOptions.FontPath is not null && File.Exists(pdfOptions.FontPath);
         if (willEmbedBodyFont)
         {
             // Asciidoctor-pdf parity: empirically calibrated against asciidoctor-pdf
@@ -384,6 +391,10 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             _fontMonoBoldItalic = writer.RegisterEmbeddedFont("F7", font);
         }
 
+        // Every face the theme leaves on a standard font gets its bundled counterpart (a theme with
+        // a body font but no code font would otherwise show code in non-embedded Courier).
+        if (writer.Tagged) RegisterBundledFonts(writer);
+
         // Heading font — separate from body bold, used for section titles
         _fontHeading = _fontBold; // default: same as bold
         if (pdfOptions.HeadingFontPath is not null && File.Exists(pdfOptions.HeadingFontPath))
@@ -450,6 +461,8 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         {
             w.AddOutlineEntry(PlainTitle(_prawnMetrics ? PartitionTitle(document, document.Title!).Main : document.Title!), 1, "_document_title");
             if (w.Recorder is { } r) { r.HasTitlePage = true; r.Capturing = true; }
+            _docTitleTagged = true;
+            _lastHeadingTag = 1;
             RenderTitlePage(w, document);
             if (w.Recorder is { } r2) r2.Capturing = false;
             w.FinishPage();
@@ -481,7 +494,11 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             w.AddOutlineEntry(PlainTitle(document.Title), 1, "_document_title");
             w.Recorder?.BeginBlock(SourceRange.None);
             if (_headingColor is { } hc) w.SetFillColor(hc.R, hc.G, hc.B);
+            var titleTag = w.BeginTag("H1");
+            _docTitleTagged = true;
+            _lastHeadingTag = 1;
             w.WriteWrappedText(PlainTitle(document.Title), _fontHeading, _titleFontSize, _titleLeading, _titleAlignment);
+            w.EndTag(titleTag);
             if (_headingColor is not null) RestoreBodyFill(w);
             w.MoveCursor(_titleMarginBottom);
         }
@@ -542,7 +559,10 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                     LinkUri: $"#internal#{FootnoteRefDestId(number)}"),
                 new($" {text}", _fontRegular, _smallFontSize),
             };
+            var note = w.BeginTag("Note");
+            note.Id = $"footnote-{number}";
             w.WriteWrappedSegments(segments, _codeLeading, justify: false);
+            w.EndTag(note);
         }
     }
 
@@ -584,7 +604,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             var toc1 = MetricsFor(w, _fontRegular, _bodyFontSize, _tocLineHeight);
             w.SetCursor(NextBlockTop(w) - toc1.FirstOffset);
         }
-        RenderTocEntries(w, toc.Entries, 0, parentNumber: "");
+        w.Tag("TOC", () => RenderTocEntries(w, toc.Entries, 0, parentNumber: ""));
         w.LinkColor = savedLinkColor;
         if (_prawnMetrics)
         {
@@ -613,6 +633,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         foreach (var entry in entries)
         {
             counter++;
+            var tocItem = w.BeginTag("TOCI");
             // Compute the section number prefix when :sectnums: is enabled.
             // Concatenates parent + counter, e.g. "1.", "1.1.", "1.1.1.".
             string numberPrefix = "";
@@ -697,7 +718,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                             var leader = string.Concat(System.Linq.Enumerable.Repeat(". ", dots));
                             float leaderWidth = w.MeasureText(leader, _fontRegular, fontSize);
                             if (_prawnMetrics) w.SetFillColor(_tocDotLeaderColor.R, _tocDotLeaderColor.G, _tocDotLeaderColor.B);
-                            w.WriteText(leader, _fontRegular, fontSize, gapEnd - leaderWidth, y);
+                            w.Artifact(() => w.WriteText(leader, _fontRegular, fontSize, gapEnd - leaderWidth, y));
                             if (_prawnMetrics) RestoreBodyFill(w);
                         }
                     }
@@ -728,8 +749,9 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 var childParent = _sectnumsEnabled && entry.Level <= _sectnumMaxLevel
                     ? (parentNumber.Length > 0 ? $"{parentNumber}{counter}." : $"{counter}.")
                     : "";
-                RenderTocEntries(w, entry.Children, depth + 1, childParent);
+                w.Tag("TOC", () => RenderTocEntries(w, entry.Children, depth + 1, childParent));
             }
+            w.EndTag(tocItem);
         }
     }
 
@@ -753,16 +775,16 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         switch (node)
         {
             case SectionNode section:
-                RenderSection(w, section, indentLevel, footnotes);
+                w.Tag("Sect", () => RenderSection(w, section, indentLevel, footnotes));
                 break;
             case ParagraphNode paragraph:
-                RenderParagraph(w, paragraph, indentLevel, footnotes);
+                w.Tag("P", () => RenderParagraph(w, paragraph, indentLevel, footnotes));
                 break;
             case ListNode list:
-                RenderList(w, list, indentLevel, footnotes);
+                w.Tag("L", () => RenderList(w, list, indentLevel, footnotes));
                 break;
             case DelimitedBlockNode block:
-                RenderDelimitedBlock(w, block, indentLevel, footnotes);
+                w.Tag(BlockTag(block), () => RenderDelimitedBlock(w, block, indentLevel, footnotes));
                 break;
             case TableNode table:
                 RenderTable(w, table, footnotes);
@@ -771,13 +793,13 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 RenderBlockImage(w, blockImage, indentLevel);
                 break;
             case DescriptionListNode descList:
-                RenderDescriptionList(w, descList, indentLevel, footnotes);
+                w.Tag("L", () => RenderDescriptionList(w, descList, indentLevel, footnotes));
                 break;
             case AdmonitionNode admonition:
-                RenderAdmonition(w, admonition, indentLevel, footnotes);
+                w.Tag("Div", () => RenderAdmonition(w, admonition, indentLevel, footnotes));
                 break;
             case BibliographyEntryNode bibEntry:
-                RenderBibliographyEntry(w, bibEntry, footnotes);
+                w.Tag("P", () => RenderBibliographyEntry(w, bibEntry, footnotes));
                 break;
             case TocNode:
                 // TOC is rendered in RenderDocumentContent, skip here
@@ -826,6 +848,57 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         }
         Walk(document);
         return map;
+    }
+
+    // ── Accessibility (tagged PDF) ──────────────────────────────────────
+
+    private bool _docTitleTagged;
+    private int _lastHeadingTag;
+    private readonly List<string> _warnings = [];
+
+    /// <summary>
+    /// Warnings from the last render, such as images without alternative text in accessible
+    /// (<see cref="PdfRenderOptions.Accessibility"/>) output.
+    /// </summary>
+    public IReadOnlyList<string> Warnings => _warnings;
+
+    /// <summary>
+    /// The heading tag for a section level: H1 for the first level below the document title (H2 when
+    /// the title is itself the H1), never more than one level deeper than the previous heading.
+    /// </summary>
+    private string HeadingTag(int level)
+    {
+        int n = Math.Max(1, Math.Min(6, level + (_docTitleTagged ? 1 : 0)));
+        n = Math.Min(n, _lastHeadingTag + 1);
+        _lastHeadingTag = n;
+        return "H" + n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>The structure type of a delimited block (verbatim blocks hold a Code element).</summary>
+    private static string BlockTag(DelimitedBlockNode block) => block.BlockKind switch
+    {
+        DelimitedBlockKind.Quote or DelimitedBlockKind.Verse => "BlockQuote",
+        DelimitedBlockKind.Listing or DelimitedBlockKind.Literal or DelimitedBlockKind.Source => "P",
+        _ => "Div",
+    };
+
+    /// <summary>
+    /// Accessible output: every face still on a standard PDF font (all of them without theme fonts)
+    /// gets the bundled asciidoctor-pdf default theme font, as PDF/UA forbids non-embedded fonts.
+    /// </summary>
+    private void RegisterBundledFonts(PdfWriter writer)
+    {
+        const string prefix = "AdocNet.Converters.Pdf.Resources.";
+        string Load(string current, string standardKey, string file) =>
+            current == standardKey ? TryLoadEmbeddedFont(writer, prefix + file, standardKey) ?? current : current;
+        _fontRegular = Load(_fontRegular, "F1", "notoserif-regular-latin.ttf");
+        _fontBold = Load(_fontBold, "F2", "notoserif-bold-latin.ttf");
+        _fontItalic = Load(_fontItalic, "F3", "notoserif-italic-latin.ttf");
+        _fontMono = Load(_fontMono, "F4", "mplus1mn-regular-ascii-conums.ttf");
+        _fontMonoBold = Load(_fontMonoBold, "F5", "mplus1mn-bold-ascii.ttf");
+        _fontMonoItalic = Load(_fontMonoItalic, "F6", "mplus1mn-italic-ascii.ttf");
+        _fontMonoBoldItalic = Load(_fontMonoBoldItalic, "F7", "mplus1mn-bolditalic-ascii.ttf");
+        _hasTrueTypeBodyFont |= _fontRegular != "F1";
     }
 
     /// <summary>Replaces each tab with spaces up to the next tab stop, column by column on each line.</summary>
@@ -927,6 +1000,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             if (headingLines > 1) w.EnsureSpaceForLine(headingLines * leading);
             RegisterHeading();
         }
+        var headingTag = w.BeginTag(HeadingTag(section.Level));
         if (_prawnMetrics)
         {
             WritePrawnHeading(w, segments, fontSize, section.Level, RegisterHeading);
@@ -936,6 +1010,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             w.WriteWrappedSegments(segments, leading);
             w.MoveCursor(marginBottom);
         }
+        w.EndTag(headingTag);
         if (color is not null) RestoreBodyFill(w);
 
         foreach (var child in section.Children)
@@ -1004,6 +1079,8 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 // from rendering with descender intruding into the footer area
                 // (or the line clipping below the page bottom margin).
                 w.EnsureSpaceForLine(_bodyLeading);
+                var listItem = w.BeginTag("LI");
+                PdfWriter.StructElem itemBody;
 
                 // Bullet or number prefix
                 // Standard PDF fonts lack the bullet glyph; use it only when a TrueType body font is embedded.
@@ -1051,7 +1128,8 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                     float markerX = w.MarginLeftValue + 0.5f - w.MeasureText(marker, _fontRegular, _bodyFontSize)
                         - w.MeasureText("x", _fontRegular, _bodyFontSize);
                     w.EnsurePage();
-                    w.WriteText(marker, _fontRegular, _bodyFontSize, markerX, w.CursorY);
+                    w.Tag("Lbl", () => w.WriteText(marker, _fontRegular, _bodyFontSize, markerX, w.CursorY));
+                    itemBody = w.BeginTag("LBody");
                     w.WriteWrappedSegments(segments, _bodyLeading);
                     w.PopIndent(itemIndent);
                 }
@@ -1062,6 +1140,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                         segments.Insert(0, new TextSegment(prefix, _fontRegular, _bodyFontSize));
                     }
 
+                    itemBody = w.BeginTag("LBody");
                     w.WriteWrappedSegments(segments, _bodyLeading);
                 }
                 // Asciidoctor-pdf adds vertical breathing room between list
@@ -1075,7 +1154,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 {
                     if (nested is ListNode nestedList)
                     {
-                        RenderList(w, nestedList, indentLevel + 1, footnotes);
+                        w.Tag("L", () => RenderList(w, nestedList, indentLevel + 1, footnotes));
                     }
                     else
                     {
@@ -1097,6 +1176,8 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                         w.PopIndent(contSaved);
                     }
                 }
+                w.EndTag(itemBody);
+                w.EndTag(listItem);
 
                 itemNumber++;
             }
@@ -1136,7 +1217,10 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         }
     }
 
-    private void RenderVerbatimBlock(PdfWriter w, DelimitedBlockNode block)
+    private void RenderVerbatimBlock(PdfWriter w, DelimitedBlockNode block) =>
+        w.Tag("Code", () => RenderVerbatimBlockCore(w, block));
+
+    private void RenderVerbatimBlockCore(PdfWriter w, DelimitedBlockNode block)
     {
         // A PDF has no tab stops: a raw tab drew as a narrow glyph and broke the column alignment.
         var content = ExpandTabs(block.Content ?? string.Empty, _tabSize);

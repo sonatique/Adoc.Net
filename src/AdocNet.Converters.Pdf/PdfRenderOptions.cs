@@ -400,4 +400,14 @@ public sealed class PdfRenderOptions : RenderOptions
     /// the document title.
     /// </summary>
     public string? MetadataTitle { get; init; }
+
+    /// <summary>
+    /// Produces an accessible, tagged PDF conforming to PDF/UA-1 (ISO 14289-1): a structure tree
+    /// (headings, paragraphs, lists, tables, figures with alternative text, links, notes, the table
+    /// of contents), decoration and running content marked as artifacts, the document language
+    /// (<c>:lang:</c>, default <c>en</c>), and only embedded fonts: without theme fonts, the bundled
+    /// Noto Serif and M+ 1mn replace the standard PDF fonts. The <c>:pdf-ua:</c> document attribute
+    /// turns it on as well. Default: false.
+    /// </summary>
+    public bool Accessibility { get; init; }
 }

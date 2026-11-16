@@ -183,7 +183,7 @@ internal sealed partial class PdfWriter
 
                 // Prawn also breaks after a hyphen inside a word ("non-byte-" / "aligned"): put the
                 // longest prefix ending in '-' that still fits on this line, wrap the rest.
-                while (BreakAfterHyphens && !glued && currentWidth + neededWidth > maxWidth && word.IndexOf('-', 1) > 0)
+                while (BreakAfterHyphens && !glued && currentWidth + neededWidth > maxWidth && word.Length > 1 && word.IndexOf('-', 1) > 0)
                 {
                     float lead = neededWidth - wordWidth; // separator space before the word, if any
                     int cut = -1;
@@ -353,21 +353,35 @@ internal sealed partial class PdfWriter
             if (seg.Background is { } bg)
             {
                 const float pad = 1.5f;
+                BeginArtifact();
                 _currentStream!.Append("q\n");
                 _currentStream.Append($"{FmtColor(bg.R)} {FmtColor(bg.G)} {FmtColor(bg.B)} rg\n");
                 _currentStream.Append($"{Fmt(bgX - pad)} {Fmt(y - 2f)} {Fmt(adjW + pad * 2)} {Fmt(seg.FontSize + 3f)} re f\n");
                 _currentStream.Append("Q\n");
+                EndArtifact();
             }
             bgX += adjW;
         }
 
         float currentX = x;
-        _currentStream!.Append("BT\n");
-        _currentStream.Append($"{Fmt(x)} {Fmt(y)} Td\n");
+        // Tagged output: one text object per segment, so a link's Link element nests inside it.
+        if (!Tagged)
+        {
+            _currentStream!.Append("BT\n");
+            _currentStream.Append($"{Fmt(x)} {Fmt(y)} Td\n");
+        }
 
         foreach (var seg in segments)
         {
-            _currentStream.Append($"/{seg.Font} {Fmt(seg.FontSize)} Tf\n");
+            StructElem? linkElem = null;
+            if (Tagged)
+            {
+                if (seg.LinkUri is not null) linkElem = BeginTag("Link");
+                MarkContent();
+                _currentStream!.Append("BT\n");
+                _currentStream.Append($"{Fmt(currentX)} {Fmt(y)} Td\n");
+            }
+            _currentStream!.Append($"/{seg.Font} {Fmt(seg.FontSize)} Tf\n");
 
             // Raise superscript segments (e.g. footnote markers) above the baseline.
             float rise = seg.Superscript ? seg.FontSize * SuperscriptRiseFactor : 0f;
@@ -429,19 +443,29 @@ internal sealed partial class PdfWriter
             float rectY = y - 2 + rise;
             if (seg.DestId is not null)
                 AddNamedDestination(seg.DestId, y + rise);
-            if (seg.LinkUri is not null)
+            if (Tagged) _currentStream.Append("ET\n");
+            if (seg.LinkUri is not null && !(Tagged && linkElem is not { Attached: true }))
             {
                 if (seg.LinkUri.StartsWith("#internal#"))
-                    AddInternalLinkAnnotation(currentX, rectY, adjustedWidth, seg.FontSize + 4,
-                        seg.LinkUri.Substring(10));
+                    _currentInternalLinks.Add(new PdfInternalLink(currentX, rectY, adjustedWidth, seg.FontSize + 4,
+                        seg.LinkUri.Substring(10), linkElem, seg.Text));
                 else
-                    AddLinkAnnotation(currentX, rectY, adjustedWidth, seg.FontSize + 4, seg.LinkUri);
+                    _currentAnnotations.Add(new PdfAnnotation(currentX, rectY, adjustedWidth, seg.FontSize + 4, seg.LinkUri, linkElem, seg.Text));
             }
+            if (linkElem is not null) EndTag(linkElem);
 
             currentX += adjustedWidth;
         }
 
-        _currentStream.Append("0 Tw\n"); // reset word spacing
-        _currentStream.Append("ET\n");
+        if (Tagged)
+        {
+            MarkContent();
+            _currentStream!.Append("0 Tw\n"); // reset word spacing (text state outlives the text object)
+        }
+        else
+        {
+            _currentStream!.Append("0 Tw\n"); // reset word spacing
+            _currentStream.Append("ET\n");
+        }
     }
 }

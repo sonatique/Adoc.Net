@@ -161,6 +161,48 @@ Presets: `PdfRenderOptions.Letter` (612x792), `PdfRenderOptions.A4`.
 - Justification spacing is capped at 2x normal word space to prevent ugly gaps
 - Last lines of justified paragraphs are left-aligned
 
+## Accessible PDF (PDF/UA)
+
+`PdfRenderOptions.Accessibility = true` (or the `:pdf-ua:` document attribute)
+produces a tagged PDF conforming to PDF/UA-1 (ISO 14289-1):
+
+| AsciiDoc | Structure |
+|----------|-----------|
+| Document title | `H1` (sections below it start at `H2`; no level is ever skipped) |
+| Sections | `Sect` with `H1`–`H6` |
+| Paragraphs | `P` |
+| Lists | `L` / `LI` / `Lbl` (marker) / `LBody`; description lists likewise (term as `Lbl`) |
+| Tables | `Table` / `THead` / `TBody` / `TR` / `TH` (`/Scope /Column`) / `TD`, with `/ColSpan` and `/RowSpan` |
+| Images | `Figure` with `/Alt` from the alt text (the file name, with a warning in `PdfRenderer.Warnings`, when there is none) |
+| Links and cross references | `Link`, owning its annotation (`OBJR`, `/StructParent`, `/Contents`) |
+| Listing, literal and source blocks | `P` containing `Code` |
+| Example, sidebar, open blocks | `Div`; quotes and verses `BlockQuote` |
+| Admonitions | `Div`, its label (text or icon) spoken through `/ActualText` |
+| Footnotes | `Note` with an `/ID` |
+| Table of contents | `TOC` / `TOCI` (nested), dot leaders as artifacts |
+
+Running headers and footers, page numbers, backgrounds, rules, table borders,
+repeated table header rows and decorative icons are marked as artifacts. The
+catalog carries `/Lang` (from `:lang:`, default `en`), `/MarkInfo`, the structure
+tree with its parent tree, XMP metadata with `pdfuaid:part` 1 and `dc:title`, and
+`/ViewerPreferences /DisplayDocTitle true`; pages with annotations use
+structure tab order (`/Tabs /S`).
+
+PDF/UA does not allow the standard PDF fonts (they are not embedded). Without
+theme fonts, accessible output therefore embeds the bundled asciidoctor-pdf
+default fonts (Noto Serif for text, M+ 1mn for code), so it looks like the
+asciidoctor-pdf default theme rather than the Helvetica default. Characters no
+embedded font can draw are dropped when invisible (such as a zero-width space)
+and drawn as `?` otherwise, since PDF/UA forbids the `.notdef` glyph.
+
+It is opt-in because it changes the default fonts and the file size: short
+documents come out about 2.5–3.5 times larger, mostly the embedded font subsets
+(with theme fonts, which are embedded anyway, the difference is the structure
+tree only). Rendering takes about 15% longer.
+
+CI renders `spec/pdf-ua/*.adoc` with `-a pdf-ua` and validates them with veraPDF
+(profile PDF/UA-1); any failed rule fails the build.
+
 ## Determinism
 
 PDF output is fully deterministic: identical input always produces byte-identical output across runs and platforms. This is achieved by:

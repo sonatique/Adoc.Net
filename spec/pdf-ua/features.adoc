@@ -1,0 +1,115 @@
+= Accessible Output Sample
+Ada Writer
+v1.2, 2026-11-16
+:toc:
+:sectnums:
+:lang: en
+:pdf-ua:
+
+This document exercises every structure an accessible PDF tags: headings,
+paragraphs, lists, tables, figures, links, footnotes, code and admonitions.
+
+== Text and links
+
+A paragraph with *bold*, _italic_ and `monospace` text, a link to
+https://asciidoc.org[the AsciiDoc site], and a cross reference to <<tables>>.
+A footnote follows this sentence.footnote:[Footnotes become notes in the structure tree.]
+
+=== A subsection
+
+Second-level content with another footnote.footnote:[A second note.]
+
+==== A third level
+
+Deep content.
+
+== Lists
+
+* First bullet
+* Second bullet with a nested list
+** Nested bullet
+** Another nested bullet
+* Third bullet
+
+. First step
+. Second step
+. Third step
+
+Term one:: The first definition.
+Term two:: The second definition.
+
+[[tables]]
+== Tables
+
+.Register map
+[cols="1,2,3",options="header"]
+|===
+|Offset |Name |Description
+
+|0x00 |Control |Enables the device.
+|0x04 |Status |Reports the device state.
+2+|Spanned name and offset |A cell beside a column span.
+.2+|0x0C |Data |First row of a row span.
+|Value |Second row of a row span.
+|===
+
+== Figures
+
+.A blue diagram
+image::images/diagram.png[Blue rectangle standing in for a diagram]
+
+image::images/photo.png[]
+
+== Code and notes
+
+[source,text]
+----
+FileFormat:Packets version=1.0
+Item time=0 channel=0 payload="00 01 02"
+	indented with a tab
+----
+
+NOTE: An admonition paragraph with its label.
+
+TIP: Another admonition.
+
+____
+A quotation block, tagged as a block quote.
+____
+
+== Long section
+
+This section fills more than a page so the running header and footer, marked as
+artifacts, appear on several pages.
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a
+ante venenatis dapibus posuere velit aliquet. Donec ullamcorper nulla non metus
+auctor fringilla. Vestibulum id ligula porta felis euismod semper.
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a
+ante venenatis dapibus posuere velit aliquet. Donec ullamcorper nulla non metus
+auctor fringilla. Vestibulum id ligula porta felis euismod semper.
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a
+ante venenatis dapibus posuere velit aliquet. Donec ullamcorper nulla non metus
+auctor fringilla. Vestibulum id ligula porta felis euismod semper.
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a
+ante venenatis dapibus posuere velit aliquet. Donec ullamcorper nulla non metus
+auctor fringilla. Vestibulum id ligula porta felis euismod semper.
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a
+ante venenatis dapibus posuere velit aliquet. Donec ullamcorper nulla non metus
+auctor fringilla. Vestibulum id ligula porta felis euismod semper.
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a
+ante venenatis dapibus posuere velit aliquet. Donec ullamcorper nulla non metus
+auctor fringilla. Vestibulum id ligula porta felis euismod semper.
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a
+ante venenatis dapibus posuere velit aliquet. Donec ullamcorper nulla non metus
+auctor fringilla. Vestibulum id ligula porta felis euismod semper.
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a
+ante venenatis dapibus posuere velit aliquet. Donec ullamcorper nulla non metus
+auctor fringilla. Vestibulum id ligula porta felis euismod semper.

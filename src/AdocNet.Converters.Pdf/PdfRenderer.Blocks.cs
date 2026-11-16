@@ -27,7 +27,56 @@ public sealed partial class PdfRenderer
         }
     }
 
-    private void RenderTable(PdfWriter w, TableNode table, FootnoteState footnotes)
+    private void RenderTable(PdfWriter w, TableNode table, FootnoteState footnotes) =>
+        w.Tag("Table", () => RenderTableCore(w, table, footnotes));
+
+    /// <summary>
+    /// Per table, for tagging: each cell's row span clipped to the rows left, and each row's count of
+    /// columns no cell covers (an incomplete source row), filled with empty cells so every row of the
+    /// structure has the same number of columns.
+    /// </summary>
+    private readonly Dictionary<List<PlacedCell>, int> _tagMissingCells = []; // List<T>: reference keys
+
+    private void PrepareTableTags(List<List<PlacedCell>> grid, int colCount)
+    {
+        _tagMissingCells.Clear();
+        var held = new int[colCount];
+        for (int r = 0; r < grid.Count; r++)
+        {
+            int covered = held.Count(h => h > 0);
+            foreach (var p in grid[r])
+            {
+                int rowSpan = Math.Max(1, Math.Min(p.Cell.RowSpan, grid.Count - r));
+                p.TagRowSpan = rowSpan;
+                covered += p.ColSpan;
+                for (int s = 0; s < p.ColSpan && p.Col + s < colCount; s++)
+                    if (rowSpan > 1) held[p.Col + s] = rowSpan;
+            }
+            _tagMissingCells[grid[r]] = Math.Max(0, colCount - covered);
+            for (int c = 0; c < colCount; c++)
+                if (held[c] > 0) held[c]--;
+        }
+    }
+
+    /// <summary>Empty cells closing an incomplete row in the structure tree.</summary>
+    private void TagMissingCells(PdfWriter w, List<PlacedCell> row, bool header)
+    {
+        if (!_tagMissingCells.TryGetValue(row, out int missing)) return;
+        for (int i = 0; i < missing; i++) w.EndTag(w.BeginTag(header ? "TH" : "TD", attributes: header ? "/O /Table /Scope /Column" : null));
+    }
+
+    /// <summary>Table cell attributes: header scope and spans.</summary>
+    private string? CellAttributes(PlacedCell cell, bool header)
+    {
+        var a = new System.Text.StringBuilder();
+        if (header) a.Append(" /Scope /Column");
+        if (cell.ColSpan > 1) a.Append(" /ColSpan ").Append(cell.ColSpan);
+        int rowSpan = cell.TagRowSpan > 0 ? cell.TagRowSpan : cell.Cell.RowSpan;
+        if (rowSpan > 1) a.Append(" /RowSpan ").Append(rowSpan);
+        return a.Length == 0 ? null : "/O /Table" + a;
+    }
+
+    private void RenderTableCore(PdfWriter w, TableNode table, FootnoteState footnotes)
     {
         if (table.Children.Count == 0) return;
 
@@ -49,6 +98,7 @@ public sealed partial class PdfRenderer
         // the occupied columns). Without this, content was attributed to the wrong
         // columns and rowspan-heavy tables over-shrank to micro-text (#50).
         var grid = BuildTableGrid(table, colCount, footnotes);
+        if (w.Tagged) PrepareTableTags(grid, colCount);
 
         // Per-column natural / minimum widths from cells that occupy a single
         // column; a spanning cell's requirement is spread across the columns it
@@ -165,10 +215,11 @@ public sealed partial class PdfRenderer
         // Header row
         if (table.HasHeader && grid.Count > 0)
         {
-            RenderTableHeader(w, grid[0], colWidths, cellPadding, effFontSize, table.Columns,
-                gridOpts, isLastRow: grid.Count == 1);
+            w.Tag("THead", () => RenderTableHeader(w, grid[0], colWidths, cellPadding, effFontSize, table.Columns,
+                gridOpts, isLastRow: grid.Count == 1));
             startRow = 1;
         }
+        var tableBody = w.BeginTag("TBody");
 
         // Body rows — repeat header on continuation pages
         List<PlacedCell>? repeatHeader = _repeatTableHeader && table.HasHeader && startRow == 1 && grid.Count > 0
@@ -180,21 +231,23 @@ public sealed partial class PdfRenderer
             w.EnsurePage();
 
             // If EnsurePage moved to a new page, repeat the header
+            // A header repeated on a continuation page is pagination, not content.
             if (repeatHeader is not null && w.CurrentPageNumber != pageBefore)
-                RenderTableHeader(w, repeatHeader, colWidths, cellPadding, effFontSize, table.Columns,
-                    gridOpts, isLastRow: false);
+                w.Artifact(() => RenderTableHeader(w, repeatHeader, colWidths, cellPadding, effFontSize, table.Columns,
+                    gridOpts, isLastRow: false));
 
             // A body row is the table's first row only when there is no header.
             bool firstRow = startRow == 0 && i == 0;
             // Themed output repeats the header after a page break inside the row renderer
             // (prawn-table repeats header rows by default).
             _repeatHeaderAfterBreak = _prawnMetrics && table.HasHeader && grid.Count > 0
-                ? () => RenderTableHeader(w, grid[0], colWidths, cellPadding, effFontSize, table.Columns, gridOpts, isLastRow: false)
+                ? () => w.Artifact(() => RenderTableHeader(w, grid[0], colWidths, cellPadding, effFontSize, table.Columns, gridOpts, isLastRow: false))
                 : null;
             RenderTableRow(w, grid[i], colWidths, cellPadding, _fontRegular, effFontSize, table.Columns,
                 gridOpts, isFirstRow: firstRow, isLastRow: i == grid.Count - 1);
             _repeatHeaderAfterBreak = null;
         }
+        w.EndTag(tableBody);
 
         if (_prawnMetrics)
             SetNextBlockTop(w, NextBlockTop(w) - _paragraphSpacingAfter);
@@ -216,6 +269,9 @@ public sealed partial class PdfRenderer
         /// superscript clickable link (the segment path) rather than plain text (#69).
         /// </summary>
         public bool HasFootnote => Runs.Any(r => r.IsMarker);
+
+        /// <summary>Tagged output: the row span clipped to the table's remaining rows (0 = not computed).</summary>
+        public int TagRowSpan { get; set; }
     }
 
     /// <summary>
@@ -707,14 +763,24 @@ public sealed partial class PdfRenderer
             bottomRuleY = topRuleY - rowHeight;
         }
 
+        var row = w.BeginTag("TR");
         foreach (var (cell, lines, x, cellWidth, align) in cellWrapped)
+        {
+            var cellTag = w.BeginTag(isHeaderRow ? "TH" : "TD", attributes: CellAttributes(cell, isHeaderRow));
+            try { RenderLegacyCell(cell, lines, x, cellWidth, align); }
+            finally { w.EndTag(cellTag); }
+        }
+        TagMissingCells(w, placed, isHeaderRow);
+        w.EndTag(row);
+
+        void RenderLegacyCell(PlacedCell cell, List<string> lines, float x, float cellWidth, TableAlignment? align)
         {
             // Cells containing a footnote render via the segment path so the marker
             // is a superscript clickable link, like body text (#69).
             if (cell.HasFootnote)
             {
                 RenderCellSegments(w, cell, x, cellWidth, baseY, cellPadding, font, fontSize, align, lineStep);
-                continue;
+                return;
             }
 
             float lineY = baseY;
@@ -887,9 +953,22 @@ public sealed partial class PdfRenderer
 
         if (image.Title is not null)
         {
-            w.WriteWrappedText(image.Title, _fontItalic, _smallFontSize, _codeLeading);
+            w.Tag("Caption", () => w.WriteWrappedText(image.Title, _fontItalic, _smallFontSize, _codeLeading));
         }
 
+        // Figure with alternative text: the alt text, else the file name (and a warning).
+        string alt = !string.IsNullOrWhiteSpace(image.Alt) ? image.Alt! : Path.GetFileNameWithoutExtension(image.Target);
+        if (string.IsNullOrWhiteSpace(image.Alt) && w.Tagged)
+            _warnings.Add($"Image '{image.Target}' has no alt text; its file name is used as the alternative text.");
+        var figure = w.BeginTag("Figure", alt: alt);
+        w.DrawingFigure = true;
+        try { RenderBlockImageCore(w, image); }
+        finally { w.DrawingFigure = false; w.EndTag(figure); }
+        w.MoveCursor(_paragraphSpacingAfter);
+    }
+
+    private void RenderBlockImageCore(PdfWriter w, BlockImageNode image)
+    {
         // Try SVG first (vector), then raster images
         if (TryLoadSvg(image.Target, out var svgDoc))
         {
@@ -924,8 +1003,6 @@ public sealed partial class PdfRenderer
             w.WriteText(label, _fontItalic, _bodyFontSize, w.MarginLeftValue + 8, w.CursorY - 35);
             w.MoveCursor(68f);
         }
-
-        w.MoveCursor(_paragraphSpacingAfter);
     }
 
     /// <summary>
@@ -999,9 +1076,11 @@ public sealed partial class PdfRenderer
             {
                 w.EnsurePage();
 
+                var listItem = w.BeginTag("LI");
                 // Term in bold
                 var termSegments = BuildInlineSegments(item.TermInlines, item.Terms.Count > 0 ? item.Terms[0] : "", _fontBold, _bodyFontSize, footnotes);
-                w.WriteWrappedSegments(termSegments, _bodyLeading);
+                w.Tag("Lbl", () => w.WriteWrappedSegments(termSegments, _bodyLeading));
+                var itemBody = w.BeginTag("LBody");
 
                 // Description indented (only when present — empty when the item
                 // body comes entirely from continuation blocks below).
@@ -1021,10 +1100,25 @@ public sealed partial class PdfRenderer
                     if (grandChild is BlockNode block)
                         RenderBlock(w, block, indentLevel, footnotes);
                 }
+                w.EndTag(itemBody);
+                w.EndTag(listItem);
                 w.MoveCursor(_paragraphSpacingAfter / 2);
             }
         }
         w.MoveCursor(_paragraphSpacingAfter);
+    }
+
+    /// <summary>
+    /// The admonition's label element (its text, icon glyph or drawn icon), created first so it
+    /// reads first; spoken as the admonition type through /ActualText.
+    /// </summary>
+    private PdfWriter.StructElem AdmonitionLabel(PdfWriter w, AdmonitionNode admonition)
+    {
+        var type = admonition.AdmonitionType;
+        var spoken = type.Length == 0 ? type : char.ToUpperInvariant(type[0]) + type.Substring(1).ToLowerInvariant();
+        var label = w.BeginTag("P", actualText: spoken);
+        w.EndTag(label);
+        return label;
     }
 
     private void RenderAdmonition(PdfWriter w, AdmonitionNode admonition, int indentLevel, FootnoteState footnotes)
@@ -1093,16 +1187,21 @@ public sealed partial class PdfRenderer
                 // Vertical centering: glyph baseline ≈ glyph_top - cap_height. For FA
                 // (cap_height ≈ 0.7 × font_size), baseline = center + 0.35×size.
                 float baselineY = iconCenterY - faSize * 0.35f;
-                w.WriteText(fa, faFont, faSize, iconCenterX - gw / 2f, baselineY);
+                w.InElement(AdmonitionLabel(w, admonition), () => w.WriteText(fa, faFont, faSize, iconCenterX - gw / 2f, baselineY));
             }
             else
             {
                 // Fallback: drawn circle + vector glyph
                 float iconRadius = 9f;
-                w.SetFillColor(color.R, color.G, color.B);
-                w.DrawCircle(iconCenterX, iconCenterY, iconRadius, "f");
-                w.SetFillColor(1f, 1f, 1f);
-                DrawAdmonitionGlyph(w, admonition.AdmonitionType, iconCenterX, iconCenterY);
+                w.InElement(AdmonitionLabel(w, admonition), () =>
+                {
+                    w.DrawingFigure = true; // the drawn icon is the label's content
+                    w.SetFillColor(color.R, color.G, color.B);
+                    w.DrawCircle(iconCenterX, iconCenterY, iconRadius, "f");
+                    w.SetFillColor(1f, 1f, 1f);
+                    DrawAdmonitionGlyph(w, admonition.AdmonitionType, iconCenterX, iconCenterY);
+                    w.DrawingFigure = false;
+                });
             }
             // Do NOT advance cursor — body text draws at startY, alongside the icon
             // (icon is in the LabelWidth gutter to the left of the indented body).
@@ -1112,7 +1211,7 @@ public sealed partial class PdfRenderer
             // Text label fallback (asciidoctor's behavior when :icons: is unset)
             var labelText = admonition.AdmonitionType.ToUpperInvariant();
             w.SetFillColor(color.R, color.G, color.B);
-            w.WriteWrappedText(labelText, _fontBold, _bodyFontSize, _bodyLeading);
+            w.InElement(AdmonitionLabel(w, admonition), () => w.WriteWrappedText(labelText, _fontBold, _bodyFontSize, _bodyLeading));
         }
         w.SetFillColor(0, 0, 0);
 
