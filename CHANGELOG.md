@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.35] - 2026-11-16
+
 ### Fixed
 
 - **`PdfImporter`**: code blocks come back as they were written. A code line

@@ -14,7 +14,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.34</Version>
+    <Version>1.0.35</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) 2026 sylvain@sonatique.net</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -23,7 +23,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;docx;word;import;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.34: the PDF converter keeps a wrapped section heading on one page; PdfImporter keeps a cover subtitle (Title: Subtitle) and reads a cover version line as revnumber. See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.35: PdfImporter brings code blocks back as written: lines the PDF wrapped at the code box edge are rejoined, a listing continued on the next page stays one listing, and code lines near a page margin are kept. See CHANGELOG.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->
