@@ -887,17 +887,22 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             if (_prawnMetrics ? section.Level <= 2 : section.Level == 1)
                 w.SetSectionTitleForPage(outlineTitle);
         }
-        // The themed path registers after its keep-with-next page break so the outline,
-        // cross-reference destination and running section title land on the heading's page.
-        if (!_prawnMetrics)
-            RegisterHeading();
-
         // Render section title with heading font, per-level color
         if (color is { } hc) w.SetFillColor(hc.R, hc.G, hc.B);
         var headingFont = HeadingFont(section.Level);
         var segments = BuildInlineSegments(section.TitleInlines, section.Title, headingFont, fontSize, footnotes);
         if (secNumPrefix is not null)
             segments.Insert(0, new TextSegment(secNumPrefix, headingFont, fontSize));
+
+        // The themed path registers after its keep-with-next page break so the outline,
+        // cross-reference destination and running section title land on the heading's page.
+        // The legacy path keeps a wrapped heading's lines on one page, then registers.
+        if (!_prawnMetrics)
+        {
+            int headingLines = w.WrapSegments(w.ExpandSegmentsForFallback(segments), w.ContentWidth).Count;
+            if (headingLines > 1) w.EnsureSpaceForLine(headingLines * leading);
+            RegisterHeading();
+        }
         if (_prawnMetrics)
         {
             WritePrawnHeading(w, segments, fontSize, section.Level, RegisterHeading);
