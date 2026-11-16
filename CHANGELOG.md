@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.34] - 2026-11-16
+
 ### Fixed
 
 - **PDF**: with the standard fonts, a section heading that wraps onto two
