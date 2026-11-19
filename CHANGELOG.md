@@ -22,6 +22,13 @@ with a table of contents, on .NET 10, against 1.0.38.
 - **EPUB**: the bundled fonts, stylesheets and images are compressed once per
   process instead of on every render, which removed about 35 ms from every
   EPUB (a small document now takes about 1 ms instead of 38 ms).
+- **Paged Avalonia preview following a PDF layout**
+  (`PagedAvaloniaRenderer.RenderPages` with a `PdfPageLayout`): a block that
+  continues across pages is no longer laid out in full for every page. Each
+  page's copy holds only what that page shows, so the cost grows linearly with
+  the block's length instead of quadratically: a 1600-line code listing went
+  from 498 ms to 97 ms, a 1600-item list from 1.75 s to 0.21 s and a 1600-row
+  table from 5.0 s to 0.28 s per render (headless).
 
 ## [1.0.38] - 2026-11-19
 
