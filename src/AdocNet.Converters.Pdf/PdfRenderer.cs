@@ -187,15 +187,17 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         }
         Dictionary<string, int>? seededPages = null;
         if (hasToc)
-        {
-            using var probe = new MemoryStream();
-            RenderToStreamCore(context, probe, seedDestinations: null, capturedPages: out seededPages);
-        }
+            RenderToStreamCore(context, output: null, seedDestinations: null, capturedPages: out seededPages);
         RenderToStreamCore(context, output, seededPages, capturedPages: out _);
         } // lock
     }
 
-    private void RenderToStreamCore(RenderContext context, Stream output,
+    /// <summary>
+    /// Lays out the document and writes the PDF to <paramref name="output"/>. With a null
+    /// output only the layout runs: the pages of the named destinations are captured and
+    /// the file is not serialized.
+    /// </summary>
+    private void RenderToStreamCore(RenderContext context, Stream? output,
         IReadOnlyDictionary<string, int>? seedDestinations,
         out Dictionary<string, int> capturedPages)
     {
@@ -444,6 +446,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         RenderFootnotesSection(writer, footnotes);
 
         capturedPages = writer.CaptureDestinationPages();
+        if (output is null) return;
         byte[] bytes = writer.ToBytes();
         output.Write(bytes, 0, bytes.Length);
         if (_recorder is not null)
