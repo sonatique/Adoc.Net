@@ -244,7 +244,14 @@ internal static class TrueTypeSubsetter
         // Copy other tables as-is
         byte[] newOs2 = CopyTable(data, tables, "OS/2");
         byte[] newName = CopyTable(data, tables, "name");
+        // post: keep only the 32-byte header as version 3.0 (no glyph names). A copied
+        // version 2.0 table would list the original font's glyph count, not the subset's.
         byte[] newPost = CopyTable(data, tables, "post");
+        if (newPost.Length >= 32)
+        {
+            Array.Resize(ref newPost, 32);
+            WriteUInt32(newPost, 0, 0x00030000);
+        }
         byte[] newCvt = CopyTable(data, tables, "cvt ");
         byte[] newFpgm = CopyTable(data, tables, "fpgm");
         byte[] newPrep = CopyTable(data, tables, "prep");
