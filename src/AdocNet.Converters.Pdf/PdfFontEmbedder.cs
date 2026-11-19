@@ -172,21 +172,40 @@ internal static class PdfFontEmbedder
     /// (rather than UTF-16 code units) keeps non-BMP characters whole, so they map
     /// to one glyph rather than two missing-glyph halves (issue #72).
     /// </summary>
-    internal static IEnumerable<int> EnumerateCodePoints(string text)
+    internal static CodePointEnumerator EnumerateCodePoints(string text) => new(text);
+
+    /// <summary>A <c>foreach</c> enumerator over the codepoints of a string that allocates nothing.</summary>
+    internal struct CodePointEnumerator
     {
-        for (int i = 0; i < text.Length;)
+        private readonly string _text;
+        private int _next;
+
+        internal CodePointEnumerator(string text)
         {
-            char c = text[i];
-            if (char.IsHighSurrogate(c) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
+            _text = text;
+            _next = 0;
+            Current = 0;
+        }
+
+        public int Current { get; private set; }
+
+        public readonly CodePointEnumerator GetEnumerator() => this;
+
+        public bool MoveNext()
+        {
+            if (_next >= _text.Length) return false;
+            char c = _text[_next];
+            if (char.IsHighSurrogate(c) && _next + 1 < _text.Length && char.IsLowSurrogate(_text[_next + 1]))
             {
-                yield return char.ConvertToUtf32(c, text[i + 1]);
-                i += 2;
+                Current = char.ConvertToUtf32(c, _text[_next + 1]);
+                _next += 2;
             }
             else
             {
-                yield return c;
-                i++;
+                Current = c;
+                _next++;
             }
+            return true;
         }
     }
 

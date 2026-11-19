@@ -71,6 +71,22 @@ internal sealed partial class PdfWriter
         return codePoint > 0xFF && MapUnicodeToWinAnsi((char)codePoint) == "?";
     }
 
+    /// <summary>True when some character of <paramref name="text"/> cannot be shown by <paramref name="primaryFont"/>.</summary>
+    private bool NeedsAnyFallback(string text, string primaryFont)
+    {
+        if (_embeddedFonts.TryGetValue(primaryFont, out var ttf))
+        {
+            foreach (var cp in PdfFontEmbedder.EnumerateCodePoints(text))
+                if (ttf.GetGlyphId(cp) == 0) return true;
+            return false;
+        }
+        // Same rule as NeedsFallback for a base font, per UTF-16 unit: a surrogate (half of a
+        // non-BMP character, or unpaired) is above 0xFF and has no WinAnsi mapping.
+        foreach (var c in text)
+            if (c > 0xFF && MapUnicodeToWinAnsi(c) == "?") return true;
+        return false;
+    }
+
     /// <summary>
     /// Resolves the font key that should render <paramref name="codePoint"/>: the
     /// primary font when it can show it, otherwise the first fallback font that has
@@ -101,12 +117,7 @@ internal sealed partial class PdfWriter
     /// </summary>
     internal List<(string Text, string Font)>? SplitFontRuns(string text, string primaryFont)
     {
-        if (string.IsNullOrEmpty(text)) return null;
-
-        bool needsAny = false;
-        foreach (var cp in PdfFontEmbedder.EnumerateCodePoints(text))
-            if (NeedsFallback(cp, primaryFont)) { needsAny = true; break; }
-        if (!needsAny) return null;
+        if (string.IsNullOrEmpty(text) || !NeedsAnyFallback(text, primaryFont)) return null;
 
         var runs = new List<(string, string)>();
         var sb = new StringBuilder();
