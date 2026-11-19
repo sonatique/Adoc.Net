@@ -376,15 +376,20 @@ internal sealed partial class PdfWriter
 
     // ── Final PDF assembly ──────────────────────────────────────────────
 
-    /// <summary>Completes the document and writes the PDF file to <paramref name="output"/>.</summary>
-    internal void WriteTo(Stream output)
+    /// <summary>Finishes the last page and writes the running content: the page layout is then complete.</summary>
+    internal void FinishLayout()
     {
-        // Ensure last page is finished
         if (_currentStream is not null)
             FinishPage();
 
         // Running content needs the final page count; write it before the fonts are subset.
         WriteDeferredRunningContent();
+    }
+
+    /// <summary>Completes the document and writes the PDF file to <paramref name="output"/>.</summary>
+    internal void WriteTo(Stream output)
+    {
+        FinishLayout();
 
         // Embed registered TrueType fonts (fills placeholder objects)
         EmbedRegisteredFonts();

@@ -204,7 +204,8 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         var pdfOptions = context.Options as PdfRenderOptions ?? PdfRenderOptions.Default;
         var writer = new PdfWriter(pdfOptions.PageWidth, pdfOptions.PageHeight,
             pdfOptions.MarginLeft, pdfOptions.MarginRight, pdfOptions.MarginTop, pdfOptions.MarginBottom);
-        writer.LayoutOnly = output is null;
+        // LayoutPages (a recorder is set) discards the file: it only needs the recorded layout.
+        writer.LayoutOnly = output is null || _recorder is not null;
         if (seedDestinations is not null)
             writer.SeedDestinations(seedDestinations);
         writer.Tagged = pdfOptions.Accessibility || context.Document.Attributes.ContainsKey("pdf-ua");
@@ -448,9 +449,13 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
         capturedPages = writer.CaptureDestinationPages();
         if (output is null) return;
-        writer.WriteTo(output);
-        if (_recorder is not null)
-            _recordedLayout = _recorder.Build(pdfOptions.PageWidth, pdfOptions.PageHeight, writer.PageCount, writer.PageNumberOffset);
+        if (_recorder is null)
+        {
+            writer.WriteTo(output);
+            return;
+        }
+        writer.FinishLayout();
+        _recordedLayout = _recorder.Build(pdfOptions.PageWidth, pdfOptions.PageHeight, writer.PageCount, writer.PageNumberOffset);
     }
 
     // ── Document rendering ──────────────────────────────────────────────
