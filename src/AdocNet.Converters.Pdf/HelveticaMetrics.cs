@@ -57,25 +57,27 @@ internal static class HelveticaMetrics
         ['z'] = 0.500f, ['{'] = 0.389f, ['|'] = 0.280f, ['}'] = 0.389f, ['~'] = 0.584f,
     };
 
-    /// <summary>
-    /// Measures the width of a character in a standard PDF font.
-    /// </summary>
-    internal static float MeasureChar(char ch, string fontKey, float fontSize)
+    /// <summary>Widths of the ASCII characters, by code; characters past the table use the default width.</summary>
+    private static readonly float[] RegularAscii = AsciiTable(Regular, DefaultWidth);
+    private static readonly float[] BoldAscii = AsciiTable(Bold, BoldDefaultWidth);
+
+    private static float[] AsciiTable(Dictionary<char, float> widths, float defaultWidth)
     {
-        float charWidth;
-        if (fontKey == "F4" || fontKey == "F5" || fontKey == "F6" || fontKey == "F7")
-        {
-            // Courier and its variants (Bold/Oblique/BoldOblique) — all monospace
-            charWidth = CourierWidth;
-        }
-        else if (fontKey == "F2") // Helvetica-Bold
-        {
-            charWidth = Bold.GetValueOrDefault(ch, BoldDefaultWidth);
-        }
-        else // F1, F3 — Helvetica, Helvetica-Oblique
-        {
-            charWidth = Regular.GetValueOrDefault(ch, DefaultWidth);
-        }
-        return charWidth * fontSize;
+        var table = new float[128];
+        for (int c = 0; c < table.Length; c++)
+            table[c] = widths.GetValueOrDefault((char)c, defaultWidth);
+        return table;
+    }
+
+    /// <summary>Width of <paramref name="text"/> in a Helvetica face (F1 regular, F2 bold, F3 oblique).</summary>
+    internal static float MeasureHelvetica(string text, string fontKey, float fontSize)
+    {
+        bool bold = fontKey == "F2";
+        var table = bold ? BoldAscii : RegularAscii;
+        float fallback = bold ? BoldDefaultWidth : DefaultWidth;
+        float total = 0;
+        foreach (var ch in text)
+            total += (ch < 128 ? table[ch] : fallback) * fontSize;
+        return total;
     }
 }

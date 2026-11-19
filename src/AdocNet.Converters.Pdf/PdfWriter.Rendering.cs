@@ -371,11 +371,7 @@ internal sealed partial class PdfWriter
         if (font == "F4" || font == "F5" || font == "F6" || font == "F7")
             return text.Length * fontSize * HelveticaMetrics.CourierWidth;
 
-        float total = 0;
-        foreach (var ch in text)
-            total += HelveticaMetrics.MeasureChar(ch, font, fontSize);
-
-        return total;
+        return HelveticaMetrics.MeasureHelvetica(text, font, fontSize);
     }
 
     // ── Final PDF assembly ──────────────────────────────────────────────
