@@ -109,6 +109,8 @@ public sealed partial class PagedAvaloniaRenderer
                 ? Math.Max(0, b.Top * DipsPerPoint - first.Margin.Top)
                 : top;
 
+            var size = piece.DesiredSize;
+            PieceGeometry? geometry = null; // read before the piece is placed, while it is laid out alone
             double offset = 0;
             while (true)
             {
@@ -121,13 +123,18 @@ public sealed partial class PagedAvaloniaRenderer
                 }
                 if (avail > 0)
                 {
-                    double cut = LineBoundary(piece, offset + avail);
+                    geometry ??= new PieceGeometry(piece);
+                    double cut = LineBoundary(geometry.Lines, offset + avail);
                     if (cut <= offset && y.Value <= top) cut = offset + avail; // not even one line fits a whole page
                     if (cut > offset)
                     {
                         Place(piece, offset, cut - offset, clip: true);
                         offset = cut;
-                        piece = Measured(create()!, source); // a control has one parent: each page gets its own copy
+                        // A control has one parent: each page gets its own copy, laid out only where the page shows it.
+                        var copy = create()!;
+                        Trim(first, copy, geometry, offset, offset + (bottom - top));
+                        piece = Measured(copy, source);
+                        if (piece.DesiredSize != size) piece = Measured(create()!, source);
                     }
                 }
                 pageIndex++;
@@ -168,22 +175,143 @@ public sealed partial class PagedAvaloniaRenderer
     }
 
     /// <summary>
-    /// The largest y ≤ <paramref name="limit"/> (in the arranged piece) that doesn't cut through a
-    /// line of text, or 0 when the first line is already below it.
+    /// Positions in a block piece laid out alone, read once and used for every page the block
+    /// continues on.
     /// </summary>
-    internal static double LineBoundary(Visual piece, double limit)
+    private sealed class PieceGeometry
     {
-        var lines = new List<(double Top, double Bottom)>();
-        foreach (var textBlock in piece.GetVisualDescendants().OfType<TextBlock>())
+        /// <summary>Text lines, top and bottom, in the piece.</summary>
+        internal readonly List<(double Top, double Bottom)> Lines = [];
+
+        /// <summary>Bounds of each descendant, in the piece.</summary>
+        internal readonly Dictionary<Control, Rect> Bounds = [];
+
+        /// <summary>Top of the first text line in the piece and the height of each line, per text block.</summary>
+        internal readonly Dictionary<TextBlock, (double Top, double[] Heights)> Text = [];
+
+        private readonly Dictionary<TextBlock, string[]> _textLines = [];
+
+        /// <summary>The text of <paramref name="textBlock"/> split at line feeds, split once.</summary>
+        internal string[] TextLines(TextBlock textBlock, string text)
         {
-            if (textBlock.TranslatePoint(new Point(0, textBlock.Padding.Top), piece) is not { } origin) continue;
-            double lineTop = origin.Y;
-            foreach (var line in textBlock.TextLayout.TextLines)
+            if (!_textLines.TryGetValue(textBlock, out var lines))
+                _textLines[textBlock] = lines = text.Split('\n');
+            return lines;
+        }
+
+        internal PieceGeometry(Visual piece)
+        {
+            foreach (var control in piece.GetVisualDescendants().OfType<Control>())
             {
-                lines.Add((lineTop, lineTop + line.Height));
-                lineTop += line.Height;
+                if (control.TranslatePoint(default, piece) is { } at)
+                    Bounds[control] = new Rect(at, control.Bounds.Size);
+                if (control is not TextBlock textBlock
+                    || textBlock.TranslatePoint(new Point(0, textBlock.Padding.Top), piece) is not { } origin) continue;
+                double lineTop = origin.Y;
+                var textLines = textBlock.TextLayout.TextLines;
+                var heights = new double[textLines.Count];
+                for (int i = 0; i < heights.Length; i++)
+                {
+                    heights[i] = textLines[i].Height;
+                    Lines.Add((lineTop, lineTop + heights[i]));
+                    lineTop += heights[i];
+                }
+                Text[textBlock] = (origin.Y, heights);
             }
         }
+    }
+
+    /// <summary>
+    /// Makes <paramref name="copy"/>, a new instance of the control <paramref name="laidOut"/> was made from,
+    /// cheap to lay out when only the band from <paramref name="top"/> to <paramref name="bottom"/> of the
+    /// piece is shown: children wholly outside the band become empty controls of the same size, and an
+    /// unwrapped multi-line text keeps only its lines in the band. The band shows the same content.
+    /// </summary>
+    private static void Trim(Control laidOut, Control copy, PieceGeometry geometry, double top, double bottom)
+    {
+        if (laidOut.GetType() != copy.GetType()) return;
+        switch (laidOut)
+        {
+            case Panel panel when copy is Panel copyPanel && copyPanel.Children.Count == panel.Children.Count:
+                for (int i = 0; i < panel.Children.Count; i++)
+                {
+                    var child = panel.Children[i];
+                    if (!geometry.Bounds.TryGetValue(child, out var bounds)) continue;
+                    if (bounds.Bottom <= top || bounds.Top >= bottom)
+                        copyPanel.Children[i] = Placeholder(child, copyPanel.Children[i]);
+                    else
+                        Trim(child, copyPanel.Children[i], geometry, top, bottom);
+                }
+                break;
+            case Decorator { Child: { } child } when copy is Decorator { Child: { } copyChild }:
+                Trim(child, copyChild, geometry, top, bottom);
+                break;
+            case TextBlock text when copy is TextBlock copyText:
+                KeepLinesInBand(text, copyText, geometry, top, bottom);
+                break;
+        }
+    }
+
+    /// <summary>An empty control taking the room <paramref name="laidOut"/> takes in its parent.</summary>
+    private static Control Placeholder(Control laidOut, Control copy)
+    {
+        var margin = laidOut.Margin;
+        var placeholder = new Border
+        {
+            Width = Math.Max(0, laidOut.DesiredSize.Width - margin.Left - margin.Right),
+            Height = Math.Max(0, laidOut.DesiredSize.Height - margin.Top - margin.Bottom),
+            Margin = margin,
+            HorizontalAlignment = laidOut.HorizontalAlignment,
+            VerticalAlignment = laidOut.VerticalAlignment,
+        };
+        Grid.SetRow(placeholder, Grid.GetRow(copy));
+        Grid.SetColumn(placeholder, Grid.GetColumn(copy));
+        Grid.SetRowSpan(placeholder, Grid.GetRowSpan(copy));
+        Grid.SetColumnSpan(placeholder, Grid.GetColumnSpan(copy));
+        return placeholder;
+    }
+
+    /// <summary>
+    /// Keeps in <paramref name="copy"/> only the lines of an unwrapped text that reach into the band: the
+    /// height of the lines above becomes top padding, and the copy keeps the full text's height.
+    /// </summary>
+    private static void KeepLinesInBand(TextBlock laidOut, TextBlock copy, PieceGeometry geometry, double top, double bottom)
+    {
+        if (laidOut.TextWrapping != TextWrapping.NoWrap || laidOut.Text is not { } text || copy.Text != text
+            || laidOut.Inlines is { Count: > 0 } || !geometry.Text.TryGetValue(laidOut, out var layout)
+            || !geometry.Bounds.TryGetValue(laidOut, out var bounds)) return;
+        var lines = geometry.TextLines(laidOut, text);
+        var heights = layout.Heights;
+        if (lines.Length != heights.Length) return;
+
+        int first = 0;
+        double lineTop = layout.Top, above = 0;
+        while (first < lines.Length && lineTop + heights[first] <= top)
+        {
+            above += heights[first];
+            lineTop += heights[first];
+            first++;
+        }
+        int last = first - 1;
+        while (last + 1 < lines.Length && lineTop < bottom)
+        {
+            last++;
+            lineTop += heights[last];
+        }
+        if (last < first || first == 0 && last == lines.Length - 1) return;
+
+        copy.Text = string.Join("\n", lines, first, last - first + 1);
+        var padding = laidOut.Padding;
+        copy.Padding = new Thickness(padding.Left, padding.Top + above, padding.Right, padding.Bottom);
+        copy.Height = bounds.Height;
+    }
+
+    /// <summary>
+    /// The largest y ≤ <paramref name="limit"/> (in the arranged piece) that doesn't cut through one of
+    /// its text <paramref name="lines"/>, or 0 when the first line is already below it.
+    /// </summary>
+    private static double LineBoundary(List<(double Top, double Bottom)> lines, double limit)
+    {
         double cut = limit;
         for (bool moved = true; moved && cut > 0;)
         {
