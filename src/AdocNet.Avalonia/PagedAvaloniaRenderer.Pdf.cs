@@ -95,7 +95,7 @@ public sealed partial class PagedAvaloniaRenderer
             canvases[pageIndex].Children.Add(host);
         }
 
-        void Flow(Func<Control?> create, SourceRange source, PdfBlockPlacement? at)
+        void Flow(Func<Control?> create, SourceRange source, PdfBlockPlacement? at, BlockLayout? block = null)
         {
             if (create() is not { } first) return;
             if (at is { } a && a.PageNumber - 1 > pageIndex)
@@ -131,7 +131,7 @@ public sealed partial class PagedAvaloniaRenderer
                         Place(piece, offset, cut - offset, clip: true);
                         offset = cut;
                         // A control has one parent: each page gets its own copy, laid out only where the page shows it.
-                        var copy = create()!;
+                        var copy = (block is null ? null : RenderPart(block, first, geometry, offset, offset + (bottom - top))) ?? create()!;
                         Trim(first, copy, geometry, offset, offset + (bottom - top));
                         piece = Measured(copy, source);
                         if (piece.DesiredSize != size) piece = Measured(create()!, source);
@@ -151,7 +151,7 @@ public sealed partial class PagedAvaloniaRenderer
             if (block is PageBreakLayout) continue; // the PDF placements already carry page breaks
             if (pdfPages.TocSource is { } toc && block.Source == toc) continue; // drawn from page items
             PdfBlockPlacement? at = !block.Source.IsNone && placements.TryGetValue(block.Source, out var p) ? p : null;
-            Flow(() => _renderer.Render(block), block.Source, at);
+            Flow(() => _renderer.Render(block), block.Source, at, block);
         }
 
         return pages;
@@ -189,6 +189,9 @@ public sealed partial class PagedAvaloniaRenderer
         /// <summary>Top of the first text line in the piece and the height of each line, per text block.</summary>
         internal readonly Dictionary<TextBlock, (double Top, double[] Heights)> Text = [];
 
+        /// <summary>Height of each row, per grid.</summary>
+        internal readonly Dictionary<Grid, double[]> RowHeights = [];
+
         private readonly Dictionary<TextBlock, string[]> _textLines = [];
 
         /// <summary>The text of <paramref name="textBlock"/> split at line feeds, split once.</summary>
@@ -205,6 +208,8 @@ public sealed partial class PagedAvaloniaRenderer
             {
                 if (control.TranslatePoint(default, piece) is { } at)
                     Bounds[control] = new Rect(at, control.Bounds.Size);
+                if (control is Grid grid)
+                    RowHeights[grid] = grid.RowDefinitions.Select(r => r.ActualHeight).ToArray();
                 if (control is not TextBlock textBlock
                     || textBlock.TranslatePoint(new Point(0, textBlock.Padding.Top), piece) is not { } origin) continue;
                 double lineTop = origin.Y;
@@ -218,6 +223,54 @@ public sealed partial class PagedAvaloniaRenderer
                 }
                 Text[textBlock] = (origin.Y, heights);
             }
+        }
+    }
+
+    /// <summary>
+    /// A copy of the list or table <paramref name="laidOut"/> was rendered from, with only the items or
+    /// rows reaching into the band from <paramref name="top"/> to <paramref name="bottom"/> of the piece
+    /// built (and the rows that a cell in the band spans), the others replaced by empty space of the same
+    /// height. Null for other blocks, or when the renderer renders blocks its own way.
+    /// </summary>
+    private Control? RenderPart(BlockLayout block, Control laidOut, PieceGeometry geometry, double top, double bottom)
+    {
+        if (!_renderer.RendersBlocksItself) return null;
+        bool InBand(Control control) =>
+            geometry.Bounds.TryGetValue(control, out var bounds) && bounds.Bottom > top && bounds.Top < bottom;
+
+        switch (block)
+        {
+            case ListLayout list when laidOut is StackPanel panel && panel.Children.Count == list.Items.Count:
+            {
+                int first = -1, last = -1;
+                for (int i = 0; i < panel.Children.Count; i++)
+                {
+                    if (!InBand(panel.Children[i])) continue;
+                    if (first < 0) first = i;
+                    last = i;
+                }
+                if (first < 0) return null;
+                double before = 0, after = 0;
+                for (int i = 0; i < first; i++) before += panel.Children[i].DesiredSize.Height;
+                for (int i = last + 1; i < panel.Children.Count; i++) after += panel.Children[i].DesiredSize.Height;
+                return _renderer.RenderListPart(list, first, last, before, after);
+            }
+            case TableLayout table when laidOut is StackPanel { Children: [.., Border { Child: Grid grid }] }
+                                        && geometry.RowHeights.TryGetValue(grid, out var heights):
+            {
+                int first = int.MaxValue, last = -1;
+                foreach (var cell in grid.Children)
+                {
+                    if (!InBand(cell)) continue;
+                    first = Math.Min(first, Grid.GetRow(cell));
+                    last = Math.Max(last, Grid.GetRow(cell) + Math.Max(1, Grid.GetRowSpan(cell)) - 1);
+                }
+                if (last < 0) return null;
+                var columns = grid.ColumnDefinitions.Select(c => (c.Width, c.MinWidth)).ToArray();
+                return _renderer.RenderTablePart(table, new AvaloniaRenderer.TablePart(columns, heights, first, Math.Min(last, heights.Length - 1)));
+            }
+            default:
+                return null;
         }
     }
 

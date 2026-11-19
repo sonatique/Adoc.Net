@@ -249,6 +249,15 @@ public class PagedAvaloniaRendererTests
         "= Doc\n\n|===\n| Name | Value\n\n" +
         string.Join("\n", Enumerable.Range(0, 140).Select(i => $"| row {i} | value {i}")) + "\n|===\n";
 
+    private static readonly string LongOrderedList =
+        "= Doc\n\n" + string.Join("\n", Enumerable.Range(0, 160).Select(i => $". numbered item {i}")) + "\n";
+
+    // Every seventh row starts a cell spanning three rows, so spans cross page cuts.
+    private static readonly string LongSpanningTable =
+        "= Doc\n\n.Spanning table\n[cols=\"1,1\"]\n|===\n| Key | Value\n\n" +
+        string.Join("\n", Enumerable.Range(0, 140).Select(i =>
+            i % 7 == 0 ? $".3+| span {i} | value {i}" : i % 7 is 1 or 2 ? $"| value {i}" : $"| key {i} | value {i}")) + "\n|===\n";
+
     /// <summary>
     /// Text lines wholly inside the window of <paramref name="piece"/> that its page shows:
     /// from its upward shift, as tall as its clipping parent (or the whole piece when not clipped).
@@ -282,14 +291,43 @@ public class PagedAvaloniaRendererTests
     [AvaloniaTest]
     [TestCase("listing")]
     [TestCase("list")]
+    [TestCase("ordered list")]
     [TestCase("table")]
-    public void A_block_spanning_several_pages_shows_each_of_its_lines_once(string kind)
+    [TestCase("table with row spans")]
+    public void A_block_spanning_several_pages_shows_each_of_its_lines_once(string kind) =>
+        AssertEachLineShownOnce(kind switch
+        {
+            "listing" => LongListing,
+            "list" => LongList,
+            "ordered list" => LongOrderedList,
+            "table" => LongTable,
+            _ => LongSpanningTable,
+        }, new AvaloniaRenderer());
+
+    [AvaloniaTest]
+    public void A_renderer_overriding_RenderBlock_keeps_its_rendering_on_every_page() =>
+        AssertEachLineShownOnce(LongList, new MarkedListRenderer());
+
+    /// <summary>Marks every list item, keeping the list's structure: a custom rendering the pages must keep.</summary>
+    private sealed class MarkedListRenderer : AvaloniaRenderer
     {
-        var (layout, pdf, options) = Themed(kind switch { "listing" => LongListing, "list" => LongList, _ => LongTable },
-            new PdfRenderOptions());
+        protected override Control? RenderBlock(AdocNet.Layout.BlockLayout block)
+        {
+            var control = base.RenderBlock(block);
+            if (block is AdocNet.Layout.ListLayout && control is StackPanel panel)
+                foreach (var item in panel.Children.OfType<StackPanel>())
+                    if (item.Children.FirstOrDefault() is TextBlock { Inlines: { } inlines })
+                        inlines.Insert(0, new global::Avalonia.Controls.Documents.Run("marked "));
+            return control;
+        }
+    }
+
+    private static void AssertEachLineShownOnce(string asciidoc, AvaloniaRenderer renderer)
+    {
+        var (layout, pdf, options) = Themed(asciidoc, new PdfRenderOptions());
         var block = layout.Children.Single(b => b is not AdocNet.Layout.HeadingLayout);
 
-        var pages = new PagedAvaloniaRenderer().RenderPages(layout, pdf, options);
+        var pages = new PagedAvaloniaRenderer(renderer).RenderPages(layout, pdf, options);
 
         var shown = pages
             .Select(page => Pieces(page).Where(p => Equals(p.Tag, block.Source)).ToList())
@@ -299,7 +337,7 @@ public class PagedAvaloniaRendererTests
             .Where(text => text.Length > 0)
             .ToList();
         var whole = new StackPanel { Width = options.PageWidth - options.PageMargin.Left - options.PageMargin.Right };
-        whole.Children.Add(new AvaloniaRenderer().Render(block)!);
+        whole.Children.Add(renderer.Render(block)!);
         whole.Measure(new global::Avalonia.Size(whole.Width, double.PositiveInfinity));
         whole.Arrange(new global::Avalonia.Rect(whole.DesiredSize));
         var expected = TextLines(whole).OrderBy(l => l.Top).ThenBy(l => l.Left).Select(l => l.Text).Where(text => text.Length > 0).ToList();
@@ -307,6 +345,9 @@ public class PagedAvaloniaRendererTests
         Assert.That(pages.Count(page => Pieces(page).Any(p => Equals(p.Tag, block.Source))), Is.GreaterThan(2), "the block spans several pages");
         Assert.That(expected, Has.Count.GreaterThan(100));
         Assert.That(shown, Is.EqualTo(expected), "every line shown once, in order");
+        var continued = pages.SelectMany(page => Pieces(page).Where(p => Equals(p.Tag, block.Source))).Skip(1).ToList();
+        Assert.That(continued.Select(p => TextLines(p).Count()), Has.All.LessThan(expected.Count / 2),
+            "pages after the first lay out only part of the block");
     }
 
     [AvaloniaTest]

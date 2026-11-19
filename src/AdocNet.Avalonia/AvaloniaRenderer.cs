@@ -105,6 +105,37 @@ public class AvaloniaRenderer
     public Control? Render(BlockLayout block) => ApplyBodyStyle(RenderBlock(block));
 
     /// <summary>
+    /// <see cref="Render(BlockLayout)"/> of a list with only the items from <paramref name="first"/> to
+    /// <paramref name="last"/> built, after and before empty space as tall as the other items.
+    /// </summary>
+    internal Control? RenderListPart(ListLayout list, int first, int last, double heightBefore, double heightAfter) =>
+        first >= 0 && last < list.Items.Count && first <= last
+            ? ApplyBodyStyle(RenderList(list, (first, last, heightBefore, heightAfter)))
+            : null;
+
+    /// <summary>
+    /// <see cref="Render(BlockLayout)"/> of a table with only the cells within the grid rows of
+    /// <paramref name="part"/> built. Null when the grid does not have the part's rows and columns.
+    /// </summary>
+    internal Control? RenderTablePart(TableLayout table, TablePart part) =>
+        RenderTable(table, part) is { } control ? ApplyBodyStyle(control) : null;
+
+    /// <summary>
+    /// The part of a table's grid to build: its columns, the height of every grid row, and the rows
+    /// <see cref="FirstRow"/> to <see cref="LastRow"/> whose cells are built. The rows before and after
+    /// become one empty row each, as tall as they are together.
+    /// </summary>
+    internal readonly record struct TablePart(
+        IReadOnlyList<(GridLength Width, double MinWidth)> Columns, IReadOnlyList<double> RowHeights, int FirstRow, int LastRow);
+
+    /// <summary>True when <see cref="RenderBlock"/> is not overridden, so list and table parts render as the whole blocks do.</summary>
+    internal bool RendersBlocksItself => _rendersBlocksItself ??=
+        GetType().GetMethod(nameof(RenderBlock), System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+            null, [typeof(BlockLayout)], null)?.DeclaringType == typeof(AvaloniaRenderer);
+
+    private bool? _rendersBlocksItself;
+
+    /// <summary>
     /// Builds the document-title block (shared by the full, paged and incremental renderers).
     /// </summary>
     internal TextBlock CreateTitleBlock(string title)
@@ -198,20 +229,25 @@ public class AvaloniaRenderer
         return textBlock;
     }
 
-    private StackPanel RenderList(ListLayout list)
+    private StackPanel RenderList(ListLayout list, (int First, int Last, double Before, double After)? part = null)
     {
         var panel = new StackPanel
         {
             Margin = new Thickness(16, 0, 0, 8),
         };
 
-        for (int i = 0; i < list.Items.Count; i++)
+        var (from, to) = part is { } p ? (p.First, p.Last) : (0, list.Items.Count - 1);
+        if (part is { Before: > 0 } before)
+            panel.Children.Add(new Border { Height = before.Before });
+        for (int i = from; i <= to; i++)
         {
             var item = list.Items[i];
             var prefix = list.Ordered ? $"{i + 1}. " : BulletPrefix;
             var itemPanel = RenderListItem(item, prefix);
             panel.Children.Add(itemPanel);
         }
+        if (part is { After: > 0 } after)
+            panel.Children.Add(new Border { Height = after.After });
 
         return panel;
     }
@@ -329,7 +365,7 @@ public class AvaloniaRenderer
 
     // ── Table rendering ─────────────────────────────────────────────
 
-    private Control RenderTable(TableLayout table)
+    private Control? RenderTable(TableLayout table, TablePart? part = null)
     {
         var wrapper = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
 
@@ -360,23 +396,35 @@ public class AvaloniaRenderer
         if (colCount == 0)
             return wrapper;
 
-        // Star weights are content-proportional (longest plain-text cell length
-        // per column, honouring row-spans) and capped at 3× the median so a
-        // single prose cell can't squeeze the rest of the table to one-letter-
-        // per-line. Each column also gets a MinWidth equal to its longest
-        // single word, so narrow columns never collapse below their content.
-        // See issues #16, #26.
-        var columnWeights = TableColumnWeights.Compute(table, colCount);
-        var columnMinWidths = TableColumnWeights.ComputeMinWidthsPixels(table, colCount);
-
         var grid = new Grid();
-        for (int c = 0; c < colCount; c++)
+        if (part is { } columns)
         {
-            grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(columnWeights[c], GridUnitType.Star))
-            {
-                MinWidth = columnMinWidths[c],
-            });
+            if (columns.Columns.Count != colCount || columns.RowHeights.Count != table.Rows.Count
+                || columns.FirstRow < 0 || columns.LastRow >= table.Rows.Count || columns.FirstRow > columns.LastRow)
+                return null;
+            foreach (var (width, minWidth) in columns.Columns)
+                grid.ColumnDefinitions.Add(new ColumnDefinition(width) { MinWidth = minWidth });
         }
+        else
+        {
+            // Star weights are content-proportional (longest plain-text cell length
+            // per column, honouring row-spans) and capped at 3× the median so a
+            // single prose cell can't squeeze the rest of the table to one-letter-
+            // per-line. Each column also gets a MinWidth equal to its longest
+            // single word, so narrow columns never collapse below their content.
+            // See issues #16, #26.
+            var columnWeights = TableColumnWeights.Compute(table, colCount);
+            var columnMinWidths = TableColumnWeights.ComputeMinWidthsPixels(table, colCount);
+            for (int c = 0; c < colCount; c++)
+            {
+                grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(columnWeights[c], GridUnitType.Star))
+                {
+                    MinWidth = columnMinWidths[c],
+                });
+            }
+        }
+        // In a part, the rows before FirstRow share the first grid row.
+        int rowShift = part is { } shifted ? (shifted.FirstRow > 0 ? 1 : 0) - shifted.FirstRow : 0;
 
         int gridRow = 0;
         // Track row-span occupancy: occupied[col] = how many more rows that col is spanned
@@ -384,7 +432,8 @@ public class AvaloniaRenderer
 
         foreach (var row in table.Rows)
         {
-            grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            if (part is null)
+                grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
 
             int col = 0;
             int cellIdx = 0;
@@ -402,16 +451,20 @@ public class AvaloniaRenderer
                     break;
 
                 var cell = row.Cells[cellIdx];
-                var cellControl = RenderTableCell(cell);
+                // A span past the last row is clamped by the grid, as it is here.
+                if (part is not { } p || gridRow >= p.FirstRow && Math.Min(gridRow + Math.Max(1, cell.RowSpan), table.Rows.Count) - 1 <= p.LastRow)
+                {
+                    var cellControl = RenderTableCell(cell);
 
-                Grid.SetRow(cellControl, gridRow);
-                Grid.SetColumn(cellControl, col);
-                if (cell.ColSpan > 1)
-                    Grid.SetColumnSpan(cellControl, cell.ColSpan);
-                if (cell.RowSpan > 1)
-                    Grid.SetRowSpan(cellControl, cell.RowSpan);
+                    Grid.SetRow(cellControl, gridRow + rowShift);
+                    Grid.SetColumn(cellControl, col);
+                    if (cell.ColSpan > 1)
+                        Grid.SetColumnSpan(cellControl, cell.ColSpan);
+                    if (cell.RowSpan > 1)
+                        Grid.SetRowSpan(cellControl, cell.RowSpan);
 
-                grid.Children.Add(cellControl);
+                    grid.Children.Add(cellControl);
+                }
 
                 // Mark future rows as occupied for row-spanning cells
                 if (cell.RowSpan > 1)
@@ -436,8 +489,21 @@ public class AvaloniaRenderer
         }
 
         // Add extra row definitions for row-spanned cells
-        while (grid.RowDefinitions.Count < gridRow)
+        while (part is null && grid.RowDefinitions.Count < gridRow)
             grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+
+        if (part is { } rows)
+        {
+            double before = 0, after = 0;
+            for (int r = 0; r < rows.FirstRow; r++) before += rows.RowHeights[r];
+            for (int r = rows.LastRow + 1; r < rows.RowHeights.Count; r++) after += rows.RowHeights[r];
+            if (rows.FirstRow > 0)
+                grid.RowDefinitions.Add(new RowDefinition(new GridLength(before, GridUnitType.Pixel)));
+            for (int r = rows.FirstRow; r <= rows.LastRow; r++)
+                grid.RowDefinitions.Add(new RowDefinition(new GridLength(rows.RowHeights[r], GridUnitType.Pixel)));
+            if (rows.LastRow < rows.RowHeights.Count - 1)
+                grid.RowDefinitions.Add(new RowDefinition(new GridLength(after, GridUnitType.Pixel)));
+        }
 
         var tableBorder = new Border
         {
