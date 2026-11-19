@@ -59,6 +59,9 @@ internal sealed partial class PdfWriter
     private StringBuilder? _currentStream;
     // Content builder of the open page, cleared and reused for each page.
     private readonly StringBuilder _pageStreamBuffer = new();
+
+    /// <summary>Only the layout is needed, the file is not written: finished pages drop their content.</summary>
+    internal bool LayoutOnly { get; set; }
     private float _cursorY;
     private float _pageWidth;
     private float _pageHeight;
@@ -637,7 +640,7 @@ internal sealed partial class PdfWriter
         BeforeFinishPage?.Invoke();
 
         int? structParents = FinishPageTags();
-        var streamContent = _currentStream.ToString();
+        var streamContent = LayoutOnly ? "" : _currentStream.ToString();
         var streamBytes = Encoding.ASCII.GetByteCount(streamContent);
         int streamObjId = AllocObject(new PdfObject($"<< /Length {streamBytes} >>\nstream\n", TextStream: streamContent));
 

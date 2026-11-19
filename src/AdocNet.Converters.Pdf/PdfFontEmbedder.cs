@@ -172,18 +172,26 @@ internal static class PdfFontEmbedder
     /// (rather than UTF-16 code units) keeps non-BMP characters whole, so they map
     /// to one glyph rather than two missing-glyph halves (issue #72).
     /// </summary>
-    internal static CodePointEnumerator EnumerateCodePoints(string text) => new(text);
+    internal static CodePointEnumerator EnumerateCodePoints(string text) => new(text, 0, text.Length);
+
+    /// <summary>
+    /// Enumerates the codepoints of <c>text[start..end)</c> exactly as
+    /// <see cref="EnumerateCodePoints(string)"/> enumerates that substring.
+    /// </summary>
+    internal static CodePointEnumerator EnumerateCodePoints(string text, int start, int end) => new(text, start, end);
 
     /// <summary>A <c>foreach</c> enumerator over the codepoints of a string that allocates nothing.</summary>
     internal struct CodePointEnumerator
     {
         private readonly string _text;
+        private readonly int _end;
         private int _next;
 
-        internal CodePointEnumerator(string text)
+        internal CodePointEnumerator(string text, int start, int end)
         {
             _text = text;
-            _next = 0;
+            _end = end;
+            _next = start;
             Current = 0;
         }
 
@@ -193,9 +201,9 @@ internal static class PdfFontEmbedder
 
         public bool MoveNext()
         {
-            if (_next >= _text.Length) return false;
+            if (_next >= _end) return false;
             char c = _text[_next];
-            if (char.IsHighSurrogate(c) && _next + 1 < _text.Length && char.IsLowSurrogate(_text[_next + 1]))
+            if (char.IsHighSurrogate(c) && _next + 1 < _end && char.IsLowSurrogate(_text[_next + 1]))
             {
                 Current = char.ConvertToUtf32(c, _text[_next + 1]);
                 _next += 2;
@@ -209,16 +217,21 @@ internal static class PdfFontEmbedder
         }
     }
 
-    internal static string EncodeTextAsGlyphIds(string text, TrueTypeFont font)
+    /// <summary>
+    /// Appends the glyph ids of the codepoints of <c>text[start..end)</c> to <paramref name="sb"/>,
+    /// as four uppercase hex digits each.
+    /// </summary>
+    internal static void AppendGlyphIds(StringBuilder sb, string text, int start, int end, TrueTypeFont font)
     {
-        var sb = new StringBuilder(text.Length * 4);
-        foreach (var cp in EnumerateCodePoints(text))
+        foreach (var cp in EnumerateCodePoints(text, start, end))
         {
-            var gid = font.GetGlyphId(cp);
-            sb.Append($"{gid:X4}");
+            int gid = font.GetGlyphId(cp);
+            sb.Append(HexDigits[gid >> 12]).Append(HexDigits[(gid >> 8) & 0xF])
+              .Append(HexDigits[(gid >> 4) & 0xF]).Append(HexDigits[gid & 0xF]);
         }
-        return sb.ToString();
     }
+
+    private const string HexDigits = "0123456789ABCDEF";
 
     internal static void TrackCodePoints(Dictionary<string, HashSet<int>> usedCodePoints, string fontKey, string text)
     {

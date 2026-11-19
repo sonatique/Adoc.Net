@@ -204,6 +204,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         var pdfOptions = context.Options as PdfRenderOptions ?? PdfRenderOptions.Default;
         var writer = new PdfWriter(pdfOptions.PageWidth, pdfOptions.PageHeight,
             pdfOptions.MarginLeft, pdfOptions.MarginRight, pdfOptions.MarginTop, pdfOptions.MarginBottom);
+        writer.LayoutOnly = output is null;
         if (seedDestinations is not null)
             writer.SeedDestinations(seedDestinations);
         writer.Tagged = pdfOptions.Accessibility || context.Document.Attributes.ContainsKey("pdf-ua");
