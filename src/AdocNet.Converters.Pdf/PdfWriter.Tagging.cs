@@ -232,11 +232,14 @@ internal sealed partial class PdfWriter
             foreach (var k in e.Kids) if (k is StructElem c) AssignIds(c);
         }
 
+        var sb = new StringBuilder();
         void Write(StructElem e, int parentId)
         {
-            var sb = new StringBuilder();
+            sb.Clear();
             sb.Append("<< /Type /StructElem /S /").Append(e.Type).Append(" /P ").Append(parentId).Append(" 0 R");
-            int? page = e.Kids.OfType<MarkedRef>().Select(m => (int?)m.PageIndex).FirstOrDefault();
+            int? page = null;
+            foreach (var k in e.Kids)
+                if (k is MarkedRef first) { page = first.PageIndex; break; }
             if (page is { } pg && pg < _pageObjectIds.Count) sb.Append(" /Pg ").Append(_pageObjectIds[pg]).Append(" 0 R");
             if (e.Alt is not null) sb.Append(" /Alt ").Append(PdfTextString(e.Alt));
             if (e.ActualText is not null) sb.Append(" /ActualText ").Append(PdfTextString(e.ActualText));

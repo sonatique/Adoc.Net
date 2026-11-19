@@ -203,7 +203,7 @@ internal sealed partial class PdfWriter
                     currentLine.Add(seg with { Text = wordBuffer.ToString() });
                     wordBuffer.Clear();
                     result.Add(currentLine);
-                    currentLine = [];
+                    currentLine = new List<TextSegment>(currentLine.Count);
                     currentWidth = 0;
                     word = word.Substring(cut + 1);
                     wordWidth = MeasureText(word, seg.Font, seg.FontSize);
@@ -221,7 +221,7 @@ internal sealed partial class PdfWriter
                     }
 
                     result.Add(currentLine);
-                    currentLine = [];
+                    currentLine = new List<TextSegment>(currentLine.Count);
                     currentWidth = 0;
                     neededWidth = wordWidth;
                     separator = false;
