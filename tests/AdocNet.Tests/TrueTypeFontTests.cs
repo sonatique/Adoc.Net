@@ -1,5 +1,6 @@
 using AdocNet.Converters.Pdf;
 using AdocNet.Parser;
+using System.Buffers.Binary;
 using System.Text;
 
 namespace AdocNet.Tests;
@@ -90,6 +91,35 @@ public class TrueTypeFontTests
         Assert.That(subset[1], Is.EqualTo(1));
         Assert.That(subset[2], Is.EqualTo(0));
         Assert.That(subset[3], Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Subsetter_writes_post_table_without_glyph_names()
+    {
+        // A copied version 2.0 post table lists every glyph of the original font,
+        // which no longer matches the subset's maxp numGlyphs.
+        var path = RepoFile("src", "AdocNet.Converters.Pdf", "Resources", "notoserif-regular-latin.ttf");
+        var font = TrueTypeFont.Parse(File.ReadAllBytes(path));
+        byte[] subset = TrueTypeSubsetter.Subset(font, new HashSet<int> { 'A', 'b' }).FontData;
+
+        var (postOffset, postLength) = FindTable(subset, "post");
+        Assert.That(postLength, Is.EqualTo(32));
+        Assert.That(BinaryPrimitives.ReadUInt32BigEndian(subset.AsSpan(postOffset)), Is.EqualTo(0x00030000u));
+        var (maxpOffset, _) = FindTable(subset, "maxp");
+        Assert.That(BinaryPrimitives.ReadUInt16BigEndian(subset.AsSpan(maxpOffset + 4)), Is.EqualTo(3));
+    }
+
+    private static (int Offset, int Length) FindTable(byte[] font, string tag)
+    {
+        int numTables = BinaryPrimitives.ReadUInt16BigEndian(font.AsSpan(4));
+        for (int i = 0; i < numTables; i++)
+        {
+            int entry = 12 + i * 16;
+            if (Encoding.ASCII.GetString(font, entry, 4) == tag)
+                return ((int)BinaryPrimitives.ReadUInt32BigEndian(font.AsSpan(entry + 8)),
+                        (int)BinaryPrimitives.ReadUInt32BigEndian(font.AsSpan(entry + 12)));
+        }
+        throw new AssertionException($"No {tag} table");
     }
 
     // ── Unicode rendering tests ──────────────────────────────────────
