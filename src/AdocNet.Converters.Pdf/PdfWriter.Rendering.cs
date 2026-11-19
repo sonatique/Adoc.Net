@@ -380,7 +380,8 @@ internal sealed partial class PdfWriter
 
     // ── Final PDF assembly ──────────────────────────────────────────────
 
-    internal byte[] ToBytes()
+    /// <summary>Completes the document and writes the PDF file to <paramref name="output"/>.</summary>
+    internal void WriteTo(Stream output)
     {
         // Ensure last page is finished
         if (_currentStream is not null)
@@ -445,48 +446,95 @@ internal sealed partial class PdfWriter
         int infoId = AllocObject(new PdfObject(infoDict));
 
         // Serialize
-        using var ms = new MemoryStream();
+        var file = new AsciiOutput(output);
         // Tagged output declares PDF 1.7 (PDF/UA-1 is based on ISO 32000-1).
         var fileHeader = (byte[])PdfHeader.Clone();
         if (Tagged) fileHeader[7] = (byte)'7';
-        ms.Write(fileHeader);
+        file.Write(fileHeader);
 
         var offsets = new long[_objects.Count];
         for (int i = 0; i < _objects.Count; i++)
         {
-            offsets[i] = ms.Position;
+            offsets[i] = file.Position;
             var obj = _objects[i];
+            file.Write($"{i + 1} 0 obj\n");
+            file.Write(obj.Content);
 
             if (obj.BinaryStream is not null)
             {
-                var header = $"{i + 1} 0 obj\n{obj.Content}\nstream\n";
-                ms.Write(Encoding.ASCII.GetBytes(header));
-                ms.Write(obj.BinaryStream);
-                ms.Write(Encoding.ASCII.GetBytes("\nendstream\nendobj\n"));
+                file.Write("\nstream\n");
+                file.Write(obj.BinaryStream);
+                file.Write("\nendstream\nendobj\n");
             }
             else
             {
-                var line = $"{i + 1} 0 obj\n{obj.Content}\nendobj\n";
-                ms.Write(Encoding.ASCII.GetBytes(line));
+                if (obj.TextStream is not null)
+                {
+                    file.Write(obj.TextStream);
+                    file.Write("endstream");
+                }
+                file.Write("\nendobj\n");
             }
         }
 
         // Cross-reference table
-        long xrefOffset = ms.Position;
-        ms.Write(Encoding.ASCII.GetBytes($"xref\n0 {_objects.Count + 1}\n"));
-        ms.Write(Encoding.ASCII.GetBytes("0000000000 65535 f \n"));
+        long xrefOffset = file.Position;
+        file.Write($"xref\n0 {_objects.Count + 1}\n");
+        file.Write("0000000000 65535 f \n");
         foreach (var offset in offsets)
-        {
-            ms.Write(Encoding.ASCII.GetBytes(
-                $"{offset:D10} 00000 n \n"));
-        }
+            file.Write($"{offset:D10} 00000 n \n");
 
         // Trailer
-        ms.Write(Encoding.ASCII.GetBytes(
+        file.Write(
             $"trailer\n<< /Size {_objects.Count + 1} /Root {catalogId} 0 R /Info {infoId} 0 R >>\n" +
-            $"startxref\n{xrefOffset}\n%%EOF\n"));
+            $"startxref\n{xrefOffset}\n%%EOF\n");
+        file.Flush();
+    }
 
-        return ms.ToArray();
+    /// <summary>
+    /// Writes text encoded as <see cref="Encoding.ASCII"/> (other characters become '?') and raw
+    /// bytes to a stream through one reused buffer, counting the bytes written.
+    /// </summary>
+    private sealed class AsciiOutput
+    {
+        private const int ChunkChars = 16 * 1024;
+        private readonly Stream _stream;
+        private readonly Encoder _encoder = Encoding.ASCII.GetEncoder();
+        private readonly char[] _chars = new char[ChunkChars];
+        private readonly byte[] _buffer = new byte[4 * ChunkChars];
+        private int _count;
+
+        internal AsciiOutput(Stream stream) => _stream = stream;
+
+        internal long Position { get; private set; }
+
+        internal void Write(string text)
+        {
+            for (int start = 0; start < text.Length; start += ChunkChars)
+            {
+                int n = Math.Min(ChunkChars, text.Length - start);
+                // At most one byte per char, plus a high surrogate held back from the previous chunk.
+                if (_buffer.Length - _count < n + 1) Flush();
+                text.CopyTo(start, _chars, 0, n);
+                int written = _encoder.GetBytes(_chars, 0, n, _buffer, _count, flush: start + n == text.Length);
+                _count += written;
+                Position += written;
+            }
+        }
+
+        internal void Write(byte[] data)
+        {
+            Flush();
+            _stream.Write(data, 0, data.Length);
+            Position += data.Length;
+        }
+
+        internal void Flush()
+        {
+            if (_count == 0) return;
+            _stream.Write(_buffer, 0, _count);
+            _count = 0;
+        }
     }
 
     /// <summary>

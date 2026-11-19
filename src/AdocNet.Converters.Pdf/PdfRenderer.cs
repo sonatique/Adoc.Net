@@ -447,8 +447,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
         capturedPages = writer.CaptureDestinationPages();
         if (output is null) return;
-        byte[] bytes = writer.ToBytes();
-        output.Write(bytes, 0, bytes.Length);
+        writer.WriteTo(output);
         if (_recorder is not null)
             _recordedLayout = _recorder.Build(pdfOptions.PageWidth, pdfOptions.PageHeight, writer.PageCount, writer.PageNumberOffset);
     }

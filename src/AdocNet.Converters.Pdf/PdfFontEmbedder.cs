@@ -11,7 +11,7 @@ internal static class PdfFontEmbedder
 {
     /// <summary>
     /// Embeds all registered TrueType fonts into PDF objects, filling placeholder entries.
-    /// Must be called during ToBytes() after all text has been written.
+    /// Must be called during WriteTo() after all text has been written.
     /// </summary>
     internal static void EmbedFonts(
         Dictionary<string, TrueTypeFont> embeddedFonts,

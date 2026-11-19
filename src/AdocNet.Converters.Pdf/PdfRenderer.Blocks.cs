@@ -1418,7 +1418,7 @@ public sealed partial class PdfRenderer
 
             case CrossReferenceInlineNode xref:
                 var xrefLabel = XrefText(xref);
-                // Use internal link for cross-references (resolved in ToBytes)
+                // Use internal link for cross-references (resolved in WriteTo)
                 segments.Add(new TextSegment(xrefLabel, defaultFont, defaultFontSize,
                     $"#internal#{xref.Target}"));
                 break;
