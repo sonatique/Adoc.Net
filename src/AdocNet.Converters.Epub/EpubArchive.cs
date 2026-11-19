@@ -122,7 +122,7 @@ internal sealed class EpubArchive
         if (entry.ResourceName is not null)
         {
             resource = typeof(EpubArchive).Assembly.GetManifestResourceStream(entry.ResourceName);
-            if (resource is null) return; // resource missing — skip silently
+            if (resource is null) return; // a missing resource is skipped
         }
         using (resource)
         {
