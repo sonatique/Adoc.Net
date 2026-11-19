@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.38] - 2026-11-19
+
+### Fixed
+
+- **PDF font subsets**: the subsetter writes the `post` table as version 3.0
+  (no glyph names). The copied version 2.0 table still counted the full font's
+  glyphs, which veraPDF reported as an incorrect embedded font program.
+
 ## [1.0.37] - 2026-11-17
 
 ### Added

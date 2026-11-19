@@ -14,7 +14,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.37</Version>
+    <Version>1.0.38</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) 2026 sylvain@sonatique.net</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -23,7 +23,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;docx;word;import;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.37: accessible PDF output (PDF/UA-1, ISO 14289-1) with PdfRenderOptions.Accessibility or :pdf-ua:: tagged structure, artifacts, document language, embedded fonts (bundled Noto Serif and M+ 1mn), validated with veraPDF in CI. See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.38: embedded font subsets write the 'post' table as version 3.0, so its glyph count no longer contradicts maxp (veraPDF reported the font program as incorrect). See CHANGELOG.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->
