@@ -94,6 +94,14 @@ jobs:
               echo ""
             fi
 
+            # Performance
+            PERFS=$(git log "$RANGE" --oneline --grep="^perf[(:]" --format="- %s" 2>/dev/null)
+            if [ -n "$PERFS" ]; then
+              echo "### Performance"
+              echo "$PERFS"
+              echo ""
+            fi
+
             # Docs
             DOCS=$(git log "$RANGE" --oneline --grep="^docs" --format="- %s" 2>/dev/null)
             if [ -n "$DOCS" ]; then
