@@ -57,6 +57,8 @@ internal sealed partial class PdfWriter
 
     // ── Current page state ──────────────────────────────────────────────
     private StringBuilder? _currentStream;
+    // Content builder of the open page, cleared and reused for each page.
+    private readonly StringBuilder _pageStreamBuffer = new();
     private float _cursorY;
     private float _pageWidth;
     private float _pageHeight;
@@ -590,7 +592,7 @@ internal sealed partial class PdfWriter
 
     internal void StartPage()
     {
-        _currentStream = new StringBuilder();
+        _currentStream = _pageStreamBuffer.Clear();
         // First text baseline starts one body-leading below the top margin so text ascender
         // doesn't climb above the top margin into the header area. Matches Asciidoctor PDF.
         _cursorY = _pageHeight - _marginTop - (FirstLineOffset ?? BodyLeading);
@@ -737,7 +739,7 @@ internal sealed partial class PdfWriter
         {
             _currentPageNumber = page.PageNumber;
             CurrentSectionTitle = page.SectionTitle;
-            _currentStream = new StringBuilder();
+            _currentStream = _pageStreamBuffer.Clear();
             BeginArtifact();
             AppendHeaderFooter();
             EndArtifact();
@@ -966,7 +968,7 @@ internal sealed partial class PdfWriter
     internal void WriteJustifiedText(string text, string font, float fontSize, float x, float y, float wordSpacing)
     {
         MarkContent();
-        RecordText(text, font, fontSize, x, y, wordSpacing * text.Count(c => c == ' '), null);
+        RecordText(text, font, fontSize, x, y, wordSpacing * CountSpaces(text), null);
         var runs = SplitFontRuns(text, font);
         _currentStream!.Append("BT\n");
 

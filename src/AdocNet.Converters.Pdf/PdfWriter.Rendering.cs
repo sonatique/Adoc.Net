@@ -718,6 +718,7 @@ internal sealed partial class PdfWriter
 
     private static string EscapePdfString(string text)
     {
+        if (!NeedsEscaping(text)) return text;
         var sb = new StringBuilder(text.Length);
         // Iterate by codepoint so a non-BMP character (a surrogate pair) becomes a
         // single missing-glyph indicator rather than two '?'s (issue #72).
@@ -748,6 +749,22 @@ internal sealed partial class PdfWriter
             }
         }
         return sb.ToString();
+    }
+
+    /// <summary>False when every character is ASCII other than '(', ')' and '\', so the text is its own escaped form.</summary>
+    private static bool NeedsEscaping(string text)
+    {
+        foreach (var ch in text)
+            if (ch >= 128 || ch is '(' or ')' or '\\') return true;
+        return false;
+    }
+
+    private static int CountSpaces(string text)
+    {
+        int count = 0;
+        foreach (var ch in text)
+            if (ch == ' ') count++;
+        return count;
     }
 
     private static string MapUnicodeToWinAnsi(char ch)

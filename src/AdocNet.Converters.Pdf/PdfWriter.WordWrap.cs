@@ -148,6 +148,7 @@ internal sealed partial class PdfWriter
         var result = new List<List<TextSegment>>();
         var currentLine = new List<TextSegment>();
         float currentWidth = 0;
+        var wordBuffer = new StringBuilder();
 
         foreach (var seg in segments)
         {
@@ -155,7 +156,7 @@ internal sealed partial class PdfWriter
 
             // Split segment text into words for word-level wrapping
             var words = seg.Text.Split(' ');
-            var wordBuffer = new StringBuilder();
+            wordBuffer.Clear();
 
             for (int i = 0; i < words.Length; i++)
             {
@@ -410,7 +411,7 @@ internal sealed partial class PdfWriter
                 var c = activeColor.Value;
                 _currentStream.Append($"{FmtColor(c.R)} {FmtColor(c.G)} {FmtColor(c.B)} rg\n");
             }
-            RecordText(seg.Text, seg.Font, seg.FontSize, currentX, y + rise, isMonospaceFnt ? 0 : extraSpacing * seg.Text.Count(c => c == ' '), activeColor);
+            RecordText(seg.Text, seg.Font, seg.FontSize, currentX, y + rise, isMonospaceFnt ? 0 : extraSpacing * CountSpaces(seg.Text), activeColor);
             if (_embeddedFonts.TryGetValue(seg.Font, out var ttFont))
             {
                 TrackCodePoints(seg.Font, seg.Text);

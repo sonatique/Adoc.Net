@@ -1329,7 +1329,7 @@ public sealed partial class PdfRenderer
         IReadOnlyList<InlineNode> inlines, string fallbackText,
         string defaultFont, float defaultFontSize, FootnoteState footnotes)
     {
-        var segments = new List<TextSegment>();
+        var segments = new List<TextSegment>(Math.Max(inlines.Count, 1));
 
         if (inlines.Count > 0)
         {
