@@ -14,7 +14,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.38</Version>
+    <Version>1.0.39</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) 2026 sylvain@sonatique.net</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -23,7 +23,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;docx;word;import;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.38: embedded font subsets write the 'post' table as version 3.0, so its glyph count no longer contradicts maxp (veraPDF reported the font program as incorrect). See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.39: faster rendering with output unchanged byte for byte: PDF 2.3x to 3x faster with a third of the allocations, EPUB no longer recompresses its bundled assets (about 35 ms less per file), PdfRenderer.LayoutPages stops once the layout is complete, and the PDF-following Avalonia preview costs time linear in the length of blocks spanning pages. See CHANGELOG.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->

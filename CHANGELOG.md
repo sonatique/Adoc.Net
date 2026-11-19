@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.39] - 2026-11-19
+
 ### Performance
 
 Output is unchanged byte for byte. Times are for a generated 640 KB document
