@@ -238,6 +238,77 @@ public class PagedAvaloniaRendererTests
         }
     }
 
+    private static readonly string LongListing =
+        "= Doc\n\n[source,text]\n----\n" +
+        string.Join("\n", Enumerable.Range(0, 220).Select(i => $"listing line {i}")) + "\n----\n";
+
+    private static readonly string LongList =
+        "= Doc\n\n" + string.Join("\n", Enumerable.Range(0, 160).Select(i => $"* list item {i}")) + "\n";
+
+    private static readonly string LongTable =
+        "= Doc\n\n|===\n| Name | Value\n\n" +
+        string.Join("\n", Enumerable.Range(0, 140).Select(i => $"| row {i} | value {i}")) + "\n|===\n";
+
+    /// <summary>
+    /// Text lines wholly inside the window of <paramref name="piece"/> that its page shows:
+    /// from its upward shift, as tall as its clipping parent (or the whole piece when not clipped).
+    /// </summary>
+    private static IEnumerable<(double Top, double Left, string Text)> ShownLines(StackPanel piece)
+    {
+        double shift = piece.RenderTransform is global::Avalonia.Media.TranslateTransform t ? -t.Y : 0;
+        // Re-parenting reset the layout: lay the piece out again, alone, to read its lines.
+        piece.Measure(new global::Avalonia.Size(piece.Width, double.PositiveInfinity));
+        piece.Arrange(new global::Avalonia.Rect(piece.DesiredSize));
+        double height = piece.Parent is Border { ClipToBounds: true } clip ? clip.Height : piece.DesiredSize.Height;
+        return TextLines(piece).Where(l => l.Top >= shift - 0.01 && l.Bottom <= shift + height + 0.01)
+            .Select(l => (l.Top - shift, l.Left, l.Text));
+    }
+
+    private static IEnumerable<(double Top, double Bottom, double Left, string Text)> TextLines(global::Avalonia.Visual root)
+    {
+        foreach (var textBlock in global::Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(root).OfType<TextBlock>())
+        {
+            if (global::Avalonia.VisualExtensions.TranslatePoint(textBlock, new global::Avalonia.Point(0, textBlock.Padding.Top), root) is not { } origin) continue;
+            double top = origin.Y;
+            foreach (var line in textBlock.TextLayout.TextLines)
+            {
+                var text = string.Concat(line.TextRuns.Select(r => r.Text.ToString())).TrimEnd('\r', '\n');
+                yield return (top, top + line.Height, origin.X, text);
+                top += line.Height;
+            }
+        }
+    }
+
+    [AvaloniaTest]
+    [TestCase("listing")]
+    [TestCase("list")]
+    [TestCase("table")]
+    public void A_block_spanning_several_pages_shows_each_of_its_lines_once(string kind)
+    {
+        var (layout, pdf, options) = Themed(kind switch { "listing" => LongListing, "list" => LongList, _ => LongTable },
+            new PdfRenderOptions());
+        var block = layout.Children.Single(b => b is not AdocNet.Layout.HeadingLayout);
+
+        var pages = new PagedAvaloniaRenderer().RenderPages(layout, pdf, options);
+
+        var shown = pages
+            .Select(page => Pieces(page).Where(p => Equals(p.Tag, block.Source)).ToList())
+            .Where(pieces => pieces.Count > 0)
+            .SelectMany(pieces => pieces.SelectMany(ShownLines).OrderBy(l => l.Top).ThenBy(l => l.Left))
+            .Select(l => l.Text)
+            .Where(text => text.Length > 0)
+            .ToList();
+        var whole = new StackPanel { Width = options.PageWidth - options.PageMargin.Left - options.PageMargin.Right };
+        whole.Children.Add(new AvaloniaRenderer().Render(block)!);
+        whole.Measure(new global::Avalonia.Size(whole.Width, double.PositiveInfinity));
+        whole.Arrange(new global::Avalonia.Rect(whole.DesiredSize));
+        var expected = TextLines(whole).OrderBy(l => l.Top).ThenBy(l => l.Left).Select(l => l.Text).Where(text => text.Length > 0).ToList();
+
+        Assert.That(pages.Count(page => Pieces(page).Any(p => Equals(p.Tag, block.Source))), Is.GreaterThan(2), "the block spans several pages");
+        Assert.That(expected, Has.Count.GreaterThan(100));
+        Assert.That(shown, Is.EqualTo(expected), "every line shown once, in order");
+    }
+
     [AvaloniaTest]
     public void Pdf_pages_add_a_page_rather_than_drop_text_that_runs_longer_on_screen()
     {
