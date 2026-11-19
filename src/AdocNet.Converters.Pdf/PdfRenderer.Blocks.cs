@@ -1329,7 +1329,7 @@ public sealed partial class PdfRenderer
         IReadOnlyList<InlineNode> inlines, string fallbackText,
         string defaultFont, float defaultFontSize, FootnoteState footnotes)
     {
-        var segments = new List<TextSegment>();
+        var segments = new List<TextSegment>(Math.Max(inlines.Count, 1));
 
         if (inlines.Count > 0)
         {
@@ -1418,7 +1418,7 @@ public sealed partial class PdfRenderer
 
             case CrossReferenceInlineNode xref:
                 var xrefLabel = XrefText(xref);
-                // Use internal link for cross-references (resolved in ToBytes)
+                // Use internal link for cross-references (resolved in WriteTo)
                 segments.Add(new TextSegment(xrefLabel, defaultFont, defaultFontSize,
                     $"#internal#{xref.Target}"));
                 break;

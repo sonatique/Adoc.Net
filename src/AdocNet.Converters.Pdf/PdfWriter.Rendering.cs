@@ -371,23 +371,25 @@ internal sealed partial class PdfWriter
         if (font == "F4" || font == "F5" || font == "F6" || font == "F7")
             return text.Length * fontSize * HelveticaMetrics.CourierWidth;
 
-        float total = 0;
-        foreach (var ch in text)
-            total += HelveticaMetrics.MeasureChar(ch, font, fontSize);
-
-        return total;
+        return HelveticaMetrics.MeasureHelvetica(text, font, fontSize);
     }
 
     // ── Final PDF assembly ──────────────────────────────────────────────
 
-    internal byte[] ToBytes()
+    /// <summary>Finishes the last page and writes the running content: the page layout is then complete.</summary>
+    internal void FinishLayout()
     {
-        // Ensure last page is finished
         if (_currentStream is not null)
             FinishPage();
 
         // Running content needs the final page count; write it before the fonts are subset.
         WriteDeferredRunningContent();
+    }
+
+    /// <summary>Completes the document and writes the PDF file to <paramref name="output"/>.</summary>
+    internal void WriteTo(Stream output)
+    {
+        FinishLayout();
 
         // Embed registered TrueType fonts (fills placeholder objects)
         EmbedRegisteredFonts();
@@ -445,48 +447,95 @@ internal sealed partial class PdfWriter
         int infoId = AllocObject(new PdfObject(infoDict));
 
         // Serialize
-        using var ms = new MemoryStream();
+        var file = new AsciiOutput(output);
         // Tagged output declares PDF 1.7 (PDF/UA-1 is based on ISO 32000-1).
         var fileHeader = (byte[])PdfHeader.Clone();
         if (Tagged) fileHeader[7] = (byte)'7';
-        ms.Write(fileHeader);
+        file.Write(fileHeader);
 
         var offsets = new long[_objects.Count];
         for (int i = 0; i < _objects.Count; i++)
         {
-            offsets[i] = ms.Position;
+            offsets[i] = file.Position;
             var obj = _objects[i];
+            file.Write($"{i + 1} 0 obj\n");
+            file.Write(obj.Content);
 
             if (obj.BinaryStream is not null)
             {
-                var header = $"{i + 1} 0 obj\n{obj.Content}\nstream\n";
-                ms.Write(Encoding.ASCII.GetBytes(header));
-                ms.Write(obj.BinaryStream);
-                ms.Write(Encoding.ASCII.GetBytes("\nendstream\nendobj\n"));
+                file.Write("\nstream\n");
+                file.Write(obj.BinaryStream);
+                file.Write("\nendstream\nendobj\n");
             }
             else
             {
-                var line = $"{i + 1} 0 obj\n{obj.Content}\nendobj\n";
-                ms.Write(Encoding.ASCII.GetBytes(line));
+                if (obj.TextStream is not null)
+                {
+                    file.Write(obj.TextStream);
+                    file.Write("endstream");
+                }
+                file.Write("\nendobj\n");
             }
         }
 
         // Cross-reference table
-        long xrefOffset = ms.Position;
-        ms.Write(Encoding.ASCII.GetBytes($"xref\n0 {_objects.Count + 1}\n"));
-        ms.Write(Encoding.ASCII.GetBytes("0000000000 65535 f \n"));
+        long xrefOffset = file.Position;
+        file.Write($"xref\n0 {_objects.Count + 1}\n");
+        file.Write("0000000000 65535 f \n");
         foreach (var offset in offsets)
-        {
-            ms.Write(Encoding.ASCII.GetBytes(
-                $"{offset:D10} 00000 n \n"));
-        }
+            file.Write($"{offset:D10} 00000 n \n");
 
         // Trailer
-        ms.Write(Encoding.ASCII.GetBytes(
+        file.Write(
             $"trailer\n<< /Size {_objects.Count + 1} /Root {catalogId} 0 R /Info {infoId} 0 R >>\n" +
-            $"startxref\n{xrefOffset}\n%%EOF\n"));
+            $"startxref\n{xrefOffset}\n%%EOF\n");
+        file.Flush();
+    }
 
-        return ms.ToArray();
+    /// <summary>
+    /// Writes text encoded as <see cref="Encoding.ASCII"/> (other characters become '?') and raw
+    /// bytes to a stream through one reused buffer, counting the bytes written.
+    /// </summary>
+    private sealed class AsciiOutput
+    {
+        private const int ChunkChars = 16 * 1024;
+        private readonly Stream _stream;
+        private readonly Encoder _encoder = Encoding.ASCII.GetEncoder();
+        private readonly char[] _chars = new char[ChunkChars];
+        private readonly byte[] _buffer = new byte[4 * ChunkChars];
+        private int _count;
+
+        internal AsciiOutput(Stream stream) => _stream = stream;
+
+        internal long Position { get; private set; }
+
+        internal void Write(string text)
+        {
+            for (int start = 0; start < text.Length; start += ChunkChars)
+            {
+                int n = Math.Min(ChunkChars, text.Length - start);
+                // At most one byte per char, plus a high surrogate held back from the previous chunk.
+                if (_buffer.Length - _count < n + 1) Flush();
+                text.CopyTo(start, _chars, 0, n);
+                int written = _encoder.GetBytes(_chars, 0, n, _buffer, _count, flush: start + n == text.Length);
+                _count += written;
+                Position += written;
+            }
+        }
+
+        internal void Write(byte[] data)
+        {
+            Flush();
+            _stream.Write(data, 0, data.Length);
+            Position += data.Length;
+        }
+
+        internal void Flush()
+        {
+            if (_count == 0) return;
+            _stream.Write(_buffer, 0, _count);
+            _count = 0;
+        }
     }
 
     /// <summary>
@@ -670,6 +719,7 @@ internal sealed partial class PdfWriter
 
     private static string EscapePdfString(string text)
     {
+        if (!NeedsEscaping(text)) return text;
         var sb = new StringBuilder(text.Length);
         // Iterate by codepoint so a non-BMP character (a surrogate pair) becomes a
         // single missing-glyph indicator rather than two '?'s (issue #72).
@@ -702,6 +752,22 @@ internal sealed partial class PdfWriter
         return sb.ToString();
     }
 
+    /// <summary>False when every character is ASCII other than '(', ')' and '\', so the text is its own escaped form.</summary>
+    private static bool NeedsEscaping(string text)
+    {
+        foreach (var ch in text)
+            if (ch >= 128 || ch is '(' or ')' or '\\') return true;
+        return false;
+    }
+
+    private static int CountSpaces(string text)
+    {
+        int count = 0;
+        foreach (var ch in text)
+            if (ch == ' ') count++;
+        return count;
+    }
+
     private static string MapUnicodeToWinAnsi(char ch)
     {
         // Map common Unicode characters to WinAnsi equivalents
@@ -722,19 +788,43 @@ internal sealed partial class PdfWriter
     }
 
     private static string Fmt(float value) =>
-        value.ToString("0.##", CultureInfo.InvariantCulture);
+        (t_fmtCache ??= new FloatFormatCache("0.##")).Format(value);
 
     // Colour components need ~1/255 resolution; two decimals shifted #909090 to #8f8f8f.
     private static string FmtColor(float value) =>
-        value.ToString("0.####", CultureInfo.InvariantCulture);
+        (t_fmtColorCache ??= new FloatFormatCache("0.####")).Format(value);
+
+    [ThreadStatic] private static FloatFormatCache? t_fmtCache;
+    [ThreadStatic] private static FloatFormatCache? t_fmtColorCache;
+
+    /// <summary>
+    /// Remembers recent results of formatting floats with one format string: content streams
+    /// repeat the same coordinates, sizes and colours, and custom numeric formats are slow.
+    /// Direct-mapped on the exact bits of the value, so a hit returns the string
+    /// <see cref="float.ToString(string, IFormatProvider)"/> gives for that value.
+    /// </summary>
+    private sealed class FloatFormatCache(string format)
+    {
+        private const int SlotBits = 10;
+        private readonly long[] _keys = new long[1 << SlotBits];
+        private readonly string?[] _values = new string?[1 << SlotBits];
+
+        internal string Format(float value)
+        {
+            long bits = BitConverter.DoubleToInt64Bits(value);
+            int slot = (int)((ulong)(bits * -7046029254386353131L) >> (64 - SlotBits));
+            if (_values[slot] is { } cached && _keys[slot] == bits) return cached;
+            var text = value.ToString(format, CultureInfo.InvariantCulture);
+            _keys[slot] = bits;
+            _values[slot] = text;
+            return text;
+        }
+    }
 
     // ── Embedded font helpers ───────────────────────────────────────────
 
     private void TrackCodePoints(string fontKey, string text) =>
         PdfFontEmbedder.TrackCodePoints(_usedCodePoints, fontKey, text);
-
-    private static string EncodeTextAsGlyphIds(string text, TrueTypeFont font) =>
-        PdfFontEmbedder.EncodeTextAsGlyphIds(text, font);
 
     /// <summary>
     /// Appends a show-text operator for an embedded font: <c>&lt;glyphs&gt; Tj</c>, or with
@@ -746,7 +836,9 @@ internal sealed partial class PdfWriter
         if (Tagged) text = Showable(text, font);
         if (!Kerning || !font.HasKerning || text.Length < 2)
         {
-            _currentStream!.Append('<').Append(EncodeTextAsGlyphIds(text, font)).Append("> Tj\n");
+            _currentStream!.Append('<');
+            PdfFontEmbedder.AppendGlyphIds(_currentStream, text, 0, text.Length, font);
+            _currentStream.Append("> Tj\n");
             return;
         }
         var sb = _currentStream!;
@@ -756,11 +848,15 @@ internal sealed partial class PdfWriter
         {
             short kern = font.GetKerning(font.GetGlyphId(text[i - 1]), font.GetGlyphId(text[i]));
             if (kern == 0) continue;
-            sb.Append('<').Append(EncodeTextAsGlyphIds(text.Substring(start, i - start), font)).Append('>');
+            sb.Append('<');
+            PdfFontEmbedder.AppendGlyphIds(sb, text, start, i, font);
+            sb.Append('>');
             sb.Append(' ').Append(Fmt(-kern * 1000f / font.UnitsPerEm)).Append(' ');
             start = i;
         }
-        sb.Append('<').Append(EncodeTextAsGlyphIds(text.Substring(start), font)).Append(">] TJ\n");
+        sb.Append('<');
+        PdfFontEmbedder.AppendGlyphIds(sb, text, start, text.Length, font);
+        sb.Append(">] TJ\n");
     }
 
     private void EmbedRegisteredFonts() =>

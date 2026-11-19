@@ -46,9 +46,26 @@ internal sealed class TrueTypeFont
         FontData = fontData;
         _cmapTable = cmapTable;
         _glyphWidths = glyphWidths;
+
+        _lowGlyphIds = new ushort[LowCodePointCount];
+        foreach (var kv in cmapTable)
+            if (kv.Key >= 0 && kv.Key < LowCodePointCount) _lowGlyphIds[kv.Key] = kv.Value;
+        _perMilleWidths = new int[glyphWidths.Count == 0 ? 0 : glyphWidths.Keys.Max() + 1];
+        for (int gid = 0; gid < _perMilleWidths.Length; gid++)
+            _perMilleWidths[gid] = PerMilleWidth((ushort)gid);
     }
 
-    public ushort GetGlyphId(int codePoint) => _cmapTable.GetValueOrDefault(codePoint);
+    // Flat copies of the lookups made for every measured or shown character.
+    private const int LowCodePointCount = 0x800;
+    private readonly ushort[] _lowGlyphIds;    // glyph id by codepoint, below LowCodePointCount
+    private readonly int[] _perMilleWidths;   // PerMilleWidth by glyph id
+
+    public ushort GetGlyphId(int codePoint) =>
+        (uint)codePoint < LowCodePointCount ? _lowGlyphIds[codePoint] : _cmapTable.GetValueOrDefault(codePoint);
+
+    // Widths in whole 1/1000 em, truncated: exactly what the embedded font's /W array
+    // tells the viewer (PdfFontEmbedder) and what Prawn measures with.
+    private int PerMilleWidth(ushort glyphId) => (int)(GetGlyphWidth(glyphId) * 1000.0 / UnitsPerEm);
 
     public int GetGlyphWidth(ushort glyphId) => _glyphWidths.GetValueOrDefault(glyphId, UnitsPerEm / 2);
 
@@ -74,13 +91,11 @@ internal sealed class TrueTypeFont
 
     private float MeasureUnkerned(string text, float fontSize)
     {
-        // Widths in whole 1/1000 em, truncated: exactly what the embedded font's /W array
-        // tells the viewer (PdfFontEmbedder) and what Prawn measures with.
         int total = 0;
         foreach (var ch in text)
         {
             var gid = GetGlyphId(ch);
-            total += (int)(GetGlyphWidth(gid) * 1000.0 / UnitsPerEm);
+            total += gid < _perMilleWidths.Length ? _perMilleWidths[gid] : PerMilleWidth(gid);
         }
         return total * fontSize / 1000f;
     }

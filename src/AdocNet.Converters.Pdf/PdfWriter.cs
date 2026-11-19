@@ -57,6 +57,11 @@ internal sealed partial class PdfWriter
 
     // ── Current page state ──────────────────────────────────────────────
     private StringBuilder? _currentStream;
+    // Content builder of the open page, cleared and reused for each page.
+    private readonly StringBuilder _pageStreamBuffer = new();
+
+    /// <summary>Only the layout is needed, the file is not written: finished pages drop their content.</summary>
+    internal bool LayoutOnly { get; set; }
     private float _cursorY;
     private float _pageWidth;
     private float _pageHeight;
@@ -590,7 +595,7 @@ internal sealed partial class PdfWriter
 
     internal void StartPage()
     {
-        _currentStream = new StringBuilder();
+        _currentStream = _pageStreamBuffer.Clear();
         // First text baseline starts one body-leading below the top margin so text ascender
         // doesn't climb above the top margin into the header area. Matches Asciidoctor PDF.
         _cursorY = _pageHeight - _marginTop - (FirstLineOffset ?? BodyLeading);
@@ -635,12 +640,11 @@ internal sealed partial class PdfWriter
         BeforeFinishPage?.Invoke();
 
         int? structParents = FinishPageTags();
-        var streamContent = _currentStream.ToString();
+        var streamContent = LayoutOnly ? "" : _currentStream.ToString();
         var streamBytes = Encoding.ASCII.GetByteCount(streamContent);
-        int streamObjId = AllocObject(new PdfObject(
-            $"<< /Length {streamBytes} >>\nstream\n{streamContent}endstream"));
+        int streamObjId = AllocObject(new PdfObject($"<< /Length {streamBytes} >>\nstream\n", TextStream: streamContent));
 
-        // Header/footer go in a second content stream, written in ToBytes once the page
+        // Header/footer go in a second content stream, written in WriteTo once the page
         // count is known ({page-count}); the page's state is captured now.
         int runningObjId = AllocPlaceholder();
         _deferredRunningContent.Add(new DeferredRunningContent(runningObjId, _currentPageNumber, CurrentSectionTitle));
@@ -665,10 +669,10 @@ internal sealed partial class PdfWriter
         }
         _currentAnnotations.Clear();
 
-        // Create internal link annotations (deferred — resolved in ToBytes)
+        // Create internal link annotations (deferred — resolved in WriteTo)
         foreach (var link in _currentInternalLinks)
         {
-            int annotId = AllocPlaceholder(); // will be filled in ToBytes
+            int annotId = AllocPlaceholder(); // will be filled in WriteTo
             int? structParent = null;
             if (Tagged && link.Owner is { } owner)
                 structParent = RegisterAnnotationOwner(owner, new AnnotRef(_currentPageNumber - 1) { ObjectId = annotId });
@@ -738,13 +742,13 @@ internal sealed partial class PdfWriter
         {
             _currentPageNumber = page.PageNumber;
             CurrentSectionTitle = page.SectionTitle;
-            _currentStream = new StringBuilder();
+            _currentStream = _pageStreamBuffer.Clear();
             BeginArtifact();
             AppendHeaderFooter();
             EndArtifact();
             var content = _currentStream.ToString();
             SetObject(page.ObjectId, new PdfObject(
-                $"<< /Length {Encoding.ASCII.GetByteCount(content)} >>\nstream\n{content}endstream"));
+                $"<< /Length {Encoding.ASCII.GetByteCount(content)} >>\nstream\n", TextStream: content));
         }
         if (Recorder is not null) Recorder.Capturing = false;
         _currentStream = null;
@@ -967,7 +971,7 @@ internal sealed partial class PdfWriter
     internal void WriteJustifiedText(string text, string font, float fontSize, float x, float y, float wordSpacing)
     {
         MarkContent();
-        RecordText(text, font, fontSize, x, y, wordSpacing * text.Count(c => c == ' '), null);
+        RecordText(text, font, fontSize, x, y, wordSpacing * CountSpaces(text), null);
         var runs = SplitFontRuns(text, font);
         _currentStream!.Append("BT\n");
 
@@ -1101,8 +1105,12 @@ internal sealed partial class PdfWriter
 
 }
 
-/// <summary>Raw PDF object content, optionally with a binary stream.</summary>
-internal readonly record struct PdfObject(string Content, byte[]? BinaryStream = null);
+/// <summary>
+/// An indirect object. <see cref="BinaryStream"/> or <see cref="TextStream"/> holds the data of a
+/// stream object: binary data is written after <c>stream</c> by the serializer, while for a text
+/// stream <see cref="Content"/> already ends with <c>stream</c> and its line break.
+/// </summary>
+internal readonly record struct PdfObject(string Content, byte[]? BinaryStream = null, string? TextStream = null);
 
 /// <summary>A link annotation to be added to a PDF page.</summary>
 internal record struct PdfAnnotation(float X, float Y, float Width, float Height, string Uri,
@@ -1112,7 +1120,7 @@ internal record struct PdfAnnotation(float X, float Y, float Width, float Height
 internal record struct PdfInternalLink(float X, float Y, float Width, float Height, string DestinationId,
     PdfWriter.StructElem? Owner = null, string? Contents = null);
 
-/// <summary>Deferred internal link — placeholder object ID + link data, resolved in ToBytes.</summary>
+/// <summary>Deferred internal link — placeholder object ID + link data, resolved in WriteTo.</summary>
 internal readonly record struct DeferredInternalLink(int PlaceholderObjId, PdfInternalLink Link, int? StructParent = null);
 
 /// <summary>A text segment with font and size info for mixed-style rendering.</summary>

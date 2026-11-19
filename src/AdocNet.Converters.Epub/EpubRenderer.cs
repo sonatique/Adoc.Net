@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Text;
 using System.Text.RegularExpressions;
 using AdocNet.Ast;
@@ -15,9 +14,6 @@ namespace AdocNet.Converters.Epub;
 /// </summary>
 public sealed class EpubRenderer : DocumentRendererBase
 {
-    private static readonly DateTimeOffset DeterministicTimestamp =
-        new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
-
     /// <inheritdoc />
     public override string Format => "epub";
 
@@ -75,8 +71,7 @@ public sealed class EpubRenderer : DocumentRendererBase
             BuildArticleChapter(doc, identifier, sectnumsEnabled, chapters, tocEntries);
         }
 
-        // Build EPUB ZIP archive
-        using var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true);
+        var archive = new EpubArchive();
 
         // :description: doc attribute → <dc:description> in OPF metadata.
         var description = doc.Attributes.TryGetValue("description", out var desc) && !string.IsNullOrWhiteSpace(desc)
@@ -93,6 +88,7 @@ public sealed class EpubRenderer : DocumentRendererBase
         WriteAssets(archive, (context.Options as EpubRenderOptions)?.CustomCss);
         foreach (var ch in chapters)
             WriteChapterXhtml(archive, ch);
+        archive.WriteTo(output);
     }
 
     /// <summary>
@@ -244,20 +240,10 @@ public sealed class EpubRenderer : DocumentRendererBase
         return sb.ToString();
     }
 
-    private static void WriteMimetype(ZipArchive archive)
-    {
-        var entry = archive.CreateEntry("mimetype", CompressionLevel.NoCompression);
-        entry.LastWriteTime = DeterministicTimestamp;
-        using var stream = entry.Open();
-#if !NETSTANDARD2_0
-        stream.Write("application/epub+zip"u8);
-#else
-        var mimeBytes = Encoding.ASCII.GetBytes("application/epub+zip");
-        stream.Write(mimeBytes, 0, mimeBytes.Length);
-#endif
-    }
+    private static void WriteMimetype(EpubArchive archive) =>
+        archive.AddStored("mimetype", Encoding.ASCII.GetBytes("application/epub+zip"));
 
-    private static void WriteContainerXml(ZipArchive archive)
+    private static void WriteContainerXml(EpubArchive archive)
     {
         WriteEntry(archive, "META-INF/container.xml",
             """
@@ -270,7 +256,7 @@ public sealed class EpubRenderer : DocumentRendererBase
             """);
     }
 
-    private static void WriteContentOpf(ZipArchive archive, string title, string? author, string language,
+    private static void WriteContentOpf(EpubArchive archive, string title, string? author, string language,
         string identifier, string? revdate, string? description, List<Chapter> chapters)
     {
         // Metadata field order matches asciidoctor-epub3 exactly (per the
@@ -351,7 +337,7 @@ public sealed class EpubRenderer : DocumentRendererBase
         WriteEntry(archive, "EPUB/package.opf", xml);
     }
 
-    private static void WriteNavXhtml(ZipArchive archive, string title, List<Chapter> chapters,
+    private static void WriteNavXhtml(EpubArchive archive, string title, List<Chapter> chapters,
         List<TocEntry> tocEntries)
     {
         // EPUB 3 navigation document. Structure mirrors asciidoctor-epub3:
@@ -406,7 +392,7 @@ public sealed class EpubRenderer : DocumentRendererBase
     /// in EPUB3 documents. Mirrors asciidoctor-epub3's nav structure: outer navPoint for
     /// the document title with one nested navPoint per top-level section.
     /// </summary>
-    private static void WriteTocNcx(ZipArchive archive, string title, string identifier, string language,
+    private static void WriteTocNcx(EpubArchive archive, string title, string identifier, string language,
         List<Chapter> chapters, List<TocEntry> tocEntries)
     {
         string firstChapterFile = chapters.Count > 0 ? chapters[0].FileName : "content.xhtml";
@@ -440,7 +426,7 @@ public sealed class EpubRenderer : DocumentRendererBase
     }
 
 
-    private static void WriteChapterXhtml(ZipArchive archive, Chapter chapter)
+    private static void WriteChapterXhtml(EpubArchive archive, Chapter chapter)
     {
         // Wrap chapter body in <section class="chapter"> with a <header> containing
         // the chapter title. Matches asciidoctor-epub3 structure so reader-side CSS
@@ -494,13 +480,7 @@ public sealed class EpubRenderer : DocumentRendererBase
         WriteEntry(archive, $"EPUB/{chapter.FileName}", xhtml);
     }
 
-    private static void WriteEntry(ZipArchive archive, string path, string content)
-    {
-        var entry = archive.CreateEntry(path, CompressionLevel.Optimal);
-        entry.LastWriteTime = DeterministicTimestamp;
-        using var stream = entry.Open();
-        stream.Write(Encoding.UTF8.GetBytes(content));
-    }
+    private static void WriteEntry(EpubArchive archive, string path, string content) => archive.Add(path, content);
 
     /// <summary>
     /// Writes all embedded asset resources (fonts, CSS, default avatar/headshot,
@@ -508,67 +488,62 @@ public sealed class EpubRenderer : DocumentRendererBase
     /// canonical paths. The resources are bundled with the assembly via
     /// &lt;EmbeddedResource&gt; in the csproj.
     /// </summary>
-    private static void WriteAssets(ZipArchive archive, string? customCss)
+    private static void WriteAssets(EpubArchive archive, string? customCss)
     {
-        // (assembly resource name, archive path) tuples. Resource names follow
-        // the .NET convention: {RootNamespace}.{folder}.{file}.
-        var assets = new (string ResourceName, string ArchivePath)[]
+        foreach (var (resourceName, archivePath) in BundledAssets)
         {
-            // Stylesheets — chapter XHTML references epub3.css; epub3-css3-only.css
-            // is loaded conditionally by readers that support media-query gates;
-            // epub3-fonts.css declares the @font-face rules for the embedded TTFs.
-            ("AdocNet.Converters.Epub.Resources.epub3.css",                       "EPUB/styles/epub3.css"),
-            ("AdocNet.Converters.Epub.Resources.epub3-css3-only.css",             "EPUB/styles/epub3-css3-only.css"),
-            ("AdocNet.Converters.Epub.Resources.epub3-fonts.css",                 "EPUB/styles/epub3-fonts.css"),
-
-            // Noto Serif body-text fonts (Latin subset).
-            ("AdocNet.Converters.Epub.Resources.notoserif-regular-latin.ttf",     "EPUB/fonts/notoserif-regular-latin.ttf"),
-            ("AdocNet.Converters.Epub.Resources.notoserif-italic-latin.ttf",      "EPUB/fonts/notoserif-italic-latin.ttf"),
-            ("AdocNet.Converters.Epub.Resources.notoserif-bold-latin.ttf",        "EPUB/fonts/notoserif-bold-latin.ttf"),
-            ("AdocNet.Converters.Epub.Resources.notoserif-bolditalic-latin.ttf",  "EPUB/fonts/notoserif-bolditalic-latin.ttf"),
-
-            // M+ 1p heading fonts (Latin subset).
-            ("AdocNet.Converters.Epub.Resources.mplus1p-regular-latin.ttf",       "EPUB/fonts/mplus1p-regular-latin.ttf"),
-            ("AdocNet.Converters.Epub.Resources.mplus1p-light-latin.ttf",         "EPUB/fonts/mplus1p-light-latin.ttf"),
-            ("AdocNet.Converters.Epub.Resources.mplus1p-bold-latin.ttf",          "EPUB/fonts/mplus1p-bold-latin.ttf"),
-
-            // M+ 1mn monospace + ASCII conums fallback.
-            ("AdocNet.Converters.Epub.Resources.mplus1mn-regular-ascii-conums.ttf","EPUB/fonts/mplus1mn-regular-ascii-conums.ttf"),
-            ("AdocNet.Converters.Epub.Resources.mplus1mn-italic-ascii.ttf",       "EPUB/fonts/mplus1mn-italic-ascii.ttf"),
-            ("AdocNet.Converters.Epub.Resources.mplus1mn-bold-ascii.ttf",         "EPUB/fonts/mplus1mn-bold-ascii.ttf"),
-            ("AdocNet.Converters.Epub.Resources.mplus1mn-bolditalic-ascii.ttf",   "EPUB/fonts/mplus1mn-bolditalic-ascii.ttf"),
-
-            // FontAwesome 5 Solid + assorted-icons supplementary glyphs.
-            ("AdocNet.Converters.Epub.Resources.awesome.fa-solid-900.ttf",        "EPUB/fonts/awesome/fa-solid-900.ttf"),
-            ("AdocNet.Converters.Epub.Resources.assorted-icons.ttf",              "EPUB/fonts/assorted-icons.ttf"),
-
-            // Default author avatar / chapter headshot (used when :author: has
-            // no explicit avatar override).
-            ("AdocNet.Converters.Epub.Resources.avatar.jpg",                      "EPUB/avatars/default.jpg"),
-            ("AdocNet.Converters.Epub.Resources.headshot.jpg",                    "EPUB/headshots/default.jpg"),
-
-            // iBooks-specific metadata: keeps the reader from substituting fonts.
-            ("AdocNet.Converters.Epub.Resources.com.apple.ibooks.display-options.xml",
-             "META-INF/com.apple.ibooks.display-options.xml"),
-        };
-
-        var asm = typeof(EpubRenderer).Assembly;
-        foreach (var (resourceName, archivePath) in assets)
-        {
-            using var resource = asm.GetManifestResourceStream(resourceName);
-            if (resource is null) continue; // resource missing — skip silently
-            var entry = archive.CreateEntry(archivePath, CompressionLevel.Optimal);
-            entry.LastWriteTime = DeterministicTimestamp;
-            using var stream = entry.Open();
-            resource.CopyTo(stream);
             // Custom CSS goes last in the main stylesheet so its rules win (cf. HtmlRenderOptions.CustomCss).
-            if (archivePath == "EPUB/styles/epub3.css" && !string.IsNullOrWhiteSpace(customCss))
-            {
-                var bytes = Encoding.UTF8.GetBytes("\n" + customCss + "\n");
-                stream.Write(bytes, 0, bytes.Length);
-            }
+            byte[]? appended = archivePath == "EPUB/styles/epub3.css" && !string.IsNullOrWhiteSpace(customCss)
+                ? Encoding.UTF8.GetBytes("\n" + customCss + "\n")
+                : null;
+            archive.AddResource(archivePath, resourceName, appended);
         }
     }
+
+    /// <summary>
+    /// Embedded asset resources (fonts, CSS, default avatar/headshot, iBooks display options) and
+    /// their asciidoctor-epub3 canonical paths in the archive, so manifest hrefs resolve. Resource
+    /// names follow the .NET convention: {RootNamespace}.{folder}.{file}.
+    /// </summary>
+    internal static readonly (string ResourceName, string ArchivePath)[] BundledAssets =
+    {
+        // Stylesheets — chapter XHTML references epub3.css; epub3-css3-only.css
+        // is loaded conditionally by readers that support media-query gates;
+        // epub3-fonts.css declares the @font-face rules for the embedded TTFs.
+        ("AdocNet.Converters.Epub.Resources.epub3.css",                       "EPUB/styles/epub3.css"),
+        ("AdocNet.Converters.Epub.Resources.epub3-css3-only.css",             "EPUB/styles/epub3-css3-only.css"),
+        ("AdocNet.Converters.Epub.Resources.epub3-fonts.css",                 "EPUB/styles/epub3-fonts.css"),
+
+        // Noto Serif body-text fonts (Latin subset).
+        ("AdocNet.Converters.Epub.Resources.notoserif-regular-latin.ttf",     "EPUB/fonts/notoserif-regular-latin.ttf"),
+        ("AdocNet.Converters.Epub.Resources.notoserif-italic-latin.ttf",      "EPUB/fonts/notoserif-italic-latin.ttf"),
+        ("AdocNet.Converters.Epub.Resources.notoserif-bold-latin.ttf",        "EPUB/fonts/notoserif-bold-latin.ttf"),
+        ("AdocNet.Converters.Epub.Resources.notoserif-bolditalic-latin.ttf",  "EPUB/fonts/notoserif-bolditalic-latin.ttf"),
+
+        // M+ 1p heading fonts (Latin subset).
+        ("AdocNet.Converters.Epub.Resources.mplus1p-regular-latin.ttf",       "EPUB/fonts/mplus1p-regular-latin.ttf"),
+        ("AdocNet.Converters.Epub.Resources.mplus1p-light-latin.ttf",         "EPUB/fonts/mplus1p-light-latin.ttf"),
+        ("AdocNet.Converters.Epub.Resources.mplus1p-bold-latin.ttf",          "EPUB/fonts/mplus1p-bold-latin.ttf"),
+
+        // M+ 1mn monospace + ASCII conums fallback.
+        ("AdocNet.Converters.Epub.Resources.mplus1mn-regular-ascii-conums.ttf","EPUB/fonts/mplus1mn-regular-ascii-conums.ttf"),
+        ("AdocNet.Converters.Epub.Resources.mplus1mn-italic-ascii.ttf",       "EPUB/fonts/mplus1mn-italic-ascii.ttf"),
+        ("AdocNet.Converters.Epub.Resources.mplus1mn-bold-ascii.ttf",         "EPUB/fonts/mplus1mn-bold-ascii.ttf"),
+        ("AdocNet.Converters.Epub.Resources.mplus1mn-bolditalic-ascii.ttf",   "EPUB/fonts/mplus1mn-bolditalic-ascii.ttf"),
+
+        // FontAwesome 5 Solid + assorted-icons supplementary glyphs.
+        ("AdocNet.Converters.Epub.Resources.awesome.fa-solid-900.ttf",        "EPUB/fonts/awesome/fa-solid-900.ttf"),
+        ("AdocNet.Converters.Epub.Resources.assorted-icons.ttf",              "EPUB/fonts/assorted-icons.ttf"),
+
+        // Default author avatar / chapter headshot (used when :author: has
+        // no explicit avatar override).
+        ("AdocNet.Converters.Epub.Resources.avatar.jpg",                      "EPUB/avatars/default.jpg"),
+        ("AdocNet.Converters.Epub.Resources.headshot.jpg",                    "EPUB/headshots/default.jpg"),
+
+        // iBooks-specific metadata: keeps the reader from substituting fonts.
+        ("AdocNet.Converters.Epub.Resources.com.apple.ibooks.display-options.xml",
+         "META-INF/com.apple.ibooks.display-options.xml"),
+    };
 
     /// <summary>
     /// Converts a parser-emitted date attribute (e.g. "2026-04-15" or
