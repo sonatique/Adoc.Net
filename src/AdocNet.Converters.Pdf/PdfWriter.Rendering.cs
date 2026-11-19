@@ -783,11 +783,38 @@ internal sealed partial class PdfWriter
     }
 
     private static string Fmt(float value) =>
-        value.ToString("0.##", CultureInfo.InvariantCulture);
+        (t_fmtCache ??= new FloatFormatCache("0.##")).Format(value);
 
     // Colour components need ~1/255 resolution; two decimals shifted #909090 to #8f8f8f.
     private static string FmtColor(float value) =>
-        value.ToString("0.####", CultureInfo.InvariantCulture);
+        (t_fmtColorCache ??= new FloatFormatCache("0.####")).Format(value);
+
+    [ThreadStatic] private static FloatFormatCache? t_fmtCache;
+    [ThreadStatic] private static FloatFormatCache? t_fmtColorCache;
+
+    /// <summary>
+    /// Remembers recent results of formatting floats with one format string: content streams
+    /// repeat the same coordinates, sizes and colours, and custom numeric formats are slow.
+    /// Direct-mapped on the exact bits of the value, so a hit returns the string
+    /// <see cref="float.ToString(string, IFormatProvider)"/> gives for that value.
+    /// </summary>
+    private sealed class FloatFormatCache(string format)
+    {
+        private const int SlotBits = 10;
+        private readonly long[] _keys = new long[1 << SlotBits];
+        private readonly string?[] _values = new string?[1 << SlotBits];
+
+        internal string Format(float value)
+        {
+            long bits = BitConverter.DoubleToInt64Bits(value);
+            int slot = (int)((ulong)(bits * -7046029254386353131L) >> (64 - SlotBits));
+            if (_values[slot] is { } cached && _keys[slot] == bits) return cached;
+            var text = value.ToString(format, CultureInfo.InvariantCulture);
+            _keys[slot] = bits;
+            _values[slot] = text;
+            return text;
+        }
+    }
 
     // ── Embedded font helpers ───────────────────────────────────────────
 
