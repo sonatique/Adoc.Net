@@ -134,10 +134,9 @@ public class LayoutBuilder
     private ListItemLayout BuildListItem(ListItemNode item)
     {
         // The item's source range starts at the list marker; the inline text
-        // begins after it. We don't have the marker width on the AST, so use
-        // the item start as origin: line numbers are exact, and columns are
-        // exact for items whose content begins at the marker column.
-        var inlines = BuildInlines(item.Inlines, item.Source.Start);
+        // begins at ContentStart, past the marker.
+        var origin = item.ContentStart.IsNone ? item.Source.Start : item.ContentStart;
+        var inlines = BuildInlines(item.Inlines, origin);
         var blocks = BuildBlocks(item.Children);
         return new ListItemLayout(inlines, blocks);
     }
@@ -237,15 +236,14 @@ public class LayoutBuilder
             if (child is DescriptionItemNode item)
             {
                 // The term begins at the item's source start; the description
-                // follows the `::` delimiter. We only have the item start, so
-                // both use it as origin — exact lines, exact term column, and
-                // best-effort description column.
+                // begins at DescriptionStart, past the `::` delimiter.
                 var origin = item.Source.Start;
                 var term = BuildInlines(item.TermInlines, origin);
                 if (term.Count == 0 && item.Terms.Count > 0 && !string.IsNullOrEmpty(item.Terms[0]))
                     term = new InlineLayout[] { new TextRun(item.Terms[0]) };
 
-                var desc = BuildInlines(item.DescriptionInlines, origin);
+                var desc = BuildInlines(item.DescriptionInlines,
+                    item.DescriptionStart.IsNone ? origin : item.DescriptionStart);
                 if (desc.Count == 0 && !string.IsNullOrEmpty(item.Description))
                     desc = new InlineLayout[] { new TextRun(item.Description) };
 

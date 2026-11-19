@@ -21,6 +21,12 @@ public sealed class DescriptionItemNode : BlockNode
 
     public required IReadOnlyList<InlineNode> DescriptionInlines { get; init; }
 
+    /// <summary>
+    /// Source position of the first character of <see cref="Description"/>.
+    /// <see cref="SourcePosition.None"/> when unknown.
+    /// </summary>
+    public SourcePosition DescriptionStart { get; set; } = SourcePosition.None;
+
     public override AstNodeKind Kind => AstNodeKind.DescriptionItem;
 
     public override IEnumerable<KeyValuePair<string, string>> GetProperties()

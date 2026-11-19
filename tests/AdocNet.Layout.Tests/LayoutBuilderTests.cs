@@ -556,6 +556,100 @@ public class LayoutBuilderTests
         Assert.That(boldInner.Source.Start.Column, Is.EqualTo(41));
     }
 
+    // ── Nested blocks carry absolute source ranges ──────────────────
+
+    private static SourceRange Range(int line, int startCol, int endCol) =>
+        new(new SourcePosition(line, startCol), new SourcePosition(line, endCol));
+
+    [Test]
+    public void List_continuation_paragraph_has_absolute_source()
+    {
+        var item = Build("Intro.\n\n* item\n+\nnested paragraph\n")
+            .Children.OfType<ListLayout>().Single().Items.Single();
+        var para = (ParagraphLayout)item.Blocks[0];
+        Assert.That(para.Source, Is.EqualTo(Range(5, 1, 16)));
+        Assert.That(para.Inlines.OfType<TextRun>().Single().Source, Is.EqualTo(Range(5, 1, 16)));
+    }
+
+    [TestCase("====")]
+    [TestCase("****")]
+    [TestCase("____")]
+    [TestCase("--")]
+    public void Paragraph_inside_compound_block_has_absolute_source(string delimiter)
+    {
+        var para = Build($"Intro.\n\n{delimiter}\nInside example.\n{delimiter}\n")
+            .Children.OfType<ParagraphLayout>().Last();
+        Assert.That(para.Source, Is.EqualTo(Range(4, 1, 15)));
+        Assert.That(para.Inlines.OfType<TextRun>().Single().Source, Is.EqualTo(Range(4, 1, 15)));
+    }
+
+    [Test]
+    public void Paragraph_inside_nested_compound_blocks_has_absolute_source()
+    {
+        var para = Build("Intro.\n\n====\nfirst\n\n****\nInside sidebar.\n****\n====\n")
+            .Children.OfType<ParagraphLayout>().Last();
+        Assert.That(para.Inlines.OfType<TextRun>().Single().Source, Is.EqualTo(Range(7, 1, 15)));
+    }
+
+    [Test]
+    public void Code_and_table_inside_example_block_have_absolute_source()
+    {
+        var layout = Build("Intro.\n\n====\n----\ncode\n----\n\n|===\n|cell\n|===\n====\n");
+        Assert.That(layout.Children.OfType<CodeBlockLayout>().Single().Source.Start.Line, Is.EqualTo(4));
+        var table = layout.Children.OfType<TableLayout>().Single();
+        Assert.That(table.Source.Start.Line, Is.EqualTo(8));
+        var cell = table.Rows.Single().Cells.Single();
+        Assert.That(cell.Source.Start.Line, Is.EqualTo(9));
+        Assert.That(cell.Inlines.OfType<TextRun>().Single().Source.Start.Line, Is.EqualTo(9));
+    }
+
+    [Test]
+    public void Paragraph_inside_admonition_block_has_absolute_source()
+    {
+        var admonition = Build("Intro.\n\n[NOTE]\n====\nInside note.\n====\n")
+            .Children.OfType<AdmonitionLayout>().Single();
+        var para = (ParagraphLayout)admonition.Blocks.Single();
+        Assert.That(para.Source, Is.EqualTo(Range(5, 1, 12)));
+        Assert.That(para.Inlines.OfType<TextRun>().Single().Source, Is.EqualTo(Range(5, 1, 12)));
+    }
+
+    [TestCase("* item", 3, 6)]
+    [TestCase(". item", 3, 6)]
+    [TestCase("- item", 3, 6)]
+    [TestCase("* [x] item", 7, 10)]
+    public void List_item_text_columns_start_after_the_marker(string itemLine, int startCol, int endCol)
+    {
+        var item = Build($"Intro.\n\n{itemLine}\n")
+            .Children.OfType<ListLayout>().Single().Items.Single();
+        Assert.That(item.Inlines.OfType<TextRun>().Single().Source, Is.EqualTo(Range(3, startCol, endCol)));
+    }
+
+    [Test]
+    public void Nested_list_item_text_columns_start_after_the_marker()
+    {
+        var item = Build("Intro.\n\n* item\n** deeper\n")
+            .Children.OfType<ListLayout>().Single().Items.Single();
+        var nested = ((ListLayout)item.Blocks.Single()).Items.Single();
+        Assert.That(nested.Inlines.OfType<TextRun>().Single().Source, Is.EqualTo(Range(4, 4, 9)));
+    }
+
+    [Test]
+    public void List_item_inside_example_block_has_absolute_columns()
+    {
+        var item = Build("Intro.\n\n====\n* item\n====\n")
+            .Children.OfType<ListLayout>().Single().Items.Single();
+        Assert.That(item.Inlines.OfType<TextRun>().Single().Source, Is.EqualTo(Range(4, 3, 6)));
+    }
+
+    [Test]
+    public void Description_text_columns_start_after_the_delimiter()
+    {
+        var item = Build("Intro.\n\nterm:: definition\n")
+            .Children.OfType<DescriptionListLayout>().Single().Items.Single();
+        Assert.That(item.Term.OfType<TextRun>().Single().Source, Is.EqualTo(Range(3, 1, 4)));
+        Assert.That(item.Description.OfType<TextRun>().Single().Source, Is.EqualTo(Range(3, 8, 17)));
+    }
+
     [Test]
     public void Inline_source_line_matches_owning_block_not_line_one()
     {
