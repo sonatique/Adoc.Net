@@ -14,7 +14,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.39</Version>
+    <Version>1.0.40</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) 2026 sylvain@sonatique.net</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -23,7 +23,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;docx;word;import;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.39: faster rendering with output unchanged byte for byte: PDF 2.3x to 3x faster with a third of the allocations, EPUB no longer recompresses its bundled assets (about 35 ms less per file), PdfRenderer.LayoutPages stops once the layout is complete, and the PDF-following Avalonia preview costs time linear in the length of blocks spanning pages. See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.40: blocks nested in example, sidebar, quote, open and admonition blocks, and list-continuation paragraphs, carry absolute source ranges; ListItemNode.ContentStart and DescriptionItemNode.DescriptionStart give exact inline columns for list and description text. See CHANGELOG.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->

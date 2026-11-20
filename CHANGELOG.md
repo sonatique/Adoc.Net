@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.40] - 2026-11-20
+
 ### Fixed
 
 - **Source ranges of nested blocks**: blocks inside example, sidebar, quote,
