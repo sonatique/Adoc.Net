@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.41] - 2026-11-20
+
 ### Added
 
 - **Markdown parser**: `AdocNet.Importers.MarkdownParser.Parse(string)` turns
