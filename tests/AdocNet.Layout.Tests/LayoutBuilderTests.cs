@@ -626,7 +626,7 @@ public class LayoutBuilderTests
         var para = Build("a [.line-through]#gone# and #marked#\n").Children.OfType<ParagraphLayout>().Single();
         var strike = para.Inlines.OfType<StrikethroughRun>().Single();
         Assert.That(strike.Children.OfType<TextRun>().Single().Text, Is.EqualTo("gone"));
-        Assert.That(para.Inlines.OfType<BoldRun>().Single().Children.OfType<TextRun>().Single().Text, Is.EqualTo("marked"));
+        Assert.That(para.Inlines.OfType<HighlightRun>().Single().Children.OfType<TextRun>().Single().Text, Is.EqualTo("marked"));
     }
 
     [Test]

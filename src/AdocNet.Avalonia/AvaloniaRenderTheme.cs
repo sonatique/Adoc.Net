@@ -41,6 +41,12 @@ public sealed class AvaloniaRenderTheme
     /// <summary>Foreground of a quote's attribution line.</summary>
     public IBrush QuoteAttributionForeground { get; set; } = new SolidColorBrush(Color.FromRgb(110, 110, 110));
 
+    /// <summary>Background of marked text (<c>#text#</c>).</summary>
+    public IBrush HighlightBackground { get; set; } = new SolidColorBrush(Color.FromRgb(255, 240, 140));
+
+    /// <summary>Foreground of marked text, readable on <see cref="HighlightBackground"/> in any theme.</summary>
+    public IBrush HighlightForeground { get; set; } = new SolidColorBrush(Colors.Black);
+
     /// <summary>Font size for the document title (the level-0 <c>= Title</c>).</summary>
     public double DocumentTitleFontSize { get; set; } = 28;
 

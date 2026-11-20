@@ -527,6 +527,9 @@ public class LayoutBuilder
             case HighlightInlineNode highlight when highlight.Roles is { } roles && roles.Contains("line-through"):
                 return new StrikethroughRun(BuildInlines(highlight.Children, contentOrigin));
 
+            case HighlightInlineNode { Roles: null or { Count: 0 } } marked:
+                return new HighlightRun(BuildInlines(marked.Children, contentOrigin));
+
             case HighlightInlineNode highlight:
                 return new BoldRun(BuildInlines(highlight.Children, contentOrigin));
 

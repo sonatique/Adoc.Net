@@ -8,6 +8,7 @@ using global::Avalonia.Input;
 using global::Avalonia.Layout;
 using global::Avalonia.Media;
 using global::Avalonia.Media.Imaging;
+using global::Avalonia.Threading;
 using AdocNet;
 using AdocNet.Layout;
 using AvInline = global::Avalonia.Controls.Documents.Inline;
@@ -588,22 +589,23 @@ public class AvaloniaRenderer
     private StackPanel RenderImage(ImageLayout image)
     {
         var panel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
-        if (LoadImage(image.Target) is { } bitmap)
-        {
-            var control = new Image
+        var host = new Decorator();
+        panel.Children.Add(host);
+        ShowImage(LoadImage(image.Target), host,
+            bitmap =>
             {
-                Source = bitmap,
-                Stretch = Stretch.Uniform,
-                StretchDirection = StretchDirection.DownOnly,
-                HorizontalAlignment = HorizontalAlignment.Left,
-            };
-            if (PixelSize(image.Width) is { } width) control.MaxWidth = width;
-            if (PixelSize(image.Height) is { } height) control.MaxHeight = height;
-            panel.Children.Add(control);
-        }
-        else
-        {
-            panel.Children.Add(new Border
+                var control = new Image
+                {
+                    Source = bitmap,
+                    Stretch = Stretch.Uniform,
+                    StretchDirection = StretchDirection.DownOnly,
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                };
+                if (PixelSize(image.Width) is { } width) control.MaxWidth = width;
+                if (PixelSize(image.Height) is { } height) control.MaxHeight = height;
+                return control;
+            },
+            () => new Border
             {
                 Background = Theme.CodeBlockBackground,
                 Padding = new Thickness(8),
@@ -615,7 +617,6 @@ public class AvaloniaRenderer
                     TextWrapping = TextWrapping.Wrap,
                 },
             });
-        }
         if (!string.IsNullOrEmpty(image.Title))
         {
             panel.Children.Add(new TextBlock
@@ -640,19 +641,69 @@ public class AvaloniaRenderer
             : null;
     }
 
-    /// <summary>Decodes a local raster image, or null when it cannot or may not be loaded.</summary>
-    private Bitmap? LoadImage(string target)
+    /// <summary>Widest decoded image, in pixels: wider files are scaled down to it once, after decoding.</summary>
+    internal const int MaxImageWidth = 2048;
+
+    // ponytail: cleared whole when full rather than least-recently-used; enough for one document's images.
+    private const int MaxCachedImages = 64;
+
+    /// <summary>Image loads by full path, reused while the file's write time is unchanged.</summary>
+    private readonly Dictionary<string, (DateTime Stamp, Task<Bitmap?> Load)> _images = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Starts (or reuses) decoding a local raster image on a worker thread; null when the target
+    /// may not or cannot be loaded. The task's result is null when the file does not decode.
+    /// </summary>
+    private Task<Bitmap?>? LoadImage(string target)
     {
         var path = ResolveImagePath(target, BaseDirectory);
         if (path is null) return null;
+        DateTime stamp;
         try
         {
-            return new Bitmap(path);
+            stamp = System.IO.File.GetLastWriteTimeUtc(path);
+        }
+        catch
+        {
+            return null;
+        }
+        if (_images.TryGetValue(path, out var cached) && cached.Stamp == stamp) return cached.Load;
+        if (_images.Count >= MaxCachedImages) _images.Clear();
+        var load = Task.Run(() => DecodeImage(path));
+        _images[path] = (stamp, load);
+        return load;
+    }
+
+    private static Bitmap? DecodeImage(string path)
+    {
+        try
+        {
+            var bitmap = new Bitmap(path);
+            var size = bitmap.PixelSize;
+            if (size.Width <= MaxImageWidth) return bitmap;
+            using (bitmap)
+                return bitmap.CreateScaledBitmap(new PixelSize(MaxImageWidth, Math.Max(1, (int)((long)size.Height * MaxImageWidth / size.Width))));
         }
         catch
         {
             return null; // undecodable: show the alternative text
         }
+    }
+
+    /// <summary>
+    /// Puts the image into <paramref name="host"/> once decoded (at once when already cached),
+    /// or the fallback when it cannot be loaded.
+    /// </summary>
+    private static void ShowImage(Task<Bitmap?>? load, Decorator host, Func<Bitmap, Control> image, Func<Control> fallback)
+    {
+        if (load is null)
+            host.Child = fallback();
+        else if (load.IsCompleted)
+            host.Child = load.Result is { } bitmap ? image(bitmap) : fallback();
+        else
+            load.ContinueWith(
+                done => Dispatcher.UIThread.Post(() => host.Child = done.Result is { } bitmap ? image(bitmap) : fallback()),
+                TaskScheduler.Default);
     }
 
     /// <summary>
@@ -838,13 +889,24 @@ public class AvaloniaRenderer
                 return span;
             }
 
+            case HighlightRun highlight:
+            {
+                var span = new Span { Background = Theme.HighlightBackground, Foreground = Theme.HighlightForeground };
+                AddInlines(span.Inlines, highlight.Children);
+                return span;
+            }
+
             case ImageRun image:
-                return LoadImage(image.Target) is { } bitmap
-                    ? new InlineUIContainer
-                    {
-                        Child = new Image { Source = bitmap, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly },
-                    }
-                    : new Run("[image: " + image.Alt + "]");
+            {
+                var fallback = "[image: " + image.Alt + "]";
+                if (LoadImage(image.Target) is not { } load)
+                    return new Run(fallback);
+                var host = new Decorator();
+                ShowImage(load, host,
+                    bitmap => new Image { Source = bitmap, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly },
+                    () => new TextBlock { Text = fallback });
+                return new InlineUIContainer { Child = host };
+            }
 
             default:
                 return null;
@@ -893,6 +955,9 @@ public class AvaloniaRenderer
                     break;
                 case StrikethroughRun strikethrough:
                     AppendPlainText(sb, strikethrough.Children);
+                    break;
+                case HighlightRun highlight:
+                    AppendPlainText(sb, highlight.Children);
                     break;
                 case ImageRun image:
                     sb.Append(image.Alt);

@@ -246,6 +246,9 @@ public static class TableColumnWeights
                 case StrikethroughRun strikethrough:
                     AppendPlainText(sb, strikethrough.Children);
                     break;
+                case HighlightRun highlight:
+                    AppendPlainText(sb, highlight.Children);
+                    break;
                 case ImageRun image:
                     sb.Append(image.Alt);
                     break;
