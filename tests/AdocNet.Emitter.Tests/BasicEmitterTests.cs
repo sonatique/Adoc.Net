@@ -133,4 +133,25 @@ public class BasicEmitterTests
     {
         AssertRoundTrip("= Doc\n:author: Alice\n:version: 1.0\n\nBody.");
     }
+
+    [Test]
+    public void Hard_breaks_round_trip_without_hardbreaks_option()
+    {
+        AssertRoundTrip("one +\ntwo\nthree");
+        var emitted = ParseAndEmit("one +\ntwo\nthree");
+        Assert.That(emitted, Does.Contain("one +\ntwo\nthree"));
+        Assert.That(emitted, Does.Not.Contain("%hardbreaks"), "only the marked line breaks");
+    }
+
+    [Test]
+    public void Hard_break_node_emits_a_trailing_plus()
+    {
+        var doc = new DocumentNode();
+        doc.AddChild(new ParagraphNode
+        {
+            Text = "",
+            Inlines = [new TextInlineNode { Value = "one" }, new HardBreakInlineNode(), new TextInlineNode { Value = "two" }],
+        });
+        Assert.That(Emitter.Emit(doc), Does.Contain("one +\ntwo"));
+    }
 }

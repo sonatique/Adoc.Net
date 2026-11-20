@@ -1360,10 +1360,17 @@ public sealed partial class PdfRenderer
     {
         switch (node)
         {
+            case HardBreakInlineNode hardBreak:
+                if (hardBreak.Value.Length > 0)
+                    segments.Add(new TextSegment(PdfWriter.HardBreak.ToString(), defaultFont, defaultFontSize, Background: background, Color: color));
+                break;
+
             case TextInlineNode text:
                 // Replace newlines with spaces — PDF text operators can't render \n. In a paragraph
-                // with hard breaks they are kept here and split into lines by the caller.
-                string value = text.Value.Contains('\n') && !_keepHardBreaks ? text.Value.Replace('\n', ' ') : text.Value;
+                // with hard breaks they become hard-break marks the writer starts new lines at.
+                string value = text.Value.Contains('\n')
+                    ? text.Value.Replace('\n', _keepHardBreaks ? PdfWriter.HardBreak : ' ')
+                    : text.Value;
                 segments.Add(new TextSegment(value, defaultFont, defaultFontSize, Background: background, Color: color));
                 break;
 

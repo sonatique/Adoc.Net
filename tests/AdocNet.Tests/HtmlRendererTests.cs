@@ -948,8 +948,41 @@ public class HtmlRendererTests
         var doc = BlockParser.Parse("line one +\nline two\nline three");
         var html = new HtmlRenderer().RenderToString(doc.Document);
         Assert.That(html, Does.Contain("line one<br>\n"));
-        // line two does not have trailing +, so no <br> before line three
-        Assert.That(html, Does.Contain("line two<br>\nline three"));
+        // line two does not have trailing +, so no <br> before line three (as Asciidoctor)
+        Assert.That(html, Does.Contain("<p>line one<br>\nline two\nline three</p>"));
+    }
+
+    [TestCase("* one +\ntwo\nthree", "<p>one<br>\ntwo\nthree</p>")]
+    [TestCase(". one +\ntwo", "<p>one<br>\ntwo</p>")]
+    [TestCase("|===\n|one +\ntwo\n|===", "<p class=\"tableblock\">one<br>\ntwo</p>")]
+    [TestCase("term:: one +\ntwo", "<p>one<br>\ntwo</p>")]
+    [TestCase("term::\none +\ntwo", "<p>one<br>\ntwo</p>")]
+    [TestCase("NOTE: one +\ntwo", "one<br>\ntwo")]
+    [TestCase("*a +\nb*", "<p><strong>a<br>\nb</strong></p>")]
+    [TestCase("end +", "<p>end<br></p>")]
+    [TestCase("[%hardbreaks]\none +\ntwo\nthree +", "<p>one<br>\ntwo<br>\nthree +</p>")]
+    [TestCase(":hardbreaks-option:\n\n* x\ny", "<p>x<br>\ny</p>")]
+    public void Hard_line_breaks_match_asciidoctor_in_every_block(string source, string expected)
+    {
+        var html = new HtmlRenderer().RenderToString(BlockParser.Parse(source).Document);
+        Assert.That(html, Does.Contain(expected));
+    }
+
+    [Test]
+    public void Description_text_continues_on_the_following_lines()
+    {
+        var html = new HtmlRenderer().RenderToString(BlockParser.Parse("term:: one\ntwo\n\nafter").Document);
+        Assert.That(html, Does.Contain("<dd>\n<p>one\ntwo</p>"));
+        Assert.That(html, Does.Contain("<p>after</p>"));
+    }
+
+    [TestCase("term:: one\n// comment\ntwo")]
+    [TestCase("term::\n// comment\none\ntwo")]
+    public void Comment_lines_in_description_text_are_dropped(string source)
+    {
+        var html = new HtmlRenderer().RenderToString(BlockParser.Parse(source).Document);
+        Assert.That(html, Does.Contain("<dd>\n<p>one\ntwo</p>"));
+        Assert.That(html, Does.Not.Contain("comment"));
     }
 
     // ── Lead paragraph ([.lead]) ────────────────────────────────────────

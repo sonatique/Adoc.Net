@@ -511,8 +511,12 @@ public class LayoutBuilder
     {
         switch (node)
         {
+            case HardBreakInlineNode hardBreak:
+                // A break at the very end of the text adds no line, as in HTML.
+                return hardBreak.Value.Length > 0 ? new LineBreakRun() : null;
+
             case TextInlineNode text:
-                // A newline here is a soft break (hard ones were split off in BuildInlines).
+                // A newline here is a soft break (under %hardbreaks they were split off in BuildInlines).
                 return new TextRun(text.Value.Replace('\n', ' '));
 
             case StrongInlineNode strong:

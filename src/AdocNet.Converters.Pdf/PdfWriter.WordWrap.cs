@@ -143,8 +143,36 @@ internal sealed partial class PdfWriter
         }
     }
 
+    /// <summary>
+    /// Marks a hard line break in a segment's text: wrapping ends the line there. U+2028 LINE
+    /// SEPARATOR, kept apart from the soft line feeds that inline text carries.
+    /// </summary>
+    internal const char HardBreak = (char)0x2028;
+
+    /// <summary>Splits segments at their hard-break marks: one segment list per line.</summary>
+    internal static List<List<TextSegment>> SplitAtHardBreaks(List<TextSegment> segments)
+    {
+        var lines = new List<List<TextSegment>> { new() };
+        foreach (var seg in segments)
+        {
+            var parts = seg.Text.Split(HardBreak);
+            for (int i = 0; i < parts.Length; i++)
+            {
+                if (i > 0) lines.Add(new List<TextSegment>());
+                if (parts[i].Length > 0) lines[^1].Add(seg with { Text = parts[i] });
+            }
+        }
+        return lines;
+    }
+
+    private static bool HasHardBreak(List<TextSegment> segments) =>
+        segments.Exists(s => s.Text.IndexOf(HardBreak) >= 0);
+
     internal List<List<TextSegment>> WrapSegments(List<TextSegment> segments, float maxWidth)
     {
+        if (HasHardBreak(segments))
+            return SplitAtHardBreaks(segments).SelectMany(line => WrapSegments(line, maxWidth)).ToList();
+
         var result = new List<List<TextSegment>>();
         var currentLine = new List<TextSegment>();
         float currentWidth = 0;
@@ -295,6 +323,11 @@ internal sealed partial class PdfWriter
     /// </summary>
     internal float WriteWrappedSegments(List<TextSegment> segments, float leading, bool justify = true)
     {
+        // Each piece between hard breaks wraps on its own, so a broken line is never
+        // justified, like the last line of a paragraph.
+        if (HasHardBreak(segments))
+            return SplitAtHardBreaks(segments).Sum(line => WriteWrappedSegments(line, leading, justify));
+
         justify &= JustifyText;
         // Route characters the segment fonts can't show (✓, arrows, …) onto a
         // Unicode fallback font, splitting affected segments. Downstream wrapping

@@ -59,7 +59,6 @@ public static class MarkdownParser
         private HeadingBlock? _promotedHeading;
         private int _headingShift;
         private int _lastSectionLevel;
-        private bool _hardBreak;
         private readonly HashSet<Footnote> _openFootnotes = [];
 
         public Converter(string text)
@@ -98,7 +97,12 @@ public static class MarkdownParser
                 if (ConvertBlock(block) is { } node)
                     (sections.Count > 0 ? (AstNode)sections.Peek() : _document).AddChild(node);
             }
-            return new ParseResult(_document, _diagnostics);
+
+            // As AdocParser for a file without includes: line n of the AST is line n of the source.
+            var origins = new LineOrigin[_lineStarts.Count];
+            for (int i = 0; i < origins.Length; i++)
+                origins[i] = new LineOrigin(null, i + 1, false);
+            return new ParseResult(_document, _diagnostics) { LineOrigins = origins };
         }
 
         // ── Headings ────────────────────────────────────────────────────────
@@ -244,13 +248,10 @@ public static class MarkdownParser
         private ParagraphNode ConvertParagraph(ParagraphBlock paragraph)
         {
             var range = ToRange(paragraph.Span);
-            _hardBreak = false;
-            var inlines = Inlines(paragraph.Inline, range.Start);
             return new ParagraphNode
             {
                 Text = Slice(paragraph.Span),
-                Inlines = inlines,
-                HasHardbreaks = _hardBreak,
+                Inlines = Inlines(paragraph.Inline, range.Start),
                 Source = range,
             };
         }
@@ -303,7 +304,6 @@ public static class MarkdownParser
                 while (textStart <= paragraph.Span.End && _text[textStart] is ' ' or '\t') textStart++;
             }
             var origin = Pos(textStart);
-            _hardBreak = false;
             var node = new ListItemNode
             {
                 Text = textStart <= paragraph.Span.End ? Slice(new SourceSpan(textStart, paragraph.Span.End)) : "",
@@ -423,7 +423,7 @@ public static class MarkdownParser
 
         /// <summary>
         /// Converts inline content with ranges relative to <paramref name="origin"/>; text before
-        /// <paramref name="from"/> (a task box) is skipped. Sets <see cref="_hardBreak"/> on a hard break.
+        /// <paramref name="from"/> (a task box) is skipped.
         /// </summary>
         private List<InlineNode> Inlines(ContainerInline? container, SourcePosition origin, int from = 0)
         {
@@ -506,8 +506,9 @@ public static class MarkdownParser
                     output.Add(new LinkInlineNode { Url = autolink.IsEmail ? "mailto:" + autolink.Url : autolink.Url, Source = range });
                     return;
                 case LineBreakInline lineBreak:
-                    if (lineBreak.IsHard) _hardBreak = true;
-                    output.Add(new TextInlineNode { Value = lineBreak.IsHard ? "\n" : " ", Source = range });
+                    output.Add(lineBreak.IsHard
+                        ? new HardBreakInlineNode { Source = range }
+                        : new TextInlineNode { Value = " ", Source = range });
                     return;
                 case HtmlEntityInline entity:
                     output.Add(new TextInlineNode { Value = entity.Transcoded.ToString(), Source = range });
@@ -542,7 +543,6 @@ public static class MarkdownParser
         /// </summary>
         private FootnoteInlineNode ConvertFootnote(Footnote footnote, SourceRange range)
         {
-            bool hardBreak = _hardBreak;
             _openFootnotes.Add(footnote);
             var inlines = new List<InlineNode>();
             foreach (var block in footnote)
@@ -551,7 +551,6 @@ public static class MarkdownParser
                 if (inlines.Count > 0) inlines.Add(new TextInlineNode { Value = " " });
                 inlines.AddRange(Inlines(paragraph.Inline, SourcePosition.None));
             }
-            _hardBreak = hardBreak;
             _openFootnotes.Remove(footnote);
             return new FootnoteInlineNode
             {
@@ -580,8 +579,8 @@ public static class MarkdownParser
             var merged = new List<InlineNode>(inlines.Count);
             foreach (var inline in inlines)
             {
-                if (inline is TextInlineNode text && text.Value != "\n"
-                    && merged.Count > 0 && merged[^1] is TextInlineNode previous && previous.Value != "\n")
+                if (inline is TextInlineNode text and not HardBreakInlineNode
+                    && merged.Count > 0 && merged[^1] is TextInlineNode previous and not HardBreakInlineNode)
                 {
                     merged[^1] = new TextInlineNode
                     {

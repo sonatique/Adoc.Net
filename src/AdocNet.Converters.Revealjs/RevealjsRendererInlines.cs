@@ -162,6 +162,9 @@ public sealed partial class RevealjsRenderer
     {
         switch (node)
         {
+            case HardBreakInlineNode n:
+                sb.Append("<br>").Append(n.Value);
+                break;
             case TextInlineNode n:
                 EscapeTo(sb, n.Value);
                 break;

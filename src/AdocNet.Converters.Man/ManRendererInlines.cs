@@ -34,6 +34,10 @@ public sealed partial class ManRenderer
     {
         switch (node)
         {
+            case HardBreakInlineNode n:
+                sb.Append("\n.br").Append(n.Value);
+                break;
+
             case TextInlineNode n:
                 sb.Append(EscapeBodyText(n.Value));
                 break;

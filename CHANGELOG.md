@@ -5,6 +5,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **`HardBreakInlineNode`**: a line ending in ` +` is now a hard-break node in
+  paragraphs, list items, table cells, description lists and admonition
+  paragraphs, and `%hardbreaks` makes every line break one. It derives from
+  `TextInlineNode` with the line feed as its value, so code that only knows
+  text nodes still sees the line break. HTML, PDF, DocBook
+  (`<?asciidoc-br?>`), man (`.br`), EPUB, reveal.js, the emitter and the
+  layout break the line there, as Asciidoctor does. Markdown hard breaks use
+  the same node, so they also break inside list items and table cells.
+  `DocumentRendererBase.RenderHardBreakInline` renders it as its text by
+  default.
+- **Marked text in the live preview**: `#text#` with no role is a
+  `HighlightRun`, drawn with the new `AvaloniaRenderTheme.HighlightBackground`
+  and `HighlightForeground`. It showed as bold before.
+
+### Changed
+
+- **Preview images** decode on a worker thread, so an image appears once it is
+  decoded; files wider than 2048 pixels are scaled down, and decoded images
+  are reused until the file changes.
+- **`ParagraphNode.Text`** keeps the source's ` +` markers, and
+  `HasHardbreaks` is set only by `%hardbreaks` and `:hardbreaks-option:`, as
+  documented. Before, the markers were removed from `Text` and set
+  `HasHardbreaks`, which made every line of the paragraph break.
+- **`TextInlineNode`** is no longer sealed.
+
+### Fixed
+
+- A paragraph with one ` +` line broke at every line in HTML and PDF; it now
+  breaks only after the marked lines.
+- ` +` at the end of a line in a list item, table cell or description showed
+  literally in every output.
+- Lines after `term:: description` continue the description, as in
+  Asciidoctor, instead of starting a new paragraph.
+- **Preview links** sat about 4 pixels above the surrounding text; they now
+  share its baseline.
+- **`MarkdownParser.Parse`** returned empty `LineOrigins`; it now maps every
+  line to itself, front matter included, as `AdocParser` does for a file
+  without includes, so `ToSourceLine` and `TryGetLineOrigin` work.
+- **Preview checklist boxes** are drawn, sized to the text and in its colour.
+  The ☑ glyph fell back to a colour emoji on Windows, unlike ☐.
+
 ## [1.0.41] - 2026-11-20
 
 ### Added

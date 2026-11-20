@@ -29,7 +29,8 @@ public sealed partial class HtmlRenderer
 
         if (paragraph.HasHardbreaks)
         {
-            // Render inlines into a temporary buffer, then replace \n with <br>\n.
+            // Render inlines into a temporary buffer, then replace \n with <br>\n, except after a
+            // <br> already rendered for a HardBreakInlineNode.
             var inlineSb = new StringBuilder();
             RenderInlines(inlineSb, paragraph.Inlines, paragraph.Text, footnotes, state);
             var rendered = inlineSb.ToString();
@@ -37,7 +38,7 @@ public sealed partial class HtmlRenderer
             for (int i = 0; i < parts.Length; i++)
             {
                 if (i > 0)
-                    sb.Append("<br>\n");
+                    sb.Append(parts[i - 1].EndsWith("<br>", StringComparison.Ordinal) ? "\n" : "<br>\n");
                 sb.Append(parts[i]);
             }
         }

@@ -198,7 +198,7 @@ Caution
 | `ItalicRun` | `EmphasisInlineNode` | Children from `EmphasisInlineNode.Children` (the `new` shadowed property). |
 | `MonoRun` | `MonospaceInlineNode` | Children from `MonospaceInlineNode.Children` (the `new` shadowed property). |
 | `LinkRun` | `LinkInlineNode`, `InlineLinkMacroNode` | `LinkInlineNode`: Href = `Url`, display = URL text. `InlineLinkMacroNode`: Href = `Url`, display = `Label`. |
-| `LineBreakRun` | *(synthetic)* | Emitted between source lines when `ParagraphNode.HasHardbreaks` is true. |
+| `LineBreakRun` | `HardBreakInlineNode` | Also emitted between source lines when `ParagraphNode.HasHardbreaks` is true, or in literal and verse paragraphs. |
 
 ### AST Types NOT Mapped (deferred to later phases or out of scope)
 

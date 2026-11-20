@@ -26,6 +26,10 @@ internal static class InlineEmitter
 
         switch (node)
         {
+            case HardBreakInlineNode hardBreak:
+                ctx.Output.Append(" +").Append(hardBreak.Value);
+                break;
+
             case TextInlineNode text:
                 ctx.Output.Append(text.Value);
                 break;

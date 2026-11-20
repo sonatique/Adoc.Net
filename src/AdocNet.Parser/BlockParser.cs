@@ -2356,6 +2356,18 @@ internal static class BlockParser
                     }
                 }
 
+                // Lines after "term:: text" continue the description, as for list items.
+                if (!string.IsNullOrEmpty(dlDesc))
+                {
+                    int nextIdx = i + 1;
+                    var descLines = new List<string> { dlDesc };
+                    for (; nextIdx < lines.Length && IsDescriptionContinuation(lines[nextIdx]); nextIdx++)
+                        if (!IsLineComment(lines[nextIdx]))
+                            descLines.Add(lines[nextIdx].Trim());
+                    dlDesc = string.Join("\n", descLines);
+                    i = nextIdx - 1;
+                }
+
                 // If description is empty, check next lines for indented continuation
                 ListNode? nestedListForDlItem = null;
                 if (string.IsNullOrEmpty(dlDesc))
@@ -2410,31 +2422,15 @@ internal static class BlockParser
                             descLines.Add(lines[nextIdx].Trim());
                             nextIdx++;
                         }
-                        // If no indented continuation found, try non-indented next line
+                        // If no indented continuation found, take the non-indented lines that follow
                         // as description (AsciiDoc allows Term::\nDescription on next line)
-                        if (descLines.Count == 0 && nextIdx < lines.Length
-                            && !string.IsNullOrWhiteSpace(lines[nextIdx])
-                            && lines[nextIdx].Trim() != "+"
-                            && !TryParseDescriptionItem(lines[nextIdx], out _, out _, out _)
-                            && !IsSectionHeader(lines[nextIdx])
-                            && !TryParseListItem(lines[nextIdx], out _, out _, out _)
-                            && !IsDelimitedBlockBoundary(lines[nextIdx])
-                            && !(lines[nextIdx].Length > 1 && lines[nextIdx][0] == '[' && lines[nextIdx][^1] == ']'))
+                        if (descLines.Count == 0)
                         {
-                            descLines.Add(lines[nextIdx].Trim());
-                            nextIdx++;
-                            // Continue consuming non-blank, non-structural lines
-                            while (nextIdx < lines.Length
-                                && !string.IsNullOrWhiteSpace(lines[nextIdx])
-                                && lines[nextIdx].Trim() != "+"
-                                && !TryParseDescriptionItem(lines[nextIdx], out _, out _, out _)
-                                && !IsSectionHeader(lines[nextIdx])
-                                && !TryParseListItem(lines[nextIdx], out _, out _, out _)
-                                && !IsDelimitedBlockBoundary(lines[nextIdx])
-                                && !(lines[nextIdx].Length > 1 && lines[nextIdx][0] == '[' && lines[nextIdx][^1] == ']'))
+                            for (; nextIdx < lines.Length && IsDescriptionContinuation(lines[nextIdx]); nextIdx++)
                             {
+                                if (IsLineComment(lines[nextIdx])) continue;
+                                if (descLines.Count == 0) descFirstIdx = nextIdx;
                                 descLines.Add(lines[nextIdx].Trim());
-                                nextIdx++;
                             }
                         }
                         if (descLines.Count > 0)
@@ -2457,7 +2453,7 @@ internal static class BlockParser
                         : null,
                     DescriptionInlines = InlineParser.Parse(dlDesc, EffectiveNormal(), document.Attributes),
                     DescriptionStart = descStart,
-                    Source = new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length)),
+                    Source = new SourceRange(new(lineNumber, 1), new(i + 1, lines[i].Length)),
                 };
                 if (nestedListForDlItem is not null)
                     item.AddChild(nestedListForDlItem);
@@ -3813,15 +3809,10 @@ internal static class BlockParser
     {
         if (lines.Count == 0) return;
 
+        // Lines ending in " +" keep their marker: the inline parser turns it into a HardBreakInlineNode.
         var rawText = string.Join("\n", lines);
-
-        // Per-line hard break: a trailing " +" on any line (except the last) forces <br>.
-        bool hasPerLineBreak = rawText.Contains(" +\n", StringComparison.Ordinal);
-        if (hasPerLineBreak)
-            rawText = rawText.Replace(" +\n", "\n");
-
         var sourceRange = new SourceRange(new(startLine, 1), new(endLine, lines[^1].Length));
-        var inlines = InlineParser.Parse(rawText, subsOverride ?? EffectiveNormalSubs(attributes), attributes);
+        var inlines = InlineParser.Parse(rawText, subsOverride ?? EffectiveNormalSubs(attributes), attributes, hasHardbreaks);
 
         if (admonitionType is not null)
         {
@@ -3859,7 +3850,7 @@ internal static class BlockParser
             Style   = style,
             Inlines = inlines,
             Source  = sourceRange,
-            HasHardbreaks = hasHardbreaks || hasPerLineBreak || attributes.ContainsKey("hardbreaks-option"),
+            HasHardbreaks = hasHardbreaks || attributes.ContainsKey("hardbreaks-option"),
         };
         if (blockId is not null)
         {
@@ -5762,6 +5753,20 @@ internal static class BlockParser
         depth = colonCount - 1; // :: = depth 1, ::: = depth 2, :::: = depth 3
         return true;
     }
+
+    /// <summary>A single-line comment: <c>//</c>, but not <c>///</c> or a <c>////</c> block delimiter.</summary>
+    private static bool IsLineComment(string line) =>
+        line.Length >= 2 && line[0] == '/' && line[1] == '/' && (line.Length == 2 || line[2] != '/');
+
+    /// <summary>A line that continues a description list item's text: not blank and not the start of a new block.</summary>
+    private static bool IsDescriptionContinuation(string line) =>
+        !string.IsNullOrWhiteSpace(line)
+        && line.Trim() != "+"
+        && !TryParseDescriptionItem(line, out _, out _, out _)
+        && !IsSectionHeader(line)
+        && !TryParseListItem(line, out _, out _, out _)
+        && !IsDelimitedBlockBoundary(line)
+        && !(line.Length > 1 && line[0] == '[' && line[^1] == ']');
 
     /// <summary>
     /// Returns true if the line looks like a section header (starts with "= " or "== " etc.).
