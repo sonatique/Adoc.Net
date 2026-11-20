@@ -644,8 +644,9 @@ internal static class BlockParser
                 ApplyPendingId(quoteBlock, quoteStartLine, line.Length);
                 if (pendingBlockRoles is not null)
                     quoteBlock.Roles = pendingBlockRoles;
-                foreach (var child in innerResult.Document.Children)
-                    quoteBlock.AddChild(child);
+                // ponytail: continuation lines keep their buffer column, 2 short of the
+                // source column after "> "; exact only on the quote's first line.
+                AddNestedChildren(quoteBlock, innerResult, new SourcePosition(quoteStartLine, 3));
 
                 currentContainer.AddChild(quoteBlock);
                 pendingBlockTitle = null;
@@ -1622,8 +1623,7 @@ internal static class BlockParser
                     if (openIsStructural)
                     {
                         var innerResult = BlockParser.Parse(openRawContent, document.Attributes);
-                        foreach (var child in innerResult.Document.Children)
-                            openBlock.AddChild(child);
+                        AddNestedChildren(openBlock, innerResult, new SourcePosition(lineNumber + 1, 1));
                     }
 
                     currentContainer.AddChild(openBlock);
@@ -2099,8 +2099,7 @@ internal static class BlockParser
                     if (pendingBlockRoles is not null)
                         admonNode.Roles = pendingBlockRoles;
                     var innerResult = BlockParser.Parse(rawContent, document.Attributes);
-                    foreach (var child in innerResult.Document.Children)
-                        admonNode.AddChild(child);
+                    AddNestedChildren(admonNode, innerResult, new SourcePosition(lineNumber + 1, 1));
                     currentContainer.AddChild(admonNode);
                 }
                 else if (delimKind == DelimitedBlockKind.Passthrough && pendingStem is not null)
@@ -2148,8 +2147,7 @@ internal static class BlockParser
                     if (isStructural)
                     {
                         var innerResult = BlockParser.Parse(rawContent, document.Attributes);
-                        foreach (var child in innerResult.Document.Children)
-                            block.AddChild(child);
+                        AddNestedChildren(block, innerResult, new SourcePosition(lineNumber + 1, 1));
                     }
 
                     currentContainer.AddChild(block);
@@ -2323,6 +2321,8 @@ internal static class BlockParser
                     }
                 }
 
+                var descStart = TextStart(line, dlDesc, lineNumber, dlTerm.Length);
+
                 // If description is empty, check if next lines are additional terms
                 var allTerms = new List<string> { dlTerm };
                 if (string.IsNullOrEmpty(dlDesc))
@@ -2346,6 +2346,7 @@ internal static class BlockParser
                         {
                             allTerms.Add(finalTerm);
                             dlDesc = finalDesc;
+                            descStart = TextStart(lines[nextIdx], finalDesc, nextIdx + 1, finalTerm.Length);
                             i = nextIdx;
                         }
                         else
@@ -2379,6 +2380,7 @@ internal static class BlockParser
                                     Text = nestedItemText,
                                     Inlines = InlineParser.Parse(nestedItemText, EffectiveNormal(), document.Attributes),
                                     Source = new SourceRange(new(nextIdx + 1, 1), new(nextIdx + 1, lines[nextIdx].Length)),
+                                    ContentStart = TextStart(lines[nextIdx], nestedItemText, nextIdx + 1, 0),
                                 };
                                 nestedListForDlItem.AddChild(nestedItem);
                             }
@@ -2399,6 +2401,7 @@ internal static class BlockParser
                     else
                     {
                         var descLines = new List<string>();
+                        int descFirstIdx = nextIdx;
                         // First try indented continuation
                         while (nextIdx < lines.Length && lines[nextIdx].Length > 0
                             && (lines[nextIdx][0] == ' ' || lines[nextIdx][0] == '\t')
@@ -2437,6 +2440,8 @@ internal static class BlockParser
                         if (descLines.Count > 0)
                         {
                             dlDesc = string.Join("\n", descLines);
+                            // ponytail: exact on the first description line only; later lines are trimmed.
+                            descStart = TextStart(lines[descFirstIdx], descLines[0], descFirstIdx + 1, 0);
                             i = nextIdx - 1; // -1 because the for loop will increment
                         }
                     }
@@ -2451,6 +2456,7 @@ internal static class BlockParser
                         ? allTerms.Select(t => (IReadOnlyList<InlineNode>)InlineParser.Parse(t, EffectiveNormal(), document.Attributes)).ToList()
                         : null,
                     DescriptionInlines = InlineParser.Parse(dlDesc, EffectiveNormal(), document.Attributes),
+                    DescriptionStart = descStart,
                     Source = new SourceRange(new(lineNumber, 1), new(lineNumber, line.Length)),
                 };
                 if (nestedListForDlItem is not null)
@@ -2687,38 +2693,37 @@ internal static class BlockParser
                             var openBlock = new DelimitedBlockNode
                             {
                                 BlockKind = DelimitedBlockKind.Open,
+                                Source = new SourceRange(new(j + 1, 1), new(contClosingIdx + 1, lines[contClosingIdx].Length)),
                             };
-                            var openContent = lines[(j + 1)..contClosingIdx];
                             var currentPara = new List<string>();
-                            foreach (var openLine in openContent)
-                            {
-                                if (string.IsNullOrWhiteSpace(openLine))
-                                {
-                                    if (currentPara.Count > 0)
-                                    {
-                                        var pText = string.Join("\n", currentPara);
-                                        openBlock.AddChild(new ParagraphNode
-                                        {
-                                            Text = pText,
-                                            Inlines = InlineParser.Parse(pText, EffectiveNormal(), document.Attributes),
-                                        });
-                                        currentPara.Clear();
-                                    }
-                                }
-                                else
-                                {
-                                    currentPara.Add(openLine);
-                                }
-                            }
-                            if (currentPara.Count > 0)
+                            int paraStart = 0;
+                            void AddOpenParagraph(int endIdx)
                             {
                                 var pText = string.Join("\n", currentPara);
                                 openBlock.AddChild(new ParagraphNode
                                 {
                                     Text = pText,
                                     Inlines = InlineParser.Parse(pText, EffectiveNormal(), document.Attributes),
+                                    Source = new SourceRange(new(paraStart + 1, 1), new(endIdx + 1, lines[endIdx].Length)),
                                 });
+                                currentPara.Clear();
                             }
+                            for (int k = j + 1; k < contClosingIdx; k++)
+                            {
+                                if (string.IsNullOrWhiteSpace(lines[k]))
+                                {
+                                    if (currentPara.Count > 0)
+                                        AddOpenParagraph(k - 1);
+                                }
+                                else
+                                {
+                                    if (currentPara.Count == 0)
+                                        paraStart = k;
+                                    currentPara.Add(lines[k]);
+                                }
+                            }
+                            if (currentPara.Count > 0)
+                                AddOpenParagraph(contClosingIdx - 1);
                             lastItem.AddChild(openBlock);
                             i = contClosingIdx;
                             continue;
@@ -2728,6 +2733,7 @@ internal static class BlockParser
                     {
                         // Non-delimited continuation: collect paragraph lines.
                         var contParagraphLines = new List<string>();
+                        int contStart = j;
                         while (j < lines.Length && !string.IsNullOrWhiteSpace(lines[j])
                             && !TryParseListItem(lines[j], out _, out _, out _)
                             && lines[j].Trim() != "+")
@@ -2742,6 +2748,7 @@ internal static class BlockParser
                             {
                                 Text = contText,
                                 Inlines = InlineParser.Parse(contText, EffectiveNormal(), document.Attributes),
+                                Source = new SourceRange(new(contStart + 1, 1), new(j, lines[j - 1].Length)),
                             };
                             lastItem.AddChild(contPara);
                             i = j - 1; // position at last consumed line
@@ -2883,6 +2890,7 @@ internal static class BlockParser
                     {
                         // Non-delimited continuation: collect paragraph lines.
                         var contParagraphLines = new List<string>();
+                        int contStart = j;
                         while (j < lines.Length && !string.IsNullOrWhiteSpace(lines[j])
                             && !TryParseListItem(lines[j], out _, out _, out _)
                             && !TryParseDescriptionItem(lines[j], out _, out _, out _)
@@ -2898,6 +2906,7 @@ internal static class BlockParser
                             {
                                 Text = contText,
                                 Inlines = InlineParser.Parse(contText, EffectiveNormal(), document.Attributes),
+                                Source = new SourceRange(new(contStart + 1, 1), new(j, lines[j - 1].Length)),
                             };
                             continuationTarget.AddChild(contPara);
                             i = j - 1;
@@ -2913,7 +2922,7 @@ internal static class BlockParser
             {
                 FlushParagraph(currentContainer, paragraphLines, ref paragraphStartLine, lineNumber - 1, document.Attributes);
                 bool isNewList = listFrames.Count == 0;
-                AddListItem(currentContainer, listFrames, listKind, listDepth, itemText, lineNumber, line.Length, document.Attributes, pendingListStart, pendingListStyle);
+                AddListItem(currentContainer, listFrames, listKind, listDepth, itemText, lineNumber, line, document.Attributes, pendingListStart, pendingListStyle);
                 if (isNewList && listFrames.Count > 0)
                     ApplyPendingId(listFrames[0].List, lineNumber, line.Length);
                 pendingListStart = null;
@@ -3587,11 +3596,12 @@ internal static class BlockParser
         int depth,
         string text,
         int lineNumber,
-        int lineLength,
+        string line,
         IReadOnlyDictionary<string, string> attributes,
         int? pendingStart = null,
         string? pendingListStyle = null)
     {
+        int lineLength = line.Length;
         // Pop any frames whose depth exceeds the current item's depth (going shallower).
         while (frames.Count > 0 && frames[^1].Depth > depth)
             frames.RemoveAt(frames.Count - 1);
@@ -3644,6 +3654,7 @@ internal static class BlockParser
                         Inlines = InlineParser.Parse(text, EffectiveNormalSubs(attributes), attributes),
                         Checked = null,
                         Source  = new SourceRange(new(lineNumber, 1), new(lineNumber, lineLength)),
+                        ContentStart = TextStart(line, text, lineNumber, depth),
                     };
                     targetList.AddChild(mixedItem);
                     targetList.Source = new SourceRange(mixedItem.Source.Start, mixedItem.Source.End);
@@ -3713,6 +3724,7 @@ internal static class BlockParser
             Inlines = InlineParser.Parse(itemText, EffectiveNormalSubs(attributes), attributes),
             Checked = checkedState,
             Source  = new SourceRange(new(lineNumber, 1), new(lineNumber, lineLength)),
+            ContentStart = TextStart(line, itemText, lineNumber, depth),
         };
         targetList.AddChild(item);
 
@@ -4556,8 +4568,37 @@ internal static class BlockParser
     private static void ShiftNodeSourceToAbsolute(AstNode node, SourcePosition origin)
     {
         node.Source = ShiftRangeByOrigin(node.Source, origin);
+        if (node is ListItemNode listItem)
+            listItem.ContentStart = ShiftPositionByOrigin(listItem.ContentStart, origin);
+        else if (node is DescriptionItemNode descItem)
+            descItem.DescriptionStart = ShiftPositionByOrigin(descItem.DescriptionStart, origin);
         foreach (var child in node.Children)
             ShiftNodeSourceToAbsolute(child, origin);
+    }
+
+    /// <summary>
+    /// Position of <paramref name="text"/> in <paramref name="line"/>, searching from
+    /// <paramref name="from"/> (0-based, past any marker). None when empty or not found.
+    /// </summary>
+    private static SourcePosition TextStart(string line, string text, int lineNumber, int from)
+    {
+        if (text.Length == 0 || from > line.Length) return SourcePosition.None;
+        int idx = line.IndexOf(text, from, StringComparison.Ordinal);
+        return idx < 0 ? SourcePosition.None : new SourcePosition(lineNumber, idx + 1);
+    }
+
+    /// <summary>
+    /// Moves the blocks of a nested parse into <paramref name="parent"/>, promoting their
+    /// buffer-relative source ranges to absolute ones. <paramref name="origin"/> is the
+    /// absolute position of the nested buffer's first character.
+    /// </summary>
+    private static void AddNestedChildren(AstNode parent, ParseResult inner, SourcePosition origin)
+    {
+        foreach (var child in inner.Document.Children)
+        {
+            ShiftNodeSourceToAbsolute(child, origin);
+            parent.AddChild(child);
+        }
     }
 
     /// <summary>

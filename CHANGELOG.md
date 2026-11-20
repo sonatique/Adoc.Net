@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Source ranges of nested blocks**: blocks inside example, sidebar, quote,
+  open and admonition blocks now carry absolute source ranges instead of
+  ranges relative to the enclosing block, and paragraphs attached to a list
+  item with `+` now have a source range. Inline ranges in the layout tree
+  follow, so click-to-source lands on the right line.
+- **Columns of list and description text**: new `ListItemNode.ContentStart`
+  and `DescriptionItemNode.DescriptionStart` locate the text past the list
+  marker or the `::` delimiter, so inline columns are exact.
+
 ## [1.0.39] - 2026-11-19
 
 ### Performance

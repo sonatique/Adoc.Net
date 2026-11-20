@@ -20,6 +20,12 @@ public sealed class ListItemNode : BlockNode
     /// </summary>
     public bool? Checked { get; init; }
 
+    /// <summary>
+    /// Source position of the first character of <see cref="Text"/>, past the list marker
+    /// and any checklist box. <see cref="SourcePosition.None"/> when unknown.
+    /// </summary>
+    public SourcePosition ContentStart { get; set; } = SourcePosition.None;
+
     public override IEnumerable<KeyValuePair<string, string>> GetProperties()
     {
         yield return new("Text", Text);
