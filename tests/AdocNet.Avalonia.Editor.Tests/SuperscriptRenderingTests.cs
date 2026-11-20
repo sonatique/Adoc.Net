@@ -57,10 +57,9 @@ public class SuperscriptRenderingTests
         var span = FirstParagraph(panel).Inlines!.OfType<Span>()
             .First(s => s.BaselineAlignment == BaselineAlignment.Superscript);
 
-        // ... wrapping a clickable link (rendered as an InlineUIContainer hosting a TextBlock).
-        var container = span.Inlines.OfType<InlineUIContainer>().First();
-        var linkText = (TextBlock)container.Child!;
-        var run = linkText.Inlines!.OfType<Run>().First();
+        // ... wrapping a clickable link.
+        var link = span.Inlines.OfType<LinkSpan>().First();
+        var run = link.Inlines.OfType<Run>().First();
         Assert.That(run.Text, Does.Contain("[1]"), "the marker text is the [n] reference");
     }
 }

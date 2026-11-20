@@ -5,6 +5,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **`LinkSpan`** (`AdocNet.Avalonia`): a link in the preview is now an
+  underlined span of the text, carrying its `Href`, and
+  `AvaloniaRenderer.LinkAt(textBlock, point)` returns the link under a point.
+
+### Changed
+
+- **Preview links wrap and select with the text.** They were embedded
+  controls, so a long URL could not break across lines and overflowed a
+  narrow column. A left click on any part of a link still raises
+  `LinkClicked`; the hand cursor shows only over links, and the press still
+  bubbles to the host.
+
 ## [1.0.42] - 2026-11-20
 
 ### Added

@@ -336,10 +336,9 @@ public class IncrementalAvaloniaRendererTests
 
         var panel = (StackPanel)renderer.Render(layout);
         var paragraph = (TextBlock)panel.Children[0];
-        var container = paragraph.Inlines!.OfType<InlineUIContainer>().First();
-        var linkText = (TextBlock)container.Child!;
+        var link = paragraph.Inlines!.OfType<LinkSpan>().First();
 
-        Assert.That(linkText.Foreground, Is.SameAs(global::Avalonia.Media.Brushes.Red));
+        Assert.That(link.Foreground, Is.SameAs(global::Avalonia.Media.Brushes.Red));
     }
 
     [AvaloniaTest]
