@@ -59,6 +59,21 @@ public class MarkdownParserTests
         Assert.That(bold.Children.OfType<TextRun>().Single().Source, Is.EqualTo(R(3, 8, 11)));
     }
 
+    [TestCase("# T\n\n## A\n")]
+    [TestCase("---\ntitle: T\n---\n\n## A\n\ntext\n")]
+    public void Line_origins_map_every_line_to_itself_like_the_asciidoc_parser(string markdown)
+    {
+        // Front matter lines count too: ranges are in Markdown coordinates.
+        var result = MarkdownParser.Parse(markdown);
+
+        Assert.That(result.LineOrigins, Has.Count.EqualTo(markdown.Split('\n').Length));
+        if (!markdown.StartsWith("---", StringComparison.Ordinal))
+            Assert.That(result.LineOrigins, Has.Count.EqualTo(AdocNet.Parser.AdocParser.Parse(markdown).LineOrigins.Count), "same shape as the AsciiDoc parser");
+        Assert.That(result.LineOrigins.Select(o => (o.SourceFile, o.IsSynthetic)), Is.All.EqualTo(((string?)null, false)));
+        Assert.That(result.LineOrigins.Select(o => o.SourceLine), Is.EqualTo(Enumerable.Range(1, result.LineOrigins.Count)));
+        Assert.That(result.ToSourceLine(3), Is.EqualTo(3));
+    }
+
     [Test]
     public void Soft_break_is_a_space_and_hard_break_a_line_break()
     {
@@ -68,14 +83,21 @@ public class MarkdownParserTests
         Assert.That(soft.HasHardbreaks, Is.False);
 
         var hard = Doc("one  \ntwo\\\nthree\n").Children.OfType<ParagraphNode>().Single();
-        Assert.That(hard.HasHardbreaks, Is.True);
+        Assert.That(hard.HasHardbreaks, Is.False, "only the marked line breaks");
         Assert.That(hard.Inlines.Cast<TextInlineNode>().Select(t => t.Value), Is.EqualTo(new[] { "one", "\n", "two", "\n", "three" }));
+        Assert.That(hard.Inlines.OfType<HardBreakInlineNode>().Count(), Is.EqualTo(2));
 
         // In the layout, each line keeps its own range, and the break is a line break run.
         var paragraph = Layout("one  \n  two\n").Children.OfType<ParagraphLayout>().Single().Inlines;
         Assert.That(paragraph.Select(i => i.GetType().Name), Is.EqualTo(new[] { "TextRun", "LineBreakRun", "TextRun" }));
         Assert.That(paragraph[0].Source, Is.EqualTo(R(1, 1, 3)));
         Assert.That(paragraph[2].Source, Is.EqualTo(R(2, 3, 5)));
+
+        // List items and table cells break too, in the layout and in HTML.
+        var item = Layout("* one  \n  two\n").Children.OfType<ListLayout>().Single().Items.Single().Inlines;
+        Assert.That(item.Select(i => i.GetType().Name), Is.EqualTo(new[] { "TextRun", "LineBreakRun", "TextRun" }));
+        var html = new HtmlRenderer().RenderToString(Doc("* one  \n  two\n"));
+        Assert.That(html, Does.Contain("one<br>\ntwo"));
     }
 
     [Test]

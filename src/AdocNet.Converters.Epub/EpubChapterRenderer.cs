@@ -615,6 +615,7 @@ internal sealed class EpubChapterRenderer
     {
         switch (node)
         {
+            case HardBreakInlineNode n: sb.Append("<br/>").Append(n.Value); break;
             case TextInlineNode n: EscapeXmlTo(sb, n.Value); break;
 
             // Asciidoctor-epub3 uses <strong>/<em> (semantic) for the standard

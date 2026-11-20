@@ -64,6 +64,7 @@ public abstract class DocumentRendererBase : IDocumentRenderer
     {
         switch (node)
         {
+            case HardBreakInlineNode n: RenderHardBreakInline(n, context); break;
             case TextInlineNode n: RenderTextInline(n, context); break;
             case StrongInlineNode n: RenderStrongInline(n, context); break;
             case EmphasisInlineNode n: RenderEmphasisInline(n, context); break;
@@ -165,6 +166,10 @@ public abstract class DocumentRendererBase : IDocumentRenderer
 
     protected virtual void RenderTextInline(TextInlineNode node, RenderContext context)
         => throw new NotSupportedException($"{Format} renderer does not support {node.Kind}");
+
+    /// <summary>Renders a hard line break; by default as its text, a line feed.</summary>
+    protected virtual void RenderHardBreakInline(HardBreakInlineNode node, RenderContext context)
+        => RenderTextInline(node, context);
 
     protected virtual void RenderStrongInline(StrongInlineNode node, RenderContext context)
         => throw new NotSupportedException($"{Format} renderer does not support {node.Kind}");

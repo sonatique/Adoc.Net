@@ -33,6 +33,10 @@ public sealed partial class HtmlRenderer
 
         switch (node)
         {
+            case HardBreakInlineNode hardBreak:
+                sb.Append("<br>").Append(hardBreak.Value);
+                break;
+
             case TextInlineNode text:
                 EscapeTo(sb, text.Value);
                 break;

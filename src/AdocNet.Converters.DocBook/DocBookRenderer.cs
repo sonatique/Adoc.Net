@@ -1128,6 +1128,11 @@ public sealed class DocBookRenderer : DocumentRendererBase
     {
         switch (node)
         {
+            case HardBreakInlineNode n:
+                writer.WriteProcessingInstruction("asciidoc-br", "");
+                WriteTextWithQuoteWrap(writer, n.Value);
+                break;
+
             case TextInlineNode n:
                 WriteTextWithQuoteWrap(writer, n.Value);
                 break;

@@ -52,10 +52,15 @@ internal static class InlineParser
     /// Document attributes for <c>{name}</c> expansion. May be null if
     /// <see cref="SubstitutionKind.Attributes"/> is not set.
     /// </param>
+    /// <param name="hardbreaks">
+    /// True when every line break is a hard break (the <c>%hardbreaks</c> block option);
+    /// the <c>hardbreaks-option</c> document attribute does the same.
+    /// </param>
     public static IReadOnlyList<InlineNode> Parse(
         string text,
         SubstitutionKind substitutions,
-        IReadOnlyDictionary<string, string>? attributes)
+        IReadOnlyDictionary<string, string>? attributes,
+        bool hardbreaks = false)
     {
         if (string.IsNullOrEmpty(text)) return [];
 
@@ -80,7 +85,55 @@ internal static class InlineParser
         // kbd:[], btn:[], menu:[] require :experimental: attribute to be set
         var doExperimental      = attributes is not null && attributes.ContainsKey("experimental");
 
-        return ParseInlines(text, 0, text.Length, ActiveMarkers.None, doFormatting, doMacros, doReplacements, doPostReplacements, doExperimental, attributes);
+        var outerBreaks = _breaks;
+        _breaks = !doReplacements && !doPostReplacements ? HardBreaks.None
+            : hardbreaks || attributes?.ContainsKey("hardbreaks-option") == true ? HardBreaks.Every
+            : HardBreaks.Marked;
+        try
+        {
+            return ParseInlines(text, 0, text.Length, ActiveMarkers.None, doFormatting, doMacros, doReplacements, doPostReplacements, doExperimental, attributes);
+        }
+        finally
+        {
+            _breaks = outerBreaks;
+        }
+    }
+
+    private enum HardBreaks
+    {
+        /// <summary>No hard breaks (substitutions without replacements).</summary>
+        None,
+
+        /// <summary>A line ending in <c>" +"</c> breaks.</summary>
+        Marked,
+
+        /// <summary>Every line break is hard (<c>%hardbreaks</c>).</summary>
+        Every,
+    }
+
+    // Hard-break mode of the Parse call in progress on this thread; the recursive
+    // scanner reads it instead of taking one more parameter at every call.
+    [ThreadStatic] private static HardBreaks _breaks;
+
+    /// <summary>
+    /// The end of the hard break starting at <paramref name="i"/> (past its line feed), or -1.
+    /// Like Asciidoctor, <c>" +"</c> also breaks at the end of the text, except under
+    /// <c>%hardbreaks</c>, where the last line stays as written.
+    /// </summary>
+    private static int HardBreakEnd(string text, int i, int endIndex)
+    {
+        if (_breaks == HardBreaks.None) return -1;
+        int end = -1;
+        if (text[i] == ' ' && i + 1 < text.Length && text[i + 1] == '+')
+        {
+            if (i + 2 < text.Length && text[i + 2] == '\n') end = i + 3;
+            else if (i + 2 == text.Length && _breaks == HardBreaks.Marked) end = i + 2;
+        }
+        else if (text[i] == '\n' && _breaks == HardBreaks.Every)
+        {
+            end = i + 1;
+        }
+        return end <= endIndex ? end : -1;
     }
 
     /// <summary>
@@ -100,6 +153,19 @@ internal static class InlineParser
         while (i < endIndex)
         {
             char c = text[i];
+
+            // ── Hard line break: " +" at a line end, or any line break under %hardbreaks ──
+            if ((c == ' ' || c == '\n') && HardBreakEnd(text, i, endIndex) is var breakEnd and > 0)
+            {
+                FlushPlain(nodes, plain, doReplacements, doPostReplacements, text, i);
+                nodes.Add(new HardBreakInlineNode
+                {
+                    Value = text[breakEnd - 1] == '\n' ? "\n" : "",
+                    Source = RangeWithin(text, i, c == ' ' ? i + 2 : i + 1),
+                });
+                i = breakEnd;
+                continue;
+            }
 
             // ── Backslash escape: \* \_ \` \< \http etc. ────────────────────
             if (c == '\\' && i + 1 < endIndex)

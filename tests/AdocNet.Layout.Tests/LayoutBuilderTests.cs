@@ -626,7 +626,7 @@ public class LayoutBuilderTests
         var para = Build("a [.line-through]#gone# and #marked#\n").Children.OfType<ParagraphLayout>().Single();
         var strike = para.Inlines.OfType<StrikethroughRun>().Single();
         Assert.That(strike.Children.OfType<TextRun>().Single().Text, Is.EqualTo("gone"));
-        Assert.That(para.Inlines.OfType<BoldRun>().Single().Children.OfType<TextRun>().Single().Text, Is.EqualTo("marked"));
+        Assert.That(para.Inlines.OfType<HighlightRun>().Single().Children.OfType<TextRun>().Single().Text, Is.EqualTo("marked"));
     }
 
     [Test]
@@ -655,6 +655,26 @@ public class LayoutBuilderTests
         Assert.That(((TextRun)inlines[0]).Text, Is.EqualTo("first"));
         Assert.That(inlines[0].Source, Is.EqualTo(Range(line, 1, 5)));
         Assert.That(inlines[2].Source, Is.EqualTo(Range(line + 1, 1, 6)));
+    }
+
+    [Test]
+    public void Hard_line_breaks_split_list_items_and_cells_but_soft_ones_wrap()
+    {
+        var layout = Build("* first +\nsecond\nthird\n\n|===\n|cell +\nnext\n|===\n");
+        var item = layout.Children.OfType<ListLayout>().Single().Items.Single().Inlines;
+        Assert.That(item.Select(i => i.GetType().Name), Is.EqualTo(new[] { "TextRun", "LineBreakRun", "TextRun" }));
+        Assert.That(((TextRun)item[2]).Text, Is.EqualTo("second third"));
+        Assert.That(item[1].Source, Is.EqualTo(Range(1, 8, 9)), "the break maps to its \" +\" marker");
+
+        var cell = layout.Children.OfType<TableLayout>().Single().Rows.Single().Cells.Single().Inlines;
+        Assert.That(cell.Select(i => i.GetType().Name), Is.EqualTo(new[] { "TextRun", "LineBreakRun", "TextRun" }));
+    }
+
+    [Test]
+    public void Trailing_plus_at_the_end_adds_no_line()
+    {
+        var inlines = Build("end +\n").Children.OfType<ParagraphLayout>().Single().Inlines;
+        Assert.That(inlines.Select(i => i.GetType().Name), Is.EqualTo(new[] { "TextRun" }));
     }
 
     [Test]

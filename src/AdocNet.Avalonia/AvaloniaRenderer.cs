@@ -8,6 +8,7 @@ using global::Avalonia.Input;
 using global::Avalonia.Layout;
 using global::Avalonia.Media;
 using global::Avalonia.Media.Imaging;
+using global::Avalonia.Threading;
 using AdocNet;
 using AdocNet.Layout;
 using AvInline = global::Avalonia.Controls.Documents.Inline;
@@ -20,8 +21,6 @@ namespace AdocNet.Avalonia;
 public class AvaloniaRenderer
 {
     private const string BulletPrefix = "\u2022 ";
-    private const string CheckedPrefix = "\u2611 ";
-    private const string UncheckedPrefix = "\u2610 ";
 
     /// <summary>
     /// Visual styling (brushes, fonts, sizes). Defaults to a fresh
@@ -257,9 +256,7 @@ public class AvaloniaRenderer
         for (int i = from; i <= to; i++)
         {
             var item = list.Items[i];
-            var prefix = list.Ordered ? $"{i + 1}. " : BulletPrefix;
-            if (item.Checked is { } isChecked)
-                prefix = (list.Ordered ? prefix : "") + (isChecked ? CheckedPrefix : UncheckedPrefix);
+            var prefix = list.Ordered ? $"{i + 1}. " : item.Checked is null ? BulletPrefix : "";
             var itemPanel = RenderListItem(item, prefix);
             panel.Children.Add(itemPanel);
         }
@@ -278,7 +275,14 @@ public class AvaloniaRenderer
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 2),
         };
-        textBlock.Inlines!.Add(new Run(prefix));
+        if (prefix.Length > 0)
+            textBlock.Inlines!.Add(new Run(prefix));
+        if (item.Checked is { } isChecked)
+        {
+            // Drawn rather than a ☑/☐ glyph: font fallback shows ☑ as a colour emoji on Windows.
+            textBlock.Inlines!.Add(new InlineUIContainer { Child = CheckBox(isChecked, textBlock) });
+            textBlock.Inlines!.Add(new Run(" "));
+        }
         AddInlines(textBlock.Inlines!, item.Inlines);
         panel.Children.Add(textBlock);
 
@@ -292,6 +296,39 @@ public class AvaloniaRenderer
         }
 
         return panel;
+    }
+
+    /// <summary>
+    /// A checklist box about as tall as a capital letter, standing on the baseline, drawn in the
+    /// colour and at the font size of <paramref name="text"/>; a checked box holds a tick.
+    /// </summary>
+    private static Viewbox CheckBox(bool isChecked, TextBlock text)
+    {
+        var foreground = text.GetObservable(TextBlock.ForegroundProperty);
+        // A 12-unit drawing, scaled by the Viewbox to three quarters of the font size.
+        var drawing = new Canvas { Width = 12, Height = 12 };
+        var frame = new global::Avalonia.Controls.Shapes.Rectangle { Width = 11, Height = 11, RadiusX = 2, RadiusY = 2, StrokeThickness = 1 };
+        Canvas.SetLeft(frame, 0.5);
+        Canvas.SetTop(frame, 0.5);
+        frame.Bind(global::Avalonia.Controls.Shapes.Shape.StrokeProperty, foreground);
+        drawing.Children.Add(frame);
+        if (isChecked)
+        {
+            var tick = new global::Avalonia.Controls.Shapes.Path
+            {
+                Data = new PolylineGeometry(new[] { new Point(3, 6.2), new Point(5.2, 8.6), new Point(9.2, 3.6) }, false),
+                StrokeThickness = 1.6,
+                StrokeLineCap = PenLineCap.Round,
+                StrokeJoin = PenLineJoin.Round,
+            };
+            tick.Bind(global::Avalonia.Controls.Shapes.Shape.StrokeProperty, foreground);
+            drawing.Children.Add(tick);
+        }
+        var box = new Viewbox { Child = drawing, Stretch = Stretch.Uniform };
+        var size = text.GetObservable(TextBlock.FontSizeProperty, fontSize => Math.Round(fontSize * 0.75));
+        box.Bind(Layoutable.WidthProperty, size);
+        box.Bind(Layoutable.HeightProperty, size);
+        return box;
     }
 
     private Border RenderCodeBlock(CodeBlockLayout codeBlock)
@@ -588,22 +625,23 @@ public class AvaloniaRenderer
     private StackPanel RenderImage(ImageLayout image)
     {
         var panel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
-        if (LoadImage(image.Target) is { } bitmap)
-        {
-            var control = new Image
+        var host = new Decorator();
+        panel.Children.Add(host);
+        ShowImage(LoadImage(image.Target), host,
+            bitmap =>
             {
-                Source = bitmap,
-                Stretch = Stretch.Uniform,
-                StretchDirection = StretchDirection.DownOnly,
-                HorizontalAlignment = HorizontalAlignment.Left,
-            };
-            if (PixelSize(image.Width) is { } width) control.MaxWidth = width;
-            if (PixelSize(image.Height) is { } height) control.MaxHeight = height;
-            panel.Children.Add(control);
-        }
-        else
-        {
-            panel.Children.Add(new Border
+                var control = new Image
+                {
+                    Source = bitmap,
+                    Stretch = Stretch.Uniform,
+                    StretchDirection = StretchDirection.DownOnly,
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                };
+                if (PixelSize(image.Width) is { } width) control.MaxWidth = width;
+                if (PixelSize(image.Height) is { } height) control.MaxHeight = height;
+                return control;
+            },
+            () => new Border
             {
                 Background = Theme.CodeBlockBackground,
                 Padding = new Thickness(8),
@@ -615,7 +653,6 @@ public class AvaloniaRenderer
                     TextWrapping = TextWrapping.Wrap,
                 },
             });
-        }
         if (!string.IsNullOrEmpty(image.Title))
         {
             panel.Children.Add(new TextBlock
@@ -640,19 +677,69 @@ public class AvaloniaRenderer
             : null;
     }
 
-    /// <summary>Decodes a local raster image, or null when it cannot or may not be loaded.</summary>
-    private Bitmap? LoadImage(string target)
+    /// <summary>Widest decoded image, in pixels: wider files are scaled down to it once, after decoding.</summary>
+    internal const int MaxImageWidth = 2048;
+
+    // ponytail: cleared whole when full rather than least-recently-used; enough for one document's images.
+    private const int MaxCachedImages = 64;
+
+    /// <summary>Image loads by full path, reused while the file's write time is unchanged.</summary>
+    private readonly Dictionary<string, (DateTime Stamp, Task<Bitmap?> Load)> _images = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Starts (or reuses) decoding a local raster image on a worker thread; null when the target
+    /// may not or cannot be loaded. The task's result is null when the file does not decode.
+    /// </summary>
+    private Task<Bitmap?>? LoadImage(string target)
     {
         var path = ResolveImagePath(target, BaseDirectory);
         if (path is null) return null;
+        DateTime stamp;
         try
         {
-            return new Bitmap(path);
+            stamp = System.IO.File.GetLastWriteTimeUtc(path);
+        }
+        catch
+        {
+            return null;
+        }
+        if (_images.TryGetValue(path, out var cached) && cached.Stamp == stamp) return cached.Load;
+        if (_images.Count >= MaxCachedImages) _images.Clear();
+        var load = Task.Run(() => DecodeImage(path));
+        _images[path] = (stamp, load);
+        return load;
+    }
+
+    private static Bitmap? DecodeImage(string path)
+    {
+        try
+        {
+            var bitmap = new Bitmap(path);
+            var size = bitmap.PixelSize;
+            if (size.Width <= MaxImageWidth) return bitmap;
+            using (bitmap)
+                return bitmap.CreateScaledBitmap(new PixelSize(MaxImageWidth, Math.Max(1, (int)((long)size.Height * MaxImageWidth / size.Width))));
         }
         catch
         {
             return null; // undecodable: show the alternative text
         }
+    }
+
+    /// <summary>
+    /// Puts the image into <paramref name="host"/> once decoded (at once when already cached),
+    /// or the fallback when it cannot be loaded.
+    /// </summary>
+    private static void ShowImage(Task<Bitmap?>? load, Decorator host, Func<Bitmap, Control> image, Func<Control> fallback)
+    {
+        if (load is null)
+            host.Child = fallback();
+        else if (load.IsCompleted)
+            host.Child = load.Result is { } bitmap ? image(bitmap) : fallback();
+        else
+            load.ContinueWith(
+                done => Dispatcher.UIThread.Post(() => host.Child = done.Result is { } bitmap ? image(bitmap) : fallback()),
+                TaskScheduler.Default);
     }
 
     /// <summary>
@@ -825,7 +912,9 @@ public class AvaloniaRenderer
                 AddInlines(linkText.Inlines!, link.Children);
                 var href = link.Href;
                 linkText.PointerPressed += (_, _) => OnLinkClicked(href);
-                return new InlineUIContainer { Child = linkText };
+                // On the default Baseline alignment the container's bottom edge sits on the
+                // baseline, lifting the link text by its descent; TextBottom lines it up.
+                return new InlineUIContainer { Child = linkText, BaselineAlignment = BaselineAlignment.TextBottom };
             }
 
             case LineBreakRun:
@@ -838,13 +927,24 @@ public class AvaloniaRenderer
                 return span;
             }
 
+            case HighlightRun highlight:
+            {
+                var span = new Span { Background = Theme.HighlightBackground, Foreground = Theme.HighlightForeground };
+                AddInlines(span.Inlines, highlight.Children);
+                return span;
+            }
+
             case ImageRun image:
-                return LoadImage(image.Target) is { } bitmap
-                    ? new InlineUIContainer
-                    {
-                        Child = new Image { Source = bitmap, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly },
-                    }
-                    : new Run("[image: " + image.Alt + "]");
+            {
+                var fallback = "[image: " + image.Alt + "]";
+                if (LoadImage(image.Target) is not { } load)
+                    return new Run(fallback);
+                var host = new Decorator();
+                ShowImage(load, host,
+                    bitmap => new Image { Source = bitmap, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly },
+                    () => new TextBlock { Text = fallback });
+                return new InlineUIContainer { Child = host };
+            }
 
             default:
                 return null;
@@ -893,6 +993,9 @@ public class AvaloniaRenderer
                     break;
                 case StrikethroughRun strikethrough:
                     AppendPlainText(sb, strikethrough.Children);
+                    break;
+                case HighlightRun highlight:
+                    AppendPlainText(sb, highlight.Children);
                     break;
                 case ImageRun image:
                     sb.Append(image.Alt);

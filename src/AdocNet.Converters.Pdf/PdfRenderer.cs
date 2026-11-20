@@ -1034,41 +1034,16 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
         // Body color is set globally at start of document; no per-paragraph
         // override needed unless we change colors mid-paragraph.
-        if (paragraph.HasHardbreaks)
-        {
-            // " +" line ends (or hardbreaks): each piece starts a new line; a broken line is
-            // never justified, like the last line of a paragraph.
-            _keepHardBreaks = true;
-            var pieces = BuildInlineSegments(paragraph.Inlines, paragraph.Text.Replace('\n', ' '), _fontRegular, _bodyFontSize, footnotes);
-            _keepHardBreaks = false;
-            foreach (var line in SplitAtHardBreaks(pieces))
-                w.WriteWrappedSegments(line, _bodyLeading);
-        }
-        else
-        {
-            var segments = BuildInlineSegments(paragraph.Inlines, paragraph.Text, _fontRegular, _bodyFontSize, footnotes);
-            w.WriteWrappedSegments(segments, _bodyLeading);
-        }
+        // Under %hardbreaks every line break of the text is hard, also in an AST built without
+        // HardBreakInlineNodes; the writer starts a new line at each.
+        _keepHardBreaks = paragraph.HasHardbreaks;
+        var segments = BuildInlineSegments(paragraph.Inlines, paragraph.HasHardbreaks ? paragraph.Text.Replace('\n', ' ') : paragraph.Text, _fontRegular, _bodyFontSize, footnotes);
+        _keepHardBreaks = false;
+        w.WriteWrappedSegments(segments, _bodyLeading);
         w.MoveCursor(_paragraphSpacingAfter);
     }
 
     private bool _keepHardBreaks;
-
-    /// <summary>Splits segments at the newlines kept for hard breaks: one segment list per line.</summary>
-    private static List<List<TextSegment>> SplitAtHardBreaks(List<TextSegment> segments)
-    {
-        var lines = new List<List<TextSegment>> { new() };
-        foreach (var seg in segments)
-        {
-            var parts = seg.Text.Split('\n');
-            for (int i = 0; i < parts.Length; i++)
-            {
-                if (i > 0) lines.Add(new List<TextSegment>());
-                if (parts[i].Length > 0) lines[^1].Add(seg with { Text = parts[i] });
-            }
-        }
-        return lines;
-    }
 
     private void RenderList(PdfWriter w, ListNode list, int indentLevel, FootnoteState footnotes)
     {

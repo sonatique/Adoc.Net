@@ -2,6 +2,7 @@ using global::Avalonia.Controls;
 using global::Avalonia.Controls.Documents;
 using global::Avalonia.Headless.NUnit;
 using global::Avalonia.Media;
+using global::Avalonia.Threading;
 using AdocNet.Avalonia;
 using AdocNet.Layout.Builders;
 using AdocNet.Parser;
@@ -21,6 +22,17 @@ public class LayoutBlocksRenderingTests
     private static StackPanel Render(string adoc, string? baseDirectory = null) =>
         (StackPanel)new AvaloniaRenderer { WrapInScrollViewer = false, BaseDirectory = baseDirectory }
             .Render(new LayoutBuilder().Build(AdocParser.Parse(adoc).Document));
+
+    /// <summary>Runs posted UI jobs until <paramref name="done"/> holds (images decode on a worker thread).</summary>
+    private static void Settle(Func<bool> done)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (!done() && DateTime.UtcNow < deadline)
+        {
+            Dispatcher.UIThread.RunJobs();
+            Thread.Sleep(5);
+        }
+    }
 
     private static IEnumerable<T> All<T>(Control root) where T : Control
     {
@@ -46,11 +58,47 @@ public class LayoutBlocksRenderingTests
     }
 
     [AvaloniaTest]
+    public void Marked_text_has_the_highlight_background()
+    {
+        var renderer = new AvaloniaRenderer { WrapInScrollViewer = false };
+        var root = (StackPanel)renderer.Render(new LayoutBuilder().Build(AdocParser.Parse("a #marked# b").Document));
+        var span = root.Children.OfType<TextBlock>().Single().Inlines!.OfType<Span>().Single();
+        Assert.That(span.Background, Is.SameAs(renderer.Theme.HighlightBackground));
+        Assert.That(span.Foreground, Is.SameAs(renderer.Theme.HighlightForeground));
+        Assert.That(span.Inlines.OfType<Run>().Single().Text, Is.EqualTo("marked"));
+    }
+
+    [AvaloniaTest]
+    public void Links_sit_on_the_text_baseline()
+    {
+        // The default Baseline alignment puts the container's bottom edge on the baseline,
+        // which lifted links by their descent (about 4 px at 14 px).
+        var paragraph = Render("Some text with https://example.org and https://example.org[named] here.").Children.OfType<TextBlock>().Single();
+        var links = paragraph.Inlines!.OfType<InlineUIContainer>().ToList();
+        Assert.That(links, Has.Count.EqualTo(2));
+        Assert.That(links.Select(l => l.BaselineAlignment), Is.All.EqualTo(BaselineAlignment.TextBottom));
+    }
+
+    [AvaloniaTest]
     public void Checklist_items_show_their_boxes()
     {
         var list = Render("* [x] done\n* [ ] todo\n* plain").Children.OfType<StackPanel>().Single();
-        var prefixes = All<TextBlock>(list).Select(t => t.Inlines!.OfType<Run>().First().Text).ToList();
-        Assert.That(prefixes, Is.EqualTo(new[] { "\u2611 ", "\u2610 ", "\u2022 " }));
+        var items = All<TextBlock>(list).ToList();
+
+        // Boxes are drawn (a glyph falls back to a colour emoji for the checked one), and take
+        // the same two text positions as the "\u2611 " prefix did.
+        foreach (var (item, isChecked) in new[] { (items[0], true), (items[1], false) })
+        {
+            var box = (Viewbox)((InlineUIContainer)item.Inlines![0]).Child!;
+            var drawing = (Canvas)box.Child!;
+            Assert.That(drawing.Children.OfType<global::Avalonia.Controls.Shapes.Path>().Any(), Is.EqualTo(isChecked));
+            Assert.That(((Run)item.Inlines[1]).Text, Is.EqualTo(" "));
+        }
+        Assert.That(items[2].Inlines!.OfType<Run>().First().Text, Is.EqualTo("\u2022 "));
+
+        var checkbox = (Viewbox)((InlineUIContainer)items[0].Inlines![0]).Child!;
+        items[0].FontSize = 20;
+        Assert.That(checkbox.Width, Is.EqualTo(15), "three quarters of the font size");
     }
 
     [AvaloniaTest]
@@ -82,13 +130,13 @@ public class LayoutBlocksRenderingTests
         {
             File.WriteAllBytes(Path.Combine(dir, "dot.png"), Png);
             var panel = Render(".Caption\nimage::dot.png[A dot]\n\nInline image:dot.png[d] here.", dir);
-            var image = All<Image>(panel).Single();
-            Assert.That(image.Source, Is.Not.Null);
-            Assert.That(All<TextBlock>(panel).Any(t => t.Text == "Caption"), Is.True);
-
             var paragraph = panel.Children.OfType<TextBlock>().Last();
-            var inlineImage = paragraph.Inlines!.OfType<InlineUIContainer>().Single();
-            Assert.That(((Image)inlineImage.Child!).Source, Is.Not.Null);
+            var inlineHost = (Decorator)paragraph.Inlines!.OfType<InlineUIContainer>().Single().Child!;
+            Settle(() => All<Image>(panel).Any() && inlineHost.Child is Image);
+
+            Assert.That(All<Image>(panel).Single().Source, Is.Not.Null);
+            Assert.That(All<TextBlock>(panel).Any(t => t.Text == "Caption"), Is.True);
+            Assert.That(((Image)inlineHost.Child!).Source, Is.Not.Null);
         }
         finally
         {
@@ -121,7 +169,40 @@ public class LayoutBlocksRenderingTests
             File.WriteAllText(Path.Combine(dir, "a.svg"), "<svg xmlns=\"http://www.w3.org/2000/svg\"/>");
             Assert.That(All<Image>(Render("image::dot.png[x]")), Is.Empty, "no base directory");
             Assert.That(All<Image>(Render("image::a.svg[x]", dir)), Is.Empty, "svg");
-            Assert.That(All<Image>(Render("image::" + Path.Combine(dir, "dot.png") + "[x]")), Has.Exactly(1).Items, "absolute path");
+            var absolute = Render("image::" + Path.Combine(dir, "dot.png") + "[x]");
+            Settle(() => All<Image>(absolute).Any());
+            Assert.That(All<Image>(absolute), Has.Exactly(1).Items, "absolute path");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [AvaloniaTest]
+    public void Decoded_images_are_reused_until_the_file_changes()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "adocnet-img-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var file = Path.Combine(dir, "dot.png");
+            File.WriteAllBytes(file, Png);
+            var renderer = new AvaloniaRenderer { WrapInScrollViewer = false, BaseDirectory = dir };
+            var layout = new LayoutBuilder().Build(AdocParser.Parse("image::dot.png[x]").Document);
+            IImage? Decoded()
+            {
+                var panel = (StackPanel)renderer.Render(layout);
+                Settle(() => All<Image>(panel).Any());
+                return All<Image>(panel).Single().Source;
+            }
+
+            var first = Decoded();
+            var again = (StackPanel)renderer.Render(layout);
+            Assert.That(All<Image>(again).Single().Source, Is.SameAs(first), "a cached image shows at once");
+
+            File.SetLastWriteTimeUtc(file, File.GetLastWriteTimeUtc(file).AddSeconds(5));
+            Assert.That(Decoded(), Is.Not.SameAs(first), "a changed file decodes again");
         }
         finally
         {
