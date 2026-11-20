@@ -225,7 +225,7 @@ public class AvaloniaRenderer
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8),
         };
-        AddInlines(textBlock.Inlines!, paragraph.Inlines);
+        AddInlines(textBlock, paragraph.Inlines);
         return textBlock;
     }
 
@@ -239,7 +239,7 @@ public class AvaloniaRenderer
             Margin = new Thickness(0, 12, 0, 4),
         };
         ApplyHeadingStyle(textBlock, heading.Level);
-        AddInlines(textBlock.Inlines!, heading.Inlines);
+        AddInlines(textBlock, heading.Inlines);
         return textBlock;
     }
 
@@ -283,7 +283,7 @@ public class AvaloniaRenderer
             textBlock.Inlines!.Add(new InlineUIContainer { Child = CheckBox(isChecked, textBlock) });
             textBlock.Inlines!.Add(new Run(" "));
         }
-        AddInlines(textBlock.Inlines!, item.Inlines);
+        AddInlines(textBlock, item.Inlines);
         panel.Children.Add(textBlock);
 
         foreach (var nested in item.Blocks)
@@ -579,7 +579,7 @@ public class AvaloniaRenderer
         };
         if (cell.IsHeader && Theme.TableHeaderForeground is { } headerFg)
             textBlock.Foreground = headerFg;
-        AddInlines(textBlock.Inlines!, cell.Inlines);
+        AddInlines(textBlock, cell.Inlines);
 
         return new Border
         {
@@ -605,7 +605,7 @@ public class AvaloniaRenderer
                 Foreground = Theme.DescriptionTermForeground,
                 TextWrapping = TextWrapping.Wrap,
             };
-            AddInlines(termBlock.Inlines!, item.Term);
+            AddInlines(termBlock, item.Term);
             panel.Children.Add(termBlock);
 
             var descBlock = new TextBlock
@@ -613,7 +613,7 @@ public class AvaloniaRenderer
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(16, 0, 0, 6),
             };
-            AddInlines(descBlock.Inlines!, item.Description);
+            AddInlines(descBlock, item.Description);
             panel.Children.Add(descBlock);
         }
 
@@ -830,6 +830,88 @@ public class AvaloniaRenderer
         }
     }
 
+    /// <summary>Adds the inlines to a block's text, making any link in it clickable.</summary>
+    private void AddInlines(TextBlock textBlock, IReadOnlyList<InlineLayout> inlines)
+    {
+        AddInlines(textBlock.Inlines!, inlines);
+        if (ContainsLink(textBlock.Inlines!))
+            WireLinks(textBlock);
+    }
+
+    private static bool ContainsLink(IEnumerable<AvInline> inlines) =>
+        inlines.Any(inline => inline is LinkSpan || inline is Span span && ContainsLink(span.Inlines));
+
+    /// <summary>
+    /// Shows the hand cursor over the links of <paramref name="textBlock"/> and raises
+    /// <see cref="LinkClicked"/> on a left click on one. The press still bubbles on, so a host
+    /// can also map the click to its source.
+    /// </summary>
+    private void WireLinks(TextBlock textBlock)
+    {
+        textBlock.PointerMoved += (_, e) =>
+        {
+            if (LinkAt(textBlock, e.GetPosition(textBlock)) is not null)
+                textBlock.Cursor = HandCursor;
+            else
+                textBlock.ClearValue(InputElement.CursorProperty);
+        };
+        textBlock.PointerPressed += (_, e) =>
+        {
+            if (e.GetCurrentPoint(textBlock).Properties.IsLeftButtonPressed
+                && LinkAt(textBlock, e.GetPosition(textBlock)) is { } link)
+                OnLinkClicked(link.Href);
+        };
+    }
+
+    private Cursor? _handCursor;
+    private Cursor HandCursor => _handCursor ??= new Cursor(StandardCursorType.Hand);
+
+    /// <summary>The link under <paramref name="point"/> (in the TextBlock's coordinates), or null.</summary>
+    public static LinkSpan? LinkAt(TextBlock textBlock, Point point)
+    {
+        if (textBlock.Inlines is not { Count: > 0 } inlines)
+            return null;
+        // The hit's IsInside is false on every line but the first (Avalonia 11.3), so check that
+        // the point falls on the hit character itself: past a line's end it does not.
+        var layout = textBlock.TextLayout;
+        int index = layout.HitTestPoint(point).CharacterHit.FirstCharacterIndex;
+        if (!layout.HitTestTextPosition(index).Contains(point))
+            return null;
+        int pos = 0;
+        return FindLink(inlines, index, ref pos, null, out var link) ? link : null;
+    }
+
+    /// <summary>
+    /// Walks <paramref name="inlines"/> counting text positions as the text layout does (a run
+    /// its text, a line break a newline, an embedded control one) until it reaches
+    /// <paramref name="target"/>; <paramref name="link"/> is the link holding that position, if any.
+    /// </summary>
+    private static bool FindLink(IEnumerable<AvInline> inlines, int target, ref int pos, LinkSpan? holder, out LinkSpan? link)
+    {
+        foreach (var inline in inlines)
+        {
+            if (inline is Span span)
+            {
+                if (FindLink(span.Inlines, target, ref pos, span as LinkSpan ?? holder, out link))
+                    return true;
+                continue;
+            }
+            pos += inline switch
+            {
+                Run run => run.Text?.Length ?? 0,
+                LineBreak => Environment.NewLine.Length,
+                _ => 1,
+            };
+            if (target < pos)
+            {
+                link = holder;
+                return true;
+            }
+        }
+        link = null;
+        return false;
+    }
+
     /// <summary>
     /// Renders an inline layout node, stamping it with its
     /// <see cref="SourceRangeProperty"/>. Override <see cref="RenderInlineCore"/>
@@ -902,19 +984,15 @@ public class AvaloniaRenderer
 
             case LinkRun link:
             {
-                var linkText = new TextBlock
+                // Part of the text, so it wraps and selects with it; the TextBlock holding it
+                // finds it under the pointer (see WireLinks).
+                var span = new LinkSpan(link.Href)
                 {
                     Foreground = Theme.LinkBrush,
                     TextDecorations = global::Avalonia.Media.TextDecorations.Underline,
-                    Cursor = new Cursor(StandardCursorType.Hand),
-                    TextWrapping = TextWrapping.Wrap,
                 };
-                AddInlines(linkText.Inlines!, link.Children);
-                var href = link.Href;
-                linkText.PointerPressed += (_, _) => OnLinkClicked(href);
-                // On the default Baseline alignment the container's bottom edge sits on the
-                // baseline, lifting the link text by its descent; TextBottom lines it up.
-                return new InlineUIContainer { Child = linkText, BaselineAlignment = BaselineAlignment.TextBottom };
+                AddInlines(span.Inlines, link.Children);
+                return span;
             }
 
             case LineBreakRun:

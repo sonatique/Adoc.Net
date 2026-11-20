@@ -1,5 +1,7 @@
+using global::Avalonia;
 using global::Avalonia.Controls;
 using global::Avalonia.Controls.Documents;
+using global::Avalonia.Headless;
 using global::Avalonia.Headless.NUnit;
 using global::Avalonia.Media;
 using global::Avalonia.Threading;
@@ -69,14 +71,73 @@ public class LayoutBlocksRenderingTests
     }
 
     [AvaloniaTest]
-    public void Links_sit_on_the_text_baseline()
+    public void Links_are_underlined_spans_of_the_text()
     {
-        // The default Baseline alignment puts the container's bottom edge on the baseline,
-        // which lifted links by their descent (about 4 px at 14 px).
         var paragraph = Render("Some text with https://example.org and https://example.org[named] here.").Children.OfType<TextBlock>().Single();
-        var links = paragraph.Inlines!.OfType<InlineUIContainer>().ToList();
-        Assert.That(links, Has.Count.EqualTo(2));
-        Assert.That(links.Select(l => l.BaselineAlignment), Is.All.EqualTo(BaselineAlignment.TextBottom));
+        var links = paragraph.Inlines!.OfType<LinkSpan>().ToList();
+        Assert.That(links.Select(l => l.Href), Is.EqualTo(new[] { "https://example.org", "https://example.org" }));
+        Assert.That(links.Select(l => l.TextDecorations), Is.All.EqualTo(TextDecorations.Underline));
+        Assert.That(paragraph.Inlines!.OfType<InlineUIContainer>(), Is.Empty, "no embedded control, so links wrap with the text");
+    }
+
+    /// <summary>The centre of the character at <paramref name="index"/>, in window coordinates.</summary>
+    private static global::Avalonia.Point CharacterCentre(TextBlock text, Window window, int index)
+    {
+        var rect = text.TextLayout.HitTestTextPosition(index);
+        return text.TranslatePoint(rect.Center, window)!.Value;
+    }
+
+    [AvaloniaTest]
+    public void Clicking_a_link_on_any_line_raises_LinkClicked_once()
+    {
+        // A hard break first: a LineBreak takes a newline's worth of text positions.
+        const string source = "Intro +\nsee https://example.org/a/long/path/that/wraps/over/several/lines/index.html and more";
+        var renderer = new AvaloniaRenderer { WrapInScrollViewer = false };
+        var clicks = new List<string>();
+        renderer.LinkClicked += (_, e) => { clicks.Add(e.Url); e.Handled = true; };
+        var panel = (StackPanel)renderer.Render(new LayoutBuilder().Build(AdocParser.Parse(source).Document));
+        var window = new Window { Width = 160, Height = 400, Content = panel };
+        window.Show();
+        window.UpdateLayout();
+        var paragraph = panel.Children.OfType<TextBlock>().Single();
+        Assert.That(paragraph.TextLayout.TextLines, Has.Count.GreaterThan(3), "the link wraps");
+        // Headless drawing does not hit-test bare text; a background makes the block hittable.
+        paragraph.Background = Brushes.Transparent;
+
+        int linkStart = "Intro".Length + Environment.NewLine.Length + "see ".Length;
+        int linkEnd = linkStart + "https://example.org/a/long/path/that/wraps/over/several/lines/index.html".Length;
+        foreach (var index in new[] { 0, linkStart - 1, linkStart, (linkStart + linkEnd) / 2, linkEnd - 1, linkEnd + 1 })
+        {
+            clicks.Clear();
+            var point = CharacterCentre(paragraph, window, index);
+            window.MouseDown(point, global::Avalonia.Input.MouseButton.Left);
+            window.MouseUp(point, global::Avalonia.Input.MouseButton.Left);
+            bool onLink = index >= linkStart && index < linkEnd;
+            Assert.That(clicks, Is.EqualTo(onLink ? new[] { "https://example.org/a/long/path/that/wraps/over/several/lines/index.html" } : Array.Empty<string>()), $"character {index}");
+        }
+
+        // Past the end of a line is not on the link, even beside it.
+        var lastLine = paragraph.TextLayout.TextLines[^1];
+        var beyond = paragraph.TranslatePoint(new global::Avalonia.Point(lastLine.WidthIncludingTrailingWhitespace + 5, paragraph.TextLayout.Height - 2), window)!.Value;
+        clicks.Clear();
+        window.MouseDown(beyond, global::Avalonia.Input.MouseButton.Left);
+        Assert.That(clicks, Is.Empty);
+    }
+
+    [AvaloniaTest]
+    public void The_hand_cursor_shows_only_over_links()
+    {
+        var panel = Render("plain https://example.org plain");
+        var window = new Window { Width = 400, Height = 200, Content = panel };
+        window.Show();
+        window.UpdateLayout();
+        var paragraph = panel.Children.OfType<TextBlock>().Single();
+        paragraph.Background = Brushes.Transparent; // hittable under headless drawing
+
+        window.MouseMove(CharacterCentre(paragraph, window, "plain ".Length + 3));
+        Assert.That(paragraph.Cursor, Is.Not.Null);
+        window.MouseMove(CharacterCentre(paragraph, window, 1));
+        Assert.That(paragraph.IsSet(global::Avalonia.Input.InputElement.CursorProperty), Is.False);
     }
 
     [AvaloniaTest]
