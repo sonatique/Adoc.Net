@@ -580,7 +580,8 @@ public static class MarkdownParser
             var merged = new List<InlineNode>(inlines.Count);
             foreach (var inline in inlines)
             {
-                if (inline is TextInlineNode text && merged.Count > 0 && merged[^1] is TextInlineNode previous)
+                if (inline is TextInlineNode text && text.Value != "\n"
+                    && merged.Count > 0 && merged[^1] is TextInlineNode previous && previous.Value != "\n")
                 {
                     merged[^1] = new TextInlineNode
                     {

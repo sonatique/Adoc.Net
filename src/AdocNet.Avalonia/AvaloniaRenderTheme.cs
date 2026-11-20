@@ -35,6 +35,12 @@ public sealed class AvaloniaRenderTheme
     /// <summary>Foreground brush for description-list terms.</summary>
     public IBrush DescriptionTermForeground { get; set; } = new SolidColorBrush(Color.FromRgb(60, 60, 60));
 
+    /// <summary>Bar on the left of a quote or verse block.</summary>
+    public IBrush QuoteBorderBrush { get; set; } = new SolidColorBrush(Color.FromRgb(200, 200, 200));
+
+    /// <summary>Foreground of a quote's attribution line.</summary>
+    public IBrush QuoteAttributionForeground { get; set; } = new SolidColorBrush(Color.FromRgb(110, 110, 110));
+
     /// <summary>Font size for the document title (the level-0 <c>= Title</c>).</summary>
     public double DocumentTitleFontSize { get; set; } = 28;
 

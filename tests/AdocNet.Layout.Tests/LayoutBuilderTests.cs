@@ -573,7 +573,6 @@ public class LayoutBuilderTests
 
     [TestCase("====")]
     [TestCase("****")]
-    [TestCase("____")]
     [TestCase("--")]
     public void Paragraph_inside_compound_block_has_absolute_source(string delimiter)
     {
@@ -581,6 +580,81 @@ public class LayoutBuilderTests
             .Children.OfType<ParagraphLayout>().Last();
         Assert.That(para.Source, Is.EqualTo(Range(4, 1, 15)));
         Assert.That(para.Inlines.OfType<TextRun>().Single().Source, Is.EqualTo(Range(4, 1, 15)));
+    }
+
+    // ── Quotes, images, strikethrough, checklists, line breaks ─────
+
+    [Test]
+    public void Quote_block_keeps_its_blocks_and_attribution()
+    {
+        var quote = Build("Intro.\n\n[quote, Ann, Book]\n____\nInside *quote*.\n____\n")
+            .Children.OfType<QuoteLayout>().Single();
+        Assert.That((quote.Attribution, quote.Citation), Is.EqualTo(("Ann", "Book")));
+        Assert.That(quote.Source, Is.EqualTo(new SourceRange(new SourcePosition(4, 1), new SourcePosition(6, 4))));
+        var para = (ParagraphLayout)quote.Blocks.Single();
+        Assert.That(para.Source, Is.EqualTo(Range(5, 1, 15)));
+        Assert.That(para.Inlines.OfType<BoldRun>().Single().Source, Is.EqualTo(Range(5, 8, 14)));
+    }
+
+    [Test]
+    public void Verse_keeps_its_lines()
+    {
+        var verse = Build("[verse, Poet]\n____\nline one\nline two\n____\n").Children.OfType<QuoteLayout>().Single();
+        Assert.That(verse.Attribution, Is.EqualTo("Poet"));
+        var inlines = ((ParagraphLayout)verse.Blocks.Single()).Inlines;
+        Assert.That(inlines.Select(i => i.GetType().Name), Is.EqualTo(new[] { "TextRun", "LineBreakRun", "TextRun" }));
+        Assert.That(inlines[0].Source, Is.EqualTo(Range(3, 1, 8)));
+        Assert.That(inlines[2].Source, Is.EqualTo(Range(4, 1, 8)));
+    }
+
+    [Test]
+    public void Block_and_inline_images()
+    {
+        var layout = Build("Intro.\n\n.Caption\nimage::img/a.png[Alt text,300]\n\nSee image:b.png[icon] here.\n");
+        var image = layout.Children.OfType<ImageLayout>().Single();
+        Assert.That((image.Target, image.Alt, image.Title, image.Width), Is.EqualTo(("img/a.png", "Alt text", "Caption", "300")));
+        Assert.That(image.Source.Start.Line, Is.EqualTo(4));
+
+        var run = layout.Children.OfType<ParagraphLayout>().Last().Inlines.OfType<ImageRun>().Single();
+        Assert.That((run.Target, run.Alt), Is.EqualTo(("b.png", "icon")));
+        Assert.That(run.Source, Is.EqualTo(Range(6, 5, 21)));
+    }
+
+    [Test]
+    public void Line_through_role_is_strikethrough()
+    {
+        var para = Build("a [.line-through]#gone# and #marked#\n").Children.OfType<ParagraphLayout>().Single();
+        var strike = para.Inlines.OfType<StrikethroughRun>().Single();
+        Assert.That(strike.Children.OfType<TextRun>().Single().Text, Is.EqualTo("gone"));
+        Assert.That(para.Inlines.OfType<BoldRun>().Single().Children.OfType<TextRun>().Single().Text, Is.EqualTo("marked"));
+    }
+
+    [Test]
+    public void Checklist_items_carry_their_state()
+    {
+        var items = Build("* [x] done\n* [ ] todo\n* plain\n").Children.OfType<ListLayout>().Single().Items;
+        Assert.That(items.Select(i => i.Checked), Is.EqualTo(new bool?[] { true, false, null }));
+        Assert.That(items[0].Inlines.OfType<TextRun>().Single().Text, Is.EqualTo("done"));
+    }
+
+    [Test]
+    public void Soft_line_breaks_become_spaces()
+    {
+        var para = Build("one\ntwo\n").Children.OfType<ParagraphLayout>().Single();
+        var run = para.Inlines.OfType<TextRun>().Single();
+        Assert.That(run.Text, Is.EqualTo("one two"));
+        Assert.That(run.Source, Is.EqualTo(new SourceRange(new SourcePosition(1, 1), new SourcePosition(2, 3))));
+    }
+
+    [TestCase("first +\nsecond\n", 1)]
+    [TestCase("[%hardbreaks]\nfirst\nsecond\n", 2)]
+    public void Hard_line_breaks_split_the_text(string adoc, int line)
+    {
+        var inlines = Build(adoc).Children.OfType<ParagraphLayout>().Single().Inlines;
+        Assert.That(inlines.Select(i => i.GetType().Name), Is.EqualTo(new[] { "TextRun", "LineBreakRun", "TextRun" }));
+        Assert.That(((TextRun)inlines[0]).Text, Is.EqualTo("first"));
+        Assert.That(inlines[0].Source, Is.EqualTo(Range(line, 1, 5)));
+        Assert.That(inlines[2].Source, Is.EqualTo(Range(line + 1, 1, 6)));
     }
 
     [Test]

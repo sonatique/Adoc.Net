@@ -24,6 +24,13 @@ public class LayoutBuilder
     private FootnoteCollector? _footnotes;
 
     /// <summary>
+    /// True while building a paragraph whose line breaks are hard (<c>%hardbreaks</c>, a trailing
+    /// <c> +</c>, a Markdown hard break, a literal or verse paragraph). Elsewhere a newline in text
+    /// is a soft break and becomes a space, as in the HTML and PDF output.
+    /// </summary>
+    private bool _keepLineBreaks;
+
+    /// <summary>
     /// Builds a <see cref="DocumentLayout"/> from the given AST document.
     /// </summary>
     /// <param name="document">The parsed AST document.</param>
@@ -88,6 +95,15 @@ public class LayoutBuilder
             case ThematicBreakNode thematic:
                 output.Add(new ThematicBreakLayout { Source = thematic.Source });
                 break;
+            case BlockImageNode image:
+                output.Add(new ImageLayout(image.Target, image.Alt)
+                {
+                    Title = image.Title,
+                    Width = image.Width,
+                    Height = image.Height,
+                    Source = image.Source,
+                });
+                break;
             case PageBreakNode pageBreak:
                 output.Add(new PageBreakLayout { Source = pageBreak.Source });
                 break;
@@ -113,7 +129,10 @@ public class LayoutBuilder
     {
         // A paragraph's inline buffer begins exactly at its source start
         // (col 1, no marker), so the block start is the content origin.
+        bool keep = _keepLineBreaks;
+        _keepLineBreaks = paragraph.HasHardbreaks || paragraph.Style is "literal" or "verse";
         var inlines = BuildInlines(paragraph.Inlines, paragraph.Source.Start);
+        _keepLineBreaks = keep;
         return new ParagraphLayout(inlines) { Source = paragraph.Source };
     }
 
@@ -138,7 +157,7 @@ public class LayoutBuilder
         var origin = item.ContentStart.IsNone ? item.Source.Start : item.ContentStart;
         var inlines = BuildInlines(item.Inlines, origin);
         var blocks = BuildBlocks(item.Children);
-        return new ListItemLayout(inlines, blocks);
+        return new ListItemLayout(inlines, blocks) { Checked = item.Checked };
     }
 
     private void BuildDelimitedBlock(DelimitedBlockNode delimited, List<BlockLayout> output)
@@ -153,8 +172,23 @@ public class LayoutBuilder
                     Source = delimited.Source,
                 });
                 break;
-            case DelimitedBlockKind.Example:
             case DelimitedBlockKind.Quote:
+                output.Add(new QuoteLayout(BuildBlocks(delimited.Children))
+                {
+                    Attribution = delimited.Attribution,
+                    Citation = delimited.CitationSource,
+                    Source = delimited.Source,
+                });
+                break;
+            case DelimitedBlockKind.Verse:
+                output.Add(new QuoteLayout(new BlockLayout[] { BuildVerse(delimited) })
+                {
+                    Attribution = delimited.Attribution,
+                    Citation = delimited.CitationSource,
+                    Source = delimited.Source,
+                });
+                break;
+            case DelimitedBlockKind.Example:
             case DelimitedBlockKind.Sidebar:
             case DelimitedBlockKind.Open:
                 foreach (var child in delimited.Children)
@@ -163,6 +197,32 @@ public class LayoutBuilder
                 }
                 break;
         }
+    }
+
+    /// <summary>
+    /// A verse keeps its lines: one run per line, from the line after the opening delimiter.
+    /// </summary>
+    private static ParagraphLayout BuildVerse(DelimitedBlockNode verse)
+    {
+        var inlines = new List<InlineLayout>();
+        var lines = (verse.Content ?? string.Empty).Split('\n');
+        int firstLine = verse.Source.IsNone ? 0 : verse.Source.Start.Line + 1;
+        for (int i = 0; i < lines.Length; i++)
+        {
+            if (i > 0)
+                inlines.Add(new LineBreakRun());
+            if (lines[i].Length == 0)
+                continue;
+            var run = new TextRun(lines[i]);
+            if (firstLine > 0)
+                run.Source = new SourceRange(new SourcePosition(firstLine + i, 1), new SourcePosition(firstLine + i, lines[i].Length));
+            inlines.Add(run);
+        }
+        var paragraphSource = firstLine > 0
+            ? new SourceRange(new SourcePosition(firstLine, 1),
+                new SourcePosition(firstLine + lines.Length - 1, Math.Max(1, lines[lines.Length - 1].Length)))
+            : SourceRange.None;
+        return new ParagraphLayout(inlines) { Source = paragraphSource };
     }
 
     private AdmonitionLayout BuildAdmonition(AdmonitionNode admonition)
@@ -336,6 +396,11 @@ public class LayoutBuilder
         var result = new List<InlineLayout>();
         foreach (var node in nodes)
         {
+            if (_keepLineBreaks && node is TextInlineNode text && text.Value.IndexOf('\n') >= 0)
+            {
+                AddLines(result, text.Value, ToAbsolute(node.Source, contentOrigin));
+                continue;
+            }
             var inline = BuildInline(node, contentOrigin);
             if (inline != null)
             {
@@ -361,6 +426,36 @@ public class LayoutBuilder
         if (layout is not null)
             layout.Source = ToAbsolute(node.Source, contentOrigin);
         return layout;
+    }
+
+    /// <summary>
+    /// Adds text holding hard line breaks as runs separated by <see cref="LineBreakRun"/>s. Each run
+    /// gets its own line of <paramref name="source"/>; a line after the first starts at column 1,
+    /// because the text keeps the source's own line starts.
+    /// </summary>
+    private static void AddLines(List<InlineLayout> output, string text, SourceRange source)
+    {
+        var parts = text.Split('\n');
+        for (int k = 0; k < parts.Length; k++)
+        {
+            if (k > 0)
+            {
+                var lineBreak = new LineBreakRun();
+                if (text == "\n") lineBreak.Source = source;
+                output.Add(lineBreak);
+            }
+            if (parts[k].Length == 0)
+                continue;
+            var run = new TextRun(parts[k]);
+            if (!source.IsNone)
+            {
+                int line = source.Start.Line + k;
+                int startColumn = k == 0 ? source.Start.Column : 1;
+                int endColumn = k == parts.Length - 1 ? source.End.Column : startColumn + parts[k].Length - 1;
+                run.Source = new SourceRange(new SourcePosition(line, startColumn), new SourcePosition(line, endColumn));
+            }
+            output.Add(run);
+        }
     }
 
     /// <summary>
@@ -416,7 +511,8 @@ public class LayoutBuilder
         switch (node)
         {
             case TextInlineNode text:
-                return new TextRun(text.Value);
+                // A newline here is a soft break (hard ones were split off in BuildInlines).
+                return new TextRun(text.Value.Replace('\n', ' '));
 
             case StrongInlineNode strong:
                 return new BoldRun(BuildInlines(strong.Children, contentOrigin));
@@ -426,6 +522,9 @@ public class LayoutBuilder
 
             case MonospaceInlineNode mono:
                 return new MonoRun(BuildInlines(mono.Children, contentOrigin));
+
+            case HighlightInlineNode highlight when highlight.Roles is { } roles && roles.Contains("line-through"):
+                return new StrikethroughRun(BuildInlines(highlight.Children, contentOrigin));
 
             case HighlightInlineNode highlight:
                 return new BoldRun(BuildInlines(highlight.Children, contentOrigin));
@@ -465,7 +564,7 @@ public class LayoutBuilder
                 return new TextRun(macro.Content);
 
             case InlineImageNode image:
-                return new TextRun("[image: " + image.Alt + "]");
+                return new ImageRun(image.Target, image.Alt);
 
             case InterDocumentXrefNode xdoc:
                 return new TextRun(xdoc.Label ?? xdoc.Path);

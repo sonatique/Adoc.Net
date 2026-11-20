@@ -69,7 +69,13 @@ public class MarkdownParserTests
 
         var hard = Doc("one  \ntwo\\\nthree\n").Children.OfType<ParagraphNode>().Single();
         Assert.That(hard.HasHardbreaks, Is.True);
-        Assert.That(((TextInlineNode)hard.Inlines.Single()).Value, Is.EqualTo("one\ntwo\nthree"));
+        Assert.That(hard.Inlines.Cast<TextInlineNode>().Select(t => t.Value), Is.EqualTo(new[] { "one", "\n", "two", "\n", "three" }));
+
+        // In the layout, each line keeps its own range, and the break is a line break run.
+        var paragraph = Layout("one  \n  two\n").Children.OfType<ParagraphLayout>().Single().Inlines;
+        Assert.That(paragraph.Select(i => i.GetType().Name), Is.EqualTo(new[] { "TextRun", "LineBreakRun", "TextRun" }));
+        Assert.That(paragraph[0].Source, Is.EqualTo(R(1, 1, 3)));
+        Assert.That(paragraph[2].Source, Is.EqualTo(R(2, 3, 5)));
     }
 
     [Test]
@@ -210,7 +216,8 @@ public class MarkdownParserTests
         Assert.That(paragraph.Source, Is.EqualTo(R(3, 3, 4, 8)));
         Assert.That(paragraph.Inlines.OfType<StrongInlineNode>().Single().Source, Is.EqualTo(R(1, 8, 12)));
 
-        var layoutParagraph = Layout("Intro.\n\n> quoted **q**\n> second\n").Children.OfType<ParagraphLayout>().Last();
+        var layoutParagraph = (ParagraphLayout)Layout("Intro.\n\n> quoted **q**\n> second\n")
+            .Children.OfType<QuoteLayout>().Single().Blocks.Single();
         Assert.That(layoutParagraph.Inlines.OfType<BoldRun>().Single().Source, Is.EqualTo(R(3, 10, 14)));
         Assert.That(layoutParagraph.Inlines.OfType<TextRun>().Last().Source, Is.EqualTo(R(3, 15, 4, 8)));
     }
@@ -450,6 +457,19 @@ public class MarkdownParserTests
             var text = line.Substring(run.Source.Start.Column - 1, run.Source.End.Column - run.Source.Start.Column + 1);
             Assert.That(text, Is.EqualTo(run.Text), $"run at {run.Source}");
         }
+    }
+
+    [Test]
+    public void Layout_has_quotes_images_strikethrough_and_checkboxes()
+    {
+        var layout = Layout("> quoted\n\n![Alt](a.png)\n\n- [x] done ~~old~~ ![i](b.png)\n");
+        var quote = layout.Children.OfType<QuoteLayout>().Single();
+        Assert.That(quote.Blocks.Single().Source, Is.EqualTo(R(1, 3, 8)));
+        Assert.That(layout.Children.OfType<ImageLayout>().Single().Source, Is.EqualTo(R(3, 1, 13)));
+        var item = layout.Children.OfType<ListLayout>().Single().Items.Single();
+        Assert.That(item.Checked, Is.True);
+        Assert.That(item.Inlines.OfType<StrikethroughRun>().Single().Source, Is.EqualTo(R(5, 12, 18)));
+        Assert.That(item.Inlines.OfType<ImageRun>().Single().Source, Is.EqualTo(R(5, 20, 30)));
     }
 
     [Test]

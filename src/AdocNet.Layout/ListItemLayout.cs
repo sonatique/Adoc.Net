@@ -18,6 +18,11 @@ public sealed class ListItemLayout : BlockLayout
     public IReadOnlyList<BlockLayout> Blocks { get; }
 
     /// <summary>
+    /// For a checklist item, true when checked and false when not; null for a plain item.
+    /// </summary>
+    public bool? Checked { get; init; }
+
+    /// <summary>
     /// Creates a new list item layout.
     /// </summary>
     /// <param name="inlines">The inline text content.</param>

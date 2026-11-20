@@ -7,6 +7,7 @@ using global::Avalonia.Controls.Primitives;
 using global::Avalonia.Input;
 using global::Avalonia.Layout;
 using global::Avalonia.Media;
+using global::Avalonia.Media.Imaging;
 using AdocNet;
 using AdocNet.Layout;
 using AvInline = global::Avalonia.Controls.Documents.Inline;
@@ -19,6 +20,8 @@ namespace AdocNet.Avalonia;
 public class AvaloniaRenderer
 {
     private const string BulletPrefix = "\u2022 ";
+    private const string CheckedPrefix = "\u2611 ";
+    private const string UncheckedPrefix = "\u2610 ";
 
     /// <summary>
     /// Visual styling (brushes, fonts, sizes). Defaults to a fresh
@@ -60,6 +63,14 @@ public class AvaloniaRenderer
     /// (e.g. an editor preview pane).
     /// </summary>
     public bool WrapInScrollViewer { get; set; } = true;
+
+    /// <summary>
+    /// Directory that relative image paths resolve against, usually the document's folder.
+    /// When null, only absolute paths load. Images load from local files only: URLs and
+    /// network (UNC) paths show their alternative text instead, so opening a document
+    /// never makes a network request.
+    /// </summary>
+    public string? BaseDirectory { get; set; }
 
     /// <summary>
     /// Renders a document layout into an Avalonia control tree.
@@ -197,6 +208,10 @@ public class AvaloniaRenderer
                 return RenderDescriptionList(descList);
             case ThematicBreakLayout:
                 return RenderThematicBreak();
+            case ImageLayout image:
+                return RenderImage(image);
+            case QuoteLayout quote:
+                return RenderQuote(quote);
             default:
                 return null;
         }
@@ -243,6 +258,8 @@ public class AvaloniaRenderer
         {
             var item = list.Items[i];
             var prefix = list.Ordered ? $"{i + 1}. " : BulletPrefix;
+            if (item.Checked is { } isChecked)
+                prefix = (list.Ordered ? prefix : "") + (isChecked ? CheckedPrefix : UncheckedPrefix);
             var itemPanel = RenderListItem(item, prefix);
             panel.Children.Add(itemPanel);
         }
@@ -566,6 +583,140 @@ public class AvaloniaRenderer
         return panel;
     }
 
+    // ── Image and quote rendering ───────────────────────────────────
+
+    private StackPanel RenderImage(ImageLayout image)
+    {
+        var panel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+        if (LoadImage(image.Target) is { } bitmap)
+        {
+            var control = new Image
+            {
+                Source = bitmap,
+                Stretch = Stretch.Uniform,
+                StretchDirection = StretchDirection.DownOnly,
+                HorizontalAlignment = HorizontalAlignment.Left,
+            };
+            if (PixelSize(image.Width) is { } width) control.MaxWidth = width;
+            if (PixelSize(image.Height) is { } height) control.MaxHeight = height;
+            panel.Children.Add(control);
+        }
+        else
+        {
+            panel.Children.Add(new Border
+            {
+                Background = Theme.CodeBlockBackground,
+                Padding = new Thickness(8),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Child = new TextBlock
+                {
+                    Text = string.IsNullOrEmpty(image.Alt) ? image.Target : image.Alt,
+                    FontStyle = FontStyle.Italic,
+                    TextWrapping = TextWrapping.Wrap,
+                },
+            });
+        }
+        if (!string.IsNullOrEmpty(image.Title))
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = image.Title,
+                FontStyle = FontStyle.Italic,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 4, 0, 0),
+            });
+        }
+        return panel;
+    }
+
+    /// <summary>A plain number of pixels (<c>300</c>, <c>300px</c>); null for percentages and other units.</summary>
+    private static double? PixelSize(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var text = value!.Trim();
+        if (text.EndsWith("px", StringComparison.OrdinalIgnoreCase)) text = text.Substring(0, text.Length - 2);
+        return double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var size) && size > 0
+            ? size
+            : null;
+    }
+
+    /// <summary>Decodes a local raster image, or null when it cannot or may not be loaded.</summary>
+    private Bitmap? LoadImage(string target)
+    {
+        var path = ResolveImagePath(target, BaseDirectory);
+        if (path is null) return null;
+        try
+        {
+            return new Bitmap(path);
+        }
+        catch
+        {
+            return null; // undecodable: show the alternative text
+        }
+    }
+
+    /// <summary>
+    /// The local file an image target names, or null. URLs, protocol-relative and UNC paths are
+    /// refused (no network access from a preview), as are SVG files (not decodable here).
+    /// </summary>
+    internal static string? ResolveImagePath(string? target, string? baseDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(target)) return null;
+        var t = target!.Trim();
+        if (t.Contains("://") || t.StartsWith("data:", StringComparison.OrdinalIgnoreCase)
+            || t.StartsWith("//", StringComparison.Ordinal) || t.StartsWith("\\\\", StringComparison.Ordinal))
+            return null;
+        if (t.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)) return null;
+        try
+        {
+            string path;
+            if (System.IO.Path.IsPathRooted(t)) path = t;
+            else if (baseDirectory is null) return null;
+            else path = System.IO.Path.Combine(baseDirectory, t);
+            var full = System.IO.Path.GetFullPath(path);
+            if (full.StartsWith("\\\\", StringComparison.Ordinal) || full.StartsWith("//", StringComparison.Ordinal))
+                return null;
+            return System.IO.File.Exists(full) ? full : null;
+        }
+        catch
+        {
+            return null; // invalid path characters
+        }
+    }
+
+    private Border RenderQuote(QuoteLayout quote)
+    {
+        var panel = new StackPanel();
+        foreach (var block in quote.Blocks)
+        {
+            var control = RenderBlock(block);
+            if (control != null)
+                panel.Children.Add(control);
+        }
+
+        var credit = string.Join(", ", new[] { quote.Attribution, quote.Citation }.Where(c => !string.IsNullOrEmpty(c)));
+        if (credit.Length > 0)
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = "\u2014 " + credit,
+                FontStyle = FontStyle.Italic,
+                Foreground = Theme.QuoteAttributionForeground,
+                TextWrapping = TextWrapping.Wrap,
+                HorizontalAlignment = HorizontalAlignment.Right,
+            });
+        }
+
+        return new Border
+        {
+            BorderBrush = Theme.QuoteBorderBrush,
+            BorderThickness = new Thickness(3, 0, 0, 0),
+            Padding = new Thickness(12, 4, 0, 4),
+            Margin = new Thickness(0, 0, 0, 8),
+            Child = panel,
+        };
+    }
+
     // ── Thematic break rendering ────────────────────────────────────
 
     private Border RenderThematicBreak()
@@ -680,6 +831,21 @@ public class AvaloniaRenderer
             case LineBreakRun:
                 return new LineBreak();
 
+            case StrikethroughRun strikethrough:
+            {
+                var span = new Span { TextDecorations = global::Avalonia.Media.TextDecorations.Strikethrough };
+                AddInlines(span.Inlines, strikethrough.Children);
+                return span;
+            }
+
+            case ImageRun image:
+                return LoadImage(image.Target) is { } bitmap
+                    ? new InlineUIContainer
+                    {
+                        Child = new Image { Source = bitmap, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly },
+                    }
+                    : new Run("[image: " + image.Alt + "]");
+
             default:
                 return null;
         }
@@ -724,6 +890,12 @@ public class AvaloniaRenderer
                     break;
                 case LineBreakRun:
                     sb.Append('\n');
+                    break;
+                case StrikethroughRun strikethrough:
+                    AppendPlainText(sb, strikethrough.Children);
+                    break;
+                case ImageRun image:
+                    sb.Append(image.Alt);
                     break;
             }
         }

@@ -19,6 +19,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   comments, scripts and styles.
 - **`SectionNode.TitleStart`**: the position of a heading's title text, used by
   the layout when the title does not follow an AsciiDoc `==` marker.
+- **Layout and live preview**: block and inline images (`ImageLayout`,
+  `ImageRun`), quote and verse blocks with their attribution (`QuoteLayout`),
+  strikethrough (`StrikethroughRun`, from the `line-through` role and Markdown
+  `~~text~~`), checklist state (`ListItemLayout.Checked`, drawn as a box) and
+  hard line breaks. The Avalonia renderer loads images from local files
+  relative to the new `AvaloniaRenderer.BaseDirectory`; URLs and network paths
+  show the alternative text and are never fetched.
+
+### Changed
+
+- **Live preview line breaks**: a newline inside a paragraph is now a soft
+  break and wraps like a space, as in the HTML and PDF output. Only hard breaks
+  (a trailing ` +`, `%hardbreaks`, Markdown hard breaks, literal and verse
+  text) start a new line. Before, every source newline started a new line.
+- **Quote blocks** are one `QuoteLayout` in the layout tree, holding their
+  blocks, instead of their blocks flattened into the surrounding content.
 
 ## [1.0.40] - 2026-11-20
 
