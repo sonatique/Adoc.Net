@@ -69,11 +69,36 @@ public class LayoutBlocksRenderingTests
     }
 
     [AvaloniaTest]
+    public void Links_sit_on_the_text_baseline()
+    {
+        // The default Baseline alignment puts the container's bottom edge on the baseline,
+        // which lifted links by their descent (about 4 px at 14 px).
+        var paragraph = Render("Some text with https://example.org and https://example.org[named] here.").Children.OfType<TextBlock>().Single();
+        var links = paragraph.Inlines!.OfType<InlineUIContainer>().ToList();
+        Assert.That(links, Has.Count.EqualTo(2));
+        Assert.That(links.Select(l => l.BaselineAlignment), Is.All.EqualTo(BaselineAlignment.TextBottom));
+    }
+
+    [AvaloniaTest]
     public void Checklist_items_show_their_boxes()
     {
         var list = Render("* [x] done\n* [ ] todo\n* plain").Children.OfType<StackPanel>().Single();
-        var prefixes = All<TextBlock>(list).Select(t => t.Inlines!.OfType<Run>().First().Text).ToList();
-        Assert.That(prefixes, Is.EqualTo(new[] { "\u2611 ", "\u2610 ", "\u2022 " }));
+        var items = All<TextBlock>(list).ToList();
+
+        // Boxes are drawn (a glyph falls back to a colour emoji for the checked one), and take
+        // the same two text positions as the "\u2611 " prefix did.
+        foreach (var (item, isChecked) in new[] { (items[0], true), (items[1], false) })
+        {
+            var box = (Viewbox)((InlineUIContainer)item.Inlines![0]).Child!;
+            var drawing = (Canvas)box.Child!;
+            Assert.That(drawing.Children.OfType<global::Avalonia.Controls.Shapes.Path>().Any(), Is.EqualTo(isChecked));
+            Assert.That(((Run)item.Inlines[1]).Text, Is.EqualTo(" "));
+        }
+        Assert.That(items[2].Inlines!.OfType<Run>().First().Text, Is.EqualTo("\u2022 "));
+
+        var checkbox = (Viewbox)((InlineUIContainer)items[0].Inlines![0]).Child!;
+        items[0].FontSize = 20;
+        Assert.That(checkbox.Width, Is.EqualTo(15), "three quarters of the font size");
     }
 
     [AvaloniaTest]

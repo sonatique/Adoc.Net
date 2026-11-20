@@ -21,8 +21,6 @@ namespace AdocNet.Avalonia;
 public class AvaloniaRenderer
 {
     private const string BulletPrefix = "\u2022 ";
-    private const string CheckedPrefix = "\u2611 ";
-    private const string UncheckedPrefix = "\u2610 ";
 
     /// <summary>
     /// Visual styling (brushes, fonts, sizes). Defaults to a fresh
@@ -258,9 +256,7 @@ public class AvaloniaRenderer
         for (int i = from; i <= to; i++)
         {
             var item = list.Items[i];
-            var prefix = list.Ordered ? $"{i + 1}. " : BulletPrefix;
-            if (item.Checked is { } isChecked)
-                prefix = (list.Ordered ? prefix : "") + (isChecked ? CheckedPrefix : UncheckedPrefix);
+            var prefix = list.Ordered ? $"{i + 1}. " : item.Checked is null ? BulletPrefix : "";
             var itemPanel = RenderListItem(item, prefix);
             panel.Children.Add(itemPanel);
         }
@@ -279,7 +275,14 @@ public class AvaloniaRenderer
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 2),
         };
-        textBlock.Inlines!.Add(new Run(prefix));
+        if (prefix.Length > 0)
+            textBlock.Inlines!.Add(new Run(prefix));
+        if (item.Checked is { } isChecked)
+        {
+            // Drawn rather than a ☑/☐ glyph: font fallback shows ☑ as a colour emoji on Windows.
+            textBlock.Inlines!.Add(new InlineUIContainer { Child = CheckBox(isChecked, textBlock) });
+            textBlock.Inlines!.Add(new Run(" "));
+        }
         AddInlines(textBlock.Inlines!, item.Inlines);
         panel.Children.Add(textBlock);
 
@@ -293,6 +296,39 @@ public class AvaloniaRenderer
         }
 
         return panel;
+    }
+
+    /// <summary>
+    /// A checklist box about as tall as a capital letter, standing on the baseline, drawn in the
+    /// colour and at the font size of <paramref name="text"/>; a checked box holds a tick.
+    /// </summary>
+    private static Viewbox CheckBox(bool isChecked, TextBlock text)
+    {
+        var foreground = text.GetObservable(TextBlock.ForegroundProperty);
+        // A 12-unit drawing, scaled by the Viewbox to three quarters of the font size.
+        var drawing = new Canvas { Width = 12, Height = 12 };
+        var frame = new global::Avalonia.Controls.Shapes.Rectangle { Width = 11, Height = 11, RadiusX = 2, RadiusY = 2, StrokeThickness = 1 };
+        Canvas.SetLeft(frame, 0.5);
+        Canvas.SetTop(frame, 0.5);
+        frame.Bind(global::Avalonia.Controls.Shapes.Shape.StrokeProperty, foreground);
+        drawing.Children.Add(frame);
+        if (isChecked)
+        {
+            var tick = new global::Avalonia.Controls.Shapes.Path
+            {
+                Data = new PolylineGeometry(new[] { new Point(3, 6.2), new Point(5.2, 8.6), new Point(9.2, 3.6) }, false),
+                StrokeThickness = 1.6,
+                StrokeLineCap = PenLineCap.Round,
+                StrokeJoin = PenLineJoin.Round,
+            };
+            tick.Bind(global::Avalonia.Controls.Shapes.Shape.StrokeProperty, foreground);
+            drawing.Children.Add(tick);
+        }
+        var box = new Viewbox { Child = drawing, Stretch = Stretch.Uniform };
+        var size = text.GetObservable(TextBlock.FontSizeProperty, fontSize => Math.Round(fontSize * 0.75));
+        box.Bind(Layoutable.WidthProperty, size);
+        box.Bind(Layoutable.HeightProperty, size);
+        return box;
     }
 
     private Border RenderCodeBlock(CodeBlockLayout codeBlock)
@@ -876,7 +912,9 @@ public class AvaloniaRenderer
                 AddInlines(linkText.Inlines!, link.Children);
                 var href = link.Href;
                 linkText.PointerPressed += (_, _) => OnLinkClicked(href);
-                return new InlineUIContainer { Child = linkText };
+                // On the default Baseline alignment the container's bottom edge sits on the
+                // baseline, lifting the link text by its descent; TextBottom lines it up.
+                return new InlineUIContainer { Child = linkText, BaselineAlignment = BaselineAlignment.TextBottom };
             }
 
             case LineBreakRun:
