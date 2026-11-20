@@ -14,7 +14,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.41</Version>
+    <Version>1.0.42</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) 2026 sylvain@sonatique.net</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -23,7 +23,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;docx;word;import;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.41: MarkdownParser.Parse turns Markdown into the AsciiDoc AST with source ranges in Markdown coordinates; the layout and Avalonia preview show images, quotes, strikethrough, checklists and hard line breaks. See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.42: a line ending in " +" is a HardBreakInlineNode in every block, and every converter breaks the line there as Asciidoctor does; MarkdownParser fills LineOrigins; the Avalonia preview highlights marked text, loads images off the UI thread, puts links on the baseline and draws checklist boxes. See CHANGELOG.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->

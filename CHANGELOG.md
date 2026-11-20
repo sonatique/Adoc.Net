@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.42] - 2026-11-20
+
 ### Added
 
 - **`HardBreakInlineNode`**: a line ending in ` +` is now a hard-break node in
