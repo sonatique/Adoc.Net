@@ -5,6 +5,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **Markdown parser**: `AdocNet.Importers.MarkdownParser.Parse(string)` turns
+  Markdown into the same `ParseResult` and `DocumentNode` as
+  `AdocParser.Parse`, so layout, live preview and every converter work on
+  Markdown source directly. It reads the syntax `MarkdownImporter` reads
+  (CommonMark, GFM tables, task lists, strikethrough, autolinks, footnotes,
+  grid tables, definition lists, YAML front matter) and maps headings to the
+  title and sections the same way. Every block and inline carries a source
+  range in Markdown coordinates, nested blocks included, with the AsciiDoc
+  parser's conventions. Text stays literal; raw HTML passes through, except
+  comments, scripts and styles.
+- **`SectionNode.TitleStart`**: the position of a heading's title text, used by
+  the layout when the title does not follow an AsciiDoc `==` marker.
+
 ## [1.0.40] - 2026-11-20
 
 ### Fixed

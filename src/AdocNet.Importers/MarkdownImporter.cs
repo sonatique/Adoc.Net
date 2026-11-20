@@ -91,7 +91,17 @@ public sealed class MarkdownImporter : DocumentImporter
     /// Front matter: scalar <c>key: value</c> pairs and <c>- item</c> lists (joined with commas).
     /// ponytail: a line-based reader, not a YAML parser; nested maps and block scalars are reported and skipped.
     /// </summary>
-    internal static void FrontMatter(string yaml, AsciiDocBuilder builder)
+    internal static void FrontMatter(string yaml, AsciiDocBuilder builder) =>
+        FrontMatter(yaml,
+            (name, value) => { if (name == "title") builder.Title = value; else builder.SetAttribute(name, value); },
+            message => builder.Report.Add(ImportIssueSeverity.Warning, "front-matter.unsupported", message));
+
+    /// <summary>
+    /// Reads front matter into AsciiDoc attribute names: <paramref name="set"/> receives <c>title</c>
+    /// (the document title, only when not empty), <c>author</c>, <c>keywords</c>, <c>revdate</c>,
+    /// <c>revnumber</c> or the key itself; <paramref name="skipped"/> receives a message per skipped line.
+    /// </summary>
+    internal static void FrontMatter(string yaml, Action<string, string> set, Action<string> skipped)
     {
         string? key = null;
         var values = new List<string>();
@@ -101,12 +111,12 @@ public sealed class MarkdownImporter : DocumentImporter
             var value = string.Join(", ", values.Where(v => v.Length > 0));
             switch (key.ToLowerInvariant())
             {
-                case "title": if (value.Length > 0) builder.Title = value; break;
-                case "authors": case "author": builder.SetAttribute("author", value); break;
-                case "tags": case "keywords": builder.SetAttribute("keywords", value); break;
-                case "date": builder.SetAttribute("revdate", value); break;
-                case "version": builder.SetAttribute("revnumber", value); break;
-                default: if (value.Length > 0) builder.SetAttribute(key, value); break;
+                case "title": if (value.Length > 0) set("title", value); break;
+                case "authors": case "author": set("author", value); break;
+                case "tags": case "keywords": set("keywords", value); break;
+                case "date": set("revdate", value); break;
+                case "version": set("revnumber", value); break;
+                default: if (value.Length > 0) set(key, value); break;
             }
             key = null;
             values.Clear();
@@ -126,7 +136,7 @@ public sealed class MarkdownImporter : DocumentImporter
                 var value = pair.Groups[2].Value.Trim();
                 if (value is "|" or ">" or "|-" or ">-")
                 {
-                    builder.Report.Add(ImportIssueSeverity.Warning, "front-matter.unsupported", $"Front matter key '{key}' uses a block scalar and was skipped.");
+                    skipped($"Front matter key '{key}' uses a block scalar and was skipped.");
                     key = null;
                 }
                 else if (value.StartsWith("[", StringComparison.Ordinal) && value.EndsWith("]", StringComparison.Ordinal))
@@ -134,7 +144,7 @@ public sealed class MarkdownImporter : DocumentImporter
                 else if (value.Length > 0) values.Add(Unquote(value));
                 continue;
             }
-            builder.Report.Add(ImportIssueSeverity.Warning, "front-matter.unsupported", $"Front matter line '{line.Trim()}' was skipped.");
+            skipped($"Front matter line '{line.Trim()}' was skipped.");
             Flush();
         }
         Flush();

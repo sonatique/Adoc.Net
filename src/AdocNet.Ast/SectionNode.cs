@@ -27,6 +27,13 @@ public sealed class SectionNode : BlockNode
     public IReadOnlyList<InlineNode> TitleInlines { get; init; } = [];
 
     /// <summary>
+    /// Source position of the first character of the title, past the heading marker.
+    /// <see cref="SourcePosition.None"/> when it follows from the AsciiDoc marker
+    /// (<see cref="Level"/> + 1 equals signs and a space).
+    /// </summary>
+    public SourcePosition TitleStart { get; set; } = SourcePosition.None;
+
+    /// <summary>
     /// Optional section style for book doctype. Values: "appendix", "glossary",
     /// "colophon", "dedication", "preface", or null for normal sections.
     /// </summary>

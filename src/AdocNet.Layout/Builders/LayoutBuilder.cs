@@ -402,6 +402,8 @@ public class LayoutBuilder
     /// </summary>
     private static SourcePosition HeadingContentOrigin(SectionNode section)
     {
+        if (!section.TitleStart.IsNone)
+            return section.TitleStart;
         var start = section.Source.Start;
         if (start.IsNone)
             return SourcePosition.None;
