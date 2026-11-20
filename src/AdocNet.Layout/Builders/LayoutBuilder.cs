@@ -38,6 +38,7 @@ public class LayoutBuilder
     public DocumentLayout Build(DocumentNode document)
     {
         _footnotes = new FootnoteCollector();
+        _keepLineBreaks = false;
 
         var blocks = new List<BlockLayout>();
         foreach (var child in document.Children)
