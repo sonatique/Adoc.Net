@@ -243,6 +243,12 @@ public static class TableColumnWeights
                 case LineBreakRun:
                     sb.Append(' ');
                     break;
+                case StrikethroughRun strikethrough:
+                    AppendPlainText(sb, strikethrough.Children);
+                    break;
+                case ImageRun image:
+                    sb.Append(image.Alt);
+                    break;
             }
         }
     }

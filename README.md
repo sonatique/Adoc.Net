@@ -187,6 +187,18 @@ tables from their drawn rules, with column and row spans, or from aligned
 columns; running headers and footers dropped) and is approximate by nature.
 Uses Markdig (BSD-2-Clause), AngleSharp (MIT) and PdfPig (Apache-2.0).
 
+To work on Markdown as Markdown (an editor with live preview, click-to-source
+and export), parse it straight into the AsciiDoc AST instead of converting it:
+
+```csharp
+var result = MarkdownParser.Parse(File.ReadAllText("README.md"));
+var pdf = new PdfRenderer().RenderToBytes(result.Document, new PdfRenderOptions()); // AdocNet.Converters.Pdf
+```
+
+`MarkdownParser.Parse` returns the same `ParseResult` as `AdocParser.Parse`, with
+source ranges in Markdown coordinates on every block and inline, so layout and
+every converter work unchanged. Text stays literal: no AsciiDoc substitutions.
+
 ### Parse with includes
 
 ```csharp

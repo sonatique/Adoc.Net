@@ -58,6 +58,15 @@ schemes. Document-controlled `file:`/UNC/`javascript:`/custom-scheme links are
 credentials over SMB. Subscribe to `LinkClicked` and set `Handled = true` to
 implement custom navigation for other schemes.
 
+## Avalonia Renderer Images
+
+The Avalonia renderer loads images from local files only: relative targets
+resolve against `AvaloniaRenderer.BaseDirectory` (not loaded when it is null),
+absolute local paths load as they are. URLs, protocol-relative (`//host/...`)
+and UNC (`\\server\share`) targets are never fetched and show their alternative
+text, so opening a document in a preview makes no network request and cannot
+leak credentials over SMB.
+
 ## Recommendations for Untrusted Input
 
 | Concern | Recommendation |

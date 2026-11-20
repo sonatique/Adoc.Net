@@ -14,5 +14,6 @@
     <ProjectReference Include="..\..\src\AdocNet.Importers\AdocNet.Importers.csproj" />
     <ProjectReference Include="..\..\src\AdocNet.Converters.Html\AdocNet.Converters.Html.csproj" />
     <ProjectReference Include="..\..\src\AdocNet.Converters.Pdf\AdocNet.Converters.Pdf.csproj" />
+    <ProjectReference Include="..\..\src\AdocNet.Layout\AdocNet.Layout.csproj" />
   </ItemGroup>
 </Project>
