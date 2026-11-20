@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.43] - 2026-11-21
+
 ### Added
 
 - **`LinkSpan`** (`AdocNet.Avalonia`): a link in the preview is now an
