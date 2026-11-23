@@ -848,7 +848,7 @@ public class LayoutBuilderTests
         // viewport, and squeezes everything else to one-letter-per-line.
         var source = """
             |===
-            | LL Packet | Link Type | Content | Result | FPGA | Writer | Reader | Description
+            | Record ID | Link Type | Content | Result | Unit | Writer | Reader | Description
 
             | EXAMPLE_LONG_IDENTIFIER
             | alpha or beta
