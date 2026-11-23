@@ -1517,6 +1517,24 @@ public class PdfRendererTests
     }
 
     [Test]
+    public void Png_streams_are_zlib_for_flatedecode()
+    {
+        // Raw deflate without the zlib header is blank in strict readers (Windows.Data.Pdf).
+        var info = ImageParser.TryParsePng(CreateMinimalPng(2, 2, colorType: 6))!.Value;
+
+        static byte[] Inflate(byte[] zlib)
+        {
+            using var z = new System.IO.Compression.ZLibStream(new MemoryStream(zlib), System.IO.Compression.CompressionMode.Decompress);
+            using var output = new MemoryStream();
+            z.CopyTo(output);
+            return output.ToArray();
+        }
+
+        Assert.That(Inflate(info.Data), Is.EqualTo(new byte[] { 0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14 }));
+        Assert.That(Inflate(info.AlphaData!), Is.EqualTo(new byte[] { 3, 7, 11, 15 }));
+    }
+
+    [Test]
     public void Image_parser_rejects_invalid_png()
     {
         byte[] data = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
