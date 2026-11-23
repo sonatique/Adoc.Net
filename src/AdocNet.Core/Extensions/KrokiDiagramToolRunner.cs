@@ -65,7 +65,7 @@ public sealed class KrokiDiagramToolRunner : IDiagramToolRunner
 
         Directory.CreateDirectory(outputDirectory);
 
-        var hash = ComputeHash(source);
+        var hash = ComputeHash(language + ":" + source);
         var outputPath = Path.Combine(outputDirectory, $"{hash}.png");
 
         // If already generated with same hash, reuse

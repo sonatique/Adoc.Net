@@ -196,7 +196,36 @@ public class DiagramExtensionTests
             $"Language '{language}' should be recognized as a diagram language");
     }
 
+    [Test]
+    public void DiagramBlock_StyledListing_ReplacedWithImageUnderItsLanguage()
+    {
+        var doc = AdocNet.Parser.AdocParser.Parse("[plantuml,diag1,svg]\n----\na -> b\n----").Document;
+        var source = doc.Children[0].Source;
+        string? language = null;
+        var runner = new RecordingToolRunner(l => language = l);
+        var engine = CreateEngine(doc);
+        engine.RegisterBlockProcessor(new DiagramBlockProcessor(runner, "/images"));
+
+        using var output = new MemoryStream();
+        engine.Convert("test", output);
+
+        Assert.That(language, Is.EqualTo("plantuml"));
+        Assert.That(doc.Children[0], Is.InstanceOf<BlockImageNode>());
+        Assert.That(doc.Children[0].Source, Is.EqualTo(source));
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────
+
+    private sealed class RecordingToolRunner(Action<string> onGenerate) : IDiagramToolRunner
+    {
+        public bool IsAvailable => true;
+
+        public string? Generate(string language, string source, string outputDirectory)
+        {
+            onGenerate(language);
+            return "/images/out.png";
+        }
+    }
 
     private static AdocEngine CreateEngine(DocumentNode doc)
         => new(new StubRenderer(), _ => doc);
