@@ -40,7 +40,10 @@ public sealed class StemGraphic
         Descent = descent;
     }
 
-    /// <summary>SVG path data (absolute commands M, L, Q, C, Z), filled with the text colour.</summary>
+    /// <summary>
+    /// SVG path data, filled with the text colour (non-zero rule). Absolute M, L, C and Z commands only,
+    /// space-separated numbers: the PDF converter's path reader takes no other.
+    /// </summary>
     public string PathData { get; }
 
     /// <summary>Width in em.</summary>
@@ -63,7 +66,7 @@ public sealed class StemGraphic
     public string ToSvg(string label, bool display = false)
     {
         var sb = new StringBuilder();
-        sb.Append("<svg xmlns=\"http://www.w3.org/2000/svg\" class=\"stem\" role=\"img\" aria-label=\"");
+        sb.Append("<svg xmlns=\"http://www.w3.org/2000/svg\" class=\"stem\" overflow=\"visible\" role=\"img\" aria-label=\"");
         AppendEscaped(sb, label ?? "");
         sb.Append(string.Format(CultureInfo.InvariantCulture,
             "\" width=\"{0:0.####}em\" height=\"{1:0.####}em\" viewBox=\"0 0 {0:0.####} {1:0.####}\" style=\"",

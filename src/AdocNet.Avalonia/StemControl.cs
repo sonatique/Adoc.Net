@@ -24,7 +24,7 @@ internal sealed class StemControl : Control
     public StemControl(StemGraphic graphic, string source)
     {
         _graphic = graphic;
-        _geometry = Geometry.Parse(graphic.PathData);
+        _geometry = Geometry.Parse("F1 " + graphic.PathData); // non-zero fill, as glyph outlines need
         AutomationProperties.SetName(this, source);
     }
 
