@@ -51,6 +51,7 @@ For library use, reference the package for the output you want. (The `AdocNet.Pd
 | Emit AsciiDoc from an AST | `AdocNet.Emitter` |
 | Import Word `.docx` | `AdocNet.Importers.Docx` |
 | Import Markdown, HTML, PDF | `AdocNet.Importers` |
+| Typeset math (LaTeX, AsciiMath) offline in every output | `AdocNet.Stem` |
 
 ### Command-line tools
 
@@ -146,6 +147,25 @@ using AdocNet.Converters.Epub;
 
 byte[] epub = new EpubRenderer().RenderToBytes(result.Document);
 File.WriteAllBytes("output.epub", epub);
+```
+
+### Math and diagrams
+
+```csharp
+// dotnet add package AdocNet.Stem
+using AdocNet.Extensions;
+using AdocNet.Stem;
+
+// STEM (LaTeX, AsciiMath): typeset offline, drawn as SVG in HTML and EPUB, vector paths in PDF,
+// and in the Avalonia preview (AvaloniaRenderer.StemRenderer). Share one instance.
+var stem = new StemRenderer();
+string html = new HtmlRenderer().RenderToString(result.Document, new HtmlRenderOptions { StemRenderer = stem });
+
+// Diagrams ([mermaid], [plantuml], [source,graphviz]...): opt-in. Kroki sends the diagram source
+// to a server; ProcessDiagramToolRunner starts a local tool for one language.
+var diagrams = new DiagramPass(new KrokiDiagramToolRunner(), cacheDirectory);
+await diagrams.GenerateAsync(result.Document);   // on a worker thread, cached by source
+diagrams.Apply(result.Document, embed: true);    // diagram blocks -> images (data: URIs for HTML/EPUB)
 ```
 
 ### Import a Word document
@@ -316,6 +336,7 @@ See [docs/CLI.md](docs/CLI.md) for the full reference.
 | Block processors (`IBlockProcessor`) | Supported |
 | Inline processors (`IInlineProcessor`) | Supported |
 | Diagram blocks (PlantUML, Mermaid, Ditaa, Graphviz) | Supported (external tool) |
+| Diagrams for direct parser users (`DiagramPass`: cached, off the UI thread) | Supported (opt-in runner) |
 | Node replacement and removal (`NodeReplacements`) | Supported |
 | Warning callback (`OnWarning`) | Supported |
 | Dynamic extension loading (`LoadExtension`, `--extensions`) | Supported |
@@ -390,6 +411,7 @@ Focused assemblies, each with a single responsibility:
 | AdocNet.Emitter | `AdocNet.Emitter` | AST-to-AsciiDoc emitter (round-trip; in progress) |
 | AdocNet.Layout | `AdocNet.Layout` | UI-agnostic layout model and AST-to-layout builder |
 | AdocNet.Avalonia | `AdocNet.Avalonia` | Avalonia UI renderer (layout tree to controls) |
+| AdocNet.Stem | `AdocNet.Stem` | STEM typesetting (CSharpMath, Latin Modern Math); AsciiMath to LaTeX |
 | AdocNet.LanguageServer | — | LSP server (`adocnet-lsp`); build-from-source |
 
 The data flow for the Avalonia viewer is strictly layered: `AST → Layout → Avalonia`. The Layout library has zero UI dependencies and targets netstandard2.0, making it consumable by any .NET UI framework.

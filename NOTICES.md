@@ -58,6 +58,21 @@ and embedded only when a glyph from them is actually used.
 | `DejaVuSans.ttf` | DejaVu Sans (primary Unicode fallback: arrows, check marks, dingbats, geometric shapes, math symbols) | Bitstream Vera Fonts License + public-domain additions |
 | `Symbola.ttf` | Symbola v8.00, George Douros (secondary symbol fallback for codepoints DejaVu Sans lacks, e.g. SMP symbol blocks) | Public domain |
 
+## Used by `AdocNet.Stem`
+
+`AdocNet.Stem` typesets STEM content with the CSharpMath.Rendering package
+(a NuGet dependency, not bundled in the AdocNet package itself), which
+embeds the fonts below and compiles in the Typography library. An
+application that ships `AdocNet.Stem` ships these too.
+
+| Component | Source | License |
+|-----------|--------|---------|
+| CSharpMath, CSharpMath.Rendering | github.com/verybadcat/CSharpMath | MIT |
+| Typography (compiled into CSharpMath.Rendering) | github.com/LayoutFarm/Typography | MIT; some files Apache License 2.0, BSD or the FreeType License, per file header |
+| `latinmodern-math.otf` | Latin Modern Math, B. Jackowski, P. Strzelczyk, P. Pianowski (GUST) | GUST Font License |
+| `AMS-Capital-Blackboard-Bold.otf` | Extracted from the AMS fonts (MSBM), American Mathematical Society | SIL Open Font License 1.1 |
+| `cyrillic-modern-nmr10.otf` | Cyrillic Modern, Andrey V. Panov, after the AMS CMR10 | SIL Open Font License 1.1 |
+
 ## Derived in `AdocNet.Converters.Html`
 
 The `HtmlTheme.Asciidoctor` stylesheet is a port of Asciidoctor's default

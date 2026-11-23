@@ -21,6 +21,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   inline SVG (no MathJax script, so HTML works offline; EPUB declares the
   `svg` property), PDF draws vector paths on the text baseline, tagged as
   `Formula`, and `AvaloniaRenderer.StemRenderer` draws them in the preview.
+- **`AdocNet.Stem`** (new package): `StemRenderer`, an `IStemRenderer` that
+  typesets LaTeX and AsciiMath offline in managed code (CSharpMath with the
+  Latin Modern Math font; AsciiMath is translated to LaTeX first).
+  Thread-safe and cached; overly nested formulas are refused rather than
+  risking the stack. Depends on CSharpMath.Rendering 1.0.0-pre.2 (MIT; fonts
+  under the GUST Font License and OFL 1.1, see NOTICES.md).
 - **`StemLayout`** and **`StemRun`** (`AdocNet.Layout`): STEM content in the
   layout tree.
 - **DocBook equations**: `[stem]` blocks and `stem:[]` become `equation`,
