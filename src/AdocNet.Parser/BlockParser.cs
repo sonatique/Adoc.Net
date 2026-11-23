@@ -176,6 +176,7 @@ internal static class BlockParser
         List<string>? pendingBlockOptions = null;
         bool pendingCollapsible = false;
         string? pendingStem = null;
+        string? pendingBlockStyle = null; // unknown style ([mermaid]...), kept by the next listing or literal block
         string? pendingDlStyle = null;
         string? pendingSectionStyle = null;
 
@@ -371,6 +372,7 @@ internal static class BlockParser
                 hasPendingVerse = false;
                 hasPendingQuote = false;
                 hasPendingListing = false;
+                pendingBlockStyle = null;
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
@@ -464,6 +466,7 @@ internal static class BlockParser
                 hasPendingVerse = false;
                 hasPendingQuote = false;
                 hasPendingListing = false;
+                pendingBlockStyle = null;
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
@@ -1127,6 +1130,23 @@ internal static class BlockParser
                 continue;
             }
 
+            // Any other style ([mermaid], [plantuml,name,svg], [loweralpha], [foo]...): Asciidoctor
+            // consumes the attribute line whatever the style, so it never shows as text. A listing
+            // or literal block keeps the style, which is how diagram blocks are recognised.
+            if (paragraphLines.Count == 0 && line.Length > 2 && line[0] == '[' && line[^1] == ']'
+                && BlockAttributes.Parse(line) is { Style: { } unknownStyle } unknownAttrs
+                && IsStyleName(unknownStyle))
+            {
+                listFrames.Clear();
+                dlFrames.Clear();
+                pendingBlockStyle = unknownStyle;
+                if (unknownAttrs.Id is not null)
+                    pendingBlockId = unknownAttrs.Id;
+                if (unknownAttrs.Roles.Count > 0)
+                    pendingBlockRoles = unknownAttrs.Roles;
+                continue;
+            }
+
             // Catch-all for unrecognized [...] attribute lines that carried subs.
             // If we pre-parsed a valid BlockAttributes with subs but none of the specific
             // handlers above consumed the line, consume it here so it doesn't leak into
@@ -1201,6 +1221,7 @@ internal static class BlockParser
                     hasPendingVerse = false;
                     hasPendingQuote = false;
                     hasPendingListing = false;
+                    pendingBlockStyle = null;
                     hasPendingLiteral = false;
                     hasPendingExample = false;
                     hasPendingSidebar = false;
@@ -1303,6 +1324,7 @@ internal static class BlockParser
                     hasPendingVerse = false;
                     hasPendingQuote = false;
                     hasPendingListing = false;
+                    pendingBlockStyle = null;
                     hasPendingLiteral = false;
                     hasPendingExample = false;
                     hasPendingSidebar = false;
@@ -1360,6 +1382,7 @@ internal static class BlockParser
                 hasPendingVerse = false;
                 hasPendingQuote = false;
                 hasPendingListing = false;
+                pendingBlockStyle = null;
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
@@ -1461,6 +1484,7 @@ internal static class BlockParser
                 hasPendingVerse = false;
                 hasPendingQuote = false;
                 hasPendingListing = false;
+                pendingBlockStyle = null;
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
@@ -1489,6 +1513,7 @@ internal static class BlockParser
                 hasPendingVerse = false;
                 hasPendingQuote = false;
                 hasPendingListing = false;
+                pendingBlockStyle = null;
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
@@ -1605,7 +1630,8 @@ internal static class BlockParser
                         BlockKind = openKind,
                         Content = openIsStructural ? null : openRawContent,
                         Title = pendingBlockTitle,
-                        Style = (openKind == DelimitedBlockKind.Open && pendingAbstract) ? "abstract" : null,
+                        Style = (openKind == DelimitedBlockKind.Open && pendingAbstract) ? "abstract"
+                            : openKind is DelimitedBlockKind.Listing or DelimitedBlockKind.Literal ? pendingBlockStyle : null,
                         Language = openKind == DelimitedBlockKind.Source ? pendingSourceLang : null,
                         Highlight = openKind == DelimitedBlockKind.Source ? pendingHighlight : null,
                         Attribution = (openKind is DelimitedBlockKind.Quote or DelimitedBlockKind.Verse) ? pendingQuoteAttribution : null,
@@ -1636,6 +1662,7 @@ internal static class BlockParser
                 hasPendingVerse = false;
                 hasPendingQuote = false;
                 hasPendingListing = false;
+                pendingBlockStyle = null;
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
@@ -1825,6 +1852,7 @@ internal static class BlockParser
                 hasPendingVerse = false;
                 hasPendingQuote = false;
                 hasPendingListing = false;
+                pendingBlockStyle = null;
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
@@ -2128,6 +2156,7 @@ internal static class BlockParser
                         BlockKind = delimKind,
                         Content = isStructural ? null : rawContent,
                         Title = pendingBlockTitle,
+                        Style = delimKind is DelimitedBlockKind.Listing or DelimitedBlockKind.Literal ? pendingBlockStyle : null,
                         Language = delimKind == DelimitedBlockKind.Source ? pendingSourceLang : null,
                         Highlight = delimKind == DelimitedBlockKind.Source ? pendingHighlight : null,
                         Attribution = delimKind is DelimitedBlockKind.Quote or DelimitedBlockKind.Verse ? pendingQuoteAttribution : null,
@@ -2160,6 +2189,7 @@ internal static class BlockParser
                 hasPendingVerse = false;
                 hasPendingQuote = false;
                 hasPendingListing = false;
+                pendingBlockStyle = null;
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
@@ -2235,6 +2265,7 @@ internal static class BlockParser
                 hasPendingVerse = false;
                 hasPendingQuote = false;
                 hasPendingListing = false;
+                pendingBlockStyle = null;
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
@@ -2473,6 +2504,7 @@ internal static class BlockParser
                 hasPendingVerse = false;
                 hasPendingQuote = false;
                 hasPendingListing = false;
+                pendingBlockStyle = null;
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
@@ -2523,6 +2555,7 @@ internal static class BlockParser
                 hasPendingVerse = false;
                 hasPendingQuote = false;
                 hasPendingListing = false;
+                pendingBlockStyle = null;
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
@@ -2637,6 +2670,7 @@ internal static class BlockParser
                             hasPendingVerse = false;
                             hasPendingQuote = false;
                             hasPendingListing = false;
+                            pendingBlockStyle = null;
                             hasPendingLiteral = false;
                             hasPendingExample = false;
                             hasPendingSidebar = false;
@@ -2848,6 +2882,7 @@ internal static class BlockParser
                             hasPendingVerse = false;
                             hasPendingQuote = false;
                             hasPendingListing = false;
+                            pendingBlockStyle = null;
                             hasPendingLiteral = false;
                             hasPendingExample = false;
                             hasPendingSidebar = false;
@@ -2930,6 +2965,7 @@ internal static class BlockParser
                 hasPendingVerse = false;
                 hasPendingQuote = false;
                 hasPendingListing = false;
+                pendingBlockStyle = null;
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
@@ -3058,6 +3094,7 @@ internal static class BlockParser
                 hasPendingVerse = false;
                 hasPendingQuote = false;
                 hasPendingListing = false;
+                pendingBlockStyle = null;
                 hasPendingLiteral = false;
                 hasPendingExample = false;
                 hasPendingSidebar = false;
@@ -3093,6 +3130,7 @@ internal static class BlockParser
             hasPendingSource = false;
             hasPendingVerse = false;
             hasPendingListing = false;
+            pendingBlockStyle = null;
             hasPendingLiteral = false;
             hasPendingExample = false;
             hasPendingSidebar = false;
@@ -3483,6 +3521,14 @@ internal static class BlockParser
 
     private static readonly string[] SectionStyleNames =
         ["appendix", "glossary", "colophon", "dedication", "preface"];
+
+    private static bool IsStyleName(string style)
+    {
+        if (style.Length == 0 || !char.IsLetter(style[0])) return false;
+        foreach (var c in style)
+            if (!char.IsLetterOrDigit(c) && c is not '-' and not '_') return false;
+        return true;
+    }
 
     private static bool IsSectionStyleName(string style)
         => Array.Exists(SectionStyleNames, s => string.Equals(s, style, StringComparison.OrdinalIgnoreCase));

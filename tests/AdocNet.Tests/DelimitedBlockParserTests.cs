@@ -391,4 +391,84 @@ public class DelimitedBlockParserTests
         Assert.That(html, Does.Not.Contain(">a<"));
         Assert.That(html, Does.Not.Contain(">b<"));
     }
+
+    // ── Unknown block styles ([mermaid], [plantuml,name,svg], [foo]...) ───────────
+
+    [TestCase("[mermaid]\n----\ngraph TD; A-->B\n----", "mermaid", DelimitedBlockKind.Listing)]
+    [TestCase("[plantuml,diag1,svg]\n....\na -> b\n....", "plantuml", DelimitedBlockKind.Literal)]
+    [TestCase("[graphviz,format=svg]\n----\ndigraph { a -> b }\n----", "graphviz", DelimitedBlockKind.Listing)]
+    [TestCase("[ditaa]\n----\n+--+\n----", "ditaa", DelimitedBlockKind.Listing)]
+    public void Unknown_style_is_consumed_and_kept_by_the_block(string source, string style, DelimitedBlockKind kind)
+    {
+        var result = BlockParser.Parse(source);
+
+        Assert.That(result.Document.Children, Has.Count.EqualTo(1));
+        var block = (DelimitedBlockNode)result.Document.Children[0];
+        Assert.Multiple(() =>
+        {
+            Assert.That(block.BlockKind, Is.EqualTo(kind));
+            Assert.That(block.Style, Is.EqualTo(style));
+            Assert.That(block.Language, Is.Null);
+        });
+    }
+
+    [Test]
+    public void Unknown_style_keeps_id_and_roles()
+    {
+        var block = (DelimitedBlockNode)BlockParser.Parse("[mermaid#flow.wide]\n----\nA-->B\n----").Document.Children[0];
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(block.Style, Is.EqualTo("mermaid"));
+            Assert.That(block.Id, Is.EqualTo("flow"));
+            Assert.That(block.Roles, Is.EqualTo(new[] { "wide" }));
+        });
+    }
+
+    [Test]
+    public void Unknown_style_line_before_a_paragraph_is_not_shown()
+    {
+        var doc = BlockParser.Parse("[foo]\npara text").Document;
+
+        Assert.That(doc.Children, Has.Count.EqualTo(1));
+        var paragraph = (ParagraphNode)doc.Children[0];
+        Assert.That(((TextInlineNode)paragraph.Inlines[0]).Value, Is.EqualTo("para text"));
+    }
+
+    [Test]
+    public void List_style_line_is_not_shown_as_a_paragraph()
+    {
+        var doc = BlockParser.Parse("[loweralpha]\n. one\n. two").Document;
+
+        Assert.That(doc.Children, Has.Count.EqualTo(1));
+        Assert.That(((ListNode)doc.Children[0]).ListStyle, Is.EqualTo("loweralpha"));
+    }
+
+    [Test]
+    public void Unknown_style_does_not_carry_past_the_next_block()
+    {
+        var doc = BlockParser.Parse("[mermaid]\npara\n\n----\ncode\n----").Document;
+
+        Assert.That(doc.Children, Has.Count.EqualTo(2));
+        Assert.That(((DelimitedBlockNode)doc.Children[1]).Style, Is.Null);
+    }
+
+    [Test]
+    public void Unknown_style_line_inside_a_paragraph_stays_text()
+    {
+        var doc = BlockParser.Parse("first line\n[foo]").Document;
+
+        var paragraph = (ParagraphNode)doc.Children[0];
+        Assert.That(((TextInlineNode)paragraph.Inlines[0]).Value, Does.Contain("[foo]"));
+    }
+
+    [Test]
+    public void Diagram_block_renders_as_a_plain_listing_in_html()
+    {
+        // Asciidoctor without a diagram extension drops the style and keeps the listing.
+        var styled = new HtmlRenderer().RenderToString(BlockParser.Parse("[mermaid]\n----\nA-->B\n----").Document);
+        var plain = new HtmlRenderer().RenderToString(BlockParser.Parse("----\nA-->B\n----").Document);
+
+        Assert.That(styled, Is.EqualTo(plain));
+    }
 }
