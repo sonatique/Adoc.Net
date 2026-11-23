@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.45] - 2026-11-23
+
 ### Fixed
 
 - PDF: PNG images were written as raw deflate data under `/FlateDecode`,
