@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.44] - 2026-11-23
+
 ### Added
 
 - **`DiagramPass`** (`AdocNet.Core`, namespace `AdocNet.Extensions`): diagram

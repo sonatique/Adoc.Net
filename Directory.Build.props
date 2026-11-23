@@ -14,7 +14,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.43</Version>
+    <Version>1.0.44</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) 2026 sylvain@sonatique.net</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -23,7 +23,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;docx;word;import;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.43: links in the Avalonia preview are underlined LinkSpans of the text, so they wrap and select with it; AvaloniaRenderer.LinkAt finds the link under a point. See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.44: math and diagrams in every output. IStemRenderer (RenderOptions.StemRenderer, AvaloniaRenderer.StemRenderer) draws STEM as SVG in HTML and EPUB (no MathJax), vector paths in PDF and on the Avalonia page; the new AdocNet.Stem package typesets LaTeX and AsciiMath offline (CSharpMath). DocBook writes equations; Markdown reads $...$ math. DiagramPass turns diagram blocks into images for direct parser users, with opt-in Kroki or local runners. Attribute lines with any style ([mermaid], [loweralpha]) no longer show as text. See CHANGELOG.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->
