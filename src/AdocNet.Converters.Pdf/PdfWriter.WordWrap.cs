@@ -203,16 +203,17 @@ internal sealed partial class PdfWriter
                 // inside a segment it is the space the split removed; before a segment's first word
                 // the legacy layout synthesizes one unless the previous text already ends with a
                 // space or this word opens with closing punctuation (issue #64).
-                bool separator = i > 0
+                // A formula is one word drawn as is: the text around it carries its spaces.
+                bool separator = seg.Graphic is null && (i > 0
                     ? (wordBuffer.Length > 0 ? !bufferEndsWithSpace : currentWidth > 0 && !prevEndsWithSpace)
                     : wordBuffer.Length == 0 && currentWidth > 0 && SynthesizeSegmentSpaces && !prevEndsWithSpace
-                      && !glued && !(word.Length > 0 && IsTightFollowingPunctuation(word[0]));
-                float wordWidth = MeasureText(word, seg.Font, seg.FontSize);
+                      && !glued && !(word.Length > 0 && IsTightFollowingPunctuation(word[0])));
+                float wordWidth = seg.Graphic is not null ? MeasureSegment(seg) : MeasureText(word, seg.Font, seg.FontSize);
                 float neededWidth = separator ? spaceWidth + wordWidth : wordWidth;
 
                 // Prawn also breaks after a hyphen inside a word ("non-byte-" / "aligned"): put the
                 // longest prefix ending in '-' that still fits on this line, wrap the rest.
-                while (BreakAfterHyphens && !glued && currentWidth + neededWidth > maxWidth && word.Length > 1 && word.IndexOf('-', 1) > 0)
+                while (seg.Graphic is null && BreakAfterHyphens && !glued && currentWidth + neededWidth > maxWidth && word.Length > 1 && word.IndexOf('-', 1) > 0)
                 {
                     float lead = neededWidth - wordWidth; // separator space before the word, if any
                     int cut = -1;
@@ -363,7 +364,7 @@ internal sealed partial class PdfWriter
         int spaceCount = 0;
         foreach (var seg in segments)
         {
-            naturalWidth += MeasureText(seg.Text, seg.Font, seg.FontSize);
+            naturalWidth += MeasureSegment(seg);
             foreach (var ch in seg.Text)
                 if (ch == ' ') spaceCount++;
         }
@@ -380,7 +381,7 @@ internal sealed partial class PdfWriter
         float bgX = x;
         foreach (var seg in segments)
         {
-            float segW = MeasureText(seg.Text, seg.Font, seg.FontSize);
+            float segW = MeasureSegment(seg);
             int segSp = 0;
             foreach (var ch in seg.Text) if (ch == ' ') segSp++;
             float adjW = segW + segSp * extraSpacing;
@@ -407,6 +408,11 @@ internal sealed partial class PdfWriter
 
         foreach (var seg in segments)
         {
+            if (seg.Graphic is { } graphic)
+            {
+                currentX += DrawInlineGraphic(graphic, seg, currentX, y);
+                continue;
+            }
             StructElem? linkElem = null;
             if (Tagged)
             {
@@ -467,7 +473,7 @@ internal sealed partial class PdfWriter
             if (rise != 0f)
                 _currentStream.Append("0 Ts\n");
 
-            float segWidth = MeasureText(seg.Text, seg.Font, seg.FontSize);
+            float segWidth = MeasureSegment(seg);
             // Account for extra spacing per space in this segment (only for non-monospace)
             int segSpaces = 0;
             foreach (var ch in seg.Text)

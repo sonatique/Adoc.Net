@@ -459,6 +459,8 @@ public sealed partial class PdfRenderer
                 case SuperscriptInlineNode sup: sb.Append(sup.Content); break;
                 case SubscriptInlineNode sub: sb.Append(sub.Content); break;
                 case PassthroughInlineNode pt: sb.Append(pt.Content); break;
+                // ponytail: formulas in table cells stay source text; the cell runs carry no graphics.
+                case StemInlineNode st: sb.Append(st.Content); break;
                 case CrossReferenceInlineNode xref: sb.Append(XrefText(xref)); break;
                 case FootnoteInlineNode fn:
                     Flush();
@@ -866,7 +868,7 @@ public sealed partial class PdfRenderer
         {
             float lineWidth = 0;
             foreach (var seg in line)
-                lineWidth += w.MeasureText(seg.Text, seg.Font, seg.FontSize);
+                lineWidth += w.MeasureSegment(seg);
 
             float textX = align switch
             {
@@ -1397,6 +1399,16 @@ public sealed partial class PdfRenderer
 
             case LinkInlineNode link:
                 segments.Add(new TextSegment(link.Url, _fontRegular, defaultFontSize, link.Url));
+                break;
+
+            case StemInlineNode stem:
+                // The source, spaces made unbreakable, is the formula's one word and its alternative text.
+                if (_stemRenderer?.Render(stem.Content, stem.StemType, display: false) is { } graphic)
+                    segments.Add(new TextSegment(System.Text.RegularExpressions.Regex.Replace(stem.Content, @"\s", "\u00A0"), defaultFont, defaultFontSize,
+                        Color: color, Graphic: graphic));
+                else
+                    segments.Add(new TextSegment(stem.Content, ResolveMonoFont(isBold, isItalic), _codeFontSize,
+                        Background: _codespanBackground, Color: _codespanColor));
                 break;
 
             case InlineLinkMacroNode linkMacro:

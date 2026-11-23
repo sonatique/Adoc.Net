@@ -51,6 +51,24 @@ public class MarkdownParserTests
     }
 
     [Test]
+    public void Math_becomes_latexmath_stem_nodes()
+    {
+        var doc = Doc("Energy $E = mc^2$ costs $5 and $10.\n\n$$\n\\sum_i x_i\n$$\n\n```math\na^2 + b^2\n```\n");
+
+        var paragraph = doc.Children.OfType<ParagraphNode>().Single();
+        var inline = paragraph.Inlines.OfType<StemInlineNode>().Single();
+        var blocks = doc.Children.OfType<StemBlockNode>().ToList();
+        Assert.Multiple(() =>
+        {
+            Assert.That((inline.Content, inline.StemType), Is.EqualTo(("E = mc^2", "latexmath")));
+            Assert.That(inline.Source, Is.EqualTo(R(1, 8, 17)));
+            Assert.That(string.Concat(paragraph.Inlines.OfType<TextInlineNode>().Select(t => t.Value)), Does.Contain("costs $5 and $10."), "prices are not math");
+            Assert.That(blocks.Select(b => (b.Content, b.StemType)), Is.EqualTo(new[] { ("\\sum_i x_i", "latexmath"), ("a^2 + b^2", "latexmath") }));
+            Assert.That(blocks[0].Source.Start.Line, Is.EqualTo(3));
+        });
+    }
+
+    [Test]
     public void Layout_promotes_inline_ranges_to_markdown_coordinates()
     {
         var paragraph = Layout("Intro.\n\nPara **bold** end\n").Children.OfType<ParagraphLayout>().Last();

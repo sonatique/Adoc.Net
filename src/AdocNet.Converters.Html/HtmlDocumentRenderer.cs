@@ -56,8 +56,8 @@ public sealed partial class HtmlRenderer
             sb.Append("\">\n");
         }
 
-        // MathJax script when :stem: attribute is set
-        if (document.Attributes.ContainsKey("stem"))
+        // MathJax script when :stem: attribute is set, unless STEM is drawn as SVG
+        if (document.Attributes.ContainsKey("stem") && options.StemRenderer is null)
         {
             var stemType = document.Attributes.TryGetValue("stem", out var sv) && sv.Length > 0
                 ? sv : "latexmath";

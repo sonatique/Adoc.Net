@@ -1177,4 +1177,22 @@ public class LayoutBuilderTests
             "a| cell content must carry a source range, not None (issue #45)");
         Assert.That(run.Source, Is.EqualTo(cell.Source));
     }
+
+    // ── STEM ────────────────────────────────────────────────────────
+
+    [Test]
+    public void Stem_blocks_and_inline_formulas_keep_their_source()
+    {
+        var layout = Build(":stem: latexmath\n\nEnergy stem:[E = mc^2] here.\n\n.Sum\n[stem]\n++++\nx + y\n++++\n");
+
+        var run = layout.Children.OfType<ParagraphLayout>().Single().Inlines.OfType<StemRun>().Single();
+        var block = layout.Children.OfType<StemLayout>().Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That((run.Content, run.StemType), Is.EqualTo(("E = mc^2", "latexmath")));
+            Assert.That(run.Source.Start.Line, Is.EqualTo(3));
+            Assert.That((block.Content, block.StemType, block.Title), Is.EqualTo(("x + y", "latexmath", "Sum")));
+            Assert.That(block.Source.Start.Line, Is.EqualTo(7), "the ++++ line");
+        });
+    }
 }

@@ -140,6 +140,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
 
     // ── Image resolution state ─────────────────────────────────────────
     private string? _baseDirectory;
+    private IStemRenderer? _stemRenderer;
 
     // Set by LayoutPages for the duration of one render; each pass records afresh.
     private PdfPageRecorder? _recorder;
@@ -245,6 +246,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             writer.HeaderTitle = ht;
 
         _baseDirectory = pdfOptions.BaseDirectory;
+        _stemRenderer = pdfOptions.StemRenderer;
         _titlePage = pdfOptions.TitlePage;
         _baseLineHeight = pdfOptions.LineSpacing;
         _fontKeysByPath.Clear(); // font keys belong to this pass's writer
@@ -800,6 +802,9 @@ public sealed partial class PdfRenderer : DocumentRendererBase
             case BlockImageNode blockImage:
                 RenderBlockImage(w, blockImage, indentLevel);
                 break;
+            case StemBlockNode stem:
+                RenderStemBlock(w, stem, indentLevel, footnotes);
+                break;
             case DescriptionListNode descList:
                 w.Tag("L", () => RenderDescriptionList(w, descList, indentLevel, footnotes));
                 break;
@@ -1172,6 +1177,56 @@ public sealed partial class PdfRenderer : DocumentRendererBase
         // (a list ends with a tighter gap than a paragraph because list items
         // already self-space).
         w.MoveCursor(_paragraphSpacingAfter / 2);
+    }
+
+    /// <summary>
+    /// A STEM block: the typeset formula centred (shrunk to the content width if wider), tagged as a
+    /// Formula; without a STEM renderer, or when the formula cannot be typeset, its source as a
+    /// literal block, as asciidoctor-pdf shows it without a math extension.
+    /// </summary>
+    private void RenderStemBlock(PdfWriter w, StemBlockNode stem, int indentLevel, FootnoteState footnotes)
+    {
+        if (_stemRenderer?.Render(stem.Content, stem.StemType, display: true) is not { } graphic)
+        {
+            var literal = new DelimitedBlockNode
+            {
+                BlockKind = DelimitedBlockKind.Literal,
+                Content = stem.Content,
+                Title = stem.Title,
+                Source = stem.Source,
+            };
+            w.Tag(BlockTag(literal), () => RenderDelimitedBlock(w, literal, indentLevel, footnotes));
+            return;
+        }
+
+        w.EnsurePage();
+        if (stem.Title is not null)
+            w.WriteWrappedText(stem.Title, _fontBold, _smallFontSize, _codeLeading);
+        float width = (float)graphic.Width * _bodyFontSize, height = (float)graphic.Height * _bodyFontSize;
+        float scale = Math.Min(1f, w.ContentWidth / width);
+        width *= scale;
+        height *= scale;
+        if (w.CursorY - height < w.MarginBottomValue && w.PageHasContent)
+        {
+            w.FinishPage();
+            w.StartPage();
+        }
+        var formula = w.BeginTag("Formula", alt: stem.Content);
+        w.DrawingFigure = true;
+        try
+        {
+            w.MoveCursor(height);
+            var fill = _bodyColor ?? new PdfColor(0, 0, 0);
+            w.DrawSvg(new SvgParser.SvgDocument((float)graphic.Width, (float)graphic.Height, width, height,
+                    [new SvgParser.SvgShape(fill, graphic.PathData)]),
+                w.MarginLeftValue + (w.ContentWidth - width) / 2, w.CursorY, width, height);
+        }
+        finally
+        {
+            w.DrawingFigure = false;
+            w.EndTag(formula);
+        }
+        w.MoveCursor(_paragraphSpacingAfter);
     }
 
     private void RenderDelimitedBlock(PdfWriter w, DelimitedBlockNode block, int indentLevel, FootnoteState footnotes)

@@ -108,6 +108,9 @@ public class LayoutBuilder
             case PageBreakNode pageBreak:
                 output.Add(new PageBreakLayout { Source = pageBreak.Source });
                 break;
+            case StemBlockNode stem:
+                output.Add(new StemLayout(stem.Content, stem.StemType) { Title = stem.Title, Source = stem.Source });
+                break;
             case TocNode toc:
                 BuildToc(toc, output);
                 break;
@@ -573,6 +576,9 @@ public class LayoutBuilder
 
             case InlineImageNode image:
                 return new ImageRun(image.Target, image.Alt);
+
+            case StemInlineNode stem:
+                return new StemRun(stem.Content, stem.StemType);
 
             case InterDocumentXrefNode xdoc:
                 return new TextRun(xdoc.Label ?? xdoc.Path);

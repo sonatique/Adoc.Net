@@ -354,7 +354,11 @@ public sealed partial class HtmlRenderer
                 break;
 
             case StemInlineNode stemInline:
-                if (string.Equals(stemInline.StemType, "asciimath", StringComparison.OrdinalIgnoreCase))
+                if (state.StemRenderer?.Render(stemInline.Content, stemInline.StemType, display: false) is { } graphic)
+                {
+                    sb.Append(graphic.ToSvg(stemInline.Content));
+                }
+                else if (string.Equals(stemInline.StemType, "asciimath", StringComparison.OrdinalIgnoreCase))
                 {
                     sb.Append("\\$");
                     sb.Append(stemInline.Content);

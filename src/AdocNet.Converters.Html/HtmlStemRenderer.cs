@@ -8,7 +8,7 @@ namespace AdocNet.Converters.Html;
 
 public sealed partial class HtmlRenderer
 {
-    private static void RenderStemBlock(StringBuilder sb, StemBlockNode block)
+    private static void RenderStemBlock(StringBuilder sb, StemBlockNode block, IStemRenderer? stemRenderer)
     {
         sb.Append("<div class=\"stemblock\">\n");
         if (block.Title is not null)
@@ -18,7 +18,11 @@ public sealed partial class HtmlRenderer
             sb.Append("</div>\n");
         }
         sb.Append("<div class=\"content\">\n");
-        if (string.Equals(block.StemType, "asciimath", StringComparison.OrdinalIgnoreCase))
+        if (stemRenderer?.Render(block.Content, block.StemType, display: true) is { } graphic)
+        {
+            sb.Append(graphic.ToSvg(block.Content, display: true));
+        }
+        else if (string.Equals(block.StemType, "asciimath", StringComparison.OrdinalIgnoreCase))
         {
             sb.Append("\\$");
             sb.Append(block.Content);
