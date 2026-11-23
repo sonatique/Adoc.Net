@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework />
+    <TargetFrameworks>netstandard2.0;net8.0;net10.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>AdocNet.Stem</RootNamespace>
+    <Description>Typesets STEM content (LaTeX and AsciiMath) for the Adoc.Net outputs and Avalonia preview, offline and in managed code, with CSharpMath and the Latin Modern Math font.</Description>
+    <PackageTags>$(PackageTags);stem;math;latex;asciimath</PackageTags>
+    <!-- CSharpMath 1.0 is published as a prerelease only. -->
+    <NoWarn>$(NoWarn);NU5104</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+    <None Include="..\..\NOTICES.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AdocNet.Core\AdocNet.Core.csproj" />
+    <PackageReference Include="CSharpMath.Rendering" Version="1.0.0-pre.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AdocNet.Tests" />
+  </ItemGroup>
+</Project>

@@ -1011,7 +1011,7 @@ internal sealed partial class PdfWriter
         float bgX = x;
         foreach (var seg in segments)
         {
-            float segW = MeasureText(seg.Text, seg.Font, seg.FontSize);
+            float segW = MeasureSegment(seg);
             if (seg.Background is { } bg)
             {
                 const float pad = 1.5f;
@@ -1036,6 +1036,11 @@ internal sealed partial class PdfWriter
 
         foreach (var seg in segments)
         {
+            if (seg.Graphic is { } graphic)
+            {
+                currentX += DrawInlineGraphic(graphic, seg, currentX, y);
+                continue;
+            }
             StructElem? linkElem = null;
             if (Tagged)
             {
@@ -1083,7 +1088,7 @@ internal sealed partial class PdfWriter
             if (rise != 0f)
                 _currentStream.Append("0 Ts\n");
 
-            float segWidth = MeasureText(seg.Text, seg.Font, seg.FontSize);
+            float segWidth = MeasureSegment(seg);
             float rectY = y - 2 + rise;
             if (seg.DestId is not null)
                 AddNamedDestination(seg.DestId, y + rise);
@@ -1103,6 +1108,37 @@ internal sealed partial class PdfWriter
         if (!Tagged) _currentStream!.Append("ET\n");
     }
 
+    /// <summary>Width of a segment: its text in its font, or its formula.</summary>
+    internal float MeasureSegment(TextSegment seg) =>
+        seg.Graphic is { } graphic ? (float)graphic.Width * seg.FontSize : MeasureText(seg.Text, seg.Font, seg.FontSize);
+
+    /// <summary>
+    /// Draws a formula segment with its baseline on <paramref name="y"/>, between the text objects of
+    /// a line (paths are not allowed inside one), tagged as a Formula with its source as alternative
+    /// text. Returns its width.
+    /// </summary>
+    private float DrawInlineGraphic(StemGraphic graphic, TextSegment seg, float x, float y)
+    {
+        float size = seg.FontSize;
+        float width = (float)graphic.Width * size, height = (float)graphic.Height * size;
+        if (!Tagged) _currentStream!.Append("ET\n");
+        var formula = BeginTag("Formula", alt: seg.Text);
+        bool figure = DrawingFigure;
+        DrawingFigure = true;
+        try
+        {
+            var fill = seg.Color ?? BodyColor ?? new PdfColor(0, 0, 0);
+            DrawSvg(new SvgParser.SvgDocument((float)graphic.Width, (float)graphic.Height, width, height,
+                [new SvgParser.SvgShape(fill, graphic.PathData)]), x, y - (float)graphic.Descent * size, width, height);
+        }
+        finally
+        {
+            DrawingFigure = figure;
+            EndTag(formula);
+        }
+        if (!Tagged) _currentStream!.Append($"BT\n{Fmt(x + width)} {Fmt(y)} Td\n");
+        return width;
+    }
 }
 
 /// <summary>
@@ -1131,7 +1167,11 @@ internal readonly record struct DeferredInternalLink(int PlaceholderObjId, PdfIn
 /// segment's rendered position — used so a footnote marker can be a GoTo target
 /// for the footnote's back-link (issue #64).
 /// </remarks>
-internal readonly record struct TextSegment(string Text, string Font, float FontSize, string? LinkUri = null, PdfColor? Background = null, PdfColor? Color = null, bool Superscript = false, string? DestId = null);
+/// <paramref name="Graphic"/> makes the segment a typeset formula drawn on the baseline: its
+/// <paramref name="Text"/> is the formula source (one unbreakable word, also its alternative text)
+/// and its <paramref name="Font"/> the surrounding text's, for line metrics. Measure segments with
+/// <see cref="PdfWriter.MeasureSegment"/>.
+internal readonly record struct TextSegment(string Text, string Font, float FontSize, string? LinkUri = null, PdfColor? Background = null, PdfColor? Color = null, bool Superscript = false, string? DestId = null, StemGraphic? Graphic = null);
 
 /// <summary>An outline/bookmark entry for the PDF document outline tree.</summary>
 internal sealed class OutlineEntry

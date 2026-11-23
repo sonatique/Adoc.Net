@@ -37,9 +37,12 @@ internal sealed class EpubChapterRenderer
     private int _tableCounter;
     private int _figureCounter;
 
-    public EpubChapterRenderer(DocumentNode document)
+    private readonly IStemRenderer? _stemRenderer;
+
+    public EpubChapterRenderer(DocumentNode document, IStemRenderer? stemRenderer = null)
     {
         _document = document;
+        _stemRenderer = stemRenderer;
         _sectnumsEnabled = document.Attributes.ContainsKey("sectnums");
     }
 
@@ -503,11 +506,20 @@ internal sealed class EpubChapterRenderer
     private void RenderStem(StringBuilder sb, StemBlockNode stem)
     {
         sb.Append("<div class=\"stemblock\">\n<p>");
-        if (string.Equals(stem.StemType, "asciimath", StringComparison.OrdinalIgnoreCase))
-            sb.Append("\\$").Append(stem.Content).Append("\\$");
+        if (_stemRenderer?.Render(stem.Content, stem.StemType, display: true) is { } graphic)
+            sb.Append(graphic.ToSvg(stem.Content, display: true));
         else
-            sb.Append("\\[").Append(stem.Content).Append("\\]");
+            AppendStemSource(sb, stem.Content, stem.StemType, "\\[", "\\]");
         sb.Append("</p>\n</div>\n");
+    }
+
+    /// <summary>The formula source between its MathJax delimiters, escaped for XHTML.</summary>
+    private static void AppendStemSource(StringBuilder sb, string content, string stemType, string open, string close)
+    {
+        bool ascii = string.Equals(stemType, "asciimath", StringComparison.OrdinalIgnoreCase);
+        sb.Append(ascii ? "\\$" : open);
+        EscapeXmlTo(sb, content);
+        sb.Append(ascii ? "\\$" : close);
     }
 
     // ── Tables ───────────────────────────────────────────────────────────
@@ -684,10 +696,10 @@ internal sealed class EpubChapterRenderer
                 _ = n;
                 break;
             case StemInlineNode n:
-                if (string.Equals(n.StemType, "asciimath", StringComparison.OrdinalIgnoreCase))
-                    sb.Append("\\$").Append(n.Content).Append("\\$");
+                if (_stemRenderer?.Render(n.Content, n.StemType, display: false) is { } graphic)
+                    sb.Append(graphic.ToSvg(n.Content));
                 else
-                    sb.Append("\\(").Append(n.Content).Append("\\)");
+                    AppendStemSource(sb, n.Content, n.StemType, "\\(", "\\)");
                 break;
             case InlineMacroNode m:
                 RenderInlineMacro(sb, m);

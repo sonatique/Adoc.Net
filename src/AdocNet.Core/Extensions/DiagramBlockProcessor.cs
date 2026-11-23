@@ -27,8 +27,7 @@ public sealed class DiagramBlockProcessor : IBlockProcessor
     /// <inheritdoc />
     public bool CanProcess(BlockNode node)
     {
-        return node is DelimitedBlockNode { BlockKind: DelimitedBlockKind.Source } block
-            && IsDiagramLanguage(block.Language);
+        return node is DelimitedBlockNode block && DiagramPass.IsKnownDiagram(block);
     }
 
     /// <inheritdoc />
@@ -42,7 +41,7 @@ public sealed class DiagramBlockProcessor : IBlockProcessor
         string? imagePath;
         try
         {
-            imagePath = _runner.Generate(block.Language!, block.Content ?? "", _outputDirectory);
+            imagePath = _runner.Generate((block.Language ?? block.Style)!.ToLowerInvariant(), block.Content ?? "", _outputDirectory);
         }
         catch
         {
@@ -58,13 +57,12 @@ public sealed class DiagramBlockProcessor : IBlockProcessor
             Alt = block.Title ?? "Diagram",
             Title = block.Title,
             Id = block.Id,
+            Roles = block.Roles,
+            Source = block.Source,
         };
 
         var replacements = context.GetOrCreate(() => new NodeReplacements());
         replacements.Replace(node, imageNode);
         return false;
     }
-
-    private static bool IsDiagramLanguage(string? language)
-        => language is "plantuml" or "mermaid" or "ditaa" or "graphviz" or "dot";
 }

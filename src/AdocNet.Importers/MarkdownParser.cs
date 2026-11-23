@@ -4,6 +4,7 @@ using AdocNet.Parser;
 using Markdig;
 using Markdig.Extensions.DefinitionLists;
 using Markdig.Extensions.Footnotes;
+using Markdig.Extensions.Mathematics;
 using Markdig.Extensions.Tables;
 using Markdig.Extensions.TaskLists;
 using Markdig.Extensions.Yaml;
@@ -39,6 +40,7 @@ public static class MarkdownParser
         .UseEmphasisExtras(Markdig.Extensions.EmphasisExtras.EmphasisExtraOptions.Strikethrough)
         .UseAutoLinks()
         .UseDefinitionLists()
+        .UseMathematics()
         .UsePreciseSourceLocation()
         .Build();
 
@@ -185,6 +187,15 @@ public static class MarkdownParser
                     parent.AddChild(node);
         }
 
+        /// <summary>A <c>$$</c> block or a <c>```math</c> fence: LaTeX, as GitHub and Markdig read it.</summary>
+        private StemBlockNode Stem(LeafBlock block) => new()
+        {
+            Content = block.Lines.ToString(),
+            StemType = "latexmath",
+            Substitutions = SubstitutionKind.Verbatim,
+            Source = ToRange(block.Span),
+        };
+
         private AstNode? ConvertBlock(Block block)
         {
             switch (block)
@@ -195,8 +206,12 @@ public static class MarkdownParser
                     return ConvertHeading(heading, discrete: true);
                 case ParagraphBlock paragraph:
                     return BlockImage(paragraph) ?? (AstNode)ConvertParagraph(paragraph);
+                case MathBlock math:
+                    return Stem(math);
                 case FencedCodeBlock fenced:
                     var info = fenced.Info?.Trim();
+                    if (string.Equals(info, "math", StringComparison.OrdinalIgnoreCase))
+                        return Stem(fenced); // GitHub's ```math fence
                     return new DelimitedBlockNode
                     {
                         BlockKind = string.IsNullOrEmpty(info) ? DelimitedBlockKind.Listing : DelimitedBlockKind.Source,
@@ -485,6 +500,9 @@ public static class MarkdownParser
                             ? new StrongInlineNode { Children = children, Source = range }
                             : new EmphasisInlineNode { Children = children, Source = range });
                     return;
+                case MathInline math:
+                    output.Add(new StemInlineNode { Content = math.Content.ToString(), StemType = "latexmath", Source = range });
+                    return;
                 case CodeInline code:
                     output.Add(new MonospaceInlineNode
                     {
@@ -607,6 +625,7 @@ public static class MarkdownParser
                 {
                     case LiteralInline literal: sb.Append(literal.Content.ToString()); break;
                     case CodeInline code: sb.Append(code.Content); break;
+                    case MathInline math: sb.Append(math.Content.ToString()); break;
                     case HtmlEntityInline entity: sb.Append(entity.Transcoded.ToString()); break;
                     case LineBreakInline: sb.Append(' '); break;
                     case AutolinkInline autolink: sb.Append(autolink.Url); break;

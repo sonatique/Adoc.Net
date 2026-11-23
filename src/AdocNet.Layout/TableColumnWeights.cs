@@ -252,6 +252,9 @@ public static class TableColumnWeights
                 case ImageRun image:
                     sb.Append(image.Alt);
                     break;
+                case StemRun stem:
+                    sb.Append(stem.Content);
+                    break;
             }
         }
     }

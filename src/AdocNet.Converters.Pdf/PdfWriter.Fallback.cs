@@ -147,7 +147,7 @@ internal sealed partial class PdfWriter
         List<TextSegment>? result = null;
         for (int i = 0; i < segments.Count; i++)
         {
-            var runs = SplitFontRuns(segments[i].Text, segments[i].Font);
+            var runs = segments[i].Graphic is null ? SplitFontRuns(segments[i].Text, segments[i].Font) : null;
             if (runs is null)
             {
                 result?.Add(segments[i]);

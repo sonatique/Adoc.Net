@@ -341,7 +341,7 @@ public sealed partial class PdfRenderer
                 baseline -= li == 0 ? asc : lineHeight + leading;
                 var line = lines[li];
                 float lineWidth = 0;
-                foreach (var seg in line) lineWidth += w.MeasureText(seg.Text, seg.Font, seg.FontSize);
+                foreach (var seg in line) lineWidth += w.MeasureSegment(seg);
                 float textX = align switch
                 {
                     TableAlignment.Right => x + width - cellPadding - lineWidth,

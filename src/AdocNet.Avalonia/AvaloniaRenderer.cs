@@ -72,6 +72,12 @@ public class AvaloniaRenderer
     public string? BaseDirectory { get; set; }
 
     /// <summary>
+    /// Typesets STEM (math) blocks and inline formulas, drawn in the text's colour and size. When
+    /// null, or when a formula cannot be typeset, its source is shown in the monospace font.
+    /// </summary>
+    public IStemRenderer? StemRenderer { get; set; }
+
+    /// <summary>
     /// Renders a document layout into an Avalonia control tree.
     /// </summary>
     /// <param name="document">The layout tree to render.</param>
@@ -211,6 +217,8 @@ public class AvaloniaRenderer
                 return RenderImage(image);
             case QuoteLayout quote:
                 return RenderQuote(quote);
+            case StemLayout stem:
+                return RenderStem(stem);
             default:
                 return null;
         }
@@ -771,6 +779,36 @@ public class AvaloniaRenderer
         }
     }
 
+    private StackPanel RenderStem(StemLayout stem)
+    {
+        var panel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+        if (!string.IsNullOrEmpty(stem.Title))
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = stem.Title,
+                FontStyle = FontStyle.Italic,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 4),
+            });
+        }
+        if (StemRenderer?.Render(stem.Content, stem.StemType, display: true) is { } graphic)
+        {
+            panel.Children.Add(new StemControl(graphic, stem.Content) { HorizontalAlignment = HorizontalAlignment.Center });
+        }
+        else
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = stem.Content,
+                FontFamily = Theme.MonospaceFont,
+                TextWrapping = TextWrapping.Wrap,
+                HorizontalAlignment = HorizontalAlignment.Center,
+            });
+        }
+        return panel;
+    }
+
     private Border RenderQuote(QuoteLayout quote)
     {
         var panel = new StackPanel();
@@ -1012,6 +1050,11 @@ public class AvaloniaRenderer
                 return span;
             }
 
+            case StemRun stem:
+                return StemRenderer?.Render(stem.Content, stem.StemType, display: false) is { } graphic
+                    ? new InlineUIContainer { Child = new StemControl(graphic, stem.Content) }
+                    : new Span { FontFamily = Theme.MonospaceFont, Inlines = { new Run(stem.Content) } };
+
             case ImageRun image:
             {
                 var fallback = "[image: " + image.Alt + "]";
@@ -1077,6 +1120,9 @@ public class AvaloniaRenderer
                     break;
                 case ImageRun image:
                     sb.Append(image.Alt);
+                    break;
+                case StemRun stem:
+                    sb.Append(stem.Content);
                     break;
             }
         }

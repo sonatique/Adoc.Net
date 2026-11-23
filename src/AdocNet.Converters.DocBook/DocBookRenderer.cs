@@ -122,6 +122,7 @@ public sealed class DocBookRenderer : DocumentRendererBase
             case TableNode n: RenderTable(writer, n, context); break;
             case DelimitedBlockNode n: RenderDelimitedBlock(writer, n, context); break;
             case BlockImageNode n: RenderBlockImage(writer, n, context); break;
+            case StemBlockNode n: RenderStemBlock(writer, n); break;
             case AdmonitionNode n: RenderAdmonition(writer, n, context); break;
             case DescriptionListNode n: RenderDescriptionList(writer, n, context); break;
             case DescriptionItemNode n: RenderDescriptionItem(writer, n, context); break;
@@ -809,6 +810,42 @@ public sealed class DocBookRenderer : DocumentRendererBase
         }
     }
 
+    /// <summary>
+    /// A STEM block as Asciidoctor writes it: an equation (informalequation without a title) holding
+    /// the source in mathphrase, plus alt for LaTeX, which dblatex typesets.
+    /// </summary>
+    private static void RenderStemBlock(XmlWriter writer, StemBlockNode node)
+    {
+        writer.WriteStartElement(node.Title is not null ? "equation" : "informalequation", DocBookNs);
+        if (node.Id is not null)
+            writer.WriteAttributeString("xml", "id", XmlNs, node.Id);
+        if (node.Title is not null)
+            writer.WriteElementString("title", DocBookNs, node.Title);
+        WriteEquation(writer, node.Content, node.StemType);
+        writer.WriteEndElement();
+    }
+
+    private static void WriteEquation(XmlWriter writer, string content, string stemType)
+    {
+        if (!string.Equals(stemType, "asciimath", StringComparison.OrdinalIgnoreCase))
+        {
+            writer.WriteStartElement("alt", DocBookNs);
+            WriteCDataSafe(writer, content);
+            writer.WriteEndElement();
+        }
+        writer.WriteStartElement("mathphrase", DocBookNs);
+        WriteCDataSafe(writer, content);
+        writer.WriteEndElement();
+    }
+
+    /// <summary>CDATA that may contain "]]&gt;": it is split across two sections.</summary>
+    private static void WriteCDataSafe(XmlWriter writer, string text)
+    {
+        var parts = text.Split(new[] { "]]>" }, StringSplitOptions.None);
+        for (int i = 0; i < parts.Length; i++)
+            writer.WriteCData((i > 0 ? ">" : "") + parts[i] + (i < parts.Length - 1 ? "]]" : ""));
+    }
+
     private void RenderBlockImage(XmlWriter writer, BlockImageNode node, RenderContext context)
     {
         // Asciidoctor uses <informalfigure> for images without titles, <figure> for titled images
@@ -1265,6 +1302,12 @@ public sealed class DocBookRenderer : DocumentRendererBase
 
             case PassthroughInlineNode n:
                 writer.WriteRaw(n.Content);
+                break;
+
+            case StemInlineNode n:
+                writer.WriteStartElement("inlineequation", DocBookNs);
+                WriteEquation(writer, n.Content, n.StemType);
+                writer.WriteEndElement();
                 break;
 
             case HighlightInlineNode n:

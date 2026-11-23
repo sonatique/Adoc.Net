@@ -64,11 +64,11 @@ public sealed class EpubRenderer : DocumentRendererBase
         var tocEntries = new List<TocEntry>();
         if (isBookDoctype)
         {
-            BuildBookChapters(doc, sectnumsEnabled, chapters, tocEntries);
+            BuildBookChapters(doc, sectnumsEnabled, chapters, tocEntries, context.Options.StemRenderer);
         }
         else
         {
-            BuildArticleChapter(doc, identifier, sectnumsEnabled, chapters, tocEntries);
+            BuildArticleChapter(doc, identifier, sectnumsEnabled, chapters, tocEntries, context.Options.StemRenderer);
         }
 
         var archive = new EpubArchive();
@@ -136,13 +136,13 @@ public sealed class EpubRenderer : DocumentRendererBase
     }
 
     private static void BuildArticleChapter(DocumentNode doc, string identifier, bool sectnumsEnabled,
-        List<Chapter> chapters, List<TocEntry> tocEntries)
+        List<Chapter> chapters, List<TocEntry> tocEntries, IStemRenderer? stemRenderer)
     {
         // EpubChapterRenderer emits asciidoctor-epub3's semantic-HTML5 chapter
         // body (section/aside/figure with role-like classes) — different from
         // HtmlRenderer's div-wrapped output, but matching the structure that
         // the bundled epub3.css targets.
-        var chapterRenderer = new EpubChapterRenderer(doc);
+        var chapterRenderer = new EpubChapterRenderer(doc, stemRenderer);
         var htmlContent = chapterRenderer.RenderBody(doc.Children);
         // Use the slug-based identifier as the chapter filename when a title exists; fall back
         // to a stable "_content.xhtml" otherwise (urn-based names produce illegal filenames).
@@ -171,7 +171,7 @@ public sealed class EpubRenderer : DocumentRendererBase
     /// with the same context (sectnums, etc.) as the original.
     /// </summary>
     private static void BuildBookChapters(DocumentNode doc, bool sectnumsEnabled,
-        List<Chapter> chapters, List<TocEntry> tocEntries)
+        List<Chapter> chapters, List<TocEntry> tocEntries, IStemRenderer? stemRenderer)
     {
         int counter = 0;
         foreach (var child in doc.Children)
@@ -189,7 +189,7 @@ public sealed class EpubRenderer : DocumentRendererBase
             synth.AddChild(section);
 
             var chapterFile = $"{Slugify(section.Title)}.xhtml";
-            var chapterRenderer = new EpubChapterRenderer(synth);
+            var chapterRenderer = new EpubChapterRenderer(synth, stemRenderer);
             var html = chapterRenderer.RenderBody(synth.Children);
             var chapterAuthor = synth.Attributes.TryGetValue("author", out var bookAuth) && !string.IsNullOrWhiteSpace(bookAuth) ? bookAuth : null;
             chapters.Add(new Chapter(chapterFile, section.Title, html, chapterAuthor));
@@ -199,7 +199,7 @@ public sealed class EpubRenderer : DocumentRendererBase
         // Edge case: no top-level sections → emit a stub chapter so the EPUB has a spine entry.
         if (chapters.Count == 0)
         {
-            var chapterRenderer = new EpubChapterRenderer(doc);
+            var chapterRenderer = new EpubChapterRenderer(doc, stemRenderer);
             var html = chapterRenderer.RenderBody(doc.Children);
             var stubName = $"{Slugify(doc.Title ?? "content")}.xhtml";
             var chapterAuthor = doc.Attributes.TryGetValue("author", out var stubAuth) && !string.IsNullOrWhiteSpace(stubAuth) ? stubAuth : null;
@@ -297,7 +297,9 @@ public sealed class EpubRenderer : DocumentRendererBase
                 ? ch.FileName.Substring(0, ch.FileName.Length - 6)
                 : ch.FileName;
             var itemId = $"item_{stem}";
-            manifest.Append($"    <item href=\"{EscapeXml(ch.FileName)}\" id=\"{EscapeXml(itemId)}\" media-type=\"application/xhtml+xml\" properties=\"scripted\"/>\n");
+            // STEM drawn as inline SVG: EPUB requires the "svg" property on such a content document.
+            var properties = ch.HtmlBody.Contains("<svg ") ? "scripted svg" : "scripted";
+            manifest.Append($"    <item href=\"{EscapeXml(ch.FileName)}\" id=\"{EscapeXml(itemId)}\" media-type=\"application/xhtml+xml\" properties=\"{properties}\"/>\n");
             spine.Append($"    <itemref idref=\"{EscapeXml(itemId)}\"/>\n");
         }
         manifest.Append("    <item href=\"toc.ncx\" id=\"ncx\" media-type=\"application/x-dtbncx+xml\"/>\n");

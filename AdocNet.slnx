@@ -16,6 +16,7 @@
     <Project Path="src/AdocNet.Avalonia/AdocNet.Avalonia.csproj" />
     <Project Path="src/AdocNet.Emitter/AdocNet.Emitter.csproj" />
     <Project Path="src/AdocNet.Importers.Docx/AdocNet.Importers.Docx.csproj" />
+    <Project Path="src/AdocNet.Stem/AdocNet.Stem.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AdocNet.Tests/AdocNet.Tests.csproj" />

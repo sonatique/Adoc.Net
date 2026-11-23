@@ -27,29 +27,51 @@ public sealed class ProcessDiagramToolRunner : IDiagramToolRunner
         _arguments = arguments ?? throw new ArgumentNullException(nameof(arguments));
     }
 
+    private bool? _isAvailable;
+
     /// <inheritdoc />
+    /// <remarks>Runs the tool with <c>--version</c> once; the answer is kept for the life of the runner.</remarks>
     public bool IsAvailable
     {
         get
         {
+            if (_isAvailable is { } known)
+                return known;
             try
             {
-                var info = new ProcessStartInfo(_executablePath, "--version")
-                {
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                };
-                using var proc = Process.Start(info);
-                proc?.WaitForExit(5000);
-                return proc is { ExitCode: 0 };
+                using var proc = Start(new ProcessStartInfo(_executablePath, "--version"));
+                return (_isAvailable = proc is not null && Finish(proc, 5000) && proc.ExitCode == 0).Value;
             }
             catch
             {
-                return false;
+                return (_isAvailable = false).Value;
             }
         }
+    }
+
+    /// <summary>
+    /// Starts the tool without a window, its output read and dropped as it comes: kept out of the host's
+    /// console, and never left to fill a pipe, which would hang the tool.
+    /// </summary>
+    private static Process? Start(ProcessStartInfo info)
+    {
+        info.UseShellExecute = false;
+        info.CreateNoWindow = true;
+        info.RedirectStandardOutput = true;
+        info.RedirectStandardError = true;
+        var proc = Process.Start(info);
+        proc?.BeginOutputReadLine();
+        proc?.BeginErrorReadLine();
+        return proc;
+    }
+
+    /// <summary>Waits for the process; kills it when it outlives <paramref name="milliseconds"/>.</summary>
+    private static bool Finish(Process proc, int milliseconds)
+    {
+        if (proc.WaitForExit(milliseconds))
+            return true;
+        try { proc.Kill(); } catch (InvalidOperationException) { } // exited meanwhile
+        return false;
     }
 
     /// <inheritdoc />
@@ -58,9 +80,12 @@ public sealed class ProcessDiagramToolRunner : IDiagramToolRunner
         Directory.CreateDirectory(outputDirectory);
 
         // Deterministic filename from source hash
-        var hash = ComputeHash(source);
+        var hash = ComputeHash(language + ":" + source);
         var inputPath = Path.Combine(outputDirectory, $"{hash}.{language}");
         var outputPath = Path.Combine(outputDirectory, $"{hash}.png");
+
+        if (File.Exists(outputPath))
+            return outputPath; // made earlier from the same language and source
 
         File.WriteAllText(inputPath, source, Encoding.UTF8);
 
@@ -69,14 +94,7 @@ public sealed class ProcessDiagramToolRunner : IDiagramToolRunner
         // arguments. A single concatenated, unquoted Arguments string would break such paths.
         var tokens = _arguments.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
 
-        var startInfo = new ProcessStartInfo(_executablePath)
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            WorkingDirectory = outputDirectory,
-        };
+        var startInfo = new ProcessStartInfo(_executablePath) { WorkingDirectory = outputDirectory };
 
 #if NETSTANDARD2_0
         // netstandard2.0 has no ArgumentList; quote each substituted token defensively.
@@ -90,11 +108,10 @@ public sealed class ProcessDiagramToolRunner : IDiagramToolRunner
             startInfo.ArgumentList.Add(token.Replace("{input}", inputPath).Replace("{output}", outputPath));
 #endif
 
-        using var proc = Process.Start(startInfo);
+        using var proc = Start(startInfo);
         if (proc is null) return null;
 
-        proc.WaitForExit(30_000);
-        if (proc.ExitCode != 0) return null;
+        if (!Finish(proc, 30_000) || proc.ExitCode != 0) return null;
 
         return File.Exists(outputPath) ? outputPath : null;
     }

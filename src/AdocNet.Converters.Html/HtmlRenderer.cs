@@ -32,6 +32,8 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
         public string? BaseDirectory { get; set; }
         public SafeMode SafeMode { get; set; } = SafeMode.Safe;
         public string? ImagesDir { get; set; }
+        /// <summary>Draws STEM content as inline SVG when set (<see cref="RenderOptions.StemRenderer"/>).</summary>
+        public IStemRenderer? StemRenderer { get; set; }
         /// <summary>Per-render context, used to resolve custom templates. Stored here (rather than
         /// in an instance field) so a single renderer instance is safe to use from multiple threads.</summary>
         public RenderContext? Context { get; set; }
@@ -178,6 +180,7 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
         state.BaseDirectory = htmlOptions?.BaseDirectory;
         state.SafeMode = htmlOptions?.SafeMode ?? SafeMode.Safe;
         state.ImagesDir = document.Attributes.TryGetValue("imagesdir", out var imgDir) ? imgDir : null;
+        state.StemRenderer = context.Options.StemRenderer;
         // EPUB chapter rendering passes SuppressInlineToc=true so the chapter
         // markup doesn't duplicate the EPUB reader's nav.xhtml ToC panel.
         if (htmlOptions?.SuppressInlineToc == true)
@@ -463,7 +466,7 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
                 RenderBlockImage(sb, blockImage, state);
                 break;
             case StemBlockNode stemBlock:
-                RenderStemBlock(sb, stemBlock);
+                RenderStemBlock(sb, stemBlock, state.StemRenderer);
                 break;
             case VideoNode video:
                 RenderVideo(sb, video);
