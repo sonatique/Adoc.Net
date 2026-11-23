@@ -17,6 +17,9 @@ namespace AdocNet.Extensions;
 /// start <see cref="GenerateAsync"/> and render again once it completes. Images are cached by diagram
 /// language and source for the life of the instance, failures included, so a diagram is generated
 /// once. Generation runs on a worker thread, one diagram at a time per instance.</para>
+/// <para>The image format is the runner's (PNG for the Kroki and process runners as configured by
+/// default); the target name and format given in the block's attribute list are not used. Apply changes
+/// the document for rendering: do not write it back to AsciiDoc, which would keep the image paths.</para>
 /// </remarks>
 public sealed class DiagramPass
 {
@@ -87,11 +90,12 @@ public sealed class DiagramPass
                 var child = parent.Children[i];
                 if (child is DelimitedBlockNode block && Find(block) is { } diagram)
                 {
-                    if (!_images.TryGetValue(diagram.Key, out var path))
+                    if (!_images.TryGetValue(diagram.Key, out var path) || (path is not null && !File.Exists(path)))
                     {
+                        _images.TryRemove(diagram.Key, out _); // an image deleted since is made again
                         pending++;
                     }
-                    else if (path is not null && (embed ? DataUri(path) : File.Exists(path) ? path : null) is { } target)
+                    else if (path is not null && (embed ? DataUri(path) : path) is { } target)
                     {
                         parent.RemoveChildAt(i);
                         parent.InsertChild(i, ImageFor(block, target));

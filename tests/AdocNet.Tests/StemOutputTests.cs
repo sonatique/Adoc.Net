@@ -29,6 +29,20 @@ public class StemOutputTests
 
     private const string Doc = ":stem: latexmath\n\nEnergy stem:[E = mc^2] here.\n\n[stem]\n++++\n\\sum_{i=0}^n i\n++++\n";
 
+    [TestCase("M0 0\"/><script>alert(1)</script>")]
+    [TestCase("M0 0 Q1 1 2 2")]
+    public void A_graphic_refuses_path_data_outputs_cannot_write_as_is(string path)
+    {
+        Assert.Throws<ArgumentException>(() => new StemGraphic(path, 1, 1, 0));
+    }
+
+    [Test]
+    public void A_graphic_refuses_lengths_that_are_not_finite()
+    {
+        Assert.Throws<ArgumentException>(() => new StemGraphic(Box, double.NaN, 1, 0));
+        Assert.Throws<ArgumentException>(() => new StemGraphic(Box, 1, double.PositiveInfinity, 0));
+    }
+
     // ── HTML ────────────────────────────────────────────────────────────────
 
     [Test]

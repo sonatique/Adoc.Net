@@ -13,7 +13,7 @@ namespace AdocNet.Avalonia;
 internal sealed class StemControl : Control
 {
     private readonly StemGraphic _graphic;
-    private readonly Geometry _geometry;
+    private readonly Geometry? _geometry;
 
     static StemControl()
     {
@@ -24,7 +24,14 @@ internal sealed class StemControl : Control
     public StemControl(StemGraphic graphic, string source)
     {
         _graphic = graphic;
-        _geometry = Geometry.Parse("F1 " + graphic.PathData); // non-zero fill, as glyph outlines need
+        try
+        {
+            _geometry = Geometry.Parse("F1 " + graphic.PathData); // non-zero fill, as glyph outlines need
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _geometry = null; // a malformed outline from a third-party renderer draws nothing
+        }
         AutomationProperties.SetName(this, source);
     }
 
@@ -40,6 +47,7 @@ internal sealed class StemControl : Control
 
     public override void Render(DrawingContext context)
     {
+        if (_geometry is null) return;
         double size = FontSize;
         using (context.PushTransform(Matrix.CreateScale(size, size)))
             context.DrawGeometry(TextElement.GetForeground(this) ?? Brushes.Black, null, _geometry);

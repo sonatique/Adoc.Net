@@ -5,6 +5,42 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **`DiagramPass`** (`AdocNet.Core`, namespace `AdocNet.Extensions`): diagram
+  blocks for applications that call the parser and converters directly.
+  `Apply(document)` swaps each diagram block whose image is made for an image
+  block with the same source range, id, roles and title, and returns the
+  number still pending; `GenerateAsync(document)` makes the missing images on
+  a worker thread, one at a time, cached by language and source.
+  `Apply(document, embed: true)` writes the images as `data:` URIs for HTML
+  and EPUB exports. Nothing runs without a runner the application chooses:
+  Kroki for every diagram type, or one runner per language.
+- **`IStemRenderer`** and **`RenderOptions.StemRenderer`** (`AdocNet.Core`):
+  STEM blocks and inline formulas drawn as outlines. HTML and EPUB write
+  inline SVG (no MathJax script, so HTML works offline; EPUB declares the
+  `svg` property), PDF draws vector paths on the text baseline, tagged as
+  `Formula`, and `AvaloniaRenderer.StemRenderer` draws them in the preview.
+- **`StemLayout`** and **`StemRun`** (`AdocNet.Layout`): STEM content in the
+  layout tree.
+- **DocBook equations**: `[stem]` blocks and `stem:[]` become `equation`,
+  `informalequation` and `inlineequation`, as in Asciidoctor.
+- **Markdown math**: `$...$`, `$$...$$` and ` ```math ` fences become LaTeX
+  STEM nodes.
+
+### Fixed
+
+- A block attribute line with a style the parser did not know (`[mermaid]`,
+  `[plantuml,name,svg]`, `[loweralpha]`, `[foo]`) showed as a paragraph and
+  the block lost its style. It is now consumed, and a listing or literal
+  block keeps the style.
+- STEM content: dropped by the layout, PDF and DocBook; EPUB wrote it
+  unescaped, so `a < b` broke the chapter's XHTML.
+- Diagram runners: the cached image was named after the source only, so the
+  same text in two diagram languages shared a file. `ProcessDiagramToolRunner`
+  reuses an image it made, checks availability once, kills a tool that
+  outlives its timeout and drains its output.
+
 ## [1.0.43] - 2026-11-21
 
 ### Added

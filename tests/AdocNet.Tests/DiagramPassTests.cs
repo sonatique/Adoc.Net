@@ -75,6 +75,23 @@ public class DiagramPassTests
     }
 
     [Test]
+    public async Task Pdf_embeds_a_generated_diagram_kept_outside_the_document_folder()
+    {
+        // A 1×1 PNG: the runner's output, in a cache folder the document's folder does not contain.
+        var png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==");
+        var pass = new DiagramPass(new FileRunner(_dir) { Bytes = png }, _dir);
+        var doc = AdocParser.Parse("[mermaid]\n----\nA-->B\n----").Document;
+        await pass.GenerateAsync(doc);
+        pass.Apply(doc);
+
+        var documentFolder = Path.Combine(_dir, "doc");
+        var pdf = System.Text.Encoding.Latin1.GetString(new AdocNet.Converters.Pdf.PdfRenderer().RenderToBytes(doc,
+            new AdocNet.Converters.Pdf.PdfRenderOptions { BaseDirectory = documentFolder }));
+
+        Assert.That(pdf, Does.Contain("/Subtype /Image"));
+    }
+
+    [Test]
     public async Task Each_diagram_is_generated_once_per_language_and_source()
     {
         var runner = new FileRunner(_dir);
@@ -114,6 +131,22 @@ public class DiagramPassTests
             Assert.That(doc.Children.Single(), Is.InstanceOf<DelimitedBlockNode>());
             Assert.That(runner.Calls, Has.Count.EqualTo(1));
         });
+    }
+
+    [Test]
+    public async Task An_image_deleted_since_is_generated_again()
+    {
+        var runner = new FileRunner(_dir);
+        var pass = new DiagramPass(runner, _dir);
+        var doc = AdocParser.Parse("[mermaid]\n----\nA-->B\n----").Document;
+        await pass.GenerateAsync(doc);
+        foreach (var file in Directory.GetFiles(_dir)) File.Delete(file);
+
+        Assert.That(pass.Apply(doc), Is.EqualTo(1));
+        await pass.GenerateAsync(doc);
+        Assert.That(pass.Apply(doc), Is.Zero);
+        Assert.That(doc.Children.Single(), Is.InstanceOf<BlockImageNode>());
+        Assert.That(runner.Calls, Has.Count.EqualTo(2));
     }
 
     [Test]
@@ -174,6 +207,7 @@ public class DiagramPassTests
         public List<int> Threads { get; } = [];
         public bool Fail { get; init; }
         public bool Available { get; init; } = true;
+        public byte[] Bytes { get; init; } = [1];
         public bool IsAvailable => Available;
 
         public string? Generate(string language, string source, string outputDirectory)
@@ -185,7 +219,7 @@ public class DiagramPassTests
             }
             if (Fail) return null;
             var path = Path.Combine(dir, Guid.NewGuid().ToString("N") + ".png");
-            File.WriteAllBytes(path, [1]);
+            File.WriteAllBytes(path, Bytes);
             return path;
         }
     }

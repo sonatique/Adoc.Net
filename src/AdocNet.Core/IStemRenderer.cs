@@ -32,13 +32,24 @@ public sealed class StemGraphic
     /// <param name="width">Width in em.</param>
     /// <param name="ascent">Height above the baseline in em.</param>
     /// <param name="descent">Depth below the baseline in em.</param>
+    /// <exception cref="ArgumentException">The path holds anything but M, L, C, Z, numbers and spaces,
+    /// or a length is not a finite number. Every output writes the path as is.</exception>
     public StemGraphic(string pathData, double width, double ascent, double descent)
     {
         PathData = pathData ?? throw new ArgumentNullException(nameof(pathData));
+        foreach (var c in pathData)
+        {
+            if (c is not ('M' or 'L' or 'C' or 'Z' or ' ' or '.' or '-' or (>= '0' and <= '9')))
+                throw new ArgumentException($"Path data may hold only M, L, C, Z, numbers and spaces, not '{c}'.", nameof(pathData));
+        }
+        if (!IsFinite(width) || !IsFinite(ascent) || !IsFinite(descent) || width < 0 || ascent + descent < 0)
+            throw new ArgumentException("The width and height must be finite and not negative.");
         Width = width;
         Ascent = ascent;
         Descent = descent;
     }
+
+    private static bool IsFinite(double d) => !double.IsNaN(d) && !double.IsInfinity(d);
 
     /// <summary>
     /// SVG path data, filled with the text colour (non-zero rule). Absolute M, L, C and Z commands only,

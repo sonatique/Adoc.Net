@@ -1396,6 +1396,7 @@ public sealed partial class PdfRenderer : DocumentRendererBase
                 case SuperscriptInlineNode sup: sb.Append(sup.Content); break;
                 case SubscriptInlineNode sub: sb.Append(sub.Content); break;
                 case PassthroughInlineNode pt: sb.Append(pt.Content); break;
+                case StemInlineNode st: sb.Append(st.Content); break;
                 case CrossReferenceInlineNode xref: sb.Append(XrefText(xref)); break;
                 case FootnoteInlineNode fn:
                     // When a footnote registry is supplied (table cells, #57), register
