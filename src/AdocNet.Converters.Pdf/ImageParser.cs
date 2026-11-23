@@ -245,9 +245,9 @@ internal static class ImageParser
             colorData = unfilteredData;
         }
 
-        // Compress with DeflateStream for FlateDecode
-        byte[] compressedColor = DeflateCompress(colorData);
-        byte[]? compressedAlpha = alphaData is not null ? DeflateCompress(alphaData) : null;
+        // FlateDecode wants zlib (header + Adler-32), not raw deflate
+        byte[] compressedColor = PdfFontEmbedder.Compress(colorData);
+        byte[]? compressedAlpha = alphaData is not null ? PdfFontEmbedder.Compress(alphaData) : null;
 
         return new ImageInfo(width, height, components, bitDepth,
             ImageFormat.Png, compressedColor, compressedAlpha);
@@ -268,15 +268,5 @@ internal static class ImageParser
         if (pa <= pb && pa <= pc) return a;
         if (pb <= pc) return b;
         return c;
-    }
-
-    private static byte[] DeflateCompress(byte[] data)
-    {
-        using var output = new MemoryStream();
-        using (var deflate = new DeflateStream(output, CompressionLevel.Optimal, leaveOpen: true))
-        {
-            deflate.Write(data, 0, data.Length);
-        }
-        return output.ToArray();
     }
 }

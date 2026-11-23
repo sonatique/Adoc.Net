@@ -5,6 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- PDF: PNG images were written as raw deflate data under `/FlateDecode`,
+  which expects a zlib stream (header and Adler-32 checksum). Strict readers,
+  such as the Windows PDF renderer, drew them blank. They are now zlib
+  streams, like the content and font streams.
+
 ## [1.0.44] - 2026-11-23
 
 ### Added
