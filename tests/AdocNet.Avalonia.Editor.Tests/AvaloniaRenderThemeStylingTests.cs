@@ -120,4 +120,29 @@ public class AvaloniaRenderThemeStylingTests
         Assert.That(theme.HeadingForeground(0), Is.SameAs(Blue));
         Assert.That(theme.HeadingForeground(9), Is.SameAs(Blue));
     }
+
+    [AvaloniaTest]
+    public void Theme_colours_admonitions_and_a_missing_kind_takes_the_note_colours()
+    {
+        const string source = "NOTE: noted\n\nTIP: tipped\n";
+        var dark = new AdmonitionPalette(Colors.Red, Colors.Black, Colors.Yellow);
+        var theme = new AvaloniaRenderTheme
+        {
+            AdmonitionPalettes = new Dictionary<AdocNet.Layout.AdmonitionKind, AdmonitionPalette> { [AdocNet.Layout.AdmonitionKind.Note] = dark },
+        };
+        var root = new AvaloniaRenderer { Theme = theme }.Render(Layout(source));
+
+        foreach (var kind in new[] { "NOTE", "TIP" })
+        {
+            var label = TextBlocks(root).First(tb => TextOf(tb) == kind);
+            var box = (Border)((Control)label.Parent!).Parent!;
+            Assert.That(((ISolidColorBrush)label.Foreground!).Color, Is.EqualTo(Colors.Yellow), kind);
+            Assert.That(((ISolidColorBrush)box.Background!).Color, Is.EqualTo(Colors.Black), kind);
+            Assert.That(((ISolidColorBrush)box.BorderBrush!).Color, Is.EqualTo(Colors.Red), kind);
+        }
+
+        var light = new AvaloniaRenderer().Render(Layout(source));
+        var lightBox = (Border)((Control)TextBlocks(light).First(tb => TextOf(tb) == "NOTE").Parent!).Parent!;
+        Assert.That(((ISolidColorBrush)lightBox.Background!).Color, Is.EqualTo(Color.FromRgb(240, 248, 255)), "the default stays light");
+    }
 }
