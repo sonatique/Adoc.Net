@@ -5,6 +5,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **`AvaloniaRenderTheme.AdmonitionPalettes`** (`AdocNet.Avalonia`): the left
+  bar, background and label colours of each admonition kind, as
+  `AdmonitionPalette` values. They were fixed light colours, so on a host's
+  dark page an admonition's text, which inherits the host's foreground, stood
+  on a light background. The defaults, `LightAdmonitionPalettes`, are
+  unchanged; a kind missing from the map uses its NOTE colours.
+
 ## [1.0.45] - 2026-11-23
 
 ### Fixed

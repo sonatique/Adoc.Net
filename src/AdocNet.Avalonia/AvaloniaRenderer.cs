@@ -379,7 +379,7 @@ public class AvaloniaRenderer
 
     private Border RenderAdmonition(AdmonitionLayout admonition)
     {
-        var (accentColor, bgColor, labelColor) = GetAdmonitionColors(admonition.Kind);
+        var (accentColor, bgColor, labelColor) = Theme.AdmonitionPaletteFor(admonition.Kind);
 
         var panel = new StackPanel();
 
@@ -409,19 +409,6 @@ public class AvaloniaRenderer
             Padding = new Thickness(12),
             Margin = new Thickness(0, 0, 0, 8),
             Child = panel,
-        };
-    }
-
-    private static (Color accent, Color background, Color label) GetAdmonitionColors(AdmonitionKind kind)
-    {
-        return kind switch
-        {
-            AdmonitionKind.Note => (Color.FromRgb(70, 130, 180), Color.FromRgb(240, 248, 255), Color.FromRgb(50, 100, 150)),
-            AdmonitionKind.Tip => (Color.FromRgb(60, 150, 120), Color.FromRgb(240, 255, 245), Color.FromRgb(40, 120, 90)),
-            AdmonitionKind.Warning => (Color.FromRgb(210, 160, 50), Color.FromRgb(255, 252, 240), Color.FromRgb(180, 130, 30)),
-            AdmonitionKind.Important => (Color.FromRgb(210, 120, 50), Color.FromRgb(255, 248, 240), Color.FromRgb(180, 90, 30)),
-            AdmonitionKind.Caution => (Color.FromRgb(200, 60, 60), Color.FromRgb(255, 242, 242), Color.FromRgb(170, 40, 40)),
-            _ => (Color.FromRgb(70, 130, 180), Color.FromRgb(240, 248, 255), Color.FromRgb(50, 100, 150)),
         };
     }
 

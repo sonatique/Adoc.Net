@@ -1,6 +1,10 @@
 using global::Avalonia.Media;
+using AdocNet.Layout;
 
 namespace AdocNet.Avalonia;
+
+/// <summary>The colours of an admonition: its left bar, its background and its label (NOTE, TIP, …).</summary>
+public readonly record struct AdmonitionPalette(Color Accent, Color Background, Color Label);
 
 /// <summary>
 /// Visual styling for <see cref="AvaloniaRenderer"/>: brushes, fonts and sizes.
@@ -46,6 +50,31 @@ public sealed class AvaloniaRenderTheme
 
     /// <summary>Foreground of marked text, readable on <see cref="HighlightBackground"/> in any theme.</summary>
     public IBrush HighlightForeground { get; set; } = new SolidColorBrush(Colors.Black);
+
+    /// <summary>
+    /// The left bar, background and label colours of each admonition kind (NOTE, TIP, …).
+    /// An admonition's text inherits the host's foreground, so a host with a dark page
+    /// gives dark backgrounds here. A kind missing from the map uses its NOTE entry, or
+    /// else the default NOTE colours.
+    /// </summary>
+    public IReadOnlyDictionary<AdmonitionKind, AdmonitionPalette> AdmonitionPalettes { get; set; } = LightAdmonitionPalettes;
+
+    /// <summary>The default admonition colours, for a light page.</summary>
+    public static IReadOnlyDictionary<AdmonitionKind, AdmonitionPalette> LightAdmonitionPalettes { get; } =
+        new Dictionary<AdmonitionKind, AdmonitionPalette>
+        {
+            [AdmonitionKind.Note] = new(Color.FromRgb(70, 130, 180), Color.FromRgb(240, 248, 255), Color.FromRgb(50, 100, 150)),
+            [AdmonitionKind.Tip] = new(Color.FromRgb(60, 150, 120), Color.FromRgb(240, 255, 245), Color.FromRgb(40, 120, 90)),
+            [AdmonitionKind.Warning] = new(Color.FromRgb(210, 160, 50), Color.FromRgb(255, 252, 240), Color.FromRgb(180, 130, 30)),
+            [AdmonitionKind.Important] = new(Color.FromRgb(210, 120, 50), Color.FromRgb(255, 248, 240), Color.FromRgb(180, 90, 30)),
+            [AdmonitionKind.Caution] = new(Color.FromRgb(200, 60, 60), Color.FromRgb(255, 242, 242), Color.FromRgb(170, 40, 40)),
+        }.AsReadOnly();
+
+    /// <summary>The colours of <paramref name="kind"/>, from <see cref="AdmonitionPalettes"/>.</summary>
+    public AdmonitionPalette AdmonitionPaletteFor(AdmonitionKind kind) =>
+        AdmonitionPalettes.TryGetValue(kind, out var palette) ? palette
+        : AdmonitionPalettes.TryGetValue(AdmonitionKind.Note, out var note) ? note
+        : LightAdmonitionPalettes[AdmonitionKind.Note];
 
     /// <summary>Font size for the document title (the level-0 <c>= Title</c>).</summary>
     public double DocumentTitleFontSize { get; set; } = 28;
