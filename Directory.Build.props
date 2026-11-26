@@ -14,7 +14,7 @@
 
   <!-- NuGet package metadata (shared across all packable projects) -->
   <PropertyGroup>
-    <Version>1.0.45</Version>
+    <Version>1.0.46</Version>
     <Authors>Sylvain Fasel</Authors>
     <Copyright>Copyright (c) 2026 sylvain@sonatique.net</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -23,7 +23,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>asciidoc;parser;ast;html;pdf;epub;docbook;docx;word;import;documentation;lsp;avalonia;layout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>v1.0.45: PDF output writes PNG images and their alpha masks as zlib streams, as /FlateDecode requires; strict readers such as the Windows PDF renderer showed them blank. See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v1.0.46: AvaloniaRenderTheme.AdmonitionPalettes sets the left bar, background and label colours of each admonition kind, so admonitions read well on a host's dark page; the light defaults are unchanged. See CHANGELOG.md.</PackageReleaseNotes>
   </PropertyGroup>
 
   <!-- Symbol packages for debugging. Embeds portable PDBs in .snupkg files. -->

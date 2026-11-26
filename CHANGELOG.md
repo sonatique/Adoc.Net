@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.46] - 2026-11-26
+
 ### Added
 
 - **`AvaloniaRenderTheme.AdmonitionPalettes`** (`AdocNet.Avalonia`): the left
