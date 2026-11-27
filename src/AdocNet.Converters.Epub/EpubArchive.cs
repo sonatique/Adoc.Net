@@ -31,6 +31,8 @@ internal sealed class EpubArchive
     internal void Add(string path, string content) =>
         _entries.Add(new Entry(path, CompressionLevel.Optimal, Encoding.UTF8.GetBytes(content), null, null));
 
+    internal void Add(string path, byte[] data) => _entries.Add(new Entry(path, CompressionLevel.Optimal, data, null, null));
+
     /// <summary>Adds an embedded resource; <paramref name="appended"/> is written after its content.</summary>
     internal void AddResource(string path, string resourceName, byte[]? appended = null) =>
         _entries.Add(new Entry(path, CompressionLevel.Optimal, null, resourceName, appended));

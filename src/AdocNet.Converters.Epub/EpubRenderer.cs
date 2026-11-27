@@ -62,13 +62,17 @@ public sealed class EpubRenderer : DocumentRendererBase
         // file named after the document title slug.
         var chapters = new List<Chapter>();
         var tocEntries = new List<TocEntry>();
+        var epubOptions = context.Options as EpubRenderOptions;
+        var images = new EpubImages(epubOptions?.BaseDirectory,
+            doc.Attributes.TryGetValue("imagesdir", out var imagesDir) ? imagesDir : null,
+            epubOptions?.SafeMode ?? SafeMode.Safe);
         if (isBookDoctype)
         {
-            BuildBookChapters(doc, sectnumsEnabled, chapters, tocEntries, context.Options.StemRenderer);
+            BuildBookChapters(doc, sectnumsEnabled, chapters, tocEntries, context.Options.StemRenderer, images);
         }
         else
         {
-            BuildArticleChapter(doc, identifier, sectnumsEnabled, chapters, tocEntries, context.Options.StemRenderer);
+            BuildArticleChapter(doc, identifier, sectnumsEnabled, chapters, tocEntries, context.Options.StemRenderer, images);
         }
 
         var archive = new EpubArchive();
@@ -79,15 +83,17 @@ public sealed class EpubRenderer : DocumentRendererBase
 
         WriteMimetype(archive);
         WriteContainerXml(archive);
-        WriteContentOpf(archive, title, author, language, identifier, revdate, description, chapters);
+        WriteContentOpf(archive, title, author, language, identifier, revdate, description, chapters, images.Files);
         WriteNavXhtml(archive, title, chapters, tocEntries);
         WriteTocNcx(archive, title, identifier, language, chapters, tocEntries);
         // Bundled fonts/CSS/images + iBooks display options. Asset paths inside
         // the EPUB match asciidoctor-epub3 conventions so manifest item href
         // attributes resolve correctly.
-        WriteAssets(archive, (context.Options as EpubRenderOptions)?.CustomCss);
+        WriteAssets(archive, epubOptions?.CustomCss);
         foreach (var ch in chapters)
             WriteChapterXhtml(archive, ch);
+        foreach (var image in images.Files)
+            archive.Add(image.ArchivePath, image.Data);
         archive.WriteTo(output);
     }
 
@@ -136,13 +142,13 @@ public sealed class EpubRenderer : DocumentRendererBase
     }
 
     private static void BuildArticleChapter(DocumentNode doc, string identifier, bool sectnumsEnabled,
-        List<Chapter> chapters, List<TocEntry> tocEntries, IStemRenderer? stemRenderer)
+        List<Chapter> chapters, List<TocEntry> tocEntries, IStemRenderer? stemRenderer, EpubImages images)
     {
         // EpubChapterRenderer emits asciidoctor-epub3's semantic-HTML5 chapter
         // body (section/aside/figure with role-like classes) — different from
         // HtmlRenderer's div-wrapped output, but matching the structure that
         // the bundled epub3.css targets.
-        var chapterRenderer = new EpubChapterRenderer(doc, stemRenderer);
+        var chapterRenderer = new EpubChapterRenderer(doc, stemRenderer, images);
         var htmlContent = chapterRenderer.RenderBody(doc.Children);
         // Use the slug-based identifier as the chapter filename when a title exists; fall back
         // to a stable "_content.xhtml" otherwise (urn-based names produce illegal filenames).
@@ -171,7 +177,7 @@ public sealed class EpubRenderer : DocumentRendererBase
     /// with the same context (sectnums, etc.) as the original.
     /// </summary>
     private static void BuildBookChapters(DocumentNode doc, bool sectnumsEnabled,
-        List<Chapter> chapters, List<TocEntry> tocEntries, IStemRenderer? stemRenderer)
+        List<Chapter> chapters, List<TocEntry> tocEntries, IStemRenderer? stemRenderer, EpubImages images)
     {
         int counter = 0;
         foreach (var child in doc.Children)
@@ -189,7 +195,7 @@ public sealed class EpubRenderer : DocumentRendererBase
             synth.AddChild(section);
 
             var chapterFile = $"{Slugify(section.Title)}.xhtml";
-            var chapterRenderer = new EpubChapterRenderer(synth, stemRenderer);
+            var chapterRenderer = new EpubChapterRenderer(synth, stemRenderer, images);
             var html = chapterRenderer.RenderBody(synth.Children);
             var chapterAuthor = synth.Attributes.TryGetValue("author", out var bookAuth) && !string.IsNullOrWhiteSpace(bookAuth) ? bookAuth : null;
             chapters.Add(new Chapter(chapterFile, section.Title, html, chapterAuthor));
@@ -199,7 +205,7 @@ public sealed class EpubRenderer : DocumentRendererBase
         // Edge case: no top-level sections → emit a stub chapter so the EPUB has a spine entry.
         if (chapters.Count == 0)
         {
-            var chapterRenderer = new EpubChapterRenderer(doc, stemRenderer);
+            var chapterRenderer = new EpubChapterRenderer(doc, stemRenderer, images);
             var html = chapterRenderer.RenderBody(doc.Children);
             var stubName = $"{Slugify(doc.Title ?? "content")}.xhtml";
             var chapterAuthor = doc.Attributes.TryGetValue("author", out var stubAuth) && !string.IsNullOrWhiteSpace(stubAuth) ? stubAuth : null;
@@ -257,7 +263,8 @@ public sealed class EpubRenderer : DocumentRendererBase
     }
 
     private static void WriteContentOpf(EpubArchive archive, string title, string? author, string language,
-        string identifier, string? revdate, string? description, List<Chapter> chapters)
+        string identifier, string? revdate, string? description, List<Chapter> chapters,
+        IReadOnlyList<EpubImages.CarriedImage> images)
     {
         // Metadata field order matches asciidoctor-epub3 exactly (per the
         // canonicalized reference output):
@@ -321,6 +328,9 @@ public sealed class EpubRenderer : DocumentRendererBase
         manifest.Append("    <item href=\"fonts/assorted-icons.ttf\" id=\"item_assorted-icons\" media-type=\"application/vnd.ms-opentype\"/>\n");
         manifest.Append("    <item href=\"avatars/default.jpg\" id=\"item_default\" media-type=\"image/jpeg\"/>\n");
         manifest.Append("    <item href=\"headshots/default.jpg\" id=\"item_default1\" media-type=\"image/jpeg\"/>\n");
+        //   7. the document's own images, carried in the EPUB
+        for (var i = 0; i < images.Count; i++)
+            manifest.Append($"    <item href=\"{EscapeXml(images[i].Href)}\" id=\"item_image{i + 1}\" media-type=\"{images[i].MediaType}\"/>\n");
 
         var xml = $"""
             <?xml version="1.0" encoding="UTF-8"?>

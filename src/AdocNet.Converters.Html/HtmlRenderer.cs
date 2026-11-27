@@ -559,7 +559,7 @@ public sealed partial class HtmlRenderer : DocumentRendererBase
             }
         }
 
-        EscapeTo(sb, target);
+        EscapeTo(sb, AssetPath.Image(target, state.ImagesDir));
     }
 
     /// <summary>
