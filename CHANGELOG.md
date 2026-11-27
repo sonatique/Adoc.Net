@@ -12,6 +12,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   stays as written; any other target is joined to `:imagesdir:` unless it
   starts with `/`, its `.` segments dropped, its `..` segments folded and its
   spaces encoded as `%20`. `AssetPath.IsUri` tells URIs from paths the same way.
+- **`EpubRenderOptions.BaseDirectory`** and **`EpubRenderOptions.SafeMode`**:
+  where the document's images are read from, so the EPUB carries them (see
+  Fixed).
 
 ### Fixed
 
@@ -19,6 +22,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   writes them: with `:imagesdir: img`, `image::a.png[]` gives `img/a.png`. The
   bare target was written, so a page or book shown away from the images folder
   showed none of them.
+- EPUB: the document's images are carried in the book. With
+  `EpubRenderOptions.BaseDirectory` set, each local PNG, JPEG, GIF, SVG or WebP
+  image found there is written into the EPUB and listed in its manifest, and
+  the chapter refers to the copy; at the default `SafeMode.Safe`, only images
+  inside the base directory are read. The chapters referred to files the book
+  did not hold, so no image showed. Without a base directory the chapters refer
+  to the images under `:imagesdir:`, as written.
 
 ## [1.0.46] - 2026-11-26
 
