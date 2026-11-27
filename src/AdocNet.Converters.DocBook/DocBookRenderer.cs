@@ -846,6 +846,10 @@ public sealed class DocBookRenderer : DocumentRendererBase
             writer.WriteCData((i > 0 ? ">" : "") + parts[i] + (i < parts.Length - 1 ? "]]" : ""));
     }
 
+    /// <summary>An image's <c>fileref</c>: its target under <c>:imagesdir:</c>, as Asciidoctor writes it.</summary>
+    private static string ImageFileRef(string target, RenderContext context) =>
+        AssetPath.Image(target, context.Attributes.TryGetValue("imagesdir", out var imagesDir) ? imagesDir : null);
+
     private void RenderBlockImage(XmlWriter writer, BlockImageNode node, RenderContext context)
     {
         // Asciidoctor uses <informalfigure> for images without titles, <figure> for titled images
@@ -871,7 +875,7 @@ public sealed class DocBookRenderer : DocumentRendererBase
                 break;
             }
         }
-        writer.WriteAttributeString("fileref", node.Target);
+        writer.WriteAttributeString("fileref", ImageFileRef(node.Target, context));
         writer.WriteEndElement(); // imagedata
         writer.WriteEndElement(); // imageobject
 
@@ -1216,7 +1220,7 @@ public sealed class DocBookRenderer : DocumentRendererBase
                 writer.WriteStartElement("inlinemediaobject", DocBookNs);
                 writer.WriteStartElement("imageobject", DocBookNs);
                 writer.WriteStartElement("imagedata", DocBookNs);
-                writer.WriteAttributeString("fileref", n.Target);
+                writer.WriteAttributeString("fileref", ImageFileRef(n.Target, context));
                 writer.WriteEndElement(); // imagedata
                 writer.WriteEndElement(); // imageobject
                 if (!string.IsNullOrEmpty(n.Alt))

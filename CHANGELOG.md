@@ -5,6 +5,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- **`AssetPath.Image(target, imagesDir)`** (`AdocNet.Core`): the path an image
+  is written with, as Asciidoctor's `image_uri` gives it. A URL or `data:` URI
+  stays as written; any other target is joined to `:imagesdir:` unless it
+  starts with `/`, its `.` segments dropped, its `..` segments folded and its
+  spaces encoded as `%20`. `AssetPath.IsUri` tells URIs from paths the same way.
+
+### Fixed
+
+- HTML and DocBook: images are written under `:imagesdir:`, as Asciidoctor
+  writes them: with `:imagesdir: img`, `image::a.png[]` gives `img/a.png`. The
+  bare target was written, so a page or book shown away from the images folder
+  showed none of them.
+
 ## [1.0.46] - 2026-11-26
 
 ### Added
