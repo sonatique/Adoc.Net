@@ -491,7 +491,7 @@ internal sealed class EpubChapterRenderer
     {
         sb.Append("<figure class=\"image\">\n");
         sb.Append("<img src=\"").Append(EscapeXmlAttr(ImageSource(img.Target))).Append('"');
-        if (img.Alt.Length > 0) sb.Append(" alt=\"").Append(EscapeXmlAttr(img.Alt)).Append('"');
+        if (AssetPath.ImageAlt(img.Alt, img.Target) is { Length: > 0 } alt) sb.Append(" alt=\"").Append(EscapeXmlAttr(alt)).Append('"');
         if (img.Width is not null) sb.Append(" width=\"").Append(EscapeXmlAttr(img.Width)).Append('"');
         if (img.Height is not null) sb.Append(" height=\"").Append(EscapeXmlAttr(img.Height)).Append('"');
         sb.Append("/>\n");
@@ -695,7 +695,7 @@ internal sealed class EpubChapterRenderer
                 }
             case InlineImageNode n:
                 sb.Append("<img class=\"inline\" src=\"").Append(EscapeXmlAttr(ImageSource(n.Target))).Append('"');
-                if (n.Alt.Length > 0) sb.Append(" alt=\"").Append(EscapeXmlAttr(n.Alt)).Append('"');
+                if (AssetPath.ImageAlt(n.Alt, n.Target) is { Length: > 0 } inlineAlt) sb.Append(" alt=\"").Append(EscapeXmlAttr(inlineAlt)).Append('"');
                 sb.Append("/>");
                 break;
             case FootnoteInlineNode n:

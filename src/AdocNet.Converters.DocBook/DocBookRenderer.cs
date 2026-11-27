@@ -879,10 +879,10 @@ public sealed class DocBookRenderer : DocumentRendererBase
         writer.WriteEndElement(); // imagedata
         writer.WriteEndElement(); // imageobject
 
-        if (!string.IsNullOrEmpty(node.Alt))
+        if (AssetPath.ImageAlt(node.Alt, node.Target) is { Length: > 0 } alt)
         {
             writer.WriteStartElement("textobject", DocBookNs);
-            writer.WriteElementString("phrase", DocBookNs, node.Alt);
+            writer.WriteElementString("phrase", DocBookNs, alt);
             writer.WriteEndElement(); // textobject
         }
 
@@ -1223,10 +1223,10 @@ public sealed class DocBookRenderer : DocumentRendererBase
                 writer.WriteAttributeString("fileref", ImageFileRef(n.Target, context));
                 writer.WriteEndElement(); // imagedata
                 writer.WriteEndElement(); // imageobject
-                if (!string.IsNullOrEmpty(n.Alt))
+                if (AssetPath.ImageAlt(n.Alt, n.Target) is { Length: > 0 } inlineAlt)
                 {
                     writer.WriteStartElement("textobject", DocBookNs);
-                    writer.WriteElementString("phrase", DocBookNs, n.Alt);
+                    writer.WriteElementString("phrase", DocBookNs, inlineAlt);
                     writer.WriteEndElement(); // textobject
                 }
                 writer.WriteEndElement(); // inlinemediaobject

@@ -11,7 +11,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   is written with, as Asciidoctor's `image_uri` gives it. A URL or `data:` URI
   stays as written; any other target is joined to `:imagesdir:` unless it
   starts with `/`, its `.` segments dropped, its `..` segments folded and its
-  spaces encoded as `%20`. `AssetPath.IsUri` tells URIs from paths the same way.
+  spaces encoded as `%20`. `AssetPath.IsUri` tells URIs from paths the same way,
+  and `AssetPath.ImageAlt(alt, target)` gives an image's alt text (see Fixed).
 - **`EpubRenderOptions.BaseDirectory`** and **`EpubRenderOptions.SafeMode`**:
   where the document's images are read from, so the EPUB carries them (see
   Fixed).
@@ -22,6 +23,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   writes them: with `:imagesdir: img`, `image::a.png[]` gives `img/a.png`. The
   bare target was written, so a page or book shown away from the images folder
   showed none of them.
+- HTML, DocBook and EPUB: an image without alt text, `image::my_pic-1.png[]`,
+  is written with Asciidoctor's default alt, its file name without the
+  extension and with `_` and `-` as spaces: `alt="my pic 1"`. An empty alt was
+  written, and DocBook left out the text object. The AST keeps the alt as
+  given, so the accessible PDF still warns of a missing one.
 - EPUB: the document's images are carried in the book. With
   `EpubRenderOptions.BaseDirectory` set, each local PNG, JPEG, GIF, SVG or WebP
   image found there is written into the EPUB and listed in its manifest, and

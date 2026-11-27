@@ -18,6 +18,23 @@ public static class AssetPath
     public static string Image(string target, string? imagesDir) =>
         IsUri(target) ? target.Replace(" ", "%20") : WebPath(target, imagesDir);
 
+    /// <summary>
+    /// An image's alt text: <paramref name="alt"/> as given, else Asciidoctor's <c>default-alt</c>,
+    /// the file name of <paramref name="target"/> without its extension, with <c>_</c> and <c>-</c>
+    /// as spaces (<c>my_pic-1.png</c> gives <c>my pic 1</c>).
+    /// </summary>
+    public static string ImageAlt(string alt, string target)
+    {
+        if (alt.Length > 0)
+            return alt;
+        var dot = target.LastIndexOf('.');
+        var extension = dot >= 0 && target.IndexOf('/', dot) < 0 ? target.Substring(dot) : "";
+        var name = target.Substring(target.LastIndexOf('/') + 1);
+        if (extension.Length > 0 && name.Length > extension.Length && name.EndsWith(extension, StringComparison.Ordinal))
+            name = name.Substring(0, name.Length - extension.Length);
+        return name.Replace('_', ' ').Replace('-', ' ');
+    }
+
     /// <summary>A URL, a <c>data:</c> URI or another URI, as Asciidoctor tells them from paths.</summary>
     public static bool IsUri(string text) => text.IndexOf(':') >= 0 && UriSniff.IsMatch(text);
 
