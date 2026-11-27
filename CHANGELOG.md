@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.47] - 2026-11-27
+
 ### Added
 
 - **`AssetPath.Image(target, imagesDir)`** (`AdocNet.Core`): the path an image
